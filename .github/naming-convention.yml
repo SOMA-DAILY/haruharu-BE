@@ -1,0 +1,68 @@
+# .github/naming-convention.yml
+# 네이밍 컨벤션 검증 규칙 설정
+# 이 파일을 수정하면 즉시 검증 규칙에 반영됩니다.
+
+tags:
+  allowed:
+    - feat       # 새로운 기능 추가
+    - fix        # 버그 수정
+    - refactor   # 코드 리팩토링
+    - docs       # 문서 수정
+    - chore      # 빌드, 패키지 관련
+    - test       # 테스트 코드
+    - style      # 코드 스타일 변경 (포맷팅 등)
+    - perf       # 성능 개선
+    - build      # 빌드 시스템 변경
+    - ci         # CI 설정 변경
+    - revert     # 커밋 되돌리기
+    # - hotfix   # 긴급 수정 (필요 시 주석 해제)
+    # - release  # 릴리즈 관련
+
+patterns:
+  # {tags}는 위에 정의된 allowed 태그로 자동 치환됩니다
+  issue_title: "^({tags}):\\s.+"           # feat: 유저 로그인 API 추가
+  branch_name: "^({tags})/\\d+$"           # feat/123
+  commit_message: "^\\[#\\d+\\];\\s({tags}):\\s.+"  # [#123]; feat: 로그인 API 추가
+  pr_title: "^\\[#\\d+\\];\\s({tags}):\\s.+"         # [#123]; feat: 로그인 기능
+
+validation:
+  issue:
+    enforce: true
+    comment_on_error: true
+
+  pull_request:
+    enforce_title: true
+    enforce_branch: true
+    enforce_commits: false  # 커밋 메시지는 경고만
+    comment_on_error: true
+
+  push:
+    enforce: false  # push는 경고만
+
+messages:
+  issue_title_error: |
+    ❌ **이슈 제목 형식 오류**
+
+    올바른 형식: `<tag>: <설명>`
+
+    **예시:**
+    - `feat: 카카오 로그인 API 추가`
+    - `fix: 토큰 갱신 로직 버그 수정`
+
+  branch_name_error: |
+    ❌ **브랜치명 형식 오류**
+
+    올바른 형식: `<tag>/<이슈번호>`
+
+    **예시:**
+    - `feat/42`
+    - `fix/123`
+
+  commit_message_warning: |
+    ⚠️ **커밋 메시지 형식 경고**
+
+    올바른 형식: `[#이슈번호]; <tag>: <설명>`
+
+    **예시:**
+    - `[#42]; feat: 카카오 OAuth 로그인 API 추가`
+    - `[#43]; fix: 만료된 토큰 갱신 null 체크 추가`

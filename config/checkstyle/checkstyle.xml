@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+        "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+        "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  Google Java Style Guide 기반 Checkstyle 설정
+  빌드 실패 목적이 아닌 코드 품질 가이드라인 목적으로 사용
+  Gradle: ./gradlew lint (별도 태스크, 빌드와 분리)
+-->
+<module name="Checker">
+    <property name="charset" value="UTF-8"/>
+    <property name="severity" value="warning"/>
+    <property name="fileExtensions" value="java"/>
+
+    <!-- 파일 길이 -->
+    <module name="FileLength">
+        <property name="max" value="800"/>
+    </module>
+
+    <!-- 탭 문자 금지 (스페이스 사용) -->
+    <module name="FileTabCharacter">
+        <property name="eachLine" value="true"/>
+    </module>
+
+    <module name="TreeWalker">
+
+        <!-- ======================== -->
+        <!-- 네이밍 컨벤션             -->
+        <!-- ======================== -->
+
+        <!-- 클래스/인터페이스: PascalCase -->
+        <module name="TypeName"/>
+
+        <!-- 메서드: camelCase -->
+        <module name="MethodName"/>
+
+        <!-- 필드: camelCase -->
+        <module name="MemberName"/>
+
+        <!-- 파라미터: camelCase -->
+        <module name="ParameterName"/>
+
+        <!-- 로컬 변수: camelCase -->
+        <module name="LocalVariableName"/>
+
+        <!-- 상수: SCREAMING_SNAKE_CASE -->
+        <module name="ConstantName"/>
+
+        <!-- 패키지: 소문자 -->
+        <module name="PackageName">
+            <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+        </module>
+
+        <!-- ======================== -->
+        <!-- 임포트                    -->
+        <!-- ======================== -->
+
+        <!-- 와일드카드 임포트 금지 -->
+        <module name="AvoidStarImport"/>
+
+        <!-- 미사용 임포트 금지 -->
+        <module name="UnusedImports"/>
+
+        <!-- 중복 임포트 금지 -->
+        <module name="RedundantImport"/>
+
+        <!-- ======================== -->
+        <!-- 코드 구조                 -->
+        <!-- ======================== -->
+
+        <!-- 메서드 길이: 50줄 권장 -->
+        <module name="MethodLength">
+            <property name="max" value="80"/>
+            <property name="severity" value="warning"/>
+        </module>
+
+        <!-- 파라미터 개수: 최대 7개 -->
+        <module name="ParameterNumber">
+            <property name="max" value="7"/>
+        </module>
+
+        <!-- 중첩 깊이: 최대 4 -->
+        <module name="NestedIfDepth">
+            <property name="max" value="4"/>
+        </module>
+
+        <!-- ======================== -->
+        <!-- 공백/포맷                 -->
+        <!-- ======================== -->
+
+        <!-- 줄 끝 공백 금지 -->
+        <module name="Regexp">
+            <property name="format" value="[ \t]+$"/>
+            <property name="illegalPattern" value="true"/>
+            <property name="message" value="줄 끝에 불필요한 공백이 있습니다."/>
+        </module>
+
+        <!-- ======================== -->
+        <!-- 코드 품질                 -->
+        <!-- ======================== -->
+
+        <!-- equals 재정의 시 hashCode도 재정의 -->
+        <module name="EqualsHashCode"/>
+
+        <!-- 빈 블록 금지 -->
+        <module name="EmptyBlock">
+            <property name="option" value="TEXT"/>
+            <property name="tokens" value="LITERAL_WHILE, LITERAL_TRY, LITERAL_FINALLY, LITERAL_DO, LITERAL_IF, LITERAL_ELSE, LITERAL_FOR, INSTANCE_INIT, STATIC_INIT, LITERAL_SWITCH, LITERAL_SYNCHRONIZED"/>
+        </module>
+
+        <!-- String 리터럴 == 비교 금지 -->
+        <module name="StringLiteralEquality"/>
+
+        <!-- 불필요한 세미콜론 금지 -->
+        <module name="EmptyStatement"/>
+
+        <!-- 불필요한 괄호 경고 -->
+        <module name="UnnecessaryParentheses"/>
+
+        <!-- ======================== -->
+        <!-- Javadoc (선택)            -->
+        <!-- ======================== -->
+
+        <!-- public 메서드 Javadoc (비즈니스 로직만 선택적 적용) -->
+        <!-- 주석: 필요 시 활성화 -->
+        <!--
+        <module name="JavadocMethod">
+            <property name="scope" value="public"/>
+            <property name="allowMissingParamTags" value="true"/>
+            <property name="allowMissingReturnTag" value="true"/>
+        </module>
+        -->
+
+    </module>
+
+</module>
