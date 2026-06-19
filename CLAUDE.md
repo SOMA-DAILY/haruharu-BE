@@ -15,6 +15,8 @@ Base package: `org.son.haruharu`
 | 이슈 없이 "만들어줘" 요청 | `/create-issue` → `/bdd-implement` | bdd-workflow |
 | 새 도메인 추가 | `/new-domain {도메인명}` → `/bdd-implement` | architecture |
 | PR 생성 | `/create-pr #이슈번호` | git-conventions |
+| 빌드/컴파일 실패 | `java-build-resolver` 에이전트 | - |
+| OAuth2 · JWT · Security 코드 수정 | `security-reviewer` 에이전트 필수 | - |
 
 > 이슈 없이 구현 요청 들어오면 **무조건 `/create-issue` 먼저.**
 
@@ -29,6 +31,18 @@ Base package: `org.son.haruharu`
 | [testing](.claude/rules/testing.md) | 테스트 작성 시 기준 확인 |
 | [code-style](.claude/rules/code-style.md) | 네이밍·응답 형식 확인 |
 | [git-conventions](.claude/rules/git-conventions.md) | 커밋·브랜치·PR 생성 시 |
+
+---
+
+## 참고 문서
+
+| 용도 | URL |
+|------|-----|
+| Claude Code Skills 공식 문서 | https://code.claude.com/docs/ko/skills |
+| Claude Code Sub-Agents 공식 문서 | https://code.claude.com/docs/ko/sub-agents |
+| Claude Code Hooks 가이드 | https://code.claude.com/docs/ko/hooks-guide |
+| Claude Code MCP 가이드 | https://code.claude.com/docs/ko/mcp |
+| ECC 하네스 레퍼런스 | https://github.com/affaan-m/ECC |
 
 ---
 

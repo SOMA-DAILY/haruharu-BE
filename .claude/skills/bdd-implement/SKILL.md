@@ -1,7 +1,7 @@
 ---
 description: BDD 기반 기능 구현 전체 루프. 이슈 시나리오 확인 → 테스트 작성(RED) → 구현(GREEN) → 실제 API 검증(VERIFY). 기능 구현 시작, 이슈 번호 또는 기능 설명을 받아 실행. "구현해줘", "만들어줘", "개발해줘" 요청 시 자동 적용.
 argument-hint: "[#이슈번호 또는 기능설명]"
-allowed-tools: Bash(./gradlew *) Bash(gh issue view *) Bash(gh issue list *) Bash(git status) Bash(git log *) Bash(git diff *) Read Grep Glob Write Edit WebFetch
+allowed-tools: Bash(./gradlew *) Bash(gh issue view *) Bash(gh issue list *) Bash(git status) Bash(git log *) Bash(git diff *) Read Grep Glob Write Edit WebFetch Agent
 ---
 
 ## 언제 쓰나?
@@ -73,15 +73,39 @@ GREEN 확인 후 다음 단계 진행.
 
 **실제 검증 없이 완료 처리 금지.**
 
-### Step 6. 린트 확인
+### Step 6. 코드 리뷰 (규모에 따라 분기)
+
+변경된 파일 수를 기준으로 판단:
+
+**3개 이상 파일 생성/수정 (새 기능, 새 도메인 포함):**
+`java-reviewer` 에이전트로 코드 품질 + 아키텍처 규칙 검증.
+
+```
+Agent: java-reviewer
+입력: 변경된 파일 경로 목록
+```
+
+OAuth2 · JWT · Security 관련 파일이 포함된 경우 추가로:
+```
+Agent: security-reviewer
+입력: 변경된 파일 경로 목록
+```
+
+FAIL/CRITICAL 항목은 즉시 수정 후 재검증.
+
+**단순 수정 (메서드 추가, 버그 픽스 등):**
+리뷰 에이전트 생략, 바로 Step 7로.
+
+### Step 7. 린트 확인
 
 ```bash
 ./gradlew lint
 ```
 
-### Step 7. 완료 보고
+### Step 8. 완료 보고
 
 - 생성/수정된 파일 목록
 - 테스트 결과
 - 실제 API 검증 결과 (요청/응답)
+- 리뷰 결과 (실행했다면)
 - PR 준비 완료 여부 → `/create-pr` 실행 제안

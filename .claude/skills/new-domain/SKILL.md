@@ -1,7 +1,7 @@
 ---
 description: 새 도메인의 4계층 패키지 스캐폴딩. 새로운 비즈니스 도메인 추가 시 사용. org.son.haruharu 패키지 기준으로 application/business/implement/storage 구조와 스텁 파일을 일괄 생성.
 argument-hint: "[도메인명]"
-allowed-tools: Write Bash(mkdir *) Read
+allowed-tools: Write Bash(mkdir *) Bash(./gradlew *) Read Agent
 ---
 
 ## 언제 쓰나?
@@ -105,7 +105,6 @@ public class {Domain} {
 package org.son.haruharu.domain.{domain}.implement;
 
 import lombok.RequiredArgsConstructor;
-import org.son.haruharu.domain.{domain}.storage.{Domain}Entity;
 import org.son.haruharu.domain.{domain}.storage.{Domain}JpaRepository;
 import org.springframework.stereotype.Component;
 
@@ -121,7 +120,6 @@ public class {Domain}Reader {
 package org.son.haruharu.domain.{domain}.implement;
 
 import lombok.RequiredArgsConstructor;
-import org.son.haruharu.domain.{domain}.storage.{Domain}Entity;
 import org.son.haruharu.domain.{domain}.storage.{Domain}JpaRepository;
 import org.springframework.stereotype.Component;
 
@@ -210,7 +208,26 @@ class {Domain}ServiceTest {
 }
 ```
 
-### Step 4. 완료 보고
+### Step 4. Reviewer 에이전트로 규칙 검증
+
+`domain-reviewer` 에이전트를 실행해 생성된 파일 전체를 검증한다.
+
+```
+Agent: domain-reviewer
+입력: 생성된 파일 경로 목록 + 도메인명
+```
+
+**FAIL 항목이 있으면 즉시 수정 후 재검증.** PASS 확인 전 다음 단계로 넘어가지 않는다.
+
+### Step 5. 빌드 검증
+
+```bash
+./gradlew build
+```
+
+컴파일 오류가 있으면 수정한다. 스텁 파일의 `UnsupportedOperationException`은 정상.
+
+### Step 6. 완료 보고
 
 생성된 파일 목록을 출력하고 다음 안내:
 - "이제 `/bdd-implement #{이슈번호}` 로 구현을 시작하세요."
