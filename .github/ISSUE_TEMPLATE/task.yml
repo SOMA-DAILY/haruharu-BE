@@ -1,0 +1,41 @@
+name: 📝 작업
+description: 리팩토링, 문서화, 설정 등 기술적 작업
+title: "chore: "
+labels: ["task"]
+assignees: []
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: "🏷️ 작업 유형"
+      options:
+        - "refactor - 코드 리팩토링"
+        - "docs - 문서화"
+        - "chore - 설정/빌드/의존성"
+        - "test - 테스트 보완"
+        - "perf - 성능 개선"
+        - "style - 코드 스타일"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "📌 작업 내용"
+      description: "무엇을 왜 해야 하나요?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: as_is_to_be
+    attributes:
+      label: "🔄 AS-IS / TO-BE"
+      placeholder: |
+        AS-IS: 현재 상태
+        TO-BE: 변경 후 상태
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "💬 특이사항 (선택)"
+      description: "주의사항, 참고 자료, 관련 이슈"

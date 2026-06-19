@@ -1,0 +1,44 @@
+name: ✨ 기능 요청
+description: 새로운 기능을 제안해주세요.
+title: "feat: "
+labels: ["feature"]
+assignees: []
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: "✨ 기능 설명"
+      description: "어떤 기능인지 간결하게 설명해주세요."
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: "📌 배경 및 목적"
+      description: "왜 이 기능이 필요한가요? 어떤 문제를 해결하나요?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: "📝 작업 내용"
+      placeholder: |
+        - [ ]
+        - [ ]
+
+  - type: textarea
+    id: api_spec
+    attributes:
+      label: "🔌 API 명세 (선택)"
+      placeholder: |
+        POST /api/...
+        Request:
+        Response:
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "💬 특이사항 (선택)"
+      description: "제약사항, 비즈니스 규칙, 주의점"

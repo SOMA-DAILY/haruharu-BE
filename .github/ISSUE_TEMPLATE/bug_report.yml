@@ -1,0 +1,52 @@
+name: 🐛 버그 리포트
+description: 버그를 발견하셨나요?
+title: "fix: "
+labels: ["bug"]
+assignees: []
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: "🐛 버그 설명"
+      description: "어떤 문제가 발생하나요?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: "🔁 재현 방법"
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_vs_actual
+    attributes:
+      label: "✅ 기대 결과 / ❌ 실제 결과"
+      placeholder: |
+        기대:
+        실제:
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "⚡ 심각도"
+      options:
+        - "Critical - 서비스 불가"
+        - "High - 주요 기능 불가"
+        - "Medium - 일부 기능 영향"
+        - "Low - 사소한 문제"
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "📝 추가 정보 (선택)"
+      description: "에러 로그, 스크린샷, 관련 API 엔드포인트"
