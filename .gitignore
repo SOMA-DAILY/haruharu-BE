@@ -35,3 +35,20 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Secrets ###
+.env
+.env.local
+.env.*.local
+.claude/settings.local.json
+
+# 프로필별 application yaml — 실제 값 포함 가능, git 비허용
+# application.yaml (base)는 ${} 플레이스홀더만 사용하므로 허용
+application-local*.yml
+application-local*.yaml
+application-dev*.yml
+application-dev*.yaml
+application-prod*.yml
+application-prod*.yaml
+application-staging*.yml
+application-staging*.yaml
