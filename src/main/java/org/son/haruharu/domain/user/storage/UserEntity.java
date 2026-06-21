@@ -1,0 +1,35 @@
+package org.son.haruharu.domain.user.storage;
+
+import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import org.son.haruharu.common.entity.BaseEntity;
+import org.son.haruharu.domain.user.implement.User;
+import org.son.haruharu.domain.user.implement.UserStatus;
+
+import java.util.UUID;
+
+@Entity
+@Table(name = "users")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class UserEntity extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(columnDefinition = "uuid")
+    private UUID id;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserStatus status;
+
+    public static UserEntity from(User user) {
+        var entity = new UserEntity();
+        entity.status = user.status();
+        return entity;
+    }
+
+    public User toDomain() {
+        return new User(id, status, createdAt);
+    }
+}
