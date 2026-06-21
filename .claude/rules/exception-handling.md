@@ -88,12 +88,23 @@ throw new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니
 
 ## API 응답 형식
 
+**성공**
 ```json
 {
-  "success": false,
+  "isSuccess": true,
+  "data": { ... }
+}
+```
+
+**실패** (`isSuccess == false`일 때만 `error` 필드 존재)
+```json
+{
+  "isSuccess": false,
   "data": null,
-  "error": "존재하지 않는 사용자입니다.",
-  "code": "USER_NOT_FOUND"
+  "error": {
+    "code": "USER_NOT_FOUND",
+    "message": "존재하지 않는 사용자입니다."
+  }
 }
 ```
 

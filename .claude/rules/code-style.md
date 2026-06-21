@@ -37,16 +37,29 @@
 
 ## API 응답 공통 래퍼
 
+`common/ApiResponse.java` + `common/ApiErrorDetail.java` 조합.
+
 ```java
-public record ApiResponse<T>(boolean success, T data, String error) {
+// 성공: error 필드 직렬화 제외 (@JsonInclude(NON_NULL))
+// 실패: error 필드에 중첩 객체 포함
+public record ApiResponse<T>(
+        @JsonProperty("isSuccess") boolean isSuccess,
+        T data,
+        @JsonInclude(JsonInclude.Include.NON_NULL) ApiErrorDetail error) {
+
     public static <T> ApiResponse<T> ok(T data) {
         return new ApiResponse<>(true, data, null);
     }
-    public static <T> ApiResponse<T> error(String message) {
-        return new ApiResponse<>(false, null, message);
+
+    public static <T> ApiResponse<T> error(ApiErrorDetail error) {
+        return new ApiResponse<>(false, null, error);
     }
 }
+
+public record ApiErrorDetail(String code, String message) {}
 ```
+
+`GlobalExceptionHandler`에서는 `ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage()))` 패턴을 사용한다.
 
 ## 불변성
 
