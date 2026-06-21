@@ -17,6 +17,10 @@ public class UserIdentityReader {
                 .orElseThrow(UserIdentityNotFoundException::new);
     }
 
+    public boolean existsByUserId(UUID userId) {
+        return userIdentityRepository.existsByUserId(userId);
+    }
+
     public boolean existsByCi(String ci) {
         return userIdentityRepository.existsByCi(ci);
     }

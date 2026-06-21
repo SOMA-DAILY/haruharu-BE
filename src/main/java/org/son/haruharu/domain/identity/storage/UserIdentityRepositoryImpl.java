@@ -20,6 +20,11 @@ public class UserIdentityRepositoryImpl implements UserIdentityRepository {
     }
 
     @Override
+    public boolean existsByUserId(UUID userId) {
+        return jpaRepository.existsByUserId(userId);
+    }
+
+    @Override
     public boolean existsByCi(String ci) {
         return jpaRepository.existsByCi(ci);
     }

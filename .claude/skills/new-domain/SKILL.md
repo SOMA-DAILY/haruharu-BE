@@ -39,13 +39,17 @@ src/main/java/org/son/haruharu/domain/{domain}/
 │       └── .gitkeep
 ├── implement/
 │   ├── {Domain}.java
+│   ├── {Domain}Repository.java
 │   ├── {Domain}Reader.java
 │   ├── {Domain}Writer.java
 │   └── exception/
 │       └── .gitkeep
 └── storage/
     ├── {Domain}Entity.java
-    └── {Domain}JpaRepository.java
+    ├── {Domain}JpaRepository.java
+    ├── {Domain}RepositoryImpl.java
+    └── exception/
+        └── .gitkeep
 
 src/test/java/org/son/haruharu/domain/{domain}/
 └── business/
@@ -89,6 +93,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class {Domain}Service {
     private final {Domain}Reader {domain}Reader;
     private final {Domain}Writer {domain}Writer;
+
+    // 읽기 메서드: 클래스 기본 readOnly = true 상속
+    // 쓰기 메서드: @Transactional 개별 추가
+    // @Transactional
+    // public {Domain}Response create({Domain}CreateCommand command) { ... }
 }
 ```
 
@@ -100,18 +109,30 @@ public class {Domain} {
 }
 ```
 
+**`{Domain}Repository.java`** — 포트 인터페이스
+```java
+package org.son.haruharu.domain.{domain}.implement;
+
+import java.util.Optional;
+
+public interface {Domain}Repository {
+    Optional<{Domain}> findById(Long id);
+    {Domain} save({Domain} {domain});
+    void deleteById(Long id);
+}
+```
+
 **`{Domain}Reader.java`**
 ```java
 package org.son.haruharu.domain.{domain}.implement;
 
 import lombok.RequiredArgsConstructor;
-import org.son.haruharu.domain.{domain}.storage.{Domain}JpaRepository;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
 public class {Domain}Reader {
-    private final {Domain}JpaRepository {domain}JpaRepository;
+    private final {Domain}Repository {domain}Repository;
 }
 ```
 
@@ -120,13 +141,12 @@ public class {Domain}Reader {
 package org.son.haruharu.domain.{domain}.implement;
 
 import lombok.RequiredArgsConstructor;
-import org.son.haruharu.domain.{domain}.storage.{Domain}JpaRepository;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
 public class {Domain}Writer {
-    private final {Domain}JpaRepository {domain}JpaRepository;
+    private final {Domain}Repository {domain}Repository;
 }
 ```
 
@@ -169,6 +189,39 @@ package org.son.haruharu.domain.{domain}.storage;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface {Domain}JpaRepository extends JpaRepository<{Domain}Entity, Long> {
+}
+```
+
+**`{Domain}RepositoryImpl.java`** — DIP 구현체
+```java
+package org.son.haruharu.domain.{domain}.storage;
+
+import lombok.RequiredArgsConstructor;
+import org.son.haruharu.domain.{domain}.implement.{Domain};
+import org.son.haruharu.domain.{domain}.implement.{Domain}Repository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+@RequiredArgsConstructor
+public class {Domain}RepositoryImpl implements {Domain}Repository {
+    private final {Domain}JpaRepository jpaRepository;
+
+    @Override
+    public Optional<{Domain}> findById(Long id) {
+        return jpaRepository.findById(id).map({Domain}Entity::toDomain);
+    }
+
+    @Override
+    public {Domain} save({Domain} {domain}) {
+        return jpaRepository.save({Domain}Entity.from({domain})).toDomain();
+    }
+
+    @Override
+    public void deleteById(Long id) {
+        jpaRepository.deleteById(id);
+    }
 }
 ```
 

@@ -21,14 +21,9 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @PostMapping("/signup")
-    public ResponseEntity<ApiResponse<AuthTokenResponse>> signup(@RequestBody @Valid SocialAuthRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(authService.signup(request.toCommand())));
-    }
-
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthTokenResponse>> login(@RequestBody @Valid SocialAuthRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(authService.login(request.toCommand())));
+        return ResponseEntity.ok(ApiResponse.ok(authService.authenticate(request.toCommand())));
     }
 
     @PostMapping("/token/refresh")
