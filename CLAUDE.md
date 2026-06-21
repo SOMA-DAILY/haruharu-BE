@@ -2,8 +2,27 @@
 
 ## Tech Stack
 Java 21 · Spring Boot 4.1.0 · Gradle Groovy DSL · PostgreSQL · JPA + QueryDSL
-OAuth2 (Kakao/Apple) · JWT HttpOnly Cookie · Spring Security · PASS 지연인증
+OAuth2 (Kakao/Apple) · JWT · Spring Security · PASS 지연인증
 Base package: `org.son.haruharu`
+
+---
+
+## 작업 실행 게이트 (필수 — 절대 건너뛰지 않는다)
+
+모든 구현 요청은 아래 4단계 게이트를 순서대로 통과한다. 각 단계는 **사용자 승인 후** 다음 단계로 넘어간다.
+
+| 게이트 | 내 행동 | 사용자에게 묻는 것 |
+|--------|---------|-----------------|
+| 1. 계획 | 의도 파악 → 변경 범위·방법 정리해서 보여줌 | "이슈 생성할까요?" |
+| 2. 이슈 | GitHub 이슈 생성 | "구현 시작할까요?" |
+| 3. 구현 | BDD 사이클 + 코드 리뷰 | "커밋/PR 할까요?" |
+| 4. 커밋·PR | secret-policy 확인 → 커밋 → PR 생성 | — |
+
+**금지 사항:**
+- 사용자가 "만들어줘" 라고 해도 계획 없이 바로 코드 작성 금지
+- 이슈 없이 구현 시작 금지
+- 구현 완료 후 사용자 승인 없이 바로 커밋/PR 금지
+- 이전에 승인받은 단계라도 새 대화에선 현재 단계 다시 확인
 
 ---
 
@@ -53,12 +72,12 @@ Base package: `org.son.haruharu`
 ## 인증 아키텍처
 
 ```
-OAuth2 (Kakao/Apple) → 내부 JWT 발급 → HttpOnly Cookie
+OAuth2 (Kakao/Apple) → 내부 JWT 발급 → Response Body (access_token, refresh_token)
                                        ↓
                              Spring Security Filter
                                        ↓
                           PASS 지연인증 (회원가입 후 선택적)
 ```
 
-- AccessToken: 단기 만료, HttpOnly Cookie
-- RefreshToken: 장기 만료, HttpOnly Cookie + DB 저장
+- AccessToken: 단기 만료, Response Body 반환 → 클라이언트가 Authorization 헤더로 전송
+- RefreshToken: 장기 만료, Response Body 반환 + DB 저장 (재사용 탐지)

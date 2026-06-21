@@ -96,13 +96,22 @@ FAIL/CRITICAL 항목은 즉시 수정 후 재검증.
 **단순 수정 (메서드 추가, 버그 픽스 등):**
 리뷰 에이전트 생략, 바로 Step 7로.
 
-### Step 7. 린트 확인
+### Step 7. 시크릿 정책 체크
+
+`.claude/rules/secret-policy.md` 체크리스트 확인:
+- [ ] 구현 파일에 API 키, 토큰, 비밀번호 등 실제 값 하드코딩 없음
+- [ ] 설정값은 `application.yaml`의 `${ENV_VAR}` 플레이스홀더로만 참조
+- [ ] `application-local.yaml`, `.env` 파일이 staged에 없음 (`git diff --staged --name-only` 확인)
+
+OAuth2·JWT·PASS 인증 관련 코드라면 `security-reviewer` 에이전트 추가 실행.
+
+### Step 8. 린트 확인
 
 ```bash
 ./gradlew lint
 ```
 
-### Step 8. 완료 보고
+### Step 9. 완료 보고
 
 - 생성/수정된 파일 목록
 - 테스트 결과

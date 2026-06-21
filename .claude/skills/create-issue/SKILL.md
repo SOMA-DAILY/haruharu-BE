@@ -1,8 +1,8 @@
 ---
-description: GitHub 이슈 생성. 기능 요청(feat), 버그 수정(fix), 기술 작업(chore/refactor) 타입을 감지해 이슈 템플릿 형식에 맞게 생성. 새 작업 시작 전 호출.
+description: GitHub 이슈 생성. 기능 요청(feat), 버그 수정(fix), 기술 작업(chore/refactor) 타입을 감지해 .github/ISSUE_TEMPLATE/ 형식에 맞게 생성. 새 작업 시작 전 호출.
+when_to_use: 사용자가 "이슈 생성해줘", "이슈 만들어줘", "이슈 파줘", "이슈 먼저" 등 GitHub 이슈 생성을 요청할 때. 구현 요청에 이슈가 없을 때 자동 제안.
 argument-hint: "[이슈 설명]"
-disable-model-invocation: true
-allowed-tools: Bash(gh issue create *) Bash(gh issue list *) Bash(gh label list *)
+allowed-tools: Bash(gh issue create *) Bash(gh issue list *) Bash(gh label list *) Bash(cat *)
 ---
 
 ## 언제 쓰나?
@@ -91,7 +91,7 @@ gh issue create \
   --body "{작성된 본문}"
 ```
 
-label 매핑: `feat` → `feature`, `fix` → `bug`, `chore/refactor` → `task`
+label 매핑: `feat` → `Feature`, `fix` → `Hotfix`, `chore/refactor` → `Refactor`
 
 ### Step 5. 완료 보고
 

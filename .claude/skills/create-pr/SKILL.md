@@ -1,8 +1,8 @@
 ---
-description: PR 컨벤션 검증 + pull_request_template.md 기반 PR 생성. 기능 구현 완료 후 호출. develop 브랜치 대상 PR 자동 생성.
+description: PR 컨벤션 검증 + .github/pull_request_template.md 기반 PR 생성. 기능 구현 완료 후 호출. develop 브랜치 대상 PR 자동 생성.
+when_to_use: 사용자가 "PR 생성해줘", "PR 만들어줘", "PR 올려줘", "풀리퀘 만들어줘" 등 PR 생성을 요청할 때. /bdd-implement 완료 후 커밋/PR을 요청할 때.
 argument-hint: "[#이슈번호]"
-disable-model-invocation: true
-allowed-tools: Bash(git status) Bash(git log *) Bash(git diff *) Bash(git push *) Bash(gh pr create *) Bash(gh pr view *) Bash(./gradlew test)
+allowed-tools: Bash(git status) Bash(git log *) Bash(git diff *) Bash(git push *) Bash(gh pr create *) Bash(gh pr view *) Bash(./gradlew test) Bash(cat *)
 ---
 
 ## 언제 쓰나?

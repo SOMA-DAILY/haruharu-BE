@@ -11,16 +11,33 @@ model: inherit
 
 주어진 도메인명으로 4계층 패키지 구조와 스텁 파일을 생성한다.
 
+## 시크릿 정책 (필수)
+
+외부 API 키, DB 자격증명, JWT 시크릿 등 **모든 민감 값은 코드에 하드코딩하지 않는다.**
+
+- 설정값은 반드시 `application.yaml`의 `${ENV_VAR}` 플레이스홀더 형식으로만 참조한다.
+- 스텁 파일이나 설정 클래스 생성 시 실제 값(비밀번호, 토큰, URL 등) 삽입 금지.
+- 설정 바인딩이 필요한 경우 `@ConfigurationProperties` + `${...}` 사용.
+- `.claude/rules/secret-policy.md` 참조.
+
 ## 의존 규칙
 
 반드시 `.claude/rules/architecture.md`를 읽고 시작한다.
 
 핵심 규칙:
 - 단방향 의존성: `application → business → implement → storage`
-- `implement/`에 Repository 인터페이스 생성 **금지**
-- `implement/Reader`, `implement/Writer`는 `storage/JpaRepository` 직접 참조
+- `implement/{Domain}Repository.java` 포트 인터페이스 **반드시 생성**
+- `implement/Reader`, `implement/Writer`는 `{Domain}Repository` 인터페이스를 참조 (JpaRepository 직접 참조 금지)
+- `storage/{Domain}RepositoryImpl.java`가 `{Domain}Repository`를 implements (DIP)
 - `@Entity`는 `storage/`에만
 - 도메인 객체(`{Domain}.java`)는 `implement/`에, 순수 Java (JPA 없음)
+- `storage/exception/` 디렉토리 반드시 생성
+
+## @Transactional 규칙
+
+- Service 클래스: `@Transactional(readOnly = true)` 기본
+- 쓰기 Service 메서드: `@Transactional` 개별 오버라이드 (주석으로 안내)
+- Reader / Writer: 트랜잭션 없음
 
 ## 생성 구조
 
