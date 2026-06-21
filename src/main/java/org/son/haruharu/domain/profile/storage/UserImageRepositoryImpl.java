@@ -33,4 +33,9 @@ public class UserImageRepositoryImpl implements UserImageRepository {
     public void deleteById(UUID id) {
         userImageJpaRepository.deleteById(id);
     }
+
+    @Override
+    public void deleteAllByUserId(UUID userId) {
+        userImageJpaRepository.deleteAllByUserId(userId);
+    }
 }
