@@ -5,17 +5,16 @@ import org.son.haruharu.domain.auth.business.command.LogoutCommand;
 import org.son.haruharu.domain.auth.business.command.SocialAuthCommand;
 import org.son.haruharu.domain.auth.business.command.TokenRefreshCommand;
 import org.son.haruharu.domain.auth.business.dto.AuthTokenResponse;
-import org.son.haruharu.domain.auth.business.exception.AlreadyExistsCredentialException;
 import org.son.haruharu.domain.auth.business.exception.InactiveMemberException;
 import org.son.haruharu.domain.auth.business.exception.InvalidRefreshTokenException;
 import org.son.haruharu.domain.auth.business.exception.InvalidTokenException;
-import org.son.haruharu.domain.auth.business.exception.NotFoundMemberException;
 import org.son.haruharu.domain.auth.implement.RefreshToken;
 import org.son.haruharu.domain.auth.implement.RefreshTokenReader;
 import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
+import org.son.haruharu.domain.identity.implement.UserIdentityReader;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.domain.user.implement.UserStatus;
@@ -41,38 +40,32 @@ public class AuthService {
     private final UserWriter userWriter;
     private final UserCredentialReader userCredentialReader;
     private final UserCredentialWriter userCredentialWriter;
+    private final UserIdentityReader userIdentityReader;
     private final RefreshTokenReader refreshTokenReader;
     private final RefreshTokenWriter refreshTokenWriter;
     private final JwtProvider jwtProvider;
 
     @Transactional
-    public AuthTokenResponse signup(SocialAuthCommand command) {
+    public AuthTokenResponse authenticate(SocialAuthCommand command) {
         OAuthUserInfo userInfo = oAuthProviderRegistry.get(command.providerType()).verify(command.idToken());
 
-        if (userCredentialReader.existsByProviderTypeAndProviderId(command.providerType().name(), userInfo.providerId())) {
-            throw new AlreadyExistsCredentialException();
-        }
-
-        User user = userWriter.save(new User(null, UserStatus.ACTIVE, null));
-        userCredentialWriter.save(new UserCredential(null, user.id(), command.providerType().name(), userInfo.providerId()));
-
-        return issueNewTokenPair(user.id(), "UNVERIFIED");
-    }
-
-    @Transactional
-    public AuthTokenResponse login(SocialAuthCommand command) {
-        OAuthUserInfo userInfo = oAuthProviderRegistry.get(command.providerType()).verify(command.idToken());
-
-        UserCredential credential = userCredentialReader
+        UUID userId = userCredentialReader
             .findByProviderTypeAndProviderId(command.providerType().name(), userInfo.providerId())
-            .orElseThrow(NotFoundMemberException::new);
+            .map(credential -> {
+                User user = userReader.getById(credential.userId());
+                if (user.status() != UserStatus.ACTIVE) {
+                    throw new InactiveMemberException();
+                }
+                return credential.userId();
+            })
+            .orElseGet(() -> {
+                User user = userWriter.save(new User(null, UserStatus.ACTIVE, null));
+                userCredentialWriter.save(new UserCredential(null, user.id(), command.providerType().name(), userInfo.providerId()));
+                return user.id();
+            });
 
-        User user = userReader.getById(credential.userId());
-        if (user.status() != UserStatus.ACTIVE) {
-            throw new InactiveMemberException();
-        }
-
-        return issueNewTokenPair(credential.userId(), "UNVERIFIED");
+        String userStatus = userIdentityReader.existsByUserId(userId) ? "VERIFIED" : "UNVERIFIED";
+        return issueNewTokenPair(userId, userStatus);
     }
 
     @Transactional

@@ -10,11 +10,9 @@ import org.son.haruharu.domain.auth.business.command.LogoutCommand;
 import org.son.haruharu.domain.auth.business.command.SocialAuthCommand;
 import org.son.haruharu.domain.auth.business.command.TokenRefreshCommand;
 import org.son.haruharu.domain.auth.business.dto.AuthTokenResponse;
-import org.son.haruharu.domain.auth.business.exception.AlreadyExistsCredentialException;
 import org.son.haruharu.domain.auth.business.exception.InactiveMemberException;
 import org.son.haruharu.domain.auth.business.exception.InvalidRefreshTokenException;
 import org.son.haruharu.domain.auth.business.exception.InvalidTokenException;
-import org.son.haruharu.domain.auth.business.exception.NotFoundMemberException;
 import org.son.haruharu.domain.auth.implement.ProviderType;
 import org.son.haruharu.domain.auth.implement.RefreshToken;
 import org.son.haruharu.domain.auth.implement.RefreshTokenReader;
@@ -22,6 +20,7 @@ import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
+import org.son.haruharu.domain.identity.implement.UserIdentityReader;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.domain.user.implement.UserStatus;
@@ -53,6 +52,7 @@ class AuthServiceTest {
     @Mock UserWriter userWriter;
     @Mock UserCredentialReader userCredentialReader;
     @Mock UserCredentialWriter userCredentialWriter;
+    @Mock UserIdentityReader userIdentityReader;
     @Mock RefreshTokenReader refreshTokenReader;
     @Mock RefreshTokenWriter refreshTokenWriter;
     @Mock JwtProvider jwtProvider;
@@ -64,15 +64,16 @@ class AuthServiceTest {
         authService = new AuthService(
             oAuthProviderRegistry, userReader, userWriter,
             userCredentialReader, userCredentialWriter,
+            userIdentityReader,
             refreshTokenReader, refreshTokenWriter, jwtProvider
         );
     }
 
-    // ===================== signup =====================
+    // ===================== authenticate =====================
 
     @Test
-    @DisplayName("신규 소셜 계정으로 회원가입 시 토큰과 UNVERIFIED 상태가 반환된다")
-    void givenNewSocialAccount_whenSignup_thenReturnsTokensWithUnverifiedStatus() {
+    @DisplayName("신규 소셜 계정으로 인증 시 User+Credential을 생성하고 UNVERIFIED 상태를 반환한다")
+    void givenNewSocialAccount_whenAuthenticate_thenCreatesUserAndReturnsUnverified() {
         UUID userId = UUID.randomUUID();
         SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
         OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-123", "KAKAO");
@@ -80,42 +81,26 @@ class AuthServiceTest {
 
         given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(oAuthProvider);
         given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
-        given(userCredentialReader.existsByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(false);
+        given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(Optional.empty());
         given(userWriter.save(any())).willReturn(savedUser);
         given(userCredentialWriter.save(any())).willReturn(new UserCredential(UUID.randomUUID(), userId, "KAKAO", "kakao-sub-123"));
+        given(userIdentityReader.existsByUserId(userId)).willReturn(false);
         given(jwtProvider.generateAccessToken(userId)).willReturn("access-token");
         given(jwtProvider.generateRefreshToken(userId)).willReturn("refresh-token");
         given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
-        given(refreshTokenWriter.save(any())).willReturn(null);
 
-        AuthTokenResponse result = authService.signup(command);
+        AuthTokenResponse result = authService.authenticate(command);
 
         assertThat(result.accessToken()).isEqualTo("access-token");
         assertThat(result.refreshToken()).isEqualTo("refresh-token");
         assertThat(result.userStatus()).isEqualTo("UNVERIFIED");
+        then(userWriter).should().save(any());
+        then(userCredentialWriter).should().save(any());
     }
 
     @Test
-    @DisplayName("이미 가입된 소셜 계정으로 회원가입 시 409 예외가 발생한다")
-    void givenExistingSocialAccount_whenSignup_thenThrowsConflict() {
-        SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
-        OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-123", "KAKAO");
-
-        given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(oAuthProvider);
-        given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
-        given(userCredentialReader.existsByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(true);
-
-        assertThatThrownBy(() -> authService.signup(command))
-            .isInstanceOf(AlreadyExistsCredentialException.class);
-
-        then(userWriter).should(never()).save(any());
-    }
-
-    // ===================== login =====================
-
-    @Test
-    @DisplayName("가입된 활성 계정으로 로그인 시 토큰이 반환된다")
-    void givenRegisteredActiveAccount_whenLogin_thenReturnsTokens() {
+    @DisplayName("기존 계정 + identity 없음: 로그인 성공 후 UNVERIFIED 반환")
+    void givenExistingAccountWithoutIdentity_whenAuthenticate_thenReturnsUnverified() {
         UUID userId = UUID.randomUUID();
         SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
         OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-123", "KAKAO");
@@ -126,35 +111,43 @@ class AuthServiceTest {
         given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
         given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(Optional.of(credential));
         given(userReader.getById(userId)).willReturn(user);
+        given(userIdentityReader.existsByUserId(userId)).willReturn(false);
         given(jwtProvider.generateAccessToken(userId)).willReturn("access-token");
         given(jwtProvider.generateRefreshToken(userId)).willReturn("refresh-token");
         given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
-        given(refreshTokenWriter.save(any())).willReturn(null);
 
-        AuthTokenResponse result = authService.login(command);
+        AuthTokenResponse result = authService.authenticate(command);
 
-        assertThat(result.accessToken()).isEqualTo("access-token");
-        assertThat(result.refreshToken()).isEqualTo("refresh-token");
         assertThat(result.userStatus()).isEqualTo("UNVERIFIED");
+        then(userWriter).should(never()).save(any());
     }
 
     @Test
-    @DisplayName("가입되지 않은 소셜 계정으로 로그인 시 404 예외가 발생한다")
-    void givenUnregisteredSocialAccount_whenLogin_thenThrowsNotFound() {
-        SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
-        OAuthUserInfo userInfo = new OAuthUserInfo("unknown-sub", "KAKAO");
+    @DisplayName("기존 계정 + identity 있음: 로그인 성공 후 VERIFIED 반환")
+    void givenExistingAccountWithIdentity_whenAuthenticate_thenReturnsVerified() {
+        UUID userId = UUID.randomUUID();
+        SocialAuthCommand command = new SocialAuthCommand(ProviderType.APPLE, "valid-id-token");
+        OAuthUserInfo userInfo = new OAuthUserInfo("apple-sub-456", "APPLE");
+        UserCredential credential = new UserCredential(UUID.randomUUID(), userId, "APPLE", "apple-sub-456");
+        User user = new User(userId, UserStatus.ACTIVE, LocalDateTime.now());
 
-        given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(oAuthProvider);
+        given(oAuthProviderRegistry.get(ProviderType.APPLE)).willReturn(oAuthProvider);
         given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
-        given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "unknown-sub")).willReturn(Optional.empty());
+        given(userCredentialReader.findByProviderTypeAndProviderId("APPLE", "apple-sub-456")).willReturn(Optional.of(credential));
+        given(userReader.getById(userId)).willReturn(user);
+        given(userIdentityReader.existsByUserId(userId)).willReturn(true);
+        given(jwtProvider.generateAccessToken(userId)).willReturn("access-token");
+        given(jwtProvider.generateRefreshToken(userId)).willReturn("refresh-token");
+        given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
 
-        assertThatThrownBy(() -> authService.login(command))
-            .isInstanceOf(NotFoundMemberException.class);
+        AuthTokenResponse result = authService.authenticate(command);
+
+        assertThat(result.userStatus()).isEqualTo("VERIFIED");
     }
 
     @Test
-    @DisplayName("비활성화된 계정으로 로그인 시 403 예외가 발생한다")
-    void givenBannedMember_whenLogin_thenThrowsForbidden() {
+    @DisplayName("비활성화된 계정으로 인증 시 InactiveMemberException이 발생한다")
+    void givenBannedMember_whenAuthenticate_thenThrowsForbidden() {
         UUID userId = UUID.randomUUID();
         SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
         OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-banned", "KAKAO");
@@ -166,7 +159,7 @@ class AuthServiceTest {
         given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-banned")).willReturn(Optional.of(credential));
         given(userReader.getById(userId)).willReturn(bannedUser);
 
-        assertThatThrownBy(() -> authService.login(command))
+        assertThatThrownBy(() -> authService.authenticate(command))
             .isInstanceOf(InactiveMemberException.class);
 
         then(jwtProvider).should(never()).generateAccessToken(any());
@@ -188,7 +181,6 @@ class AuthServiceTest {
         given(jwtProvider.generateAccessToken(userId)).willReturn("new-access-token");
         given(jwtProvider.generateRefreshToken(userId)).willReturn("new-refresh-token");
         given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
-        given(refreshTokenWriter.save(any())).willReturn(null);
 
         AuthTokenResponse result = authService.refresh(new TokenRefreshCommand(rawToken));
 
