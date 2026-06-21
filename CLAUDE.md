@@ -34,6 +34,7 @@ Base package: `org.son.haruharu`
 | [git-conventions](.claude/rules/git-conventions.md) | 커밋·브랜치·PR 생성 시 |
 | [modification-policy](.claude/rules/modification-policy.md) | 파일 수정 시 항상 — 타인 코드 포함 |
 | [secret-policy](.claude/rules/secret-policy.md) | 커밋·PR 생성 전 필수 확인 |
+| [exception-handling](.claude/rules/exception-handling.md) | 예외 클래스 추가·수정 시 계층·네이밍 확인 |
 
 ---
 

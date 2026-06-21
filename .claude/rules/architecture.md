@@ -17,21 +17,30 @@ src/main/java/org/son/haruharu/
 │       │   ├── {Domain}Service.java        # @Service
 │       │   ├── command/                    # 입력 Command
 │       │   ├── dto/                        # 출력 Response DTO
-│       │   └── exception/                 # 비즈니스 규칙 위반
+│       │   └── exception/                 # 비즈니스 규칙 위반 (extends BusinessException)
 │       │
 │       ├── implement/                      # 실제 도메인 로직
 │       │   ├── {Domain}.java               # 순수 도메인 객체 (JPA 없음)
 │       │   ├── {Domain}Reader.java         # @Component 읽기
 │       │   ├── {Domain}Writer.java         # @Component 쓰기
-│       │   └── exception/                 # 도메인 불변식 위반
+│       │   └── exception/                 # 도메인 불변식 위반 (extends BusinessException)
 │       │
 │       └── storage/                        # 영속성
 │           ├── {Domain}Entity.java         # @Entity + from() / toDomain()
-│           └── {Domain}JpaRepository.java  # JpaRepository<Entity, ID>
+│           ├── {Domain}JpaRepository.java  # JpaRepository<Entity, ID>
+│           └── exception/                 # 영속성 조회 실패 (extends BusinessException)
+│
+├── common/
+│   └── exception/
+│       ├── BadRequestException.java        # abstract, 400
+│       ├── NotFoundException.java          # abstract, 404
+│       ├── UnauthorizedException.java      # abstract, 401
+│       ├── ForbiddenException.java         # abstract, 403
+│       └── ConflictException.java          # abstract, 409
 │
 ├── infrastructure/                         # 외부 시스템 어댑터 (OAuth 등)
 ├── config/
-├── handler/                                # @RestControllerAdvice
+├── handler/                                # @RestControllerAdvice (GlobalExceptionHandler)
 └── utils/
 ```
 
