@@ -14,4 +14,8 @@ public class RefreshTokenReader {
         return refreshTokenRepository.findByTokenHash(tokenHash)
                 .orElseThrow(RefreshTokenNotFoundException::new);
     }
+
+    public java.util.Optional<RefreshToken> findByTokenHash(String tokenHash) {
+        return refreshTokenRepository.findByTokenHash(tokenHash);
+    }
 }

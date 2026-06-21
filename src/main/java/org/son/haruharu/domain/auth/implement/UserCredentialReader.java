@@ -14,4 +14,12 @@ public class UserCredentialReader {
         return userCredentialRepository.findByProviderTypeAndProviderId(providerType, providerId)
                 .orElseThrow(UserCredentialNotFoundException::new);
     }
+
+    public boolean existsByProviderTypeAndProviderId(String providerType, String providerId) {
+        return userCredentialRepository.findByProviderTypeAndProviderId(providerType, providerId).isPresent();
+    }
+
+    public java.util.Optional<UserCredential> findByProviderTypeAndProviderId(String providerType, String providerId) {
+        return userCredentialRepository.findByProviderTypeAndProviderId(providerType, providerId);
+    }
 }

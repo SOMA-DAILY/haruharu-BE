@@ -39,10 +39,14 @@ public class UserCredentialEntity extends BaseEntity {
     private String providerId;
 
     public static UserCredentialEntity from(UserCredential userCredential) {
-        throw new UnsupportedOperationException("TODO");
+        UserCredentialEntity entity = new UserCredentialEntity();
+        entity.userId = userCredential.userId();
+        entity.providerType = userCredential.providerType();
+        entity.providerId = userCredential.providerId();
+        return entity;
     }
 
     public UserCredential toDomain() {
-        throw new UnsupportedOperationException("TODO");
+        return new UserCredential(id, userId, providerType, providerId);
     }
 }

@@ -16,16 +16,23 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
 
     @Override
     public Optional<RefreshToken> findByTokenHash(String tokenHash) {
-        throw new UnsupportedOperationException("TODO");
+        return refreshTokenJpaRepository.findByTokenHash(tokenHash)
+            .map(RefreshTokenEntity::toDomain);
     }
 
     @Override
     public RefreshToken save(RefreshToken refreshToken) {
-        throw new UnsupportedOperationException("TODO");
+        return refreshTokenJpaRepository.save(RefreshTokenEntity.from(refreshToken)).toDomain();
     }
 
     @Override
     public void revokeAllByUserId(UUID userId) {
-        // TODO
+        refreshTokenJpaRepository.deleteByUserId(userId);
+    }
+
+    @Override
+    public void revokeByTokenHash(String tokenHash) {
+        refreshTokenJpaRepository.findByTokenHash(tokenHash)
+            .ifPresent(RefreshTokenEntity::revoke);
     }
 }

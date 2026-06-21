@@ -18,4 +18,8 @@ public class RefreshTokenWriter {
     public void revokeAllByUserId(UUID userId) {
         refreshTokenRepository.revokeAllByUserId(userId);
     }
+
+    public void revokeByTokenHash(String tokenHash) {
+        refreshTokenRepository.revokeByTokenHash(tokenHash);
+    }
 }
