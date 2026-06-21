@@ -1,4 +1,4 @@
-package org.son.haruharu.utils;
+package org.son.haruharu.common;
 
 public record ApiResponse<T>(boolean success, T data, String error, String code) {
 
@@ -8,9 +8,5 @@ public record ApiResponse<T>(boolean success, T data, String error, String code)
 
     public static <T> ApiResponse<T> error(String message, String code) {
         return new ApiResponse<>(false, null, message, code);
-    }
-
-    public static <T> ApiResponse<T> error(String message) {
-        return new ApiResponse<>(false, null, message, null);
     }
 }

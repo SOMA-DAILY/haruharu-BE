@@ -1,15 +1,8 @@
 package org.son.haruharu.common.exception;
 
-public abstract class ForbiddenException extends RuntimeException {
-
-    private final String code;
+public abstract class ForbiddenException extends BusinessException {
 
     protected ForbiddenException(String code, String message) {
-        super(message);
-        this.code = code;
-    }
-
-    public String getCode() {
-        return code;
+        super(code, message);
     }
 }

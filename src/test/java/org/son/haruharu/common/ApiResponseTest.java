@@ -1,4 +1,4 @@
-package org.son.haruharu.utils;
+package org.son.haruharu.common;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,9 +10,7 @@ class ApiResponseTest {
     @Test
     @DisplayName("성공 데이터로 ok() 호출 시 success=true, data 포함, error=null 반환")
     void givenData_whenOk_thenSuccessTrueWithData() {
-        String data = "hello";
-
-        ApiResponse<String> response = ApiResponse.ok(data);
+        ApiResponse<String> response = ApiResponse.ok("hello");
 
         assertThat(response.success()).isTrue();
         assertThat(response.data()).isEqualTo("hello");
@@ -32,24 +30,13 @@ class ApiResponseTest {
     }
 
     @Test
-    @DisplayName("에러 메시지로 error() 호출 시 success=false, data=null, error 포함 반환")
-    void givenErrorMessage_whenError_thenSuccessFalseWithMessage() {
-        ApiResponse<Void> response = ApiResponse.error("유저를 찾을 수 없습니다");
-
-        assertThat(response.success()).isFalse();
-        assertThat(response.data()).isNull();
-        assertThat(response.error()).isEqualTo("유저를 찾을 수 없습니다");
-        assertThat(response.code()).isNull();
-    }
-
-    @Test
     @DisplayName("에러 메시지와 코드로 error() 호출 시 success=false, error와 code 포함 반환")
     void givenErrorMessageAndCode_whenError_thenSuccessFalseWithMessageAndCode() {
-        ApiResponse<Void> response = ApiResponse.error("유저를 찾을 수 없습니다", "U001");
+        ApiResponse<Void> response = ApiResponse.error("존재하지 않는 사용자입니다.", "USER_NOT_FOUND");
 
         assertThat(response.success()).isFalse();
         assertThat(response.data()).isNull();
-        assertThat(response.error()).isEqualTo("유저를 찾을 수 없습니다");
-        assertThat(response.code()).isEqualTo("U001");
+        assertThat(response.error()).isEqualTo("존재하지 않는 사용자입니다.");
+        assertThat(response.code()).isEqualTo("USER_NOT_FOUND");
     }
 }

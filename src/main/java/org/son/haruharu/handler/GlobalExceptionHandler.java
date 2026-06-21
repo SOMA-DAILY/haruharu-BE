@@ -7,7 +7,7 @@ import org.son.haruharu.common.exception.ConflictException;
 import org.son.haruharu.common.exception.ForbiddenException;
 import org.son.haruharu.common.exception.NotFoundException;
 import org.son.haruharu.common.exception.UnauthorizedException;
-import org.son.haruharu.utils.ApiResponse;
+import org.son.haruharu.common.ApiResponse;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -67,31 +67,31 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException e) {
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error(e.getMessage(), "INVALID_INPUT"));
+                .body(ApiResponse.error("잘못된 요청 파라미터입니다.", "INVALID_INPUT"));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error("잘못된 타입의 요청입니다. {{ " + e.getMessage() + " }}", "INVALID_TYPE"));
+                .body(ApiResponse.error("잘못된 타입의 요청입니다.", "INVALID_TYPE"));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error("잘못된 RequestBody입니다.", "INVALID_REQUEST_BODY"));
+                .body(ApiResponse.error("잘못된 요청 바디입니다.", "INVALID_REQUEST_BODY"));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
-                .body(ApiResponse.error("허용되지 않은 메소드입니다. {{ " + e.getMessage() + " }}", "METHOD_NOT_ALLOWED"));
+                .body(ApiResponse.error("허용되지 않는 HTTP 메서드입니다.", "METHOD_NOT_ALLOWED"));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error("올바르지 않은 경로입니다. {{ /" + e.getResourcePath() + " }}", "NOT_FOUND"));
+                .body(ApiResponse.error("요청한 경로를 찾을 수 없습니다.", "NOT_FOUND"));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

@@ -1,15 +1,8 @@
 package org.son.haruharu.common.exception;
 
-public abstract class ConflictException extends RuntimeException {
-
-    private final String code;
+public abstract class ConflictException extends BusinessException {
 
     protected ConflictException(String code, String message) {
-        super(message);
-        this.code = code;
-    }
-
-    public String getCode() {
-        return code;
+        super(code, message);
     }
 }
