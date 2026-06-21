@@ -1,4 +1,4 @@
-package org.son.haruharu.domain.user.business.command;
+package org.son.haruharu.domain.profile.business.command;
 
 import org.son.haruharu.domain.profile.implement.UserProfile;
 

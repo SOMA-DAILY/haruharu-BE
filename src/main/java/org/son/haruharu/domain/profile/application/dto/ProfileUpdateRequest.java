@@ -1,8 +1,8 @@
-package org.son.haruharu.domain.user.application.dto;
+package org.son.haruharu.domain.profile.application.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import org.son.haruharu.domain.user.business.command.UpdateProfileCommand;
+import org.son.haruharu.domain.profile.business.command.UpdateProfileCommand;
 
 import java.time.LocalDate;
 
