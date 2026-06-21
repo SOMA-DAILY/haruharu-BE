@@ -15,11 +15,12 @@ public class UserCredentialRepositoryImpl implements UserCredentialRepository {
 
     @Override
     public Optional<UserCredential> findByProviderTypeAndProviderId(String providerType, String providerId) {
-        throw new UnsupportedOperationException("TODO");
+        return userCredentialJpaRepository.findByProviderTypeAndProviderId(providerType, providerId)
+            .map(UserCredentialEntity::toDomain);
     }
 
     @Override
     public UserCredential save(UserCredential userCredential) {
-        throw new UnsupportedOperationException("TODO");
+        return userCredentialJpaRepository.save(UserCredentialEntity.from(userCredential)).toDomain();
     }
 }

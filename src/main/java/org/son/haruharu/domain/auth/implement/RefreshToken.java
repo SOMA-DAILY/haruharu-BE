@@ -9,4 +9,12 @@ public record RefreshToken(
         String tokenHash,
         LocalDateTime expiresAt,
         LocalDateTime revokedAt
-) {}
+) {
+    public boolean isExpired() {
+        return expiresAt.isBefore(LocalDateTime.now());
+    }
+
+    public boolean isRevoked() {
+        return revokedAt != null;
+    }
+}

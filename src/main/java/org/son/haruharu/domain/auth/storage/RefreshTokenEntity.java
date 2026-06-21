@@ -38,10 +38,19 @@ public class RefreshTokenEntity extends BaseEntity {
     private LocalDateTime revokedAt;
 
     public static RefreshTokenEntity from(RefreshToken refreshToken) {
-        throw new UnsupportedOperationException("TODO");
+        RefreshTokenEntity entity = new RefreshTokenEntity();
+        entity.userId = refreshToken.userId();
+        entity.tokenHash = refreshToken.tokenHash();
+        entity.expiresAt = refreshToken.expiresAt();
+        entity.revokedAt = refreshToken.revokedAt();
+        return entity;
     }
 
     public RefreshToken toDomain() {
-        throw new UnsupportedOperationException("TODO");
+        return new RefreshToken(id, userId, tokenHash, expiresAt, revokedAt);
+    }
+
+    public void revoke() {
+        this.revokedAt = java.time.LocalDateTime.now();
     }
 }

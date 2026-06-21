@@ -10,4 +10,6 @@ public interface RefreshTokenRepository {
     RefreshToken save(RefreshToken refreshToken);
 
     void revokeAllByUserId(UUID userId);
+
+    void revokeByTokenHash(String tokenHash);
 }
