@@ -8,4 +8,5 @@ public interface UserIdentityRepository {
     boolean existsByUserId(UUID userId);
     boolean existsByCi(String ci);
     UserIdentity save(UserIdentity userIdentity);
+    void deleteByUserId(UUID userId);
 }

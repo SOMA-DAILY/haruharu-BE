@@ -55,6 +55,14 @@ public class JwtProvider {
         }
     }
 
+    public boolean isAccessToken(String token) {
+        try {
+            return "ACCESS".equals(parseClaims(token).get("type"));
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     private String buildToken(UUID userId, long expiryMs, String type) {
         Instant now = Instant.now();
         return Jwts.builder()

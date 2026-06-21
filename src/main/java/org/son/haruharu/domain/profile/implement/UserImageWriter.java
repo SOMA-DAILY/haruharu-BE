@@ -20,4 +20,8 @@ public class UserImageWriter {
     public void deleteById(UUID id) {
         userImageRepository.deleteById(id);
     }
+
+    public void deleteAllByUserId(UUID userId) {
+        userImageRepository.deleteAllByUserId(userId);
+    }
 }

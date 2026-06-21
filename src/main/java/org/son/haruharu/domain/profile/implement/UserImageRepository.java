@@ -10,4 +10,6 @@ public interface UserImageRepository {
     UserImage save(UserImage userImage);
 
     void deleteById(UUID id);
+
+    void deleteAllByUserId(UUID userId);
 }

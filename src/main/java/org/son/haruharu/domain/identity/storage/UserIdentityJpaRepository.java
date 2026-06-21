@@ -9,4 +9,5 @@ public interface UserIdentityJpaRepository extends JpaRepository<UserIdentityEnt
     Optional<UserIdentityEntity> findByUserId(UUID userId);
     boolean existsByUserId(UUID userId);
     boolean existsByCi(String ci);
+    void deleteByUserId(UUID userId);
 }

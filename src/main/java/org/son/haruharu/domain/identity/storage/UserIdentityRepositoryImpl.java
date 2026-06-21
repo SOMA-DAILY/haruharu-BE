@@ -33,4 +33,9 @@ public class UserIdentityRepositoryImpl implements UserIdentityRepository {
     public UserIdentity save(UserIdentity userIdentity) {
         return jpaRepository.save(UserIdentityEntity.from(userIdentity)).toDomain();
     }
+
+    @Override
+    public void deleteByUserId(UUID userId) {
+        jpaRepository.deleteByUserId(userId);
+    }
 }
