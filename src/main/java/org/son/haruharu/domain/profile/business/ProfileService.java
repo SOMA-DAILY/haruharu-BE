@@ -49,7 +49,8 @@ public class ProfileService {
 
     @Transactional
     public ProfileResponse updateProfile(UUID userId, UpdateProfileCommand command) {
-        UserProfile existing = userProfileReader.getByUserId(userId);
+        UserProfile existing = userProfileReader.findByUserId(userId)
+            .orElseGet(() -> UserProfile.empty(userId));
         UserProfile updated = command.applyTo(existing);
         UserProfile saved = userProfileWriter.save(updated);
         List<UserImage> images = userImageReader.getAllByUserId(userId);

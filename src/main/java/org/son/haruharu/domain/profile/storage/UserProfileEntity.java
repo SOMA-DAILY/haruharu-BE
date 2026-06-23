@@ -10,7 +10,8 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
-@Table(name = "user_profiles")
+@Table(name = "user_profiles",
+       uniqueConstraints = @UniqueConstraint(name = "uk_user_profiles_user_id", columnNames = "user_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserProfileEntity extends BaseEntity {
 
