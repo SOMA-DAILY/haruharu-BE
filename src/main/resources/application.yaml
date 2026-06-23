@@ -2,33 +2,27 @@ spring:
   application:
     name: haruharu
 
+  profiles:
+    default: local
+
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
-    hibernate:
-      ddl-auto: ${DDL_AUTO}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: false
     open-in-view: false
 
 jwt:
-  secret: ${JWT_SECRET}
-  access-token-expiry-ms: ${JWT_ACCESS_TOKEN_EXPIRY_MS:1800000}
-  refresh-token-expiry-ms: ${JWT_REFRESH_TOKEN_EXPIRY_MS:2592000000}
+  access-token-expiry-ms: 1800000
+  refresh-token-expiry-ms: 2592000000
 
 oauth:
   providers:
     kakao:
-      client-id: ${KAKAO_CLIENT_ID}
       issuer: https://kauth.kakao.com
       public-key-uri: https://kauth.kakao.com/.well-known/jwks.json
     apple:
-      client-id: ${APPLE_CLIENT_ID}
       issuer: https://appleid.apple.com
       public-key-uri: https://appleid.apple.com/auth/keys

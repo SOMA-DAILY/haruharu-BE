@@ -3,15 +3,16 @@
 
 STAGED=$(git diff --staged --name-only)
 
-# 1. 프로필 yaml 파일 커밋 차단
-BLOCKED=$(echo "$STAGED" | grep -E "application-(local|dev|prod|staging)[.-].*\.(yml|yaml)$")
+# 1. local/staging 프로필 yaml 파일 커밋 차단 (실제 값 포함 가능)
+#    dev/prod는 플레이스홀더(${})만 사용하므로 추적 허용 — 아래 #2에서 하드코딩 시크릿 검사
+BLOCKED=$(echo "$STAGED" | grep -E "application-(local|staging)[.-].*\.(yml|yaml)$")
 if [ -n "$BLOCKED" ]; then
-    echo "BLOCKED: 프로필 yaml 파일은 git에 올릴 수 없습니다."
+    echo "BLOCKED: local/staging 프로필 yaml 파일은 git에 올릴 수 없습니다."
     echo "$BLOCKED"
     exit 1
 fi
 
-# 2. application*.yaml 에서 하드코딩된 시크릿 탐지
+# 2. application*.yaml 에서 하드코딩된 시크릿 탐지 (dev/prod 프로필 포함)
 YAML_FILES=$(echo "$STAGED" | grep -E "application.*\.(yml|yaml)$")
 for file in $YAML_FILES; do
     SECRETS=$(git show ":$file" 2>/dev/null \

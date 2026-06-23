@@ -46,9 +46,5 @@ out/
 # application.yaml (base)는 ${} 플레이스홀더만 사용하므로 허용
 application-local*.yml
 application-local*.yaml
-application-dev*.yml
-application-dev*.yaml
-application-prod*.yml
-application-prod*.yaml
 application-staging*.yml
 application-staging*.yaml
