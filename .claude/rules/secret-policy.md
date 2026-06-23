@@ -11,8 +11,9 @@
 |------|---------|------|
 | `application.yaml` | O | `${}` 플레이스홀더만 포함 |
 | `application-local.yaml` | X | 로컬 실제 값 포함 가능 |
-| `application-dev.yaml` | X | 개발 서버 시크릿 |
-| `application-prod.yaml` | X | 운영 시크릿 |
+| `application-dev.yaml` | O | `${}` 플레이스홀더만 포함 (팀 공유) |
+| `application-prod.yaml` | O | `${}` 플레이스홀더만 포함 (팀 공유) |
+| `application-staging.yaml` | X | 실제 값 포함 가능 |
 | `.env*` | X | 환경변수 실제 값 |
 
 ## 허용/금지 패턴 예시
@@ -37,7 +38,7 @@ spring:
 
 ## 커밋 전 필수 체크리스트 (CRITICAL)
 
-- [ ] `git diff --staged --name-only` 에 `application-local`, `application-dev`, `application-prod` 파일 없음
+- [ ] `git diff --staged --name-only` 에 `application-local`, `application-staging` 파일 없음 (dev/prod는 플레이스홀더만 있으면 허용)
 - [ ] `application*.yaml` 파일에서 `password:`, `secret:`, `token:`, `api-key:` 뒤에 `${` 외 실제 값 없음
 - [ ] `.env` 파일이 staged에 없음
 
