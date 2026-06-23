@@ -21,7 +21,4 @@ public class UserIdentityReader {
         return userIdentityRepository.existsByUserId(userId);
     }
 
-    public boolean existsByCi(String ci) {
-        return userIdentityRepository.existsByCi(ci);
-    }
 }

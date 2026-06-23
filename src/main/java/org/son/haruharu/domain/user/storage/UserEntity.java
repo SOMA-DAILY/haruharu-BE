@@ -25,6 +25,7 @@ public class UserEntity extends BaseEntity {
 
     public static UserEntity from(User user) {
         var entity = new UserEntity();
+        entity.id = user.id();
         entity.status = user.status();
         return entity;
     }

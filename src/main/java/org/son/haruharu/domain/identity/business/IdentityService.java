@@ -31,6 +31,15 @@ public class IdentityService {
         this.passVerificationPort = passVerificationPort;
     }
 
+    public boolean isVerified(UUID userId) {
+        return userIdentityReader.existsByUserId(userId);
+    }
+
+    @Transactional
+    public void deleteIdentity(UUID userId) {
+        userIdentityWriter.deleteByUserId(userId);
+    }
+
     @Transactional
     public void verifyIdentity(UUID userId, VerifyIdentityCommand command) {
         if (userIdentityReader.existsByUserId(userId)) {

@@ -36,6 +36,17 @@ public class ProfileService {
         this.userImageWriter = userImageWriter;
     }
 
+    public ProfileResponse getProfile(UUID userId) {
+        UserProfile profile = userProfileReader.getByUserId(userId);
+        List<UserImage> images = userImageReader.getAllByUserId(userId);
+        return ProfileResponse.from(profile, images);
+    }
+
+    @Transactional
+    public void deleteAllImages(UUID userId) {
+        userImageWriter.deleteAllByUserId(userId);
+    }
+
     @Transactional
     public ProfileResponse updateProfile(UUID userId, UpdateProfileCommand command) {
         UserProfile existing = userProfileReader.getByUserId(userId);
