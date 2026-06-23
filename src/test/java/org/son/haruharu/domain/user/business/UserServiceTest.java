@@ -6,13 +6,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.son.haruharu.domain.identity.implement.UserIdentityReader;
-import org.son.haruharu.domain.identity.implement.UserIdentityWriter;
-import org.son.haruharu.domain.profile.implement.UserImage;
-import org.son.haruharu.domain.profile.implement.UserImageReader;
-import org.son.haruharu.domain.profile.implement.UserImageWriter;
-import org.son.haruharu.domain.profile.implement.UserProfile;
-import org.son.haruharu.domain.profile.implement.UserProfileReader;
+import org.son.haruharu.domain.identity.business.IdentityService;
+import org.son.haruharu.domain.profile.business.ProfileService;
+import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.user.business.dto.UserProfileResponse;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserReader;
@@ -34,38 +30,28 @@ class UserServiceTest {
 
     @Mock UserReader userReader;
     @Mock UserWriter userWriter;
-    @Mock UserProfileReader userProfileReader;
-    @Mock UserImageReader userImageReader;
-    @Mock UserIdentityReader userIdentityReader;
-    @Mock UserImageWriter userImageWriter;
-    @Mock UserIdentityWriter userIdentityWriter;
+    @Mock ProfileService profileService;
+    @Mock IdentityService identityService;
 
     UserService userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(
-            userReader, userWriter,
-            userProfileReader, userImageReader,
-            userIdentityReader,
-            userImageWriter, userIdentityWriter
-        );
+        userService = new UserService(userReader, userWriter, profileService, identityService);
     }
 
     @Test
     @DisplayName("로그인한 유저가 내 프로필 조회 시 프로필·이미지·인증 여부를 반환한다")
     void givenLoggedInUser_whenGetMyProfile_thenReturnsAggregatedProfile() {
         UUID userId = UUID.randomUUID();
-        UserProfile profile = new UserProfile(UUID.randomUUID(), userId,
-            "MALE", LocalDate.of(1998, 5, 15), "서울", "직장인",
-            175, "INFP", "테스터", "가끔", "비흡연", "무교", "잔잔한");
-        List<UserImage> images = List.of(
-            new UserImage(UUID.randomUUID(), userId, "https://image1.png", 0)
+        ProfileResponse profileResponse = new ProfileResponse(
+            "테스터", "MALE", LocalDate.of(1998, 5, 15), "서울", "직장인",
+            175, "INFP", "가끔", "비흡연", "무교", "잔잔한",
+            List.of("https://image1.png")
         );
 
-        given(userProfileReader.getByUserId(userId)).willReturn(profile);
-        given(userImageReader.getAllByUserId(userId)).willReturn(images);
-        given(userIdentityReader.existsByUserId(userId)).willReturn(true);
+        given(profileService.getProfile(userId)).willReturn(profileResponse);
+        given(identityService.isVerified(userId)).willReturn(true);
 
         UserProfileResponse result = userService.getMyProfile(userId);
 
@@ -85,8 +71,8 @@ class UserServiceTest {
 
         userService.withdraw(userId);
 
-        then(userImageWriter).should().deleteAllByUserId(userId);
-        then(userIdentityWriter).should().deleteByUserId(userId);
+        then(profileService).should().deleteAllImages(userId);
+        then(identityService).should().deleteIdentity(userId);
         then(userWriter).should().save(any());
     }
 }

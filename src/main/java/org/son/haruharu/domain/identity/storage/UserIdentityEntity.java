@@ -54,10 +54,22 @@ public class UserIdentityEntity {
     private LocalDateTime verifiedAt;
 
     public static UserIdentityEntity from(UserIdentity userIdentity) {
-        throw new UnsupportedOperationException("TODO");
+        UserIdentityEntity entity = new UserIdentityEntity();
+        entity.id = userIdentity.id();
+        entity.userId = userIdentity.userId();
+        entity.ci = userIdentity.ci();
+        entity.di = userIdentity.di();
+        entity.phoneNumber = userIdentity.phoneNumber();
+        entity.birthday = userIdentity.birthday();
+        entity.gender = userIdentity.gender();
+        entity.userName = userIdentity.userName();
+        entity.operator = userIdentity.operator();
+        entity.isForeigner = userIdentity.isForeigner();
+        entity.verifiedAt = userIdentity.verifiedAt();
+        return entity;
     }
 
     public UserIdentity toDomain() {
-        throw new UnsupportedOperationException("TODO");
+        return new UserIdentity(id, userId, ci, di, phoneNumber, birthday, gender, userName, operator, isForeigner, verifiedAt);
     }
 }
