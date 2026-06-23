@@ -5,6 +5,6 @@ import org.son.haruharu.common.exception.UnauthorizedException;
 public class InvalidTokenException extends UnauthorizedException {
 
     public InvalidTokenException() {
-        super("AUTH_401_INVALID_TOKEN", "유효하지 않은 토큰입니다.");
+        super("AUTH_INVALID_TOKEN", "유효하지 않은 토큰입니다.");
     }
 }

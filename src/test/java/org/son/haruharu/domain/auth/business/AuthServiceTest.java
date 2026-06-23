@@ -178,6 +178,7 @@ class AuthServiceTest {
 
         given(jwtProvider.isValid(rawToken)).willReturn(true);
         given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(refreshToken));
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.now()));
         given(jwtProvider.generateAccessToken(userId)).willReturn("new-access-token");
         given(jwtProvider.generateRefreshToken(userId)).willReturn("new-refresh-token");
         given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);

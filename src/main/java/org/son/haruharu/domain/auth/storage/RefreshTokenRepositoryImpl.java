@@ -33,6 +33,9 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
     @Override
     public void revokeByTokenHash(String tokenHash) {
         refreshTokenJpaRepository.findByTokenHash(tokenHash)
-            .ifPresent(RefreshTokenEntity::revoke);
+            .ifPresent(entity -> {
+                entity.revoke();
+                refreshTokenJpaRepository.save(entity);
+            });
     }
 }
