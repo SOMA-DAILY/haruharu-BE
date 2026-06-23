@@ -87,6 +87,11 @@ public class AuthService {
             throw new InvalidRefreshTokenException();
         }
 
+        User user = userReader.getById(refreshToken.userId());
+        if (user.status() != UserStatus.ACTIVE) {
+            throw new InactiveMemberException();
+        }
+
         refreshTokenWriter.revokeByTokenHash(tokenHash);
         return issueNewTokenPairOnly(refreshToken.userId());
     }
