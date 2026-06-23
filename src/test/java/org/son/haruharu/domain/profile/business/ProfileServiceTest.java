@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.profile.business.command.UpdateImagesCommand;
@@ -18,6 +19,7 @@ import org.son.haruharu.domain.profile.implement.UserProfileWriter;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,7 +59,7 @@ class ProfileServiceTest {
             175, "INFP", "기존닉", "안함", "비흡연", "무교", "활발한");
         UserProfile updated = command.applyTo(existing);
 
-        given(userProfileReader.getByUserId(userId)).willReturn(existing);
+        given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(existing));
         given(userProfileWriter.save(any())).willReturn(updated);
         given(userImageReader.getAllByUserId(userId)).willReturn(List.of());
 
@@ -65,6 +67,30 @@ class ProfileServiceTest {
 
         assertThat(result.nickname()).isEqualTo("새닉네임");
         then(userProfileWriter).should().save(any());
+    }
+
+    @Test
+    @DisplayName("프로필이 없는 신규 유저가 수정 요청 시 새 프로필을 생성해 저장한다")
+    void givenNoProfile_whenUpdateProfile_thenCreatesAndSaves() {
+        UUID userId = UUID.randomUUID();
+        UpdateProfileCommand command = new UpdateProfileCommand(
+            "MALE", LocalDate.of(1995, 3, 1), "서울", "회사원",
+            178, "ENFP", "하루", "가끔", "비흡연", "무교", "차분한"
+        );
+
+        given(userProfileReader.findByUserId(userId)).willReturn(Optional.empty());
+        given(userProfileWriter.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+        given(userImageReader.getAllByUserId(userId)).willReturn(List.of());
+
+        ProfileResponse result = profileService.updateProfile(userId, command);
+
+        assertThat(result.nickname()).isEqualTo("하루");
+
+        ArgumentCaptor<UserProfile> captor = ArgumentCaptor.forClass(UserProfile.class);
+        then(userProfileWriter).should().save(captor.capture());
+        UserProfile saved = captor.getValue();
+        assertThat(saved.userId()).isEqualTo(userId);
+        assertThat(saved.id()).isNull(); // 신규 row → id는 영속화 시점에 생성 위임
     }
 
     @Test

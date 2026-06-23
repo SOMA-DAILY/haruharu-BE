@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.auth.application;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.son.haruharu.common.ApiResponse;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@SecurityRequirements // 비인증 엔드포인트 — Swagger 전역 bearerAuth 해제(자물쇠 미표시)
 public class AuthController {
 
     private final AuthService authService;
