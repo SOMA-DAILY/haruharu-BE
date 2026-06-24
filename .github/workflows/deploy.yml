@@ -1,0 +1,49 @@
+name: Deploy
+
+# 수동 트리거 전용. 빌드는 image-build.yml(머지)에서 끝나고, 여기선 EC2 반영만 한다.
+# 실제 배포 로직은 scripts/deploy.sh 에 있고, 이 워크플로우는 입력·시크릿을 env 로 넘겨 호출만 한다.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '배포 환경'
+        required: true
+        type: choice
+        options: [dev, prod]
+      image_tag:
+        description: '배포할 이미지 태그 (비우면 dev=develop, prod=main 사용)'
+        required: false
+        default: ''
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run deploy script
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          APP_PORT: ${{ vars.APP_PORT }}
+          REPO: ${{ github.repository }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          DB_URL: ${{ secrets.DB_URL }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          APPLE_CLIENT_ID: ${{ secrets.APPLE_CLIENT_ID }}
+        run: bash scripts/deploy.sh

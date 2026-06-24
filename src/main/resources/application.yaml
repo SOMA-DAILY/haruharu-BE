@@ -26,3 +26,12 @@ oauth:
     apple:
       issuer: https://appleid.apple.com
       public-key-uri: https://appleid.apple.com/auth/keys
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
