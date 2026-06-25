@@ -18,7 +18,7 @@ class FifoMatchingStrategyTest {
         return IntStream.range(0, count)
             .mapToObj(i -> new MatchingQueue(
                 UUID.randomUUID(), UUID.randomUUID(), gender,
-                MatchingQueueStatus.QUEUED, LocalDateTime.now().plusSeconds(i)))
+                MatchingQueueStatus.QUEUED, LocalDateTime.now().plusSeconds(i), null))
             .toList();
     }
 

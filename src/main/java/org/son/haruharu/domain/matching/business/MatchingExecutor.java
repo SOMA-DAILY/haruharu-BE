@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -48,9 +49,9 @@ public class MatchingExecutor {
         this.roomMemberWriter = roomMemberWriter;
     }
 
-    /** scheduledDate 당일에 시작될 방을 확정한다. 반환값은 생성된 방 수. */
+    /** scheduledDate 당일에 시작될 방을 확정한다. matchedAt은 큐 MATCHED·멤버 입장 시각으로 함께 기록한다. 반환값은 생성된 방 수. */
     @Transactional
-    public int execute(LocalDate scheduledDate) {
+    public int execute(LocalDate scheduledDate, LocalDateTime matchedAt) {
         List<MatchingQueue> queued = matchingQueueReader.findAllQueued();
         List<MatchingQueue> males = queued.stream().filter(q -> MALE.equals(q.gender())).toList();
         List<MatchingQueue> females = queued.stream().filter(q -> FEMALE.equals(q.gender())).toList();
@@ -59,10 +60,10 @@ public class MatchingExecutor {
         for (MatchGroup group : groups) {
             Room room = roomWriter.save(Room.create(scheduledDate, ROOM_TOTAL_DAYS));
             List<RoomMember> members = group.all().stream()
-                .map(q -> RoomMember.of(room.id(), q.userId(), q.gender()))
+                .map(q -> RoomMember.of(room.id(), q.userId(), q.gender(), matchedAt))
                 .toList();
             roomMemberWriter.saveAll(members);
-            group.all().forEach(q -> matchingQueueWriter.save(q.matched()));
+            group.all().forEach(q -> matchingQueueWriter.save(q.matched(matchedAt)));
         }
         return groups.size();
     }

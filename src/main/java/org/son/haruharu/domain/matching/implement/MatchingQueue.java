@@ -8,20 +8,21 @@ public record MatchingQueue(
         UUID userId,
         String gender,
         MatchingQueueStatus status,
-        LocalDateTime queuedAt
+        LocalDateTime queuedAt,
+        LocalDateTime matchedAt
 ) {
-    /** 큐 참가: 신규 대기 항목 생성. id는 영속화 시점에 부여. */
+    /** 큐 참가: 신규 대기 항목 생성. id는 영속화 시점에 부여, matchedAt은 매칭 확정 전까지 null. */
     public static MatchingQueue join(UUID userId, String gender, LocalDateTime queuedAt) {
-        return new MatchingQueue(null, userId, gender, MatchingQueueStatus.QUEUED, queuedAt);
+        return new MatchingQueue(null, userId, gender, MatchingQueueStatus.QUEUED, queuedAt, null);
     }
 
     /** 큐 취소: 상태만 CANCELLED로 전이한 새 인스턴스 반환. */
     public MatchingQueue cancelled() {
-        return new MatchingQueue(id, userId, gender, MatchingQueueStatus.CANCELLED, queuedAt);
+        return new MatchingQueue(id, userId, gender, MatchingQueueStatus.CANCELLED, queuedAt, matchedAt);
     }
 
-    /** 매칭 확정: 상태만 MATCHED로 전이한 새 인스턴스 반환. */
-    public MatchingQueue matched() {
-        return new MatchingQueue(id, userId, gender, MatchingQueueStatus.MATCHED, queuedAt);
+    /** 매칭 확정: MATCHED로 전이하고 확정 시각을 기록한 새 인스턴스 반환. */
+    public MatchingQueue matched(LocalDateTime matchedAt) {
+        return new MatchingQueue(id, userId, gender, MatchingQueueStatus.MATCHED, queuedAt, matchedAt);
     }
 }
