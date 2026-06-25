@@ -88,8 +88,8 @@ class ImageApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("마이페이지 조회 응답이 age·is_identity_verified·image_urls(snake_case)로 직렬화되고 birthday는 노출되지 않는다")
-    void givenProfile_whenGetMe_thenReturnsAgeAndSnakeCase() throws Exception {
+    @DisplayName("마이페이지 조회 응답이 user_id·user_status·profile 중첩·images 객체배열(snake_case)로 직렬화되고 birthday는 노출되지 않는다")
+    void givenProfile_whenGetMe_thenReturnsNestedSnakeCase() throws Exception {
         UUID userId = UUID.randomUUID();
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "MALE", LocalDate.of(2000, 1, 1), "서울", "회사원",
@@ -97,10 +97,12 @@ class ImageApiIntegrationTest {
 
         mockMvc.perform(get("/api/v1/users/me").with(authentication(auth(userId))))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.nickname").value("하루"))
-            .andExpect(jsonPath("$.data.age").isNumber())
-            .andExpect(jsonPath("$.data.is_identity_verified").value(false))
-            .andExpect(jsonPath("$.data.image_urls").isArray())
-            .andExpect(jsonPath("$.data.birthday").doesNotExist());
+            .andExpect(jsonPath("$.data.user_id").exists())
+            .andExpect(jsonPath("$.data.user_status").value("UNVERIFIED"))
+            .andExpect(jsonPath("$.data.profile.nickname").value("하루"))
+            .andExpect(jsonPath("$.data.profile.age").isNumber())
+            .andExpect(jsonPath("$.data.profile.drinking_status").value("가끔"))
+            .andExpect(jsonPath("$.data.images").isArray())
+            .andExpect(jsonPath("$.data.profile.birthday").doesNotExist());
     }
 }

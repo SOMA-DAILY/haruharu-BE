@@ -15,6 +15,7 @@ import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
 import org.son.haruharu.domain.identity.implement.UserIdentityReader;
+import org.son.haruharu.domain.identity.implement.VerificationStatus;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.domain.user.implement.UserStatus;
@@ -64,7 +65,7 @@ public class AuthService {
                 return user.id();
             });
 
-        String userStatus = userIdentityReader.existsByUserId(userId) ? "VERIFIED" : "UNVERIFIED";
+        String userStatus = VerificationStatus.of(userIdentityReader.existsByUserId(userId)).name();
         return issueNewTokenPair(userId, userStatus);
     }
 

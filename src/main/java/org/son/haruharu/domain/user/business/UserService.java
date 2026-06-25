@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.user.business;
 
 import org.son.haruharu.domain.identity.business.IdentityService;
+import org.son.haruharu.domain.identity.implement.VerificationStatus;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.user.business.dto.UserProfileResponse;
@@ -36,8 +37,8 @@ public class UserService {
 
     public UserProfileResponse getMyProfile(UUID userId) {
         ProfileResponse profile = profileService.getProfile(userId);
-        boolean verified = identityService.isVerified(userId);
-        return UserProfileResponse.from(profile, verified);
+        VerificationStatus status = VerificationStatus.of(identityService.isVerified(userId));
+        return UserProfileResponse.from(userId, profile, status.name());
     }
 
     @Transactional
