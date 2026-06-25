@@ -1,0 +1,26 @@
+# 통합 테스트(@SpringBootTest) 전용 설정 — @ActiveProfiles("test")로 활성화.
+# DB는 H2 인메모리(PostgreSQL 호환 모드). Docker 불필요, 로컬/CI 동일.
+# 주의: PostgreSQL 네이티브 쿼리(ON CONFLICT, JSON 등) 검증이 필요한 테스트는 H2로 못 잡으므로
+#       그런 테스트는 별도로 Testcontainers를 사용한다.
+spring:
+  datasource:
+    url: jdbc:h2:mem:haruharu_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+# 운영 시크릿이 아닌 test-only 더미값. 환경변수가 있으면 그것을, 없으면 기본 더미를 사용한다.
+jwt:
+  secret: ${JWT_SECRET:test-only-secret-not-for-prod-haruharu-min-32bytes}
+
+oauth:
+  providers:
+    kakao:
+      client-id: ${KAKAO_CLIENT_ID:test-kakao-client-id}
+    apple:
+      client-id: ${APPLE_CLIENT_ID:test-apple-client-id}
