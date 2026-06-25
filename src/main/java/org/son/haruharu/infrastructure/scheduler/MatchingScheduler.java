@@ -30,7 +30,7 @@ public class MatchingScheduler {
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     public void runMatching() {
         try {
-            int rooms = matchingExecutor.execute(LocalDate.now(SEOUL));
+            int rooms = matchingExecutor.execute(LocalDate.now(SEOUL), LocalDateTime.now(SEOUL));
             log.info("매칭 배치 완료: {}개 방 확정", rooms);
         } catch (Exception e) {
             log.error("매칭 배치 실패", e);

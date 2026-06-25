@@ -75,7 +75,7 @@ class MatchingServiceTest {
         given(matchingQueueReader.isQueued(userId)).willReturn(false);
         given(matchingQueueWriter.save(any())).willAnswer(inv -> {
             MatchingQueue q = inv.getArgument(0);
-            return new MatchingQueue(UUID.randomUUID(), q.userId(), q.gender(), q.status(), q.queuedAt());
+            return new MatchingQueue(UUID.randomUUID(), q.userId(), q.gender(), q.status(), q.queuedAt(), q.matchedAt());
         });
 
         QueueResponse result = matchingService.joinQueue(userId);
@@ -91,7 +91,7 @@ class MatchingServiceTest {
     void givenQueued_whenLeaveQueue_thenSavesCancelled() {
         UUID userId = UUID.randomUUID();
         MatchingQueue queued = new MatchingQueue(
-            UUID.randomUUID(), userId, "MALE", MatchingQueueStatus.QUEUED, LocalDateTime.now());
+            UUID.randomUUID(), userId, "MALE", MatchingQueueStatus.QUEUED, LocalDateTime.now(), null);
         given(matchingQueueReader.getQueued(userId)).willReturn(queued);
 
         matchingService.leaveQueue(userId);

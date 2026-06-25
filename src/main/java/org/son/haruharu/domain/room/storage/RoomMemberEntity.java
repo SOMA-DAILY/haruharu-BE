@@ -10,6 +10,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.son.haruharu.domain.room.implement.RoomMember;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -30,16 +31,20 @@ public class RoomMemberEntity {
     @Column(nullable = false, length = 10)
     private String gender;
 
+    @Column(nullable = false)
+    private LocalDateTime joinedAt;
+
     public static RoomMemberEntity from(RoomMember member) {
         RoomMemberEntity entity = new RoomMemberEntity();
         entity.id = member.id();
         entity.roomId = member.roomId();
         entity.userId = member.userId();
         entity.gender = member.gender();
+        entity.joinedAt = member.joinedAt();
         return entity;
     }
 
     public RoomMember toDomain() {
-        return new RoomMember(id, roomId, userId, gender);
+        return new RoomMember(id, roomId, userId, gender, joinedAt);
     }
 }

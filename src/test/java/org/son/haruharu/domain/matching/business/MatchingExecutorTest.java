@@ -50,7 +50,7 @@ class MatchingExecutorTest {
         return IntStream.range(0, count)
             .mapToObj(i -> new MatchingQueue(
                 UUID.randomUUID(), UUID.randomUUID(), gender,
-                MatchingQueueStatus.QUEUED, LocalDateTime.now().plusSeconds(i)))
+                MatchingQueueStatus.QUEUED, LocalDateTime.now().plusSeconds(i), null))
             .toList();
     }
 
@@ -65,7 +65,7 @@ class MatchingExecutorTest {
                 r.totalDays(), r.currentDay(), r.startedAt(), r.endedAt());
         });
 
-        int created = executor.execute(LocalDate.now());
+        int created = executor.execute(LocalDate.now(), LocalDateTime.now());
 
         assertThat(created).isEqualTo(1);
         then(roomWriter).should(times(1)).save(any());
@@ -84,7 +84,7 @@ class MatchingExecutorTest {
                 r.totalDays(), r.currentDay(), r.startedAt(), r.endedAt());
         });
 
-        int created = executor.execute(LocalDate.now());
+        int created = executor.execute(LocalDate.now(), LocalDateTime.now());
 
         assertThat(created).isEqualTo(2);
         then(roomWriter).should(times(2)).save(any());
@@ -98,7 +98,7 @@ class MatchingExecutorTest {
         List<MatchingQueue> all = Stream.concat(queues("MALE", 2).stream(), queues("FEMALE", 3).stream()).toList();
         given(matchingQueueReader.findAllQueued()).willReturn(all);
 
-        int created = executor.execute(LocalDate.now());
+        int created = executor.execute(LocalDate.now(), LocalDateTime.now());
 
         assertThat(created).isZero();
         then(roomWriter).should(never()).save(any());

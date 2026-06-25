@@ -38,6 +38,9 @@ public class MatchingQueueEntity {
     @Column(nullable = false)
     private LocalDateTime queuedAt;
 
+    @Column
+    private LocalDateTime matchedAt;
+
     public static MatchingQueueEntity from(MatchingQueue queue) {
         MatchingQueueEntity entity = new MatchingQueueEntity();
         entity.id = queue.id();
@@ -45,10 +48,11 @@ public class MatchingQueueEntity {
         entity.gender = queue.gender();
         entity.status = queue.status();
         entity.queuedAt = queue.queuedAt();
+        entity.matchedAt = queue.matchedAt();
         return entity;
     }
 
     public MatchingQueue toDomain() {
-        return new MatchingQueue(id, userId, gender, status, queuedAt);
+        return new MatchingQueue(id, userId, gender, status, queuedAt, matchedAt);
     }
 }
