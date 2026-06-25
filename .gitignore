@@ -48,3 +48,8 @@ application-local*.yml
 application-local*.yaml
 application-staging*.yml
 application-staging*.yaml
+
+## CUSTOM ##
+local-kakao-test/
+.claude/ref/
+docker-compose.yml
