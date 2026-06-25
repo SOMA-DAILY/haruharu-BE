@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -33,6 +34,11 @@ public class IdentityService {
 
     public boolean isVerified(UUID userId) {
         return userIdentityReader.existsByUserId(userId);
+    }
+
+    /** 본인인증된 유저의 성별을 반환한다. 미인증(인증 정보 없음)이면 empty. */
+    public Optional<String> findVerifiedGender(UUID userId) {
+        return userIdentityReader.findByUserId(userId).map(UserIdentity::gender);
     }
 
     @Transactional
