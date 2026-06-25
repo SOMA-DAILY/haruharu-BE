@@ -21,7 +21,7 @@ public class UserImageEntity extends BaseEntity {
     @Column(nullable = false, columnDefinition = "uuid")
     private UUID userId;
 
-    @Column(nullable = false, length = 200)
+    @Column(nullable = false, length = 512)
     private String imageUrl;
 
     @Column(nullable = false)

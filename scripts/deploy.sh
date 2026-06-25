@@ -36,6 +36,8 @@ DB_PASSWORD=${DB_PASSWORD:-}
 JWT_SECRET=${JWT_SECRET:-}
 KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID:-}
 APPLE_CLIENT_ID=${APPLE_CLIENT_ID:-}
+AWS_REGION=${AWS_REGION:-ap-northeast-2}
+AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
 EOF
 
 # ── 3. SSH 키 준비 (keyscan 으로 호스트키 등록 → strict 검증 유지) ──

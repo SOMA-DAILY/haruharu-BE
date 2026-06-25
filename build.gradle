@@ -21,6 +21,7 @@ repositories {
 dependencyManagement {
     imports {
         mavenBom 'org.testcontainers:testcontainers-bom:1.21.0'
+        mavenBom 'software.amazon.awssdk:bom:2.31.18'
     }
 }
 
@@ -52,6 +53,10 @@ dependencies {
     // API Documentation
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 
+    // AWS S3 (presigned URL 업로드 — 프로필 이미지·영상)
+    implementation 'software.amazon.awssdk:s3'
+    implementation 'software.amazon.awssdk:url-connection-client'
+
     // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
@@ -60,6 +65,7 @@ dependencies {
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'

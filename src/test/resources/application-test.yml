@@ -24,3 +24,7 @@ oauth:
       client-id: ${KAKAO_CLIENT_ID:test-kakao-client-id}
     apple:
       client-id: ${APPLE_CLIENT_ID:test-apple-client-id}
+
+aws:
+  s3:
+    bucket: ${AWS_S3_BUCKET:test-bucket}

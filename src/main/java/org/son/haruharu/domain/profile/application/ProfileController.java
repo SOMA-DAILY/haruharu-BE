@@ -3,10 +3,14 @@ package org.son.haruharu.domain.profile.application;
 import jakarta.validation.Valid;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.profile.application.dto.ImageUpdateRequest;
+import org.son.haruharu.domain.profile.application.dto.PresignedUrlRequest;
 import org.son.haruharu.domain.profile.application.dto.ProfileUpdateRequest;
 import org.son.haruharu.domain.profile.business.ProfileService;
+import org.son.haruharu.domain.profile.business.dto.ImageUploadUrlResponse;
+import org.son.haruharu.domain.profile.business.dto.ImagesResponse;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,12 +36,19 @@ public class ProfileController {
         return ApiResponse.ok(profileService.updateProfile(userId, request.toCommand()));
     }
 
+    @PostMapping("/images/presigned-url")
+    public ApiResponse<ImageUploadUrlResponse> createImageUploadUrl(
+            @Valid @RequestBody PresignedUrlRequest request,
+            Authentication authentication) {
+        UUID userId = (UUID) authentication.getPrincipal();
+        return ApiResponse.ok(profileService.createImageUploadUrl(userId, request.filename()));
+    }
+
     @PutMapping("/images")
-    public ApiResponse<Void> updateImages(
+    public ApiResponse<ImagesResponse> updateImages(
             @Valid @RequestBody ImageUpdateRequest request,
             Authentication authentication) {
         UUID userId = (UUID) authentication.getPrincipal();
-        profileService.updateImages(userId, request.toCommand());
-        return ApiResponse.ok(null);
+        return ApiResponse.ok(profileService.updateImages(userId, request.toCommand()));
     }
 }
