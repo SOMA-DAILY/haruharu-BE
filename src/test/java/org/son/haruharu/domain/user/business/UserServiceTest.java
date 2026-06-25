@@ -41,13 +41,14 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("로그인한 유저가 내 프로필 조회 시 프로필·이미지·인증 여부를 반환한다")
+    @DisplayName("로그인한 유저가 내 프로필 조회 시 user_id·user_status·프로필·이미지를 반환한다")
     void givenLoggedInUser_whenGetMyProfile_thenReturnsAggregatedProfile() {
         UUID userId = UUID.randomUUID();
+        UUID imageId = UUID.randomUUID();
         ProfileResponse profileResponse = new ProfileResponse(
             "테스터", "MALE", 27, "서울", "직장인",
             175, "INFP", "가끔", "비흡연", "무교",
-            List.of("https://image1.png")
+            List.of(new ProfileResponse.ImageInfo(imageId, "https://image1.png", 0))
         );
 
         given(profileService.getProfile(userId)).willReturn(profileResponse);
@@ -55,9 +56,26 @@ class UserServiceTest {
 
         UserProfileResponse result = userService.getMyProfile(userId);
 
-        assertThat(result.nickname()).isEqualTo("테스터");
-        assertThat(result.imageUrls()).hasSize(1);
-        assertThat(result.isIdentityVerified()).isTrue();
+        assertThat(result.userId()).isEqualTo(userId);
+        assertThat(result.userStatus()).isEqualTo("VERIFIED");
+        assertThat(result.profile().nickname()).isEqualTo("테스터");
+        assertThat(result.profile().age()).isEqualTo(27);
+        assertThat(result.images()).hasSize(1);
+        assertThat(result.images().get(0).id()).isEqualTo(imageId);
+        assertThat(result.images().get(0).sortedOrder()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("미인증 유저 조회 시 user_status가 UNVERIFIED로 반환된다")
+    void givenUnverifiedUser_whenGetMyProfile_thenUserStatusUnverified() {
+        UUID userId = UUID.randomUUID();
+        given(profileService.getProfile(userId)).willReturn(new ProfileResponse(
+            "유저", "FEMALE", 25, "서울", "학생", 160, "ENFP", "안함", "비흡연", "무교", List.of()));
+        given(identityService.isVerified(userId)).willReturn(false);
+
+        UserProfileResponse result = userService.getMyProfile(userId);
+
+        assertThat(result.userStatus()).isEqualTo("UNVERIFIED");
     }
 
     @Test

@@ -4,28 +4,38 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 
 import java.util.List;
+import java.util.UUID;
 
 public record UserProfileResponse(
-        String nickname,
-        String gender,
-        Integer age,
-        String location,
-        String affiliation,
-        Integer height,
-        String mbti,
-        String drinkingStatus,
-        String smokingStatus,
-        String religion,
-        List<String> imageUrls,
-        @JsonProperty("is_identity_verified") boolean isIdentityVerified
+        @JsonProperty("user_id") UUID userId,
+        @JsonProperty("user_status") String userStatus,
+        ProfileSection profile,
+        List<ProfileResponse.ImageInfo> images
 ) {
-    public static UserProfileResponse from(ProfileResponse profile, boolean verified) {
+    public record ProfileSection(
+            String nickname,
+            String gender,
+            Integer age,
+            String location,
+            String affiliation,
+            Integer height,
+            String mbti,
+            @JsonProperty("drinking_status") String drinkingStatus,
+            @JsonProperty("smoking_status") String smokingStatus,
+            String religion
+    ) {}
+
+    public static UserProfileResponse from(UUID userId, ProfileResponse profile, String userStatus) {
         return new UserProfileResponse(
-            profile.nickname(), profile.gender(), profile.age(),
-            profile.location(), profile.affiliation(), profile.height(),
-            profile.mbti(), profile.drinkingStatus(), profile.smokingStatus(),
-            profile.religion(), profile.imageUrls(),
-            verified
+            userId,
+            userStatus,
+            new ProfileSection(
+                profile.nickname(), profile.gender(), profile.age(),
+                profile.location(), profile.affiliation(), profile.height(),
+                profile.mbti(), profile.drinkingStatus(), profile.smokingStatus(),
+                profile.religion()
+            ),
+            profile.images()
         );
     }
 }
