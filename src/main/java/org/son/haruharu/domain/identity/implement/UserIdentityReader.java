@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.son.haruharu.domain.identity.storage.exception.UserIdentityNotFoundException;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -19,6 +20,10 @@ public class UserIdentityReader {
 
     public boolean existsByUserId(UUID userId) {
         return userIdentityRepository.existsByUserId(userId);
+    }
+
+    public Optional<UserIdentity> findByUserId(UUID userId) {
+        return userIdentityRepository.findByUserId(userId);
     }
 
 }
