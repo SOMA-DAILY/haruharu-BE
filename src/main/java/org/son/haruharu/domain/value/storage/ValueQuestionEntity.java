@@ -36,10 +36,16 @@ public class ValueQuestionEntity extends BaseEntity {
     private boolean isActive;
 
     public static ValueQuestionEntity from(ValueQuestion valueQuestion) {
-        throw new UnsupportedOperationException("미구현");
+        var entity = new ValueQuestionEntity();
+        entity.id = valueQuestion.id();
+        entity.questionText = valueQuestion.questionText();
+        entity.category = valueQuestion.category();
+        entity.displayOrder = valueQuestion.displayOrder();
+        entity.isActive = valueQuestion.isActive();
+        return entity;
     }
 
     public ValueQuestion toDomain() {
-        throw new UnsupportedOperationException("미구현");
+        return new ValueQuestion(id, questionText, category, displayOrder, isActive);
     }
 }

@@ -37,10 +37,15 @@ public class UserValueAnswerEntity extends BaseEntity {
     private String answer;
 
     public static UserValueAnswerEntity from(UserValueAnswer userValueAnswer) {
-        throw new UnsupportedOperationException("미구현");
+        var entity = new UserValueAnswerEntity();
+        entity.id = userValueAnswer.id();
+        entity.userId = userValueAnswer.userId();
+        entity.questionId = userValueAnswer.questionId();
+        entity.answer = userValueAnswer.answer();
+        return entity;
     }
 
     public UserValueAnswer toDomain() {
-        throw new UnsupportedOperationException("미구현");
+        return new UserValueAnswer(id, userId, questionId, answer);
     }
 }
