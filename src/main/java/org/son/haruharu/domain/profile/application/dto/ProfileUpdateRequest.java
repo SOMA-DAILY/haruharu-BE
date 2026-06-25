@@ -16,14 +16,13 @@ public record ProfileUpdateRequest(
         @NotBlank @Size(max = 20) String nickname,
         String drinkingStatus,
         String smokingStatus,
-        String religion,
-        String atmosphereKeywords
+        String religion
 ) {
     public UpdateProfileCommand toCommand() {
         return new UpdateProfileCommand(
             gender, birthday, location, affiliation,
             height, mbti, nickname,
-            drinkingStatus, smokingStatus, religion, atmosphereKeywords
+            drinkingStatus, smokingStatus, religion
         );
     }
 }

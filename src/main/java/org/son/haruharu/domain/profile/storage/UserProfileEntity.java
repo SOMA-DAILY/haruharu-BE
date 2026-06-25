@@ -51,9 +51,6 @@ public class UserProfileEntity extends BaseEntity {
     @Column(length = 20)
     private String religion;
 
-    @Column(length = 255)
-    private String atmosphereKeywords;
-
     public static UserProfileEntity from(UserProfile userProfile) {
         var entity = new UserProfileEntity();
         entity.id = userProfile.id();
@@ -68,7 +65,6 @@ public class UserProfileEntity extends BaseEntity {
         entity.drinkingStatus = userProfile.drinkingStatus();
         entity.smokingStatus = userProfile.smokingStatus();
         entity.religion = userProfile.religion();
-        entity.atmosphereKeywords = userProfile.atmosphereKeywords();
         return entity;
     }
 
@@ -85,8 +81,7 @@ public class UserProfileEntity extends BaseEntity {
                 nickname,
                 drinkingStatus,
                 smokingStatus,
-                religion,
-                atmosphereKeywords
+                religion
         );
     }
 }

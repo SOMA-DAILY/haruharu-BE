@@ -14,15 +14,14 @@ public record UpdateProfileCommand(
         String nickname,
         String drinkingStatus,
         String smokingStatus,
-        String religion,
-        String atmosphereKeywords
+        String religion
 ) {
     public UserProfile applyTo(UserProfile existing) {
         return new UserProfile(
             existing.id(), existing.userId(),
             this.gender(), this.birthday(), this.location(), this.affiliation(),
             this.height(), this.mbti(), this.nickname(),
-            this.drinkingStatus(), this.smokingStatus(), this.religion(), this.atmosphereKeywords()
+            this.drinkingStatus(), this.smokingStatus(), this.religion()
         );
     }
 }

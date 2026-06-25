@@ -32,7 +32,7 @@ class ProfileUpsertIntegrationTest {
         UUID userId = UUID.randomUUID();
         UpdateProfileCommand command = new UpdateProfileCommand(
             "MALE", LocalDate.of(1995, 3, 1), "서울", "회사원",
-            178, "ENFP", "하루", "가끔", "비흡연", "무교", "차분한");
+            178, "ENFP", "하루", "가끔", "비흡연", "무교");
 
         profileService.updateProfile(userId, command);
 
@@ -47,11 +47,11 @@ class ProfileUpsertIntegrationTest {
         UUID userId = UUID.randomUUID();
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "MALE", LocalDate.of(1995, 3, 1), "서울", "회사원",
-            178, "ENFP", "하루", "가끔", "비흡연", "무교", "차분한"));
+            178, "ENFP", "하루", "가끔", "비흡연", "무교"));
 
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "FEMALE", LocalDate.of(1996, 6, 6), "부산", "학생",
-            165, "INFJ", "이틀", "안함", "비흡연", "무교", "활발한"));
+            165, "INFJ", "이틀", "안함", "비흡연", "무교"));
 
         List<UserProfileEntity> rows = jpaRepository.findAll().stream()
             .filter(e -> e.toDomain().userId().equals(userId))

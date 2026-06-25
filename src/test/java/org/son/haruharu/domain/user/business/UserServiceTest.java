@@ -45,8 +45,8 @@ class UserServiceTest {
     void givenLoggedInUser_whenGetMyProfile_thenReturnsAggregatedProfile() {
         UUID userId = UUID.randomUUID();
         ProfileResponse profileResponse = new ProfileResponse(
-            "테스터", "MALE", LocalDate.of(1998, 5, 15), "서울", "직장인",
-            175, "INFP", "가끔", "비흡연", "무교", "잔잔한",
+            "테스터", "MALE", 27, "서울", "직장인",
+            175, "INFP", "가끔", "비흡연", "무교",
             List.of("https://image1.png")
         );
 
