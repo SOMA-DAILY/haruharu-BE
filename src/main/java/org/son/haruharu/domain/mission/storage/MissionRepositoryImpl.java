@@ -19,6 +19,11 @@ public class MissionRepositoryImpl implements MissionRepository {
     }
 
     @Override
+    public java.util.Optional<Mission> findById(java.util.UUID id) {
+        return jpaRepository.findById(id).map(MissionEntity::toDomain);
+    }
+
+    @Override
     public List<Mission> saveAll(List<Mission> missions) {
         return jpaRepository.saveAll(missions.stream().map(MissionEntity::from).toList()).stream()
                 .map(MissionEntity::toDomain)

@@ -19,6 +19,11 @@ public class UploadSlotRepositoryImpl implements UploadSlotRepository {
     }
 
     @Override
+    public java.util.Optional<UploadSlot> findById(java.util.UUID id) {
+        return jpaRepository.findById(id).map(UploadSlotEntity::toDomain);
+    }
+
+    @Override
     public List<UploadSlot> findByDayNumber(int dayNumber) {
         return jpaRepository.findByDayNumberOrderBySlotIndexAsc(dayNumber).stream()
                 .map(UploadSlotEntity::toDomain).toList();

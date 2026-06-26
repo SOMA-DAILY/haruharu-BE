@@ -15,4 +15,6 @@ public interface RoomMemberRepository {
     List<RoomMember> findByRoomId(UUID roomId);
 
     Optional<RoomMember> findByRoomIdAndUserId(UUID roomId, UUID userId);
+
+    Optional<RoomMember> findById(UUID id);
 }

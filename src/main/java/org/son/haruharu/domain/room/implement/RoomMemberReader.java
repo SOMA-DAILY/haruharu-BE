@@ -2,6 +2,7 @@ package org.son.haruharu.domain.room.implement;
 
 import lombok.RequiredArgsConstructor;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
+import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -12,6 +13,11 @@ import java.util.UUID;
 public class RoomMemberReader {
 
     private final RoomMemberRepository roomMemberRepository;
+
+    public RoomMember getById(UUID id) {
+        return roomMemberRepository.findById(id)
+                .orElseThrow(RoomMemberNotFoundException::new);
+    }
 
     public List<RoomMember> findByUserId(UUID userId) {
         return roomMemberRepository.findByUserId(userId);

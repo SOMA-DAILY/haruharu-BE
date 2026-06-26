@@ -41,4 +41,9 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     public Optional<RoomMember> findByRoomIdAndUserId(UUID roomId, UUID userId) {
         return jpaRepository.findByRoomIdAndUserId(roomId, userId).map(RoomMemberEntity::toDomain);
     }
+
+    @Override
+    public Optional<RoomMember> findById(UUID id) {
+        return jpaRepository.findById(id).map(RoomMemberEntity::toDomain);
+    }
 }
