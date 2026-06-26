@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.room.implement;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface RoomMemberRepository {
@@ -10,4 +11,6 @@ public interface RoomMemberRepository {
     List<RoomMember> findByUserId(UUID userId);
 
     List<RoomMember> findByRoomId(UUID roomId);
+
+    Optional<RoomMember> findByRoomIdAndUserId(UUID roomId, UUID userId);
 }
