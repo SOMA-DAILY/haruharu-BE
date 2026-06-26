@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.value.implement;
 
+import org.son.haruharu.domain.value.storage.exception.UserValueAnswerNotFoundException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -16,5 +17,10 @@ public class UserValueAnswerReader {
 
     public List<UserValueAnswer> getAllByUserId(UUID userId) {
         return userValueAnswerRepository.findAllByUserId(userId);
+    }
+
+    public UserValueAnswer getById(UUID id) {
+        return userValueAnswerRepository.findById(id)
+                .orElseThrow(UserValueAnswerNotFoundException::new);
     }
 }

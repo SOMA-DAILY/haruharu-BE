@@ -9,4 +9,8 @@ public record FinalSelection(
         UUID roomMemberId,
         UUID selectedMemberId,
         LocalDateTime submittedAt
-) {}
+) {
+    public static FinalSelection of(UUID roomMemberId, UUID selectedMemberId, LocalDateTime submittedAt) {
+        return new FinalSelection(null, roomMemberId, selectedMemberId, submittedAt);
+    }
+}
