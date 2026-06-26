@@ -1,8 +1,10 @@
 package org.son.haruharu.domain.room.application;
 
 import org.son.haruharu.common.ApiResponse;
+import org.son.haruharu.domain.room.business.RoomMembersService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.RoomTodayService;
+import org.son.haruharu.domain.room.business.dto.MembersResponse;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
 import org.springframework.security.core.Authentication;
@@ -19,10 +21,13 @@ public class RoomController {
 
     private final RoomService roomService;
     private final RoomTodayService roomTodayService;
+    private final RoomMembersService roomMembersService;
 
-    public RoomController(RoomService roomService, RoomTodayService roomTodayService) {
+    public RoomController(RoomService roomService, RoomTodayService roomTodayService,
+                          RoomMembersService roomMembersService) {
         this.roomService = roomService;
         this.roomTodayService = roomTodayService;
+        this.roomMembersService = roomMembersService;
     }
 
     @GetMapping("/me")
@@ -41,5 +46,11 @@ public class RoomController {
     public ApiResponse<TodayResponse> getToday(@PathVariable UUID roomId, Authentication authentication) {
         UUID userId = (UUID) authentication.getPrincipal();
         return ApiResponse.ok(roomTodayService.getToday(roomId, userId));
+    }
+
+    @GetMapping("/{roomId}/members")
+    public ApiResponse<MembersResponse> getMembers(@PathVariable UUID roomId, Authentication authentication) {
+        UUID userId = (UUID) authentication.getPrincipal();
+        return ApiResponse.ok(roomMembersService.getMembers(roomId, userId));
     }
 }
