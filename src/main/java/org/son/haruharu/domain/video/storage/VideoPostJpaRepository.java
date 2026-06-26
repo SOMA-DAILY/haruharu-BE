@@ -8,4 +8,10 @@ import java.util.UUID;
 public interface VideoPostJpaRepository extends JpaRepository<VideoPostEntity, UUID> {
 
     long countByRoomMemberIdAndUploadSlotIdInAndDeletedAtIsNull(UUID roomMemberId, List<UUID> slotIds);
+
+    boolean existsByRoomMemberIdAndUploadSlotIdAndDeletedAtIsNull(UUID roomMemberId, UUID uploadSlotId);
+
+    boolean existsByRoomMemberIdAndUploadSlotIdAndMissionIdIsNotNull(UUID roomMemberId, UUID uploadSlotId);
+
+    List<VideoPostEntity> findByUploadSlotIdInAndDeletedAtIsNullAndIsHiddenFalse(List<UUID> slotIds);
 }

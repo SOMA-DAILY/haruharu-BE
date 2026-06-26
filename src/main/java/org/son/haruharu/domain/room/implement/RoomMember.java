@@ -15,4 +15,9 @@ public record RoomMember(
     public static RoomMember of(UUID roomId, UUID userId, String gender, LocalDateTime joinedAt) {
         return new RoomMember(null, roomId, userId, gender, 0, joinedAt);
     }
+
+    /** 열쇠 지급/차감. 새 인스턴스를 반환(불변). */
+    public RoomMember addPoints(int amount) {
+        return new RoomMember(id, roomId, userId, gender, pointSum + amount, joinedAt);
+    }
 }

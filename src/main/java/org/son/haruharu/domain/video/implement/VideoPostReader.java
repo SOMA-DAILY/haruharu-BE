@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.video.implement;
 
 import lombok.RequiredArgsConstructor;
+import org.son.haruharu.domain.video.storage.exception.VideoPostNotFoundException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -12,11 +13,28 @@ public class VideoPostReader {
 
     private final VideoPostRepository videoPostRepository;
 
-    /** 슬롯이 비어 있으면(미시작 Day 등) 0. video_posts가 비어 있는 #39 시점엔 항상 0. */
+    public VideoPost getById(UUID id) {
+        return videoPostRepository.findById(id)
+                .orElseThrow(VideoPostNotFoundException::new);
+    }
+
+    /** 슬롯이 비어 있으면(미시작 Day 등) 0. */
     public long countUploaded(UUID roomMemberId, List<UUID> slotIds) {
         if (slotIds.isEmpty()) {
             return 0;
         }
         return videoPostRepository.countUploaded(roomMemberId, slotIds);
+    }
+
+    public boolean hasActiveUpload(UUID roomMemberId, UUID uploadSlotId) {
+        return videoPostRepository.existsActiveBySlot(roomMemberId, uploadSlotId);
+    }
+
+    public boolean hasEverUploadedMission(UUID roomMemberId, UUID uploadSlotId) {
+        return videoPostRepository.existsMissionUploadBySlot(roomMemberId, uploadSlotId);
+    }
+
+    public List<VideoPost> getFeed(List<UUID> slotIds) {
+        return videoPostRepository.findFeed(slotIds);
     }
 }

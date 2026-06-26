@@ -8,6 +8,8 @@ public interface RoomMemberRepository {
 
     List<RoomMember> saveAll(List<RoomMember> members);
 
+    RoomMember save(RoomMember member);
+
     List<RoomMember> findByUserId(UUID userId);
 
     List<RoomMember> findByRoomId(UUID roomId);

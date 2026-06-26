@@ -23,6 +23,11 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     }
 
     @Override
+    public RoomMember save(RoomMember member) {
+        return jpaRepository.save(RoomMemberEntity.from(member)).toDomain();
+    }
+
+    @Override
     public List<RoomMember> findByUserId(UUID userId) {
         return jpaRepository.findByUserId(userId).stream().map(RoomMemberEntity::toDomain).toList();
     }
