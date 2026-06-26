@@ -1,0 +1,26 @@
+package org.son.haruharu.domain.coin.storage;
+
+import lombok.RequiredArgsConstructor;
+import org.son.haruharu.domain.coin.implement.CoinWallet;
+import org.son.haruharu.domain.coin.implement.CoinWalletRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+@RequiredArgsConstructor
+public class CoinWalletRepositoryImpl implements CoinWalletRepository {
+
+    private final CoinWalletJpaRepository jpaRepository;
+
+    @Override
+    public Optional<CoinWallet> findByUserId(UUID userId) {
+        return jpaRepository.findByUserId(userId).map(CoinWalletEntity::toDomain);
+    }
+
+    @Override
+    public CoinWallet save(CoinWallet wallet) {
+        return jpaRepository.save(CoinWalletEntity.from(wallet)).toDomain();
+    }
+}
