@@ -17,6 +17,7 @@ spring:
   # JSON 네이밍 snake_case (API 명세 계약). DTO 필드는 camelCase 유지, @JsonProperty 명시 필드 우선.
   jackson:
     property-naming-strategy: SNAKE_CASE
+    time-zone: Asia/Seoul
 
 # AWS S3 (프로필 이미지·영상 업로드). 자격증명 키는 미기재 — DefaultCredentialsProvider 사용.
 aws:
