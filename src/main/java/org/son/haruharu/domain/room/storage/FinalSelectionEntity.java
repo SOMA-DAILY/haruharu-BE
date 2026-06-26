@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "final_selections", uniqueConstraints = @UniqueConstraint(columnNames = "roomMemberId"))
+@Table(name = "final_selections", uniqueConstraints = @UniqueConstraint(columnNames = "room_member_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FinalSelectionEntity {
 

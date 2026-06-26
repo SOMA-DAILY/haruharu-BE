@@ -20,7 +20,8 @@ public class UploadSlotRepositoryImpl implements UploadSlotRepository {
 
     @Override
     public List<UploadSlot> findByDayNumber(int dayNumber) {
-        return jpaRepository.findByDayNumber(dayNumber).stream().map(UploadSlotEntity::toDomain).toList();
+        return jpaRepository.findByDayNumberOrderBySlotIndexAsc(dayNumber).stream()
+                .map(UploadSlotEntity::toDomain).toList();
     }
 
     @Override

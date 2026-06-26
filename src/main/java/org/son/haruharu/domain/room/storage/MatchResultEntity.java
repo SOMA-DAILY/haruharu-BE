@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "match_results", uniqueConstraints = @UniqueConstraint(columnNames = {"memberAId", "memberBId"}))
+@Table(name = "match_results", uniqueConstraints = @UniqueConstraint(columnNames = {"member_a_id", "member_b_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MatchResultEntity {
 

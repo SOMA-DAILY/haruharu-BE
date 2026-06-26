@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "video_reactions", uniqueConstraints = @UniqueConstraint(columnNames = {"videoPostId", "userId"}))
+@Table(name = "video_reactions", uniqueConstraints = @UniqueConstraint(columnNames = {"video_post_id", "user_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VideoReactionEntity {
 

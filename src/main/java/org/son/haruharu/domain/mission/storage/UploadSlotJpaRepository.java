@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface UploadSlotJpaRepository extends JpaRepository<UploadSlotEntity, UUID> {
 
-    List<UploadSlotEntity> findByDayNumber(int dayNumber);
+    List<UploadSlotEntity> findByDayNumberOrderBySlotIndexAsc(int dayNumber);
 }

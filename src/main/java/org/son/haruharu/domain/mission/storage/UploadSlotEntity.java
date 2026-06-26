@@ -14,7 +14,7 @@ import org.son.haruharu.domain.mission.implement.UploadSlot;
 import java.util.UUID;
 
 @Entity
-@Table(name = "upload_slots", uniqueConstraints = @UniqueConstraint(columnNames = {"dayNumber", "slotIndex"}))
+@Table(name = "upload_slots", uniqueConstraints = @UniqueConstraint(columnNames = {"day_number", "slot_index"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UploadSlotEntity {
 
