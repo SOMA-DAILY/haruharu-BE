@@ -11,6 +11,9 @@ spring:
 jwt:
   secret: ${JWT_SECRET}
 
+revenuecat:
+  webhook-secret: ${REVENUECAT_WEBHOOK_SECRET}
+
 oauth:
   providers:
     kakao:

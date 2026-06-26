@@ -18,6 +18,9 @@ spring:
 jwt:
   secret: ${JWT_SECRET:test-only-secret-not-for-prod-haruharu-min-32bytes}
 
+revenuecat:
+  webhook-secret: ${REVENUECAT_WEBHOOK_SECRET:test-only-webhook-secret}
+
 oauth:
   providers:
     kakao:
