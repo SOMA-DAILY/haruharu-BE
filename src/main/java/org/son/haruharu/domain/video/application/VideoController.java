@@ -2,9 +2,12 @@ package org.son.haruharu.domain.video.application;
 
 import jakarta.validation.Valid;
 import org.son.haruharu.common.ApiResponse;
+import org.son.haruharu.domain.video.application.dto.ReactionRequest;
 import org.son.haruharu.domain.video.application.dto.VideoPresignRequest;
 import org.son.haruharu.domain.video.application.dto.VideoUploadRequest;
+import org.son.haruharu.domain.video.business.VideoReactionService;
 import org.son.haruharu.domain.video.business.VideoService;
+import org.son.haruharu.domain.video.business.dto.ReactionResponse;
 import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
 import org.son.haruharu.domain.video.business.dto.VideoUploadUrlResponse;
 import org.springframework.security.core.Authentication;
@@ -22,9 +25,11 @@ import java.util.UUID;
 public class VideoController {
 
     private final VideoService videoService;
+    private final VideoReactionService videoReactionService;
 
-    public VideoController(VideoService videoService) {
+    public VideoController(VideoService videoService, VideoReactionService videoReactionService) {
         this.videoService = videoService;
+        this.videoReactionService = videoReactionService;
     }
 
     @PostMapping("/video-posts/presign")
@@ -47,5 +52,13 @@ public class VideoController {
         UUID userId = (UUID) authentication.getPrincipal();
         videoService.delete(userId, videoPostId);
         return ApiResponse.ok(null);
+    }
+
+    @PostMapping("/video-posts/{videoPostId}/reactions")
+    public ApiResponse<ReactionResponse> react(
+            @PathVariable UUID videoPostId, @Valid @RequestBody ReactionRequest request,
+            Authentication authentication) {
+        UUID userId = (UUID) authentication.getPrincipal();
+        return ApiResponse.ok(videoReactionService.toggle(userId, videoPostId, request.reactionType()));
     }
 }
