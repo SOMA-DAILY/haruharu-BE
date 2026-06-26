@@ -8,9 +8,11 @@ public record RoomMember(
         UUID roomId,
         UUID userId,
         String gender,
+        int pointSum,
         LocalDateTime joinedAt
 ) {
+    /** 방 입장 시 열쇠 잔액(pointSum)은 0으로 시작한다(세션 스코프). */
     public static RoomMember of(UUID roomId, UUID userId, String gender, LocalDateTime joinedAt) {
-        return new RoomMember(null, roomId, userId, gender, joinedAt);
+        return new RoomMember(null, roomId, userId, gender, 0, joinedAt);
     }
 }

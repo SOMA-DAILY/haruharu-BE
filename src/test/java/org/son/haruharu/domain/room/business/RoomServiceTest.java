@@ -45,11 +45,11 @@ class RoomServiceTest {
         Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, 1, LocalDateTime.now(), null);
 
         given(roomMemberReader.findByUserId(userId))
-            .willReturn(List.of(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", LocalDateTime.now())));
+            .willReturn(List.of(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 0, LocalDateTime.now())));
         given(roomReader.findCurrent(List.of(roomId))).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
-            new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", LocalDateTime.now()),
-            new RoomMember(UUID.randomUUID(), roomId, UUID.randomUUID(), "FEMALE", LocalDateTime.now())
+            new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 0, LocalDateTime.now()),
+            new RoomMember(UUID.randomUUID(), roomId, UUID.randomUUID(), "FEMALE", 0, LocalDateTime.now())
         ));
 
         RoomResponse result = roomService.getMyRoom(userId);

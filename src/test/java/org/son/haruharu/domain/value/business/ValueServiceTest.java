@@ -47,7 +47,7 @@ class ValueServiceTest {
         // given
         UUID questionId = UUID.randomUUID();
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
-                new ValueQuestion(questionId, "주말에 무엇을 하나요?", "LIFESTYLE", 1, true)
+                new ValueQuestion(questionId, "주말에 무엇을 하나요?", "LIFESTYLE", 1, true, 10)
         ));
 
         // when
@@ -73,8 +73,8 @@ class ValueServiceTest {
                 new SaveValueAnswersCommand.AnswerItem(q2, "독서")
         ));
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
-                new ValueQuestion(q1, "질문1", "LIFESTYLE", 1, true),
-                new ValueQuestion(q2, "질문2", "LIFESTYLE", 2, true)
+                new ValueQuestion(q1, "질문1", "LIFESTYLE", 1, true, 10),
+                new ValueQuestion(q2, "질문2", "LIFESTYLE", 2, true, 10)
         ));
         given(userValueAnswerReader.getAllByUserId(userId)).willReturn(List.of());
 
@@ -106,7 +106,7 @@ class ValueServiceTest {
                 new SaveValueAnswersCommand.AnswerItem(questionId, "수정된 답변")
         ));
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
-                new ValueQuestion(questionId, "질문", "LIFESTYLE", 1, true)
+                new ValueQuestion(questionId, "질문", "LIFESTYLE", 1, true, 10)
         ));
         given(userValueAnswerReader.getAllByUserId(userId)).willReturn(List.of(
                 new UserValueAnswer(existingAnswerId, userId, questionId, "이전 답변")
