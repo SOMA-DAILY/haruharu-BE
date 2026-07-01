@@ -30,7 +30,10 @@ public class VideoPostEntity {
     private UUID roomMemberId;
 
     @Column(nullable = false)
-    private UUID uploadSlotId;
+    private int dayNumber;
+
+    @Column(nullable = false)
+    private int slotIndex;
 
     @Column
     private UUID missionId;
@@ -60,7 +63,8 @@ public class VideoPostEntity {
         VideoPostEntity entity = new VideoPostEntity();
         entity.id = post.id();
         entity.roomMemberId = post.roomMemberId();
-        entity.uploadSlotId = post.uploadSlotId();
+        entity.dayNumber = post.dayNumber();
+        entity.slotIndex = post.slotIndex();
         entity.missionId = post.missionId();
         entity.caption = post.caption();
         entity.videoUrl = post.videoUrl();
@@ -73,7 +77,7 @@ public class VideoPostEntity {
     }
 
     public VideoPost toDomain() {
-        return new VideoPost(id, roomMemberId, uploadSlotId, missionId, caption, videoUrl,
+        return new VideoPost(id, roomMemberId, dayNumber, slotIndex, missionId, caption, videoUrl,
                 thumbnailUrl, isHidden, hiddenReason, deletedAt, createdAt);
     }
 }

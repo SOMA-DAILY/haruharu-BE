@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.room.business;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
-import org.son.haruharu.domain.mission.implement.UploadSlotReader;
 import org.son.haruharu.domain.room.business.dto.FeedResponse;
 import org.son.haruharu.domain.room.business.dto.FeedResponse.FeedItem;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -19,30 +18,29 @@ import java.util.UUID;
 public class RoomFeedService {
 
     private final RoomMemberReader roomMemberReader;
-    private final UploadSlotReader uploadSlotReader;
     private final VideoPostReader videoPostReader;
 
-    public RoomFeedService(RoomMemberReader roomMemberReader, UploadSlotReader uploadSlotReader,
-                           VideoPostReader videoPostReader) {
+    public RoomFeedService(RoomMemberReader roomMemberReader, VideoPostReader videoPostReader) {
         this.roomMemberReader = roomMemberReader;
-        this.uploadSlotReader = uploadSlotReader;
         this.videoPostReader = videoPostReader;
     }
 
     public FeedResponse getFeed(UUID roomId, UUID userId, int day) {
-        RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
+        RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId);
 
-        List<UUID> slotIds = uploadSlotReader.getByDay(day).stream().map(UploadSlot::id).toList();
-        if (slotIds.isEmpty()) {
-            return new FeedResponse(false, List.of()); // 해당 Day 슬롯 없음 → 볼 것도 잠글 것도 없음
+        if (UploadSlot.ofDay(day).isEmpty()) {
+            return new FeedResponse(false, List.of()); // 슬롯 없는 Day → 볼 것도 잠글 것도 없음
         }
 
         // 미업로드 잠금: 내가 day N에 한 건도 안 올렸으면 잠금
-        if (videoPostReader.countUploaded(me.id(), slotIds) == 0) {
+        if (videoPostReader.countUploaded(me.id(), day) == 0) {
             return new FeedResponse(true, List.of());
         }
 
-        List<FeedItem> posts = videoPostReader.getFeed(slotIds).stream()
+        // 피드는 이 방 멤버들의 영상으로 한정(roomMemberId가 방을 특정)
+        List<UUID> roomMemberIds = roomMemberReader.getByRoomId(roomId).stream()
+                .map(RoomMember::id).toList();
+        List<FeedItem> posts = videoPostReader.getFeed(roomMemberIds, day).stream()
                 .map(p -> new FeedItem(
                         p.id(), p.roomMemberId(), p.roomMemberId().equals(me.id()),
                         p.videoUrl(), p.thumbnailUrl(), p.caption(), p.createdAt()))

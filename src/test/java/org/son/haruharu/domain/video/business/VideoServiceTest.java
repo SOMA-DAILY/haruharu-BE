@@ -8,8 +8,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.mission.implement.Mission;
 import org.son.haruharu.domain.mission.implement.MissionReader;
-import org.son.haruharu.domain.mission.implement.UploadSlot;
-import org.son.haruharu.domain.mission.implement.UploadSlotReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -48,12 +46,13 @@ class VideoServiceTest {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final String BASE = "https://bucket.s3.ap-northeast-2.amazonaws.com/";
+    // Day1 slot2 = 11-14 시간창 (UploadSlot.DAY1_SLOT2)
+    private static final int SLOT_INDEX = 2;
 
     @Mock S3StoragePort s3StoragePort;
     @Mock RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
     @Mock RoomMemberWriter roomMemberWriter;
-    @Mock UploadSlotReader uploadSlotReader;
     @Mock MissionReader missionReader;
     @Mock VideoPostReader videoPostReader;
     @Mock VideoPostWriter videoPostWriter;
@@ -61,7 +60,7 @@ class VideoServiceTest {
     private VideoService serviceAt(int hour) {
         Clock clock = Clock.fixed(ZonedDateTime.of(2026, 6, 26, hour, 0, 0, 0, SEOUL).toInstant(), SEOUL);
         return new VideoService(s3StoragePort, roomReader, roomMemberReader, roomMemberWriter,
-                uploadSlotReader, missionReader, videoPostReader, videoPostWriter, clock);
+                missionReader, videoPostReader, videoPostWriter, clock);
     }
 
     private RoomMember member(UUID id, UUID userId, int points) {
@@ -105,19 +104,17 @@ class VideoServiceTest {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
-        UUID slotId = UUID.randomUUID();
         UUID missionId = UUID.randomUUID();
         RoomMember me = member(memberId, userId, 0);
         String url = BASE + "users/" + userId + "/videos/v.mp4";
-        var command = new VideoUploadCommand(slotId, missionId, url, null, "안녕");
+        var command = new VideoUploadCommand(SLOT_INDEX, missionId, url, null, "안녕");
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
-        given(uploadSlotReader.getById(slotId)).willReturn(new UploadSlot(slotId, 1, 2, 11, 14));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(missionReader.getById(missionId)).willReturn(new Mission(missionId, "미션", 5, true));
-        given(videoPostReader.hasActiveUpload(memberId, slotId)).willReturn(false);
-        given(videoPostReader.hasEverUploadedMission(memberId, slotId)).willReturn(false);
+        given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(false);
+        given(videoPostReader.hasEverUploadedMission(memberId, 1, SLOT_INDEX)).willReturn(false);
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(roomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
@@ -134,19 +131,17 @@ class VideoServiceTest {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
-        UUID slotId = UUID.randomUUID();
         UUID missionId = UUID.randomUUID();
         RoomMember me = member(memberId, userId, 5);
         String url = BASE + "users/" + userId + "/videos/v.mp4";
-        var command = new VideoUploadCommand(slotId, missionId, url, null, null);
+        var command = new VideoUploadCommand(SLOT_INDEX, missionId, url, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
-        given(uploadSlotReader.getById(slotId)).willReturn(new UploadSlot(slotId, 1, 2, 11, 14));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(missionReader.getById(missionId)).willReturn(new Mission(missionId, "미션", 5, true));
-        given(videoPostReader.hasActiveUpload(memberId, slotId)).willReturn(false);
-        given(videoPostReader.hasEverUploadedMission(memberId, slotId)).willReturn(true); // 과거 지급 있음
+        given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(false);
+        given(videoPostReader.hasEverUploadedMission(memberId, 1, SLOT_INDEX)).willReturn(true); // 과거 지급 있음
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         VideoPostResponse result = serviceAt(12).upload(userId, roomId, command);
@@ -162,17 +157,15 @@ class VideoServiceTest {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
-        UUID slotId = UUID.randomUUID();
         RoomMember me = member(memberId, userId, 0);
         String url = BASE + "users/" + userId + "/videos/v.mp4";
-        var command = new VideoUploadCommand(slotId, null, url, null, null);
+        var command = new VideoUploadCommand(SLOT_INDEX, null, url, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
-        given(uploadSlotReader.getById(slotId)).willReturn(new UploadSlot(slotId, 1, 2, 11, 14));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
-        given(videoPostReader.hasActiveUpload(memberId, slotId)).willReturn(false);
-        given(videoPostReader.hasEverUploadedMission(memberId, slotId)).willReturn(false);
+        given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(false);
+        given(videoPostReader.hasEverUploadedMission(memberId, 1, SLOT_INDEX)).willReturn(false);
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         VideoPostResponse result = serviceAt(12).upload(userId, roomId, command);
@@ -187,12 +180,10 @@ class VideoServiceTest {
     void givenOutsideWindow_whenUpload_thenThrows() {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
-        UUID slotId = UUID.randomUUID();
-        var command = new VideoUploadCommand(slotId, null, BASE + "x", null, null);
+        var command = new VideoUploadCommand(SLOT_INDEX, null, BASE + "x", null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(UUID.randomUUID(), userId, 0));
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
-        given(uploadSlotReader.getById(slotId)).willReturn(new UploadSlot(slotId, 1, 2, 11, 14));
 
         assertThatThrownBy(() -> serviceAt(9).upload(userId, roomId, command))
             .isInstanceOf(SlotWindowClosedException.class);
@@ -204,15 +195,13 @@ class VideoServiceTest {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
-        UUID slotId = UUID.randomUUID();
         String url = BASE + "users/" + userId + "/videos/v.mp4";
-        var command = new VideoUploadCommand(slotId, null, url, null, null);
+        var command = new VideoUploadCommand(SLOT_INDEX, null, url, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId, 0));
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
-        given(uploadSlotReader.getById(slotId)).willReturn(new UploadSlot(slotId, 1, 2, 11, 14));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
-        given(videoPostReader.hasActiveUpload(memberId, slotId)).willReturn(true);
+        given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(true);
 
         assertThatThrownBy(() -> serviceAt(12).upload(userId, roomId, command))
             .isInstanceOf(DuplicateSlotUploadException.class);
@@ -226,7 +215,7 @@ class VideoServiceTest {
         UUID userId = UUID.randomUUID();
         UUID postId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
-        VideoPost post = new VideoPost(postId, memberId, UUID.randomUUID(), null, null,
+        VideoPost post = new VideoPost(postId, memberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
 
         given(videoPostReader.getById(postId)).willReturn(post);
@@ -246,7 +235,7 @@ class VideoServiceTest {
         UUID userId = UUID.randomUUID();
         UUID postId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
-        VideoPost post = new VideoPost(postId, memberId, UUID.randomUUID(), null, null,
+        VideoPost post = new VideoPost(postId, memberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
 
         given(videoPostReader.getById(postId)).willReturn(post);

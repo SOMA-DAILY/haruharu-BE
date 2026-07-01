@@ -3,7 +3,6 @@ package org.son.haruharu.domain.room.business;
 import org.son.haruharu.domain.mission.implement.Mission;
 import org.son.haruharu.domain.mission.implement.MissionReader;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
-import org.son.haruharu.domain.mission.implement.UploadSlotReader;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
@@ -26,30 +25,26 @@ public class RoomTodayService {
 
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
-    private final UploadSlotReader uploadSlotReader;
     private final MissionReader missionReader;
     private final VideoPostReader videoPostReader;
     private final Clock clock;
 
     public RoomTodayService(RoomReader roomReader, RoomMemberReader roomMemberReader,
-                            UploadSlotReader uploadSlotReader, MissionReader missionReader,
-                            VideoPostReader videoPostReader, Clock clock) {
+                            MissionReader missionReader, VideoPostReader videoPostReader, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
-        this.uploadSlotReader = uploadSlotReader;
         this.missionReader = missionReader;
         this.videoPostReader = videoPostReader;
         this.clock = clock;
     }
 
     public TodayResponse getToday(UUID roomId, UUID userId) {
-        RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
+        RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId);
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
 
-        List<UploadSlot> slots = uploadSlotReader.getByDay(room.currentDay());
-        List<UUID> slotIds = slots.stream().map(UploadSlot::id).toList();
-        long uploadedCount = videoPostReader.countUploaded(member.id(), slotIds);
+        List<UploadSlot> slots = UploadSlot.ofDay(room.currentDay());
+        long uploadedCount = videoPostReader.countUploaded(member.id(), room.currentDay());
         List<Mission> missions = missionReader.getActiveCandidates();
         int nowHour = LocalTime.now(clock).getHour();
 

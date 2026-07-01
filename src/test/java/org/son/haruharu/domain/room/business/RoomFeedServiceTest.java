@@ -6,8 +6,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.son.haruharu.domain.mission.implement.UploadSlot;
-import org.son.haruharu.domain.mission.implement.UploadSlotReader;
 import org.son.haruharu.domain.room.business.dto.FeedResponse;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -22,25 +20,32 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 
 @ExtendWith(MockitoExtension.class)
 class RoomFeedServiceTest {
 
     @Mock RoomMemberReader roomMemberReader;
-    @Mock UploadSlotReader uploadSlotReader;
     @Mock VideoPostReader videoPostReader;
 
     RoomFeedService service;
 
     @BeforeEach
     void setUp() {
-        service = new RoomFeedService(roomMemberReader, uploadSlotReader, videoPostReader);
+        service = new RoomFeedService(roomMemberReader, videoPostReader);
     }
 
     private RoomMember me(UUID id, UUID userId) {
         return new RoomMember(id, UUID.randomUUID(), userId, "MALE", 0, LocalDateTime.now());
+    }
+
+    private VideoPost post(UUID memberId, String url) {
+        return new VideoPost(UUID.randomUUID(), memberId, 1, 1, null, null, url, null, false, null, null,
+                LocalDateTime.now());
     }
 
     @Test
@@ -50,8 +55,7 @@ class RoomFeedServiceTest {
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me(memberId, userId));
-        given(uploadSlotReader.getByDay(1)).willReturn(List.of(new UploadSlot(UUID.randomUUID(), 1, 1, 8, 11)));
-        given(videoPostReader.countUploaded(any(), anyList())).willReturn(0L);
+        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
 
         FeedResponse result = service.getFeed(roomId, userId, 1);
 
@@ -66,13 +70,13 @@ class RoomFeedServiceTest {
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         UUID otherMemberId = UUID.randomUUID();
-        UUID slotId = UUID.randomUUID();
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me(memberId, userId));
-        given(uploadSlotReader.getByDay(1)).willReturn(List.of(new UploadSlot(slotId, 1, 1, 8, 11)));
-        given(videoPostReader.countUploaded(any(), anyList())).willReturn(1L);
-        given(videoPostReader.getFeed(anyList())).willReturn(List.of(
-                new VideoPost(UUID.randomUUID(), memberId, slotId, null, null, "myUrl", null, false, null, null, LocalDateTime.now()),
-                new VideoPost(UUID.randomUUID(), otherMemberId, slotId, null, null, "otherUrl", null, false, null, null, LocalDateTime.now())
+        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(1L);
+        given(roomMemberReader.getByRoomId(roomId))
+                .willReturn(List.of(me(memberId, userId), me(otherMemberId, UUID.randomUUID())));
+        given(videoPostReader.getFeed(anyList(), eq(1))).willReturn(List.of(
+                post(memberId, "myUrl"),
+                post(otherMemberId, "otherUrl")
         ));
 
         FeedResponse result = service.getFeed(roomId, userId, 1);
@@ -80,6 +84,21 @@ class RoomFeedServiceTest {
         assertThat(result.locked()).isFalse();
         assertThat(result.posts()).hasSize(2);
         assertThat(result.posts()).extracting(FeedResponse.FeedItem::mine).containsExactly(true, false);
+        // 피드는 이 방 멤버 id로만 조회(다른 방 영상 유입 차단)
+        then(videoPostReader).should().getFeed(List.of(memberId, otherMemberId), 1);
+    }
+
+    @Test
+    @DisplayName("슬롯이 없는 Day(0)면 잠금 없이 빈 목록을 반환한다")
+    void givenDayWithoutSlots_whenFeed_thenEmptyUnlocked() {
+        UUID userId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me(UUID.randomUUID(), userId));
+
+        FeedResponse result = service.getFeed(roomId, userId, 0);
+
+        assertThat(result.locked()).isFalse();
+        assertThat(result.posts()).isEmpty();
     }
 
     @Test

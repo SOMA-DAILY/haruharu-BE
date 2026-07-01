@@ -3,7 +3,6 @@ package org.son.haruharu.domain.video.business;
 import org.son.haruharu.domain.mission.implement.Mission;
 import org.son.haruharu.domain.mission.implement.MissionReader;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
-import org.son.haruharu.domain.mission.implement.UploadSlotReader;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -47,7 +46,6 @@ public class VideoService {
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
     private final RoomMemberWriter roomMemberWriter;
-    private final UploadSlotReader uploadSlotReader;
     private final MissionReader missionReader;
     private final VideoPostReader videoPostReader;
     private final VideoPostWriter videoPostWriter;
@@ -55,13 +53,12 @@ public class VideoService {
 
     public VideoService(S3StoragePort s3StoragePort, RoomReader roomReader,
                         RoomMemberReader roomMemberReader, RoomMemberWriter roomMemberWriter,
-                        UploadSlotReader uploadSlotReader, MissionReader missionReader,
+                        MissionReader missionReader,
                         VideoPostReader videoPostReader, VideoPostWriter videoPostWriter, Clock clock) {
         this.s3StoragePort = s3StoragePort;
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.roomMemberWriter = roomMemberWriter;
-        this.uploadSlotReader = uploadSlotReader;
         this.missionReader = missionReader;
         this.videoPostReader = videoPostReader;
         this.videoPostWriter = videoPostWriter;
@@ -88,26 +85,25 @@ public class VideoService {
             throw new RoomNotActiveException();
         }
 
-        UploadSlot slot = uploadSlotReader.getById(command.uploadSlotId());
-        if (slot.dayNumber() != room.currentDay()) {
-            throw new SlotNotInCurrentDayException();
-        }
+        UploadSlot slot = UploadSlot.of(room.currentDay(), command.slotIndex())
+                .orElseThrow(SlotNotInCurrentDayException::new);
         int nowHour = LocalTime.now(clock).getHour();
-        if (nowHour < slot.startHour() || nowHour >= slot.endHour()) {
+        if (!slot.isOpenAt(nowHour)) {
             throw new SlotWindowClosedException();
         }
         validateOwnUrl(userId, command.videoUrl());
 
         Mission mission = command.missionId() == null ? null : missionReader.getById(command.missionId());
 
-        if (videoPostReader.hasActiveUpload(member.id(), slot.id())) {
+        if (videoPostReader.hasActiveUpload(member.id(), slot.dayNumber(), slot.slotIndex())) {
             throw new DuplicateSlotUploadException();
         }
         // 열쇠 지급 멱등 게이트: 신규 영상 저장 전에 "과거(삭제분 포함) 미션 업로드 여부"를 확정한다.
-        boolean alreadyGrantedForSlot = videoPostReader.hasEverUploadedMission(member.id(), slot.id());
+        boolean alreadyGrantedForSlot =
+                videoPostReader.hasEverUploadedMission(member.id(), slot.dayNumber(), slot.slotIndex());
 
         VideoPost saved = videoPostWriter.save(VideoPost.create(
-                member.id(), slot.id(), command.missionId(),
+                member.id(), slot.dayNumber(), slot.slotIndex(), command.missionId(),
                 command.caption(), command.videoUrl(), command.thumbnailUrl(), LocalDateTime.now(clock)));
 
         int grantedPoints = 0;

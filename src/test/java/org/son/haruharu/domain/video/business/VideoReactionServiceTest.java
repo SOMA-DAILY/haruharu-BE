@@ -47,7 +47,7 @@ class VideoReactionServiceTest {
     private void stubPostAndMembership(UUID postId, UUID userId) {
         UUID authorMemberId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
-        VideoPost post = new VideoPost(postId, authorMemberId, UUID.randomUUID(), null, null,
+        VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
@@ -121,7 +121,7 @@ class VideoReactionServiceTest {
         UUID postId = UUID.randomUUID();
         UUID authorMemberId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
-        VideoPost post = new VideoPost(postId, authorMemberId, UUID.randomUUID(), null, null,
+        VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))

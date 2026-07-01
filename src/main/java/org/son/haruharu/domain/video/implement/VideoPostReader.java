@@ -18,23 +18,19 @@ public class VideoPostReader {
                 .orElseThrow(VideoPostNotFoundException::new);
     }
 
-    /** 슬롯이 비어 있으면(미시작 Day 등) 0. */
-    public long countUploaded(UUID roomMemberId, List<UUID> slotIds) {
-        if (slotIds.isEmpty()) {
-            return 0;
-        }
-        return videoPostRepository.countUploaded(roomMemberId, slotIds);
+    public long countUploaded(UUID roomMemberId, int dayNumber) {
+        return videoPostRepository.countUploaded(roomMemberId, dayNumber);
     }
 
-    public boolean hasActiveUpload(UUID roomMemberId, UUID uploadSlotId) {
-        return videoPostRepository.existsActiveBySlot(roomMemberId, uploadSlotId);
+    public boolean hasActiveUpload(UUID roomMemberId, int dayNumber, int slotIndex) {
+        return videoPostRepository.existsActiveBySlot(roomMemberId, dayNumber, slotIndex);
     }
 
-    public boolean hasEverUploadedMission(UUID roomMemberId, UUID uploadSlotId) {
-        return videoPostRepository.existsMissionUploadBySlot(roomMemberId, uploadSlotId);
+    public boolean hasEverUploadedMission(UUID roomMemberId, int dayNumber, int slotIndex) {
+        return videoPostRepository.existsMissionUploadBySlot(roomMemberId, dayNumber, slotIndex);
     }
 
-    public List<VideoPost> getFeed(List<UUID> slotIds) {
-        return videoPostRepository.findFeed(slotIds);
+    public List<VideoPost> getFeed(List<UUID> roomMemberIds, int dayNumber) {
+        return videoPostRepository.findFeed(roomMemberIds, dayNumber);
     }
 }
