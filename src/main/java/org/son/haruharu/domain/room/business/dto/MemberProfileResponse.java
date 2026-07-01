@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 방 멤버 단건 프로필. 기본 프로필(직업/학교·키·MBTI)은 Day3부터 공개,
- * 가치관 답변은 열쇠로 해금한 것만 내용이 보인다(미해금은 answer=null).
+ * 방 멤버 단건 프로필. 기본 항목(닉네임·성별·지역·나이)은 항상 노출.
+ * unlockableFields는 3-state(잠김/해금가능/해금) — unlockable·unlocked·value 3필드로 표현한다.
  */
 public record MemberProfileResponse(
         UUID roomMemberId,
@@ -13,11 +13,19 @@ public record MemberProfileResponse(
         String gender,
         String location,
         Integer age,
-        String affiliation,
-        Integer height,
-        String mbti,
+        List<UnlockableFieldView> unlockableFields,
         List<ValueAnswerView> valueAnswers
 ) {
+
+    public record UnlockableFieldView(
+            String fieldKey,
+            String label,
+            int unlockCost,
+            int availableFromDay,
+            boolean unlockable,
+            boolean unlocked,
+            String value
+    ) {}
 
     public record ValueAnswerView(
             UUID answerId,

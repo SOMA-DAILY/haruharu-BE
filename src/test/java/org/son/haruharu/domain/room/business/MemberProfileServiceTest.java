@@ -6,19 +6,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.profile.implement.ProfileFieldCatalog;
+import org.son.haruharu.domain.profile.implement.ProfileFieldCatalogReader;
+import org.son.haruharu.domain.profile.implement.ProfileFieldUnlockReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
+import org.son.haruharu.domain.room.business.dto.MemberProfileResponse.UnlockableFieldView;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
-import org.son.haruharu.domain.value.implement.UserValueAnswer;
 import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
 import org.son.haruharu.domain.value.implement.ValueAnswerUnlockReader;
-import org.son.haruharu.domain.value.implement.ValueQuestion;
 import org.son.haruharu.domain.value.implement.ValueQuestionReader;
 
 import java.time.Clock;
@@ -45,6 +47,8 @@ class MemberProfileServiceTest {
     @Mock ValueQuestionReader valueQuestionReader;
     @Mock UserValueAnswerReader userValueAnswerReader;
     @Mock ValueAnswerUnlockReader valueAnswerUnlockReader;
+    @Mock ProfileFieldCatalogReader profileFieldCatalogReader;
+    @Mock ProfileFieldUnlockReader profileFieldUnlockReader;
 
     MemberProfileService service;
 
@@ -53,7 +57,8 @@ class MemberProfileServiceTest {
     @BeforeEach
     void setUp() {
         service = new MemberProfileService(roomReader, roomMemberReader, userProfileReader,
-                valueQuestionReader, userValueAnswerReader, valueAnswerUnlockReader, clock);
+                valueQuestionReader, userValueAnswerReader, valueAnswerUnlockReader,
+                profileFieldCatalogReader, profileFieldUnlockReader, clock);
     }
 
     private RoomMember member(UUID id, UUID roomId, UUID userId) {
@@ -70,9 +75,20 @@ class MemberProfileServiceTest {
                 "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE", "NONE");
     }
 
+    private List<ProfileFieldCatalog> catalog() {
+        return List.of(
+                new ProfileFieldCatalog(UUID.randomUUID(), "affiliation", 10, 3, true),
+                new ProfileFieldCatalog(UUID.randomUUID(), "height", 15, 3, true),
+                new ProfileFieldCatalog(UUID.randomUUID(), "mbti", 5, 3, true));
+    }
+
+    private UnlockableFieldView field(MemberProfileResponse res, String key) {
+        return res.unlockableFields().stream().filter(f -> f.fieldKey().equals(key)).findFirst().orElseThrow();
+    }
+
     @Test
-    @DisplayName("Day3 미만이면 직업/키/MBTI는 가려지고 닉네임·지역·나이는 노출된다")
-    void givenBeforeDay3_whenGetProfile_thenBasicFieldsHidden() {
+    @DisplayName("Day3 이전에는 해금 대상 항목이 unlockable=false·미해금이고 닉네임·지역·나이는 노출된다")
+    void givenBeforeDay3_whenGetProfile_thenFieldsNotUnlockable() {
         UUID userId = UUID.randomUUID();
         UUID targetUserId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
@@ -83,6 +99,8 @@ class MemberProfileServiceTest {
         given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, 1)));
         given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
+        given(profileFieldCatalogReader.getAllActive()).willReturn(catalog());
+        given(profileFieldUnlockReader.getUnlockedFieldKeys(meId, targetId)).willReturn(List.of());
         given(valueQuestionReader.getAllActive()).willReturn(List.of());
         given(userValueAnswerReader.getAllByUserId(targetUserId)).willReturn(List.of());
         given(valueAnswerUnlockReader.getUnlockedAnswerIds(meId)).willReturn(List.of());
@@ -92,51 +110,44 @@ class MemberProfileServiceTest {
         assertThat(result.nickname()).isEqualTo("하루");
         assertThat(result.location()).isEqualTo("서울");
         assertThat(result.age()).isEqualTo(26);
-        assertThat(result.affiliation()).isNull();
-        assertThat(result.height()).isNull();
-        assertThat(result.mbti()).isNull();
+        UnlockableFieldView height = field(result, "height");
+        assertThat(height.unlockable()).isFalse();
+        assertThat(height.unlocked()).isFalse();
+        assertThat(height.value()).isNull();
+        assertThat(height.unlockCost()).isEqualTo(15);
+        assertThat(height.availableFromDay()).isEqualTo(3);
     }
 
     @Test
-    @DisplayName("Day3 이상이면 직업/키/MBTI까지 공개되고, 해금한 가치관 답변만 내용이 보인다")
-    void givenDay3AndUnlock_whenGetProfile_thenRevealedAndUnlockedAnswerShown() {
+    @DisplayName("Day3에 미해금 항목은 unlockable=true지만 값은 가려지고, 해금한 항목만 값이 보인다")
+    void givenDay3_whenGetProfile_thenUnlockableButValueGatedByUnlock() {
         UUID userId = UUID.randomUUID();
         UUID targetUserId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         UUID meId = UUID.randomUUID();
         UUID targetId = UUID.randomUUID();
-        UUID q1 = UUID.randomUUID();
-        UUID q2 = UUID.randomUUID();
-        UUID a1 = UUID.randomUUID();
-        UUID a2 = UUID.randomUUID();
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
         given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, 3)));
         given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
-        given(valueQuestionReader.getAllActive()).willReturn(List.of(
-                new ValueQuestion(q1, "주말엔?", "LIFE", 1, true, 10),
-                new ValueQuestion(q2, "이상형은?", "LOVE", 2, true, 20)));
-        given(userValueAnswerReader.getAllByUserId(targetUserId)).willReturn(List.of(
-                new UserValueAnswer(a1, targetUserId, q1, "집에서 휴식"),
-                new UserValueAnswer(a2, targetUserId, q2, "다정한 사람")));
-        given(valueAnswerUnlockReader.getUnlockedAnswerIds(meId)).willReturn(List.of(a1));
+        given(profileFieldCatalogReader.getAllActive()).willReturn(catalog());
+        given(profileFieldUnlockReader.getUnlockedFieldKeys(meId, targetId)).willReturn(List.of("affiliation"));
+        given(valueQuestionReader.getAllActive()).willReturn(List.of());
+        given(userValueAnswerReader.getAllByUserId(targetUserId)).willReturn(List.of());
+        given(valueAnswerUnlockReader.getUnlockedAnswerIds(meId)).willReturn(List.of());
 
         MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
 
-        assertThat(result.affiliation()).isEqualTo("카카오");
-        assertThat(result.height()).isEqualTo(165);
-        assertThat(result.mbti()).isEqualTo("INFP");
-        assertThat(result.valueAnswers()).hasSize(2);
+        UnlockableFieldView affiliation = field(result, "affiliation");
+        assertThat(affiliation.unlockable()).isTrue();
+        assertThat(affiliation.unlocked()).isTrue();
+        assertThat(affiliation.value()).isEqualTo("카카오");
 
-        var unlocked = result.valueAnswers().stream().filter(v -> v.answerId().equals(a1)).findFirst().orElseThrow();
-        assertThat(unlocked.unlocked()).isTrue();
-        assertThat(unlocked.answer()).isEqualTo("집에서 휴식");
-
-        var locked = result.valueAnswers().stream().filter(v -> v.answerId().equals(a2)).findFirst().orElseThrow();
-        assertThat(locked.unlocked()).isFalse();
-        assertThat(locked.answer()).isNull();
-        assertThat(locked.unlockCost()).isEqualTo(20);
+        UnlockableFieldView mbti = field(result, "mbti");
+        assertThat(mbti.unlockable()).isTrue();
+        assertThat(mbti.unlocked()).isFalse();
+        assertThat(mbti.value()).isNull();
     }
 
     @Test

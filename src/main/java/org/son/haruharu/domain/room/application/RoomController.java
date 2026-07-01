@@ -6,6 +6,7 @@ import org.son.haruharu.domain.room.application.dto.FinalSelectionRequest;
 import org.son.haruharu.domain.room.business.FinalSelectionService;
 import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.MemberProfileService;
+import org.son.haruharu.domain.room.business.ProfileFieldUnlockService;
 import org.son.haruharu.domain.room.business.RoomFeedService;
 import org.son.haruharu.domain.room.business.RoomMembersService;
 import org.son.haruharu.domain.room.business.RoomService;
@@ -16,6 +17,7 @@ import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
 import org.son.haruharu.domain.room.business.dto.MatchResultResponse;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.business.dto.MembersResponse;
+import org.son.haruharu.domain.room.business.dto.ProfileFieldUnlockResponse;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
 import org.son.haruharu.domain.room.business.dto.UnlockResponse;
@@ -39,19 +41,23 @@ public class RoomController {
     private final RoomMembersService roomMembersService;
     private final MemberProfileService memberProfileService;
     private final ValueAnswerUnlockService valueAnswerUnlockService;
+    private final ProfileFieldUnlockService profileFieldUnlockService;
     private final FinalSelectionService finalSelectionService;
     private final MatchResultService matchResultService;
     private final RoomFeedService roomFeedService;
 
     public RoomController(RoomService roomService, RoomTodayService roomTodayService,
                           RoomMembersService roomMembersService, MemberProfileService memberProfileService,
-                          ValueAnswerUnlockService valueAnswerUnlockService, FinalSelectionService finalSelectionService,
+                          ValueAnswerUnlockService valueAnswerUnlockService,
+                          ProfileFieldUnlockService profileFieldUnlockService,
+                          FinalSelectionService finalSelectionService,
                           MatchResultService matchResultService, RoomFeedService roomFeedService) {
         this.roomService = roomService;
         this.roomTodayService = roomTodayService;
         this.roomMembersService = roomMembersService;
         this.memberProfileService = memberProfileService;
         this.valueAnswerUnlockService = valueAnswerUnlockService;
+        this.profileFieldUnlockService = profileFieldUnlockService;
         this.finalSelectionService = finalSelectionService;
         this.matchResultService = matchResultService;
         this.roomFeedService = roomFeedService;
@@ -93,6 +99,15 @@ public class RoomController {
                                                          @PathVariable UUID answerId, Authentication authentication) {
         UUID userId = (UUID) authentication.getPrincipal();
         return ApiResponse.ok(valueAnswerUnlockService.unlock(roomId, memberId, answerId, userId));
+    }
+
+    @PostMapping("/{roomId}/members/{memberId}/profile-fields/{fieldKey}/unlock")
+    public ApiResponse<ProfileFieldUnlockResponse> unlockProfileField(@PathVariable UUID roomId,
+                                                                      @PathVariable UUID memberId,
+                                                                      @PathVariable String fieldKey,
+                                                                      Authentication authentication) {
+        UUID userId = (UUID) authentication.getPrincipal();
+        return ApiResponse.ok(profileFieldUnlockService.unlock(roomId, memberId, fieldKey, userId));
     }
 
     @PostMapping("/{roomId}/final-selection")

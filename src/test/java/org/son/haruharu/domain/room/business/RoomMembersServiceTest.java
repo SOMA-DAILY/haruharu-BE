@@ -8,11 +8,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MembersResponse;
-import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
-import org.son.haruharu.domain.room.implement.RoomReader;
-import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 
 import java.time.Clock;
@@ -36,12 +33,11 @@ class RoomMembersServiceTest {
     private final Clock clock = Clock.fixed(
             ZonedDateTime.of(2026, 6, 26, 12, 0, 0, 0, SEOUL).toInstant(), SEOUL);
 
-    @Mock RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
     @Mock UserProfileReader userProfileReader;
 
     private RoomMembersService service() {
-        return new RoomMembersService(roomReader, roomMemberReader, userProfileReader, clock);
+        return new RoomMembersService(roomMemberReader, userProfileReader, clock);
     }
 
     private UserProfile profile(UUID userId) {
@@ -50,15 +46,13 @@ class RoomMembersServiceTest {
     }
 
     @Test
-    @DisplayName("Day3 이전에는 직업/키/MBTI가 가려지고 닉네임·지역·나이·내 열쇠 잔액은 노출된다")
-    void givenPreDay3_whenGetMembers_thenDetailGated() {
+    @DisplayName("목록은 닉네임·성별·지역·나이·내 열쇠 잔액만 담고 해금 대상 항목은 포함하지 않는다")
+    void givenMember_whenGetMembers_thenBasicsOnly() {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         RoomMember me = new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 15, LocalDateTime.now());
-        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, 1, LocalDateTime.now(), null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
-        given(roomReader.findById(roomId)).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me));
         given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(profile(userId)));
 
@@ -70,30 +64,6 @@ class RoomMembersServiceTest {
         assertThat(view.nickname()).isEqualTo("철수");
         assertThat(view.location()).isEqualTo("서울");
         assertThat(view.age()).isEqualTo(26);
-        assertThat(view.affiliation()).isNull();
-        assertThat(view.height()).isNull();
-        assertThat(view.mbti()).isNull();
-    }
-
-    @Test
-    @DisplayName("Day3에는 직업/키/MBTI가 공개된다")
-    void givenDay3_whenGetMembers_thenDetailRevealed() {
-        UUID userId = UUID.randomUUID();
-        UUID roomId = UUID.randomUUID();
-        RoomMember me = new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 20, LocalDateTime.now());
-        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, 3, LocalDateTime.now(), null);
-
-        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
-        given(roomReader.findById(roomId)).willReturn(Optional.of(room));
-        given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me));
-        given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(profile(userId)));
-
-        MembersResponse result = service().getMembers(roomId, userId);
-
-        MembersResponse.MemberView view = result.members().get(0);
-        assertThat(view.affiliation()).isEqualTo("ABC대학교");
-        assertThat(view.height()).isEqualTo(180);
-        assertThat(view.mbti()).isEqualTo("INTJ");
     }
 
     @Test
