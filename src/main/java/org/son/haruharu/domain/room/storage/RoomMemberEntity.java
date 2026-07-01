@@ -31,6 +31,10 @@ public class RoomMemberEntity {
     @Column(nullable = false, length = 10)
     private String gender;
 
+    // 방 내 재화(열쇠) 잔액. 입장 시 0, 미션 영상 업로드로 획득, 프로필 해금에 사용(세션 스코프).
+    @Column(nullable = false)
+    private int pointSum;
+
     @Column(nullable = false)
     private LocalDateTime joinedAt;
 
@@ -40,11 +44,12 @@ public class RoomMemberEntity {
         entity.roomId = member.roomId();
         entity.userId = member.userId();
         entity.gender = member.gender();
+        entity.pointSum = member.pointSum();
         entity.joinedAt = member.joinedAt();
         return entity;
     }
 
     public RoomMember toDomain() {
-        return new RoomMember(id, roomId, userId, gender, joinedAt);
+        return new RoomMember(id, roomId, userId, gender, pointSum, joinedAt);
     }
 }

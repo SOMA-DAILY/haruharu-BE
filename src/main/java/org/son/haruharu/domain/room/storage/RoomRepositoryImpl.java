@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -19,6 +20,11 @@ public class RoomRepositoryImpl implements RoomRepository {
     @Override
     public Room save(Room room) {
         return jpaRepository.save(RoomEntity.from(room)).toDomain();
+    }
+
+    @Override
+    public Optional<Room> findById(UUID id) {
+        return jpaRepository.findById(id).map(RoomEntity::toDomain);
     }
 
     @Override

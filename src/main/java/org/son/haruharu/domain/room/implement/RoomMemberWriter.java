@@ -14,4 +14,8 @@ public class RoomMemberWriter {
     public List<RoomMember> saveAll(List<RoomMember> members) {
         return roomMemberRepository.saveAll(members);
     }
+
+    public RoomMember save(RoomMember member) {
+        return roomMemberRepository.save(member);
+    }
 }

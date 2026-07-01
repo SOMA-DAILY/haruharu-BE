@@ -48,7 +48,7 @@ class ValueApiIntegrationTest {
 
     private UUID saveQuestion(String text, String category, int displayOrder, boolean active) {
         ValueQuestionEntity saved = valueQuestionJpaRepository.save(
-                ValueQuestionEntity.from(new ValueQuestion(null, text, category, displayOrder, active))
+                ValueQuestionEntity.from(new ValueQuestion(null, text, category, displayOrder, active, 10))
         );
         return saved.toDomain().id();
     }

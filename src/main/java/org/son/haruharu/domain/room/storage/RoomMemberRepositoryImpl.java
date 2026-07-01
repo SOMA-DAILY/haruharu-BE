@@ -6,6 +6,7 @@ import org.son.haruharu.domain.room.implement.RoomMemberRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -22,6 +23,11 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     }
 
     @Override
+    public RoomMember save(RoomMember member) {
+        return jpaRepository.save(RoomMemberEntity.from(member)).toDomain();
+    }
+
+    @Override
     public List<RoomMember> findByUserId(UUID userId) {
         return jpaRepository.findByUserId(userId).stream().map(RoomMemberEntity::toDomain).toList();
     }
@@ -29,5 +35,15 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     @Override
     public List<RoomMember> findByRoomId(UUID roomId) {
         return jpaRepository.findByRoomId(roomId).stream().map(RoomMemberEntity::toDomain).toList();
+    }
+
+    @Override
+    public Optional<RoomMember> findByRoomIdAndUserId(UUID roomId, UUID userId) {
+        return jpaRepository.findByRoomIdAndUserId(roomId, userId).map(RoomMemberEntity::toDomain);
+    }
+
+    @Override
+    public Optional<RoomMember> findById(UUID id) {
+        return jpaRepository.findById(id).map(RoomMemberEntity::toDomain);
     }
 }

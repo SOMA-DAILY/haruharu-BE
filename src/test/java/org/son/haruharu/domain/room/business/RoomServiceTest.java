@@ -13,6 +13,7 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
+import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -45,11 +46,11 @@ class RoomServiceTest {
         Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, 1, LocalDateTime.now(), null);
 
         given(roomMemberReader.findByUserId(userId))
-            .willReturn(List.of(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", LocalDateTime.now())));
+            .willReturn(List.of(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 0, LocalDateTime.now())));
         given(roomReader.findCurrent(List.of(roomId))).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
-            new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", LocalDateTime.now()),
-            new RoomMember(UUID.randomUUID(), roomId, UUID.randomUUID(), "FEMALE", LocalDateTime.now())
+            new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 0, LocalDateTime.now()),
+            new RoomMember(UUID.randomUUID(), roomId, UUID.randomUUID(), "FEMALE", 0, LocalDateTime.now())
         ));
 
         RoomResponse result = roomService.getMyRoom(userId);
@@ -68,5 +69,37 @@ class RoomServiceTest {
 
         assertThatThrownBy(() -> roomService.getMyRoom(userId))
             .isInstanceOf(RoomNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("방 멤버가 roomId로 조회 시 방 정보를 반환한다")
+    void givenMember_whenGetRoom_thenReturnsRoom() {
+        UUID userId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, 2, LocalDateTime.now(), null);
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
+            .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 0, LocalDateTime.now()));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room));
+        given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
+            new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 0, LocalDateTime.now())
+        ));
+
+        RoomResponse result = roomService.getRoom(roomId, userId);
+
+        assertThat(result.roomId()).isEqualTo(roomId);
+        assertThat(result.currentDay()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("방 멤버가 아닌 유저가 roomId로 조회 시 NotRoomMemberException이 발생한다")
+    void givenNonMember_whenGetRoom_thenThrows() {
+        UUID userId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
+            .willThrow(new NotRoomMemberException());
+
+        assertThatThrownBy(() -> roomService.getRoom(roomId, userId))
+            .isInstanceOf(NotRoomMemberException.class);
     }
 }

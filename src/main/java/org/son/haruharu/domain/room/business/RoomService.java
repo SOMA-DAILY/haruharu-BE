@@ -35,4 +35,12 @@ public class RoomService {
         List<RoomMember> members = roomMemberReader.getByRoomId(currentRoom.id());
         return RoomResponse.from(currentRoom, members);
     }
+
+    public RoomResponse getRoom(UUID roomId, UUID userId) {
+        roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
+        Room room = roomReader.findById(roomId)
+            .orElseThrow(RoomNotFoundException::new);
+        List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
+        return RoomResponse.from(room, members);
+    }
 }
