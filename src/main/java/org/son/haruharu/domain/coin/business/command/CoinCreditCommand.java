@@ -14,4 +14,11 @@ public record CoinCreditCommand(
         String refType,
         UUID refId
 ) {
+    /**
+     * 인앱결제(IAP) 구매 적립. 버킷(PAID)·사유(PURCHASE)를 coin 도메인 내부에서 고정해,
+     * 호출 도메인이 coin 내부 enum을 알 필요 없게 한다.
+     */
+    public static CoinCreditCommand purchase(UUID userId, long amount, String refType, UUID refId) {
+        return new CoinCreditCommand(userId, CoinBucket.PAID, amount, CoinLedgerReason.PURCHASE, refType, refId);
+    }
 }
