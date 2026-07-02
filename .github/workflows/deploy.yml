@@ -46,6 +46,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
           APPLE_CLIENT_ID: ${{ secrets.APPLE_CLIENT_ID }}
+          REVENUECAT_WEBHOOK_SECRET: ${{ secrets.REVENUECAT_WEBHOOK_SECRET }}
           # AWS S3: dev는 IAM 사용자 액세스 키(시크릿)를 컨테이너 env로 주입.
           # (prod는 EC2 IAM 역할 부착 후 키 미주입 방식으로 격상 예정 — #47)
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
