@@ -1,13 +1,14 @@
 package org.son.haruharu.domain.room.business.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import org.son.haruharu.domain.room.implement.Room;
-import org.son.haruharu.domain.room.implement.RoomMember;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
+import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomMember;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record RoomResponse(
         @JsonProperty("room_id") UUID roomId,
@@ -18,10 +19,10 @@ public record RoomResponse(
         @JsonProperty("started_at") LocalDateTime startedAt,
         @JsonProperty("member_count") int memberCount
 ) {
-    public static RoomResponse from(Room room, List<RoomMember> members) {
+    public static RoomResponse from(Room room, List<RoomMember> members, int currentDay) {
         return new RoomResponse(
             room.id(), room.status().name(), room.scheduledDate(),
-            room.totalDays(), room.currentDay(), room.startedAt(), members.size()
+            room.totalDays(), currentDay, room.startedAt(), members.size()
         );
     }
 }

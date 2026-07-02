@@ -4,26 +4,23 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 방 멤버 단건 프로필. 기본 항목(닉네임·성별·지역·나이)은 항상 노출.
- * unlockableFields는 3-state(잠김/해금가능/해금) — unlockable·unlocked·value 3필드로 표현한다.
+ * 방 멤버 단건 프로필. 닉네임·성별은 항상 노출(Day1). 나머지 항목(fields)은 currentDay >= availableFromDay면
+ * 전원에게 자동 공개된다(재화·해금 없음). 가치관 답변(valueAnswers)은 Day2부터 공개.
+ * visible=false면 value/answer는 null로 가려진다.
  */
 public record MemberProfileResponse(
         UUID roomMemberId,
         String nickname,
         String gender,
-        String location,
-        Integer age,
-        List<UnlockableFieldView> unlockableFields,
+        List<ProfileFieldView> fields,
         List<ValueAnswerView> valueAnswers
 ) {
 
-    public record UnlockableFieldView(
-            String fieldKey,
+    public record ProfileFieldView(
+            String key,
             String label,
-            int unlockCost,
             int availableFromDay,
-            boolean unlockable,
-            boolean unlocked,
+            boolean visible,
             String value
     ) {}
 
@@ -31,8 +28,7 @@ public record MemberProfileResponse(
             UUID answerId,
             UUID questionId,
             String questionText,
-            int unlockCost,
-            boolean unlocked,
+            boolean visible,
             String answer
     ) {}
 }

@@ -1,13 +1,22 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Period;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.profile.implement.ProfileField;
-import org.son.haruharu.domain.profile.implement.ProfileFieldCatalog;
-import org.son.haruharu.domain.profile.implement.ProfileFieldCatalogReader;
-import org.son.haruharu.domain.profile.implement.ProfileFieldUnlockReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
-import org.son.haruharu.domain.room.business.dto.MemberProfileResponse.UnlockableFieldView;
+import org.son.haruharu.domain.room.business.dto.MemberProfileResponse.ProfileFieldView;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse.ValueAnswerView;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
@@ -15,62 +24,45 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
-import org.son.haruharu.domain.value.implement.UserValueAnswer;
 import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
-import org.son.haruharu.domain.value.implement.ValueAnswerUnlockReader;
 import org.son.haruharu.domain.value.implement.ValueQuestion;
 import org.son.haruharu.domain.value.implement.ValueQuestionReader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
-import java.time.LocalDate;
-import java.time.Period;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-
 /**
- * 방 멤버 단건 프로필 조회. 해금 항목 정책은 카탈로그(데이터)에서 읽어 항목별 상태를 계산한다.
+ * 방 멤버 단건 프로필 조회. 항목별 공개는 currentDay 기반 자동 공개(ProfileField의 공개Day). 재화·해금 호출이 없다.
  * room·profile·value 세 도메인의 Reader를 조율한다(같은 방 멤버 한정).
  */
 @Service
 @Transactional(readOnly = true)
 public class MemberProfileService {
 
+    /** 나이 공개 Day. 나이는 UserProfile이 아닌 본인인증 스냅샷(RoomMember.birthday)에서 파생한다. */
+    private static final int AGE_REVEAL_DAY = 3;
+    /** 가치관 답변 공개 Day. */
+    private static final int VALUE_REVEAL_DAY = 2;
+
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
     private final UserProfileReader userProfileReader;
     private final ValueQuestionReader valueQuestionReader;
     private final UserValueAnswerReader userValueAnswerReader;
-    private final ValueAnswerUnlockReader valueAnswerUnlockReader;
-    private final ProfileFieldCatalogReader profileFieldCatalogReader;
-    private final ProfileFieldUnlockReader profileFieldUnlockReader;
     private final Clock clock;
 
     public MemberProfileService(RoomReader roomReader, RoomMemberReader roomMemberReader,
                                 UserProfileReader userProfileReader, ValueQuestionReader valueQuestionReader,
-                                UserValueAnswerReader userValueAnswerReader,
-                                ValueAnswerUnlockReader valueAnswerUnlockReader,
-                                ProfileFieldCatalogReader profileFieldCatalogReader,
-                                ProfileFieldUnlockReader profileFieldUnlockReader, Clock clock) {
+                                UserValueAnswerReader userValueAnswerReader, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.userProfileReader = userProfileReader;
         this.valueQuestionReader = valueQuestionReader;
         this.userValueAnswerReader = userValueAnswerReader;
-        this.valueAnswerUnlockReader = valueAnswerUnlockReader;
-        this.profileFieldCatalogReader = profileFieldCatalogReader;
-        this.profileFieldUnlockReader = profileFieldUnlockReader;
         this.clock = clock;
     }
 
     public MemberProfileResponse getMemberProfile(UUID roomId, UUID memberId, UUID userId) {
-        RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId);
+        roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         RoomMember target = roomMemberReader.getById(memberId);
         if (!target.roomId().equals(roomId)) {
             throw new RoomMemberNotFoundException();
@@ -79,70 +71,45 @@ public class MemberProfileService {
                 .orElseThrow(RoomNotFoundException::new);
 
         boolean self = target.userId().equals(userId);
+        int currentDay = room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour());
         UserProfile profile = userProfileReader.findByUserId(target.userId()).orElse(null);
-        Integer age = target.birthday() == null
-                ? null : Period.between(target.birthday(), LocalDate.now(clock)).getYears();
-
-        List<UnlockableFieldView> unlockableFields =
-                toUnlockableFields(profile, room.currentDay(), me.id(), target.id(), self);
-        List<ValueAnswerView> valueAnswers = toValueAnswers(target.userId(), me.id(), self);
 
         return new MemberProfileResponse(
                 target.id(),
                 profile == null ? null : profile.nickname(),
                 target.gender(),
-                profile == null ? null : profile.location(),
-                age,
-                unlockableFields,
-                valueAnswers);
+                toFields(profile, target, currentDay, self),
+                toValueAnswers(target.userId(), currentDay, self));
     }
 
-    private List<UnlockableFieldView> toUnlockableFields(UserProfile profile, int currentDay,
-                                                         UUID viewerRoomMemberId, UUID targetRoomMemberId,
-                                                         boolean self) {
-        Set<String> unlockedKeys = self
-                ? Set.of()
-                : Set.copyOf(profileFieldUnlockReader.getUnlockedFieldKeys(viewerRoomMemberId, targetRoomMemberId));
-
-        List<UnlockableFieldView> views = new ArrayList<>();
-        for (ProfileFieldCatalog catalog : profileFieldCatalogReader.getAllActive()) {
-            ProfileField field = ProfileField.findByKey(catalog.fieldKey()).orElse(null);
-            if (field == null) {
-                continue; // 카탈로그에 있으나 대응 enum이 없는 항목(제거됨)은 조용히 skip
-            }
-            boolean unlocked = self || unlockedKeys.contains(catalog.fieldKey());
-            views.add(new UnlockableFieldView(
-                    catalog.fieldKey(),
-                    field.label(),
-                    catalog.unlockCost(),
-                    catalog.availableFromDay(),
-                    catalog.isUnlockableOn(currentDay),
-                    unlocked,
-                    unlocked ? field.extract(profile) : null));
+    private List<ProfileFieldView> toFields(UserProfile profile, RoomMember target, int currentDay, boolean self) {
+        List<ProfileFieldView> views = new ArrayList<>();
+        for (ProfileField field : ProfileField.values()) {
+            boolean visible = self || currentDay >= field.availableFromDay();
+            views.add(new ProfileFieldView(field.key(), field.label(), field.availableFromDay(),
+                    visible, visible ? field.extract(profile) : null));
         }
+        boolean ageVisible = self || currentDay >= AGE_REVEAL_DAY;
+        String age = ageVisible && target.birthday() != null
+                ? String.valueOf(Period.between(target.birthday(), LocalDate.now(clock)).getYears())
+                : null;
+        views.add(new ProfileFieldView("age", "나이", AGE_REVEAL_DAY, ageVisible, age));
         return views;
     }
 
-    private List<ValueAnswerView> toValueAnswers(UUID targetUserId, UUID myRoomMemberId, boolean self) {
+    private List<ValueAnswerView> toValueAnswers(UUID targetUserId, int currentDay, boolean self) {
+        boolean visible = self || currentDay >= VALUE_REVEAL_DAY;
         Map<UUID, ValueQuestion> questions = valueQuestionReader.getAllActive().stream()
                 .collect(Collectors.toMap(ValueQuestion::id, Function.identity()));
-        Set<UUID> unlockedIds = Set.copyOf(valueAnswerUnlockReader.getUnlockedAnswerIds(myRoomMemberId));
 
         return userValueAnswerReader.getAllByUserId(targetUserId).stream()
                 .filter(answer -> questions.containsKey(answer.questionId()))
-                .map(answer -> toView(answer, questions.get(answer.questionId()), unlockedIds, self))
+                .map(answer -> new ValueAnswerView(
+                        answer.id(),
+                        answer.questionId(),
+                        questions.get(answer.questionId()).questionText(),
+                        visible,
+                        visible ? answer.answer() : null))
                 .toList();
-    }
-
-    private ValueAnswerView toView(UserValueAnswer answer, ValueQuestion question,
-                                   Set<UUID> unlockedIds, boolean self) {
-        boolean unlocked = self || unlockedIds.contains(answer.id());
-        return new ValueAnswerView(
-                answer.id(),
-                question.id(),
-                question.questionText(),
-                question.unlockCost(),
-                unlocked,
-                unlocked ? answer.answer() : null);
     }
 }

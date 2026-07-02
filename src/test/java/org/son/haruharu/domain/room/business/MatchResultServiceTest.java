@@ -1,5 +1,8 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,10 +15,6 @@ import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.storage.exception.MatchResultNotFoundException;
-
-import java.time.LocalDateTime;
-import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,7 +39,7 @@ class MatchResultServiceTest {
     }
 
     private RoomMember me() {
-        return new RoomMember(meId, roomId, userId, "MALE", null, 0, LocalDateTime.now());
+        return new RoomMember(meId, roomId, userId, "MALE", null, LocalDateTime.now());
     }
 
     @Test

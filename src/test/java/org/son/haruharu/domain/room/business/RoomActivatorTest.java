@@ -1,5 +1,10 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,11 +16,6 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,13 +38,13 @@ class RoomActivatorTest {
     }
 
     @Test
-    @DisplayName("당일 시작 예정(PENDING) 방들을 ACTIVE·currentDay=1로 전환한다")
+    @DisplayName("당일 시작 예정(PENDING) 방들을 ACTIVE로 전환하고 startedAt을 앵커한다")
     void givenPendingRooms_whenActivate_thenStartsAll() {
         LocalDate date = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
         given(roomReader.getScheduledPending(date)).willReturn(List.of(
-            new Room(UUID.randomUUID(), RoomStatus.PENDING, date, 3, 0, null, null),
-            new Room(UUID.randomUUID(), RoomStatus.PENDING, date, 3, 0, null, null)
+            new Room(UUID.randomUUID(), RoomStatus.PENDING, date, 3, null, null),
+            new Room(UUID.randomUUID(), RoomStatus.PENDING, date, 3, null, null)
         ));
 
         int activated = roomActivator.activate(date, now);
@@ -53,7 +53,7 @@ class RoomActivatorTest {
         ArgumentCaptor<Room> captor = ArgumentCaptor.forClass(Room.class);
         then(roomWriter).should(times(2)).save(captor.capture());
         assertThat(captor.getAllValues())
-            .allMatch(r -> r.status() == RoomStatus.ACTIVE && r.currentDay() == 1 && r.startedAt() == now);
+            .allMatch(r -> r.status() == RoomStatus.ACTIVE && r.startedAt() == now);
     }
 
     @Test

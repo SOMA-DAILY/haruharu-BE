@@ -1,5 +1,10 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
 import org.son.haruharu.domain.room.business.exception.AlreadySelectedException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSelfException;
@@ -17,10 +22,6 @@ import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Clock;
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * Day3 최종선택. 멤버당 1회 확정(변경 불가)이며, 상대도 나를 선택했으면
@@ -56,7 +57,7 @@ public class FinalSelectionService {
         RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
-        if (room.currentDay() < FINAL_SELECTION_DAY) {
+        if (room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour()) < FINAL_SELECTION_DAY) {
             throw new NotFinalSelectionDayException();
         }
         if (selectedMemberId.equals(me.id())) {

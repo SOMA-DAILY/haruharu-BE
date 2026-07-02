@@ -1,5 +1,9 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,10 +16,6 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,7 +40,7 @@ class RoomFeedServiceTest {
     }
 
     private RoomMember me(UUID id, UUID userId) {
-        return new RoomMember(id, UUID.randomUUID(), userId, "MALE", null, 0, LocalDateTime.now());
+        return new RoomMember(id, UUID.randomUUID(), userId, "MALE", null, LocalDateTime.now());
     }
 
     private VideoPost post(UUID memberId, String url) {

@@ -1,5 +1,14 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -7,19 +16,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
+import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
-import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,14 +31,20 @@ import static org.mockito.BDDMockito.given;
 @ExtendWith(MockitoExtension.class)
 class RoomServiceTest {
 
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     @Mock RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
 
     RoomService roomService;
 
+    // 2026-06-26 12:00 KST 고정 → startedAt 앵커에 따라 currentDay가 파생된다.
+    private final Clock clock = Clock.fixed(
+            ZonedDateTime.of(2026, 6, 26, 12, 0, 0, 0, SEOUL).toInstant(), SEOUL);
+
     @BeforeEach
     void setUp() {
-        roomService = new RoomService(roomReader, roomMemberReader);
+        roomService = new RoomService(roomReader, roomMemberReader, clock);
     }
 
     @Test
@@ -43,14 +52,14 @@ class RoomServiceTest {
     void givenActiveRoom_whenGetMyRoom_thenReturnsRoom() {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
-        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, 1, LocalDateTime.now(), null);
+        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, LocalDateTime.now(), null);
 
         given(roomMemberReader.findByUserId(userId))
-            .willReturn(List.of(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, 0, LocalDateTime.now())));
+            .willReturn(List.of(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now())));
         given(roomReader.findCurrent(List.of(roomId))).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
-            new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, 0, LocalDateTime.now()),
-            new RoomMember(UUID.randomUUID(), roomId, UUID.randomUUID(), "FEMALE", null, 0, LocalDateTime.now())
+            new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now()),
+            new RoomMember(UUID.randomUUID(), roomId, UUID.randomUUID(), "FEMALE", null, LocalDateTime.now())
         ));
 
         RoomResponse result = roomService.getMyRoom(userId);
@@ -76,13 +85,15 @@ class RoomServiceTest {
     void givenMember_whenGetRoom_thenReturnsRoom() {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
-        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, 2, LocalDateTime.now(), null);
+        // startedAt=전날 09:00 → clock(2026-06-26 12:00) 기준 currentDay=2로 파생
+        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 25), 3,
+            LocalDateTime.of(2026, 6, 25, 9, 0), null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-            .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, 0, LocalDateTime.now()));
+            .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
-            new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, 0, LocalDateTime.now())
+            new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now())
         ));
 
         RoomResponse result = roomService.getRoom(roomId, userId);

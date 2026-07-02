@@ -7,6 +7,5 @@ public record ValueQuestion(
         String questionText,
         String category,
         int displayOrder,
-        boolean isActive,
-        int unlockCost
+        boolean isActive
 ) {}

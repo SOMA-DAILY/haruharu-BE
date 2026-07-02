@@ -1,5 +1,13 @@
 package org.son.haruharu.domain.video.business;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.Optional;
+import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,20 +31,11 @@ import org.son.haruharu.domain.video.implement.VideoPostWriter;
 import org.son.haruharu.infrastructure.s3.PresignedUpload;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 
-import java.time.Clock;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.Optional;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
-import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class VideoServiceTest {
@@ -58,12 +57,14 @@ class VideoServiceTest {
                 videoPostReader, videoPostWriter, clock);
     }
 
-    private RoomMember member(UUID id, UUID userId, int points) {
-        return new RoomMember(id, UUID.randomUUID(), userId, "MALE", null, points, LocalDateTime.now());
+    private RoomMember member(UUID id, UUID userId) {
+        return new RoomMember(id, UUID.randomUUID(), userId, "MALE", null, LocalDateTime.now());
     }
 
+    // startedAt=당일 09:00 앵커 → serviceAt(9/12) 기준 currentDay=1로 파생된다.
     private Room activeDay1(UUID roomId) {
-        return new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, 1, LocalDateTime.now(), null);
+        return new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
+                LocalDateTime.of(2026, 6, 26, 9, 0), null);
     }
 
     // ── presign ──────────────────────────────────────────────
@@ -94,12 +95,12 @@ class VideoServiceTest {
     // ── upload ───────────────────────────────────────────────
 
     @Test
-    @DisplayName("정상 업로드 시 저장되고 열쇠 지급 없이 grantedPoints 0으로 응답한다(미션 비활성)")
-    void givenValidUpload_whenUpload_thenSavesWithNoKeyGrant() {
+    @DisplayName("정상 업로드 시 현재 Day·슬롯으로 저장된다(미션·열쇠 없음)")
+    void givenValidUpload_whenUpload_thenSaves() {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
-        RoomMember me = member(memberId, userId, 0);
+        RoomMember me = member(memberId, userId);
         String url = BASE + "users/" + userId + "/videos/v.mp4";
         var command = new VideoUploadCommand(SLOT_INDEX, url, null, "안녕");
 
@@ -111,8 +112,9 @@ class VideoServiceTest {
 
         VideoPostResponse result = serviceAt(12).upload(userId, roomId, command);
 
-        assertThat(result.grantedPoints()).isZero();
-        assertThat(result.keyBalance()).isZero();
+        assertThat(result.dayNumber()).isEqualTo(1);
+        assertThat(result.slotIndex()).isEqualTo(SLOT_INDEX);
+        assertThat(result.missionId()).isNull();
     }
 
     @Test
@@ -122,7 +124,7 @@ class VideoServiceTest {
         UUID roomId = UUID.randomUUID();
         var command = new VideoUploadCommand(SLOT_INDEX, BASE + "x", null, null);
 
-        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(UUID.randomUUID(), userId, 0));
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(UUID.randomUUID(), userId));
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
 
         assertThatThrownBy(() -> serviceAt(9).upload(userId, roomId, command))
@@ -138,7 +140,7 @@ class VideoServiceTest {
         String url = BASE + "users/" + userId + "/videos/v.mp4";
         var command = new VideoUploadCommand(SLOT_INDEX, url, null, null);
 
-        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId, 0));
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId));
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(true);
@@ -159,7 +161,7 @@ class VideoServiceTest {
                 "url", null, false, null, null, LocalDateTime.now());
 
         given(videoPostReader.getById(postId)).willReturn(post);
-        given(roomMemberReader.getById(memberId)).willReturn(member(memberId, userId, 0));
+        given(roomMemberReader.getById(memberId)).willReturn(member(memberId, userId));
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         serviceAt(12).delete(userId, postId);
@@ -179,7 +181,7 @@ class VideoServiceTest {
                 "url", null, false, null, null, LocalDateTime.now());
 
         given(videoPostReader.getById(postId)).willReturn(post);
-        given(roomMemberReader.getById(memberId)).willReturn(member(memberId, UUID.randomUUID(), 0)); // 다른 userId
+        given(roomMemberReader.getById(memberId)).willReturn(member(memberId, UUID.randomUUID())); // 다른 userId
 
         assertThatThrownBy(() -> serviceAt(12).delete(userId, postId))
             .isInstanceOf(NotVideoOwnerException.class);

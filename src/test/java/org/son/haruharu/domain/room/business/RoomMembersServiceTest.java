@@ -1,5 +1,14 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,15 +20,6 @@ import org.son.haruharu.domain.room.business.dto.MembersResponse;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
-
-import java.time.Clock;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -49,17 +49,17 @@ class RoomMembersServiceTest {
                 location, "ABC대학교", 180, "INTJ", nickname, "SOMETIMES", "NONE");
     }
 
-    private RoomMember member(UUID roomId, UUID userId, int pointSum) {
+    private RoomMember member(UUID roomId, UUID userId) {
         return new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", LocalDate.of(2000, 1, 1),
-                pointSum, LocalDateTime.now(clock));
+                LocalDateTime.now(clock));
     }
 
     @Test
-    @DisplayName("목록은 닉네임·성별·지역·나이·내 열쇠 잔액만 담고 해금 대상 항목은 포함하지 않는다")
+    @DisplayName("목록은 닉네임·성별·지역·나이만 담고 Day 게이트 항목은 포함하지 않는다")
     void givenMember_whenGetMembers_thenBasicsOnly() {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
-        RoomMember me = member(roomId, userId, 15);
+        RoomMember me = member(roomId, userId);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me));
@@ -68,7 +68,6 @@ class RoomMembersServiceTest {
 
         MembersResponse result = service().getMembers(roomId, userId);
 
-        assertThat(result.myPointSum()).isEqualTo(15);
         MembersResponse.MemberView view = result.members().get(0);
         assertThat(view.me()).isTrue();
         assertThat(view.nickname()).isEqualTo("철수");
@@ -82,8 +81,8 @@ class RoomMembersServiceTest {
         UUID myUserId = UUID.randomUUID();
         UUID otherUserId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
-        RoomMember me = member(roomId, myUserId, 15);
-        RoomMember other = member(roomId, otherUserId, 0);
+        RoomMember me = member(roomId, myUserId);
+        RoomMember other = member(roomId, otherUserId);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, myUserId)).willReturn(me);
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me, other));
@@ -108,7 +107,7 @@ class RoomMembersServiceTest {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         // 나이는 프로필이 아닌 RoomMember.birthday(본인인증 스냅샷)에서 온다 → birthday null이면 나이도 null
-        RoomMember me = new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, 0, LocalDateTime.now(clock));
+        RoomMember me = new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now(clock));
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me));

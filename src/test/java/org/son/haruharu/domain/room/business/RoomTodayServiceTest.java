@@ -1,5 +1,13 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.Optional;
+import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,15 +21,6 @@ import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
-
-import java.time.Clock;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -50,10 +49,12 @@ class RoomTodayServiceTest {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
-        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, 1, LocalDateTime.now(), null);
+        // startedAt=당일 09:00 앵커 → serviceAt 기준(2026-06-26) currentDay=1로 파생
+        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
+            LocalDateTime.of(2026, 6, 26, 9, 0), null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, 0, LocalDateTime.now()));
+            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
         given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
 
@@ -72,10 +73,10 @@ class RoomTodayServiceTest {
     void givenPendingRoom_whenGetToday_thenEmptySlots() {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
-        Room room = new Room(roomId, RoomStatus.PENDING, LocalDate.now(), 3, 0, null, null);
+        Room room = new Room(roomId, RoomStatus.PENDING, LocalDate.now(), 3, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-            .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, 0, LocalDateTime.now()));
+            .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
         given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
 

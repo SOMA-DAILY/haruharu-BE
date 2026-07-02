@@ -10,16 +10,10 @@ public record RoomMember(
         UUID userId,
         String gender,
         LocalDate birthday,
-        int pointSum,
         LocalDateTime joinedAt
 ) {
-    /** 방 입장 시 열쇠 잔액(pointSum)은 0으로 시작한다(세션 스코프). 성별·생년월일은 본인인증값 스냅샷. */
+    /** 방 입장. 성별·생년월일은 본인인증값 스냅샷. */
     public static RoomMember of(UUID roomId, UUID userId, String gender, LocalDate birthday, LocalDateTime joinedAt) {
-        return new RoomMember(null, roomId, userId, gender, birthday, 0, joinedAt);
-    }
-
-    /** 열쇠 지급/차감. 새 인스턴스를 반환(불변). */
-    public RoomMember addPoints(int amount) {
-        return new RoomMember(id, roomId, userId, gender, birthday, pointSum + amount, joinedAt);
+        return new RoomMember(null, roomId, userId, gender, birthday, joinedAt);
     }
 }

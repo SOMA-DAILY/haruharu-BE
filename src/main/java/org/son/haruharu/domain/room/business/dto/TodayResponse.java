@@ -1,9 +1,9 @@
 package org.son.haruharu.domain.room.business.dto;
 
+import java.util.List;
+
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.implement.Room;
-
-import java.util.List;
 
 /**
  * 오늘 화면: 현재 Day의 업로드 슬롯(시간창·현재 열림 여부) + 내 업로드 진행.
@@ -20,12 +20,12 @@ public record TodayResponse(
 ) {
     public record SlotView(int slotIndex, int startHour, int endHour, boolean openNow) {}
 
-    public static TodayResponse of(Room room, List<UploadSlot> slots, int nowHour, long uploadedCount) {
+    public static TodayResponse of(Room room, int currentDay, List<UploadSlot> slots, int nowHour, long uploadedCount) {
         List<SlotView> slotViews = slots.stream()
                 .map(s -> new SlotView(s.slotIndex(), s.startHour(), s.endHour(),
                         nowHour >= s.startHour() && nowHour < s.endHour()))
                 .toList();
         return new TodayResponse(
-                room.currentDay(), room.status().name(), slots.size(), uploadedCount, slotViews);
+                currentDay, room.status().name(), slots.size(), uploadedCount, slotViews);
     }
 }

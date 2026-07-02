@@ -1,5 +1,11 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.UUID;
+
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
@@ -10,11 +16,6 @@ import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Clock;
-import java.time.LocalTime;
-import java.util.List;
-import java.util.UUID;
 
 /** 오늘 화면 조회. 슬롯 시간창의 "현재 열림" 판정에 Clock(Asia/Seoul)을 사용한다. */
 @Service
@@ -39,10 +40,11 @@ public class RoomTodayService {
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
 
-        List<UploadSlot> slots = UploadSlot.ofDay(room.currentDay());
-        long uploadedCount = videoPostReader.countUploaded(member.id(), room.currentDay());
+        int currentDay = room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour());
+        List<UploadSlot> slots = UploadSlot.ofDay(currentDay);
+        long uploadedCount = videoPostReader.countUploaded(member.id(), currentDay);
         int nowHour = LocalTime.now(clock).getHour();
 
-        return TodayResponse.of(room, slots, nowHour, uploadedCount);
+        return TodayResponse.of(room, currentDay, slots, nowHour, uploadedCount);
     }
 }

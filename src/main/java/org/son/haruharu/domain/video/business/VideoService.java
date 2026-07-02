@@ -1,5 +1,11 @@
 package org.son.haruharu.domain.video.business;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.Map;
+import java.util.UUID;
+
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
@@ -23,12 +29,6 @@ import org.son.haruharu.domain.video.implement.VideoPostWriter;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Clock;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.Map;
-import java.util.UUID;
 
 /** 영상 업로드 라이프사이클(presign 발급 → 업로드 제출 → 재촬영 삭제). */
 @Service
@@ -77,7 +77,8 @@ public class VideoService {
             throw new RoomNotActiveException();
         }
 
-        UploadSlot slot = UploadSlot.of(room.currentDay(), command.slotIndex())
+        UploadSlot slot = UploadSlot.of(
+                        room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour()), command.slotIndex())
                 .orElseThrow(SlotNotInCurrentDayException::new);
         int nowHour = LocalTime.now(clock).getHour();
         if (!slot.isOpenAt(nowHour)) {
@@ -89,12 +90,12 @@ public class VideoService {
             throw new DuplicateSlotUploadException();
         }
 
-        // MVP: 미션 비활성화 — mission_id는 항상 null, 열쇠(세션 재화) 지급 없음.
+        // MVP: 미션 비활성화 — mission_id는 항상 null. 세션 재화(열쇠) 제거됨.
         VideoPost saved = videoPostWriter.save(VideoPost.create(
                 member.id(), slot.dayNumber(), slot.slotIndex(), null,
                 command.caption(), command.videoUrl(), command.thumbnailUrl(), LocalDateTime.now(clock)));
 
-        return VideoPostResponse.of(saved, 0, member.pointSum());
+        return VideoPostResponse.of(saved);
     }
 
     @Transactional

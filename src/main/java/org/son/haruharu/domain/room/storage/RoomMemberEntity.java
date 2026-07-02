@@ -1,6 +1,8 @@
 package org.son.haruharu.domain.room.storage;
 
-import org.son.haruharu.common.entity.BaseEntity;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -8,13 +10,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
+
+import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.room.implement.RoomMember;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "room_members")
@@ -38,10 +39,6 @@ public class RoomMemberEntity extends BaseEntity {
     @Column
     private LocalDate birthday;
 
-    // 방 내 재화(열쇠) 잔액. 입장 시 0, 미션 영상 업로드로 획득, 프로필 해금에 사용(세션 스코프).
-    @Column(nullable = false)
-    private int pointSum;
-
     @Column(nullable = false)
     private LocalDateTime joinedAt;
 
@@ -52,12 +49,11 @@ public class RoomMemberEntity extends BaseEntity {
         entity.userId = member.userId();
         entity.gender = member.gender();
         entity.birthday = member.birthday();
-        entity.pointSum = member.pointSum();
         entity.joinedAt = member.joinedAt();
         return entity;
     }
 
     public RoomMember toDomain() {
-        return new RoomMember(id, roomId, userId, gender, birthday, pointSum, joinedAt);
+        return new RoomMember(id, roomId, userId, gender, birthday, joinedAt);
     }
 }

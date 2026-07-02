@@ -1,5 +1,8 @@
 package org.son.haruharu.domain.value.business;
 
+import java.util.List;
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,9 +19,6 @@ import org.son.haruharu.domain.value.implement.UserValueAnswerWriter;
 import org.son.haruharu.domain.value.implement.ValueQuestion;
 import org.son.haruharu.domain.value.implement.ValueQuestionReader;
 import org.son.haruharu.domain.value.storage.exception.ValueQuestionNotFoundException;
-
-import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -47,7 +47,7 @@ class ValueServiceTest {
         // given
         UUID questionId = UUID.randomUUID();
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
-                new ValueQuestion(questionId, "주말에 무엇을 하나요?", "LIFESTYLE", 1, true, 10)
+                new ValueQuestion(questionId, "주말에 무엇을 하나요?", "LIFESTYLE", 1, true)
         ));
 
         // when
@@ -73,8 +73,8 @@ class ValueServiceTest {
                 new SaveValueAnswersCommand.AnswerItem(q2, "독서")
         ));
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
-                new ValueQuestion(q1, "질문1", "LIFESTYLE", 1, true, 10),
-                new ValueQuestion(q2, "질문2", "LIFESTYLE", 2, true, 10)
+                new ValueQuestion(q1, "질문1", "LIFESTYLE", 1, true),
+                new ValueQuestion(q2, "질문2", "LIFESTYLE", 2, true)
         ));
         given(userValueAnswerReader.getAllByUserId(userId)).willReturn(List.of());
 
@@ -106,7 +106,7 @@ class ValueServiceTest {
                 new SaveValueAnswersCommand.AnswerItem(questionId, "수정된 답변")
         ));
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
-                new ValueQuestion(questionId, "질문", "LIFESTYLE", 1, true, 10)
+                new ValueQuestion(questionId, "질문", "LIFESTYLE", 1, true)
         ));
         given(userValueAnswerReader.getAllByUserId(userId)).willReturn(List.of(
                 new UserValueAnswer(existingAnswerId, userId, questionId, "이전 답변")
