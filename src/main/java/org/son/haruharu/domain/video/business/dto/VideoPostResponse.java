@@ -5,7 +5,10 @@ import org.son.haruharu.domain.video.implement.VideoPost;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** 업로드 결과. grantedPoints>0면 미션 영상으로 열쇠가 지급됨, keyBalance는 지급 후 잔액. */
+/**
+ * 업로드 결과. MVP: 미션 비활성화로 missionId=null·grantedPoints=0 고정, keyBalance는 현재 열쇠 잔액.
+ * 미션 재개 시 지급 로직 복원 후 grantedPoints/keyBalance가 의미를 갖는다.
+ */
 public record VideoPostResponse(
         UUID videoPostId,
         int dayNumber,

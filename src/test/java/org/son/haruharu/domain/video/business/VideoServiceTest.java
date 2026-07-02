@@ -6,12 +6,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.son.haruharu.domain.mission.implement.Mission;
-import org.son.haruharu.domain.mission.implement.MissionReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
-import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
@@ -46,21 +43,19 @@ class VideoServiceTest {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final String BASE = "https://bucket.s3.ap-northeast-2.amazonaws.com/";
-    // Day1 slot2 = 11-14 시간창 (UploadSlot.DAY1_SLOT2)
+    // Day1 slot2 = 12-15 시간창 (UploadSlot.DAY1_SLOT2)
     private static final int SLOT_INDEX = 2;
 
     @Mock S3StoragePort s3StoragePort;
     @Mock RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
-    @Mock RoomMemberWriter roomMemberWriter;
-    @Mock MissionReader missionReader;
     @Mock VideoPostReader videoPostReader;
     @Mock VideoPostWriter videoPostWriter;
 
     private VideoService serviceAt(int hour) {
         Clock clock = Clock.fixed(ZonedDateTime.of(2026, 6, 26, hour, 0, 0, 0, SEOUL).toInstant(), SEOUL);
-        return new VideoService(s3StoragePort, roomReader, roomMemberReader, roomMemberWriter,
-                missionReader, videoPostReader, videoPostWriter, clock);
+        return new VideoService(s3StoragePort, roomReader, roomMemberReader,
+                videoPostReader, videoPostWriter, clock);
     }
 
     private RoomMember member(UUID id, UUID userId, int points) {
@@ -99,88 +94,33 @@ class VideoServiceTest {
     // ── upload ───────────────────────────────────────────────
 
     @Test
-    @DisplayName("미션 영상 업로드 시 미션 포인트만큼 열쇠가 지급된다(슬롯 최초)")
-    void givenMissionUpload_whenUpload_thenGrantsKeysOnce() {
-        UUID userId = UUID.randomUUID();
-        UUID roomId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
-        UUID missionId = UUID.randomUUID();
-        RoomMember me = member(memberId, userId, 0);
-        String url = BASE + "users/" + userId + "/videos/v.mp4";
-        var command = new VideoUploadCommand(SLOT_INDEX, missionId, url, null, "안녕");
-
-        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
-        given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
-        given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
-        given(missionReader.getById(missionId)).willReturn(new Mission(missionId, "미션", 5, true));
-        given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(false);
-        given(videoPostReader.hasEverUploadedMission(memberId, 1, SLOT_INDEX)).willReturn(false);
-        given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(roomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
-
-        VideoPostResponse result = serviceAt(12).upload(userId, roomId, command);
-
-        assertThat(result.grantedPoints()).isEqualTo(5);
-        assertThat(result.keyBalance()).isEqualTo(5);
-        then(roomMemberWriter).should().save(any());
-    }
-
-    @Test
-    @DisplayName("재촬영(삭제 후 재업로드)으로 슬롯에 과거 미션 업로드가 있으면 열쇠를 재지급하지 않는다")
-    void givenSlotAlreadyEarned_whenMissionUpload_thenNoRegrant() {
-        UUID userId = UUID.randomUUID();
-        UUID roomId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
-        UUID missionId = UUID.randomUUID();
-        RoomMember me = member(memberId, userId, 5);
-        String url = BASE + "users/" + userId + "/videos/v.mp4";
-        var command = new VideoUploadCommand(SLOT_INDEX, missionId, url, null, null);
-
-        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
-        given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
-        given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
-        given(missionReader.getById(missionId)).willReturn(new Mission(missionId, "미션", 5, true));
-        given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(false);
-        given(videoPostReader.hasEverUploadedMission(memberId, 1, SLOT_INDEX)).willReturn(true); // 과거 지급 있음
-        given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
-
-        VideoPostResponse result = serviceAt(12).upload(userId, roomId, command);
-
-        assertThat(result.grantedPoints()).isZero();
-        assertThat(result.keyBalance()).isEqualTo(5);
-        then(roomMemberWriter).should(never()).save(any());
-    }
-
-    @Test
-    @DisplayName("미션 없는 업로드는 열쇠를 지급하지 않는다(무료·무보상)")
-    void givenNoMission_whenUpload_thenNoGrant() {
+    @DisplayName("정상 업로드 시 저장되고 열쇠 지급 없이 grantedPoints 0으로 응답한다(미션 비활성)")
+    void givenValidUpload_whenUpload_thenSavesWithNoKeyGrant() {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         RoomMember me = member(memberId, userId, 0);
         String url = BASE + "users/" + userId + "/videos/v.mp4";
-        var command = new VideoUploadCommand(SLOT_INDEX, null, url, null, null);
+        var command = new VideoUploadCommand(SLOT_INDEX, url, null, "안녕");
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(false);
-        given(videoPostReader.hasEverUploadedMission(memberId, 1, SLOT_INDEX)).willReturn(false);
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         VideoPostResponse result = serviceAt(12).upload(userId, roomId, command);
 
         assertThat(result.grantedPoints()).isZero();
-        then(roomMemberWriter).should(never()).save(any());
-        then(missionReader).should(never()).getById(any());
+        assertThat(result.keyBalance()).isZero();
     }
 
     @Test
-    @DisplayName("슬롯 시간창 밖(09시, 슬롯 11-14)에서 업로드 시 SlotWindowClosedException")
+    @DisplayName("슬롯 시간창 밖(09시, 슬롯 12-15)에서 업로드 시 SlotWindowClosedException")
     void givenOutsideWindow_whenUpload_thenThrows() {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
-        var command = new VideoUploadCommand(SLOT_INDEX, null, BASE + "x", null, null);
+        var command = new VideoUploadCommand(SLOT_INDEX, BASE + "x", null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(UUID.randomUUID(), userId, 0));
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
@@ -196,7 +136,7 @@ class VideoServiceTest {
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         String url = BASE + "users/" + userId + "/videos/v.mp4";
-        var command = new VideoUploadCommand(SLOT_INDEX, null, url, null, null);
+        var command = new VideoUploadCommand(SLOT_INDEX, url, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId, 0));
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));

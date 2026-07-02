@@ -5,8 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.son.haruharu.domain.mission.implement.Mission;
-import org.son.haruharu.domain.mission.implement.MissionReader;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -38,18 +36,17 @@ class RoomTodayServiceTest {
 
     @Mock RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
-    @Mock MissionReader missionReader;
     @Mock VideoPostReader videoPostReader;
 
     private RoomTodayService serviceAt(int hour) {
         ZonedDateTime fixed = ZonedDateTime.of(2026, 6, 26, hour, 0, 0, 0, SEOUL);
         Clock clock = Clock.fixed(fixed.toInstant(), SEOUL);
-        return new RoomTodayService(roomReader, roomMemberReader, missionReader, videoPostReader, clock);
+        return new RoomTodayService(roomReader, roomMemberReader, videoPostReader, clock);
     }
 
     @Test
-    @DisplayName("ACTIVE Day1 조회 시 Day1 슬롯 5개·미션 후보·업로드 진행을 반환하고 12시엔 11-14 슬롯만 열려 있다")
-    void givenActiveDay1_whenGetToday_thenReturnsSlotsAndMissions() {
+    @DisplayName("ACTIVE Day1 조회 시 Day1 슬롯 5개·업로드 진행을 반환하고 12시엔 12-15 슬롯만 열려 있다")
+    void givenActiveDay1_whenGetToday_thenReturnsSlots() {
         UUID userId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -59,17 +56,13 @@ class RoomTodayServiceTest {
             .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, 0, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
         given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
-        given(missionReader.getActiveCandidates()).willReturn(List.of(
-            new Mission(UUID.randomUUID(), "오늘 먹은 음식", 5, true)
-        ));
 
-        // 12시 → Day1 슬롯 중 11-14(slot2)만 열림
+        // 12시 → Day1 슬롯 중 12-15(slot2)만 열림
         TodayResponse result = serviceAt(12).getToday(roomId, userId);
 
         assertThat(result.currentDay()).isEqualTo(1);
         assertThat(result.totalSlots()).isEqualTo(5);
         assertThat(result.uploadedCount()).isZero();
-        assertThat(result.missionCandidates()).hasSize(1);
         assertThat(result.slots()).extracting(TodayResponse.SlotView::openNow)
             .containsExactly(false, true, false, false, false);
     }
@@ -85,7 +78,6 @@ class RoomTodayServiceTest {
             .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, 0, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
         given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
-        given(missionReader.getActiveCandidates()).willReturn(List.of());
 
         TodayResponse result = serviceAt(12).getToday(roomId, userId);
 

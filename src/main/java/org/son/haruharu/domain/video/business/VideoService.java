@@ -1,13 +1,10 @@
 package org.son.haruharu.domain.video.business;
 
-import org.son.haruharu.domain.mission.implement.Mission;
-import org.son.haruharu.domain.mission.implement.MissionReader;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
-import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
@@ -45,21 +42,16 @@ public class VideoService {
     private final S3StoragePort s3StoragePort;
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
-    private final RoomMemberWriter roomMemberWriter;
-    private final MissionReader missionReader;
     private final VideoPostReader videoPostReader;
     private final VideoPostWriter videoPostWriter;
     private final Clock clock;
 
     public VideoService(S3StoragePort s3StoragePort, RoomReader roomReader,
-                        RoomMemberReader roomMemberReader, RoomMemberWriter roomMemberWriter,
-                        MissionReader missionReader,
+                        RoomMemberReader roomMemberReader,
                         VideoPostReader videoPostReader, VideoPostWriter videoPostWriter, Clock clock) {
         this.s3StoragePort = s3StoragePort;
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
-        this.roomMemberWriter = roomMemberWriter;
-        this.missionReader = missionReader;
         this.videoPostReader = videoPostReader;
         this.videoPostWriter = videoPostWriter;
         this.clock = clock;
@@ -93,26 +85,16 @@ public class VideoService {
         }
         validateOwnUrl(userId, command.videoUrl());
 
-        Mission mission = command.missionId() == null ? null : missionReader.getById(command.missionId());
-
         if (videoPostReader.hasActiveUpload(member.id(), slot.dayNumber(), slot.slotIndex())) {
             throw new DuplicateSlotUploadException();
         }
-        // 열쇠 지급 멱등 게이트: 신규 영상 저장 전에 "과거(삭제분 포함) 미션 업로드 여부"를 확정한다.
-        boolean alreadyGrantedForSlot =
-                videoPostReader.hasEverUploadedMission(member.id(), slot.dayNumber(), slot.slotIndex());
 
+        // MVP: 미션 비활성화 — mission_id는 항상 null, 열쇠(세션 재화) 지급 없음.
         VideoPost saved = videoPostWriter.save(VideoPost.create(
-                member.id(), slot.dayNumber(), slot.slotIndex(), command.missionId(),
+                member.id(), slot.dayNumber(), slot.slotIndex(), null,
                 command.caption(), command.videoUrl(), command.thumbnailUrl(), LocalDateTime.now(clock)));
 
-        int grantedPoints = 0;
-        int keyBalance = member.pointSum();
-        if (mission != null && !alreadyGrantedForSlot) {
-            grantedPoints = mission.points();
-            keyBalance = roomMemberWriter.save(member.addPoints(grantedPoints)).pointSum();
-        }
-        return VideoPostResponse.of(saved, grantedPoints, keyBalance);
+        return VideoPostResponse.of(saved, 0, member.pointSum());
     }
 
     @Transactional
@@ -126,7 +108,7 @@ public class VideoService {
             throw new NotVideoOwnerException();
         }
         videoPostWriter.save(post.deletedAt(LocalDateTime.now(clock)));
-        // 열쇠는 회수하지 않는다(MVP). 슬롯당 1회 지급이라 재촬영해도 재지급되지 않음.
+        // MVP: 미션 비활성화로 열쇠 지급 자체가 없어 회수 로직도 없다.
     }
 
     private void validateOwnUrl(UUID userId, String videoUrl) {

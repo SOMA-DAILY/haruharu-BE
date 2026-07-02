@@ -1,7 +1,5 @@
 package org.son.haruharu.domain.room.business;
 
-import org.son.haruharu.domain.mission.implement.Mission;
-import org.son.haruharu.domain.mission.implement.MissionReader;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
@@ -25,15 +23,13 @@ public class RoomTodayService {
 
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
-    private final MissionReader missionReader;
     private final VideoPostReader videoPostReader;
     private final Clock clock;
 
     public RoomTodayService(RoomReader roomReader, RoomMemberReader roomMemberReader,
-                            MissionReader missionReader, VideoPostReader videoPostReader, Clock clock) {
+                            VideoPostReader videoPostReader, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
-        this.missionReader = missionReader;
         this.videoPostReader = videoPostReader;
         this.clock = clock;
     }
@@ -45,9 +41,8 @@ public class RoomTodayService {
 
         List<UploadSlot> slots = UploadSlot.ofDay(room.currentDay());
         long uploadedCount = videoPostReader.countUploaded(member.id(), room.currentDay());
-        List<Mission> missions = missionReader.getActiveCandidates();
         int nowHour = LocalTime.now(clock).getHour();
 
-        return TodayResponse.of(room, slots, nowHour, uploadedCount, missions);
+        return TodayResponse.of(room, slots, nowHour, uploadedCount);
     }
 }
