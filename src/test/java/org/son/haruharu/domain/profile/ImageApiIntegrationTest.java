@@ -25,6 +25,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -92,15 +93,16 @@ class ImageApiIntegrationTest {
     void givenProfile_whenGetMe_thenReturnsNestedSnakeCase() throws Exception {
         UUID userId = UUID.randomUUID();
         profileService.updateProfile(userId, new UpdateProfileCommand(
-            "MALE", LocalDate.of(2000, 1, 1), "서울", "회사원",
-            178, "ENFP", "하루", "가끔", "비흡연", "무교"));
+            "서울", "회사원",
+            178, "ENFP", "하루", "가끔", "비흡연"));
 
         mockMvc.perform(get("/api/v1/users/me").with(authentication(auth(userId))))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.user_id").exists())
             .andExpect(jsonPath("$.data.user_status").value("UNVERIFIED"))
             .andExpect(jsonPath("$.data.profile.nickname").value("하루"))
-            .andExpect(jsonPath("$.data.profile.age").isNumber())
+            // 미인증 유저는 나이(본인인증 값)가 없으므로 null
+            .andExpect(jsonPath("$.data.profile.age").value(nullValue()))
             .andExpect(jsonPath("$.data.profile.drinking_status").value("가끔"))
             .andExpect(jsonPath("$.data.images").isArray())
             .andExpect(jsonPath("$.data.profile.birthday").doesNotExist());

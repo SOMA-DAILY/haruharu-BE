@@ -4,6 +4,8 @@ import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +22,13 @@ public class UserProfileRepositoryImpl implements UserProfileRepository {
     public Optional<UserProfile> findByUserId(UUID userId) {
         return userProfileJpaRepository.findByUserId(userId)
                 .map(UserProfileEntity::toDomain);
+    }
+
+    @Override
+    public List<UserProfile> findByUserIdIn(Collection<UUID> userIds) {
+        return userProfileJpaRepository.findByUserIdIn(userIds).stream()
+                .map(UserProfileEntity::toDomain)
+                .toList();
     }
 
     @Override

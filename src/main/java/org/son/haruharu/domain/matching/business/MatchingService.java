@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.matching.business;
 
 import org.son.haruharu.domain.identity.business.IdentityService;
+import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.matching.business.dto.QueueResponse;
 import org.son.haruharu.domain.matching.business.exception.MatchingAlreadyQueuedException;
 import org.son.haruharu.domain.matching.business.exception.MatchingNotVerifiedException;
@@ -33,13 +34,14 @@ public class MatchingService {
 
     @Transactional
     public QueueResponse joinQueue(UUID userId) {
-        // 성별은 본인인증(identity)에서만 온다. 미인증이면 성별이 없으므로 참가 차단.
-        String gender = identityService.findVerifiedGender(userId)
+        // 성별·생년월일은 본인인증(identity)에서만 온다. 미인증이면 참가 차단.
+        VerifiedIdentity verified = identityService.findVerified(userId)
             .orElseThrow(MatchingNotVerifiedException::new);
         if (matchingQueueReader.isQueued(userId)) {
             throw new MatchingAlreadyQueuedException();
         }
-        MatchingQueue saved = matchingQueueWriter.save(MatchingQueue.join(userId, gender, LocalDateTime.now()));
+        MatchingQueue saved = matchingQueueWriter.save(
+            MatchingQueue.join(userId, verified.gender(), verified.birthday(), LocalDateTime.now()));
         return QueueResponse.from(saved);
     }
 

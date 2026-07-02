@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.matching.storage;
 
+import org.son.haruharu.common.entity.BaseEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,13 +15,14 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
 @Table(name = "matching_queue")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class MatchingQueueEntity {
+public class MatchingQueueEntity extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -30,6 +33,9 @@ public class MatchingQueueEntity {
 
     @Column(nullable = false, length = 10)
     private String gender;
+
+    @Column
+    private LocalDate birthday;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -46,6 +52,7 @@ public class MatchingQueueEntity {
         entity.id = queue.id();
         entity.userId = queue.userId();
         entity.gender = queue.gender();
+        entity.birthday = queue.birthday();
         entity.status = queue.status();
         entity.queuedAt = queue.queuedAt();
         entity.matchedAt = queue.matchedAt();
@@ -53,6 +60,6 @@ public class MatchingQueueEntity {
     }
 
     public MatchingQueue toDomain() {
-        return new MatchingQueue(id, userId, gender, status, queuedAt, matchedAt);
+        return new MatchingQueue(id, userId, gender, birthday, status, queuedAt, matchedAt);
     }
 }

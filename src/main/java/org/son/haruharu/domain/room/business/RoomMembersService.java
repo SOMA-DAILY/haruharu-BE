@@ -13,6 +13,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -37,20 +38,22 @@ public class RoomMembersService {
         RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId);
         LocalDate today = LocalDate.now(clock);
 
-        List<MemberView> views = roomMemberReader.getByRoomId(roomId).stream()
-                .map(member -> toView(member, userId, today))
+        List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
+        List<UUID> userIds = members.stream().map(RoomMember::userId).toList();
+        Map<UUID, UserProfile> profiles = userProfileReader.findByUserIdIn(userIds);
+
+        List<MemberView> views = members.stream()
+                .map(member -> toView(member, profiles.get(member.userId()), userId, today))
                 .toList();
 
         return new MembersResponse(me.pointSum(), views);
     }
 
-    private MemberView toView(RoomMember member, UUID meUserId, LocalDate today) {
-        UserProfile profile = userProfileReader.findByUserId(member.userId()).orElse(null);
-
+    private MemberView toView(RoomMember member, UserProfile profile, UUID meUserId, LocalDate today) {
         String nickname = profile == null ? null : profile.nickname();
         String location = profile == null ? null : profile.location();
-        Integer age = (profile == null || profile.birthday() == null)
-                ? null : Period.between(profile.birthday(), today).getYears();
+        Integer age = member.birthday() == null
+                ? null : Period.between(member.birthday(), today).getYears();
 
         return new MemberView(member.id(), member.userId().equals(meUserId), nickname, member.gender(), location, age);
     }

@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.room.storage;
 
+import org.son.haruharu.common.entity.BaseEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -17,7 +19,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "match_results", uniqueConstraints = @UniqueConstraint(columnNames = {"member_a_id", "member_b_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class MatchResultEntity {
+public class MatchResultEntity extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

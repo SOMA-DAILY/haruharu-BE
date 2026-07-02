@@ -40,7 +40,7 @@ class MatchResultServiceTest {
     }
 
     private RoomMember me() {
-        return new RoomMember(meId, roomId, userId, "MALE", 0, LocalDateTime.now());
+        return new RoomMember(meId, roomId, userId, "MALE", null, 0, LocalDateTime.now());
     }
 
     @Test

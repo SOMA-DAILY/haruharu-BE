@@ -64,7 +64,7 @@ class VideoServiceTest {
     }
 
     private RoomMember member(UUID id, UUID userId, int points) {
-        return new RoomMember(id, UUID.randomUUID(), userId, "MALE", points, LocalDateTime.now());
+        return new RoomMember(id, UUID.randomUUID(), userId, "MALE", null, points, LocalDateTime.now());
     }
 
     private Room activeDay1(UUID roomId) {

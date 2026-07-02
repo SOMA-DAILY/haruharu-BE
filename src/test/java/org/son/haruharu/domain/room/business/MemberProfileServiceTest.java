@@ -62,7 +62,7 @@ class MemberProfileServiceTest {
     }
 
     private RoomMember member(UUID id, UUID roomId, UUID userId) {
-        return new RoomMember(id, roomId, userId, "FEMALE", 30, LocalDateTime.now());
+        return new RoomMember(id, roomId, userId, "FEMALE", LocalDate.of(2000, 1, 1), 30, LocalDateTime.now());
     }
 
     private Room room(UUID roomId, int currentDay) {
@@ -71,8 +71,8 @@ class MemberProfileServiceTest {
     }
 
     private UserProfile profile(UUID userId) {
-        return new UserProfile(UUID.randomUUID(), userId, "FEMALE", LocalDate.of(2000, 1, 1),
-                "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE", "NONE");
+        return new UserProfile(UUID.randomUUID(), userId,
+                "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE");
     }
 
     private List<ProfileFieldCatalog> catalog() {

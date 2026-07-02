@@ -79,13 +79,13 @@ class RoomProfileFieldUnlockE2ETest {
     }
 
     private UUID saveMember(UUID roomId, UUID userId, int pointSum) {
-        RoomMember member = new RoomMember(null, roomId, userId, "FEMALE", pointSum, LocalDateTime.now());
+        RoomMember member = new RoomMember(null, roomId, userId, "FEMALE", null, pointSum, LocalDateTime.now());
         return roomMemberJpaRepository.save(RoomMemberEntity.from(member)).toDomain().id();
     }
 
     private void saveProfile(UUID userId) {
-        UserProfile profile = new UserProfile(null, userId, "FEMALE", LocalDate.of(2000, 1, 1),
-                "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE", "NONE");
+        UserProfile profile = new UserProfile(null, userId,
+                "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE");
         userProfileJpaRepository.save(UserProfileEntity.from(profile));
     }
 

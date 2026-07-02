@@ -63,7 +63,7 @@ class FinalSelectionServiceTest {
     }
 
     private RoomMember member(UUID id, UUID memberUserId, UUID memberRoomId) {
-        return new RoomMember(id, memberRoomId, memberUserId, "MALE", 0, LocalDateTime.now());
+        return new RoomMember(id, memberRoomId, memberUserId, "MALE", null, 0, LocalDateTime.now());
     }
 
     private Room room(int currentDay) {

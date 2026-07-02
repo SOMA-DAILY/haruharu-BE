@@ -80,8 +80,8 @@ public class MemberProfileService {
 
         boolean self = target.userId().equals(userId);
         UserProfile profile = userProfileReader.findByUserId(target.userId()).orElse(null);
-        Integer age = (profile == null || profile.birthday() == null)
-                ? null : Period.between(profile.birthday(), LocalDate.now(clock)).getYears();
+        Integer age = target.birthday() == null
+                ? null : Period.between(target.birthday(), LocalDate.now(clock)).getYears();
 
         List<UnlockableFieldView> unlockableFields =
                 toUnlockableFields(profile, room.currentDay(), me.id(), target.id(), self);

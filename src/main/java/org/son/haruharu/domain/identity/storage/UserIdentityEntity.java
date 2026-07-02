@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.identity.storage;
 
+import org.son.haruharu.common.entity.BaseEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -17,7 +19,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "user_identities")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class UserIdentityEntity {
+public class UserIdentityEntity extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

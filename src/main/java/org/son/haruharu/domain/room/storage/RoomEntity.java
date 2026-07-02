@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.room.storage;
 
+import org.son.haruharu.common.entity.BaseEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -20,7 +22,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "rooms")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class RoomEntity {
+public class RoomEntity extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

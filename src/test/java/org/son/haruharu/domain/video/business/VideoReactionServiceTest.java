@@ -51,9 +51,9 @@ class VideoReactionServiceTest {
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
-                .willReturn(new RoomMember(authorMemberId, roomId, UUID.randomUUID(), "FEMALE", 0, LocalDateTime.now()));
+                .willReturn(new RoomMember(authorMemberId, roomId, UUID.randomUUID(), "FEMALE", null, 0, LocalDateTime.now()));
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-                .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 0, LocalDateTime.now()));
+                .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, 0, LocalDateTime.now()));
     }
 
     @Test
@@ -125,7 +125,7 @@ class VideoReactionServiceTest {
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
-                .willReturn(new RoomMember(authorMemberId, roomId, UUID.randomUUID(), "FEMALE", 0, LocalDateTime.now()));
+                .willReturn(new RoomMember(authorMemberId, roomId, UUID.randomUUID(), "FEMALE", null, 0, LocalDateTime.now()));
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willThrow(new NotRoomMemberException());
 
         assertThatThrownBy(() -> service().toggle(userId, postId, "LIKE"))

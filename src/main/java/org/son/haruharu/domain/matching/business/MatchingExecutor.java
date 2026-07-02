@@ -60,7 +60,7 @@ public class MatchingExecutor {
         for (MatchGroup group : groups) {
             Room room = roomWriter.save(Room.create(scheduledDate, ROOM_TOTAL_DAYS));
             List<RoomMember> members = group.all().stream()
-                .map(q -> RoomMember.of(room.id(), q.userId(), q.gender(), matchedAt))
+                .map(q -> RoomMember.of(room.id(), q.userId(), q.gender(), q.birthday(), matchedAt))
                 .toList();
             roomMemberWriter.saveAll(members);
             group.all().forEach(q -> matchingQueueWriter.save(q.matched(matchedAt)));

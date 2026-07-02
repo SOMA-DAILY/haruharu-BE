@@ -61,11 +61,11 @@ class ValueAnswerUnlockServiceTest {
     }
 
     private RoomMember me(int pointSum) {
-        return new RoomMember(meId, roomId, userId, "MALE", pointSum, LocalDateTime.now());
+        return new RoomMember(meId, roomId, userId, "MALE", null, pointSum, LocalDateTime.now());
     }
 
     private RoomMember target() {
-        return new RoomMember(targetId, roomId, targetUserId, "FEMALE", 0, LocalDateTime.now());
+        return new RoomMember(targetId, roomId, targetUserId, "FEMALE", null, 0, LocalDateTime.now());
     }
 
     private void stubLookups(int myPoints) {

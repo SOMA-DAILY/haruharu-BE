@@ -40,7 +40,7 @@ class RoomFeedServiceTest {
     }
 
     private RoomMember me(UUID id, UUID userId) {
-        return new RoomMember(id, UUID.randomUUID(), userId, "MALE", 0, LocalDateTime.now());
+        return new RoomMember(id, UUID.randomUUID(), userId, "MALE", null, 0, LocalDateTime.now());
     }
 
     private VideoPost post(UUID memberId, String url) {

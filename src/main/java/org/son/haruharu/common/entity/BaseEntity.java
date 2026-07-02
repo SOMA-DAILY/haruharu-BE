@@ -20,4 +20,8 @@ public abstract class BaseEntity {
     @LastModifiedDate
     @Column(nullable = false)
     protected LocalDateTime updatedAt;
+
+    // 소프트 삭제 시각. null이면 미삭제. 전역 조회 필터는 도입하지 않고 각 도메인이 필요 시 명시적으로 사용한다.
+    @Column
+    protected LocalDateTime deletedAt;
 }

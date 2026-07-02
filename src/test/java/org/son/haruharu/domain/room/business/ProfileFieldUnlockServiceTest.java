@@ -68,11 +68,11 @@ class ProfileFieldUnlockServiceTest {
     }
 
     private RoomMember me(int pointSum) {
-        return new RoomMember(meId, roomId, userId, "MALE", pointSum, LocalDateTime.now());
+        return new RoomMember(meId, roomId, userId, "MALE", null, pointSum, LocalDateTime.now());
     }
 
     private RoomMember target() {
-        return new RoomMember(targetId, roomId, targetUserId, "FEMALE", 0, LocalDateTime.now());
+        return new RoomMember(targetId, roomId, targetUserId, "FEMALE", null, 0, LocalDateTime.now());
     }
 
     private Room room(int currentDay) {
@@ -84,8 +84,8 @@ class ProfileFieldUnlockServiceTest {
     }
 
     private UserProfile targetProfile() {
-        return new UserProfile(UUID.randomUUID(), targetUserId, "FEMALE", LocalDate.of(2000, 1, 1),
-                "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE", "NONE");
+        return new UserProfile(UUID.randomUUID(), targetUserId,
+                "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE");
     }
 
     private void stubMembers(int myPoints) {

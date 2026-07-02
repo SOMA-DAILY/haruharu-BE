@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.identity.business;
 
 import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
+import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.identity.business.exception.UserAlreadyVerifiedException;
 import org.son.haruharu.domain.identity.implement.UserIdentity;
 import org.son.haruharu.domain.identity.implement.UserIdentityReader;
@@ -36,9 +37,10 @@ public class IdentityService {
         return userIdentityReader.existsByUserId(userId);
     }
 
-    /** 본인인증된 유저의 성별을 반환한다. 미인증(인증 정보 없음)이면 empty. */
-    public Optional<String> findVerifiedGender(UUID userId) {
-        return userIdentityReader.findByUserId(userId).map(UserIdentity::gender);
+    /** 본인인증된 유저의 성별·생년월일을 반환한다. 미인증(인증 정보 없음)이면 empty. */
+    public Optional<VerifiedIdentity> findVerified(UUID userId) {
+        return userIdentityReader.findByUserId(userId)
+                .map(i -> new VerifiedIdentity(i.gender(), i.birthday()));
     }
 
     @Transactional

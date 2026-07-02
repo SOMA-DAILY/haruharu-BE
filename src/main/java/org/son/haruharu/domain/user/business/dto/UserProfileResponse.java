@@ -21,19 +21,19 @@ public record UserProfileResponse(
             Integer height,
             String mbti,
             @JsonProperty("drinking_status") String drinkingStatus,
-            @JsonProperty("smoking_status") String smokingStatus,
-            String religion
+            @JsonProperty("smoking_status") String smokingStatus
     ) {}
 
-    public static UserProfileResponse from(UUID userId, ProfileResponse profile, String userStatus) {
+    /** gender·age는 프로필이 아니라 본인인증(identity)에서 수급한다. */
+    public static UserProfileResponse from(UUID userId, ProfileResponse profile,
+                                           String gender, Integer age, String userStatus) {
         return new UserProfileResponse(
             userId,
             userStatus,
             new ProfileSection(
-                profile.nickname(), profile.gender(), profile.age(),
+                profile.nickname(), gender, age,
                 profile.location(), profile.affiliation(), profile.height(),
-                profile.mbti(), profile.drinkingStatus(), profile.smokingStatus(),
-                profile.religion()
+                profile.mbti(), profile.drinkingStatus(), profile.smokingStatus()
             ),
             profile.images()
         );

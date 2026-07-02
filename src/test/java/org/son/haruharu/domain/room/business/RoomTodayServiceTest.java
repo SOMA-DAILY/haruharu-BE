@@ -56,7 +56,7 @@ class RoomTodayServiceTest {
         Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, 1, LocalDateTime.now(), null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", 0, LocalDateTime.now()));
+            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, 0, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
         given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
         given(missionReader.getActiveCandidates()).willReturn(List.of(
@@ -82,7 +82,7 @@ class RoomTodayServiceTest {
         Room room = new Room(roomId, RoomStatus.PENDING, LocalDate.now(), 3, 0, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-            .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 0, LocalDateTime.now()));
+            .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, 0, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
         given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
         given(missionReader.getActiveCandidates()).willReturn(List.of());
