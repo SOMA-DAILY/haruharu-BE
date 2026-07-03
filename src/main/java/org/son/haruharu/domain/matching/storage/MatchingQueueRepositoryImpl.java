@@ -6,6 +6,7 @@ import org.son.haruharu.domain.matching.implement.MatchingQueueRepository;
 import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,5 +37,10 @@ public class MatchingQueueRepositoryImpl implements MatchingQueueRepository {
     @Override
     public MatchingQueue save(MatchingQueue queue) {
         return jpaRepository.save(MatchingQueueEntity.from(queue)).toDomain();
+    }
+
+    @Override
+    public boolean transitionStatus(UUID id, MatchingQueueStatus from, MatchingQueueStatus to, LocalDateTime now) {
+        return jpaRepository.transitionStatus(id, from, to, now) == 1;
     }
 }

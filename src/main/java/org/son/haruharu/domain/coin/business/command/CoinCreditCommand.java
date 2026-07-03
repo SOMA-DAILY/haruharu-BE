@@ -21,4 +21,12 @@ public record CoinCreditCommand(
     public static CoinCreditCommand purchase(UUID userId, long amount, String refType, UUID refId) {
         return new CoinCreditCommand(userId, CoinBucket.PAID, amount, CoinLedgerReason.PURCHASE, refType, refId);
     }
+
+    /**
+     * 매칭 취소·미성사 환불 적립. 소모는 리워드 우선이므로 환불도 REWARD 버킷으로 되돌린다
+     * (PAID 적립 시 실결제 환불 회수(revoke) 대상 잔액이 부풀려지는 것을 막는다).
+     */
+    public static CoinCreditCommand matchRefund(UUID userId, long amount, String refType, UUID refId) {
+        return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.MATCH_REFUND, refType, refId);
+    }
 }

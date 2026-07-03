@@ -30,16 +30,28 @@ public class RoomService {
     }
 
     public RoomResponse getMyRoom(UUID userId) {
-        // 유저는 과거 방 이력(재매칭 방지용 보존)을 가질 수 있으므로, 후보 방 id를 모아 종료되지 않은 방을 한 번에 조회한다.
-        List<UUID> candidateRoomIds = roomMemberReader.findByUserId(userId).stream()
-            .map(RoomMember::roomId)
-            .toList();
-        Room currentRoom = roomReader.findCurrent(candidateRoomIds)
+        Room currentRoom = roomReader.findCurrent(candidateRoomIds(userId))
             .orElseThrow(RoomNotFoundException::new);
 
         List<RoomMember> members = roomMemberReader.getByRoomId(currentRoom.id());
         return RoomResponse.from(currentRoom, members,
                 currentRoom.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour()));
+    }
+
+    /** 종료되지 않은(PENDING/ACTIVE) 방 보유 여부. 매칭 큐 참가 차단 등 도메인 간 조율에 쓰인다. */
+    public boolean hasCurrentRoom(UUID userId) {
+        List<UUID> candidateRoomIds = candidateRoomIds(userId);
+        if (candidateRoomIds.isEmpty()) {
+            return false;
+        }
+        return roomReader.findCurrent(candidateRoomIds).isPresent();
+    }
+
+    /** 유저는 과거 방 이력(재매칭 방지용 보존)을 가질 수 있으므로, 후보 방 id를 모아 종료되지 않은 방을 한 번에 조회한다. */
+    private List<UUID> candidateRoomIds(UUID userId) {
+        return roomMemberReader.findByUserId(userId).stream()
+            .map(RoomMember::roomId)
+            .toList();
     }
 
     public RoomResponse getRoom(UUID roomId, UUID userId) {
