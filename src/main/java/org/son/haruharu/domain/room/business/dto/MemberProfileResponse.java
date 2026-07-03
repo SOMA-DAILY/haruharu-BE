@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.room.business.dto;
 
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 방 멤버 단건 프로필. 닉네임·성별은 항상 노출(Day1). 나머지 항목(fields)은 currentDay >= availableFromDay면
@@ -9,7 +8,7 @@ import java.util.UUID;
  * visible=false면 value/answer는 null로 가려진다.
  */
 public record MemberProfileResponse(
-        UUID roomMemberId,
+        Long roomMemberId,
         String nickname,
         String gender,
         List<ProfileFieldView> fields,

@@ -6,7 +6,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,8 +46,8 @@ class RoomTodayServiceTest {
     @DisplayName("ACTIVE Day1 조회 시 Day1 슬롯 5개·업로드 진행을 반환하고 12시엔 12-15 슬롯만 열려 있다")
     void givenActiveDay1_whenGetToday_thenReturnsSlots() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
+        Long roomId = 100L;
+        Long memberId = 200L;
         // startedAt=당일 09:00 앵커 → serviceAt 기준(2026-06-26) currentDay=1로 파생
         Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
             LocalDateTime.of(2026, 6, 26, 9, 0), null);
@@ -72,11 +71,11 @@ class RoomTodayServiceTest {
     @DisplayName("PENDING(currentDay=0) 방은 슬롯이 없어 빈 목록을 반환한다")
     void givenPendingRoom_whenGetToday_thenEmptySlots() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
+        Long roomId = 101L;
         Room room = new Room(roomId, RoomStatus.PENDING, LocalDate.now(), 3, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-            .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now()));
+            .willReturn(new RoomMember(201L, roomId, userId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
         given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
 
@@ -91,7 +90,7 @@ class RoomTodayServiceTest {
     @DisplayName("방 멤버가 아니면 NotRoomMemberException이 발생한다")
     void givenNonMember_whenGetToday_thenThrows() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
+        Long roomId = 102L;
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willThrow(new NotRoomMemberException());
 

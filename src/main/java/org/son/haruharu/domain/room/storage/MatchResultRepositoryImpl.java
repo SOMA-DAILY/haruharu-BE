@@ -5,7 +5,6 @@ import org.son.haruharu.domain.room.implement.MatchResultRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 public class MatchResultRepositoryImpl implements MatchResultRepository {
@@ -17,7 +16,7 @@ public class MatchResultRepositoryImpl implements MatchResultRepository {
     }
 
     @Override
-    public Optional<MatchResult> findByMember(UUID memberId) {
+    public Optional<MatchResult> findByMember(Long memberId) {
         return matchResultJpaRepository.findByMemberAIdOrMemberBId(memberId, memberId).map(MatchResultEntity::toDomain);
     }
 

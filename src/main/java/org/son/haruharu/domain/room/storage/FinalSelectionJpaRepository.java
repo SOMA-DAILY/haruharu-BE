@@ -3,11 +3,10 @@ package org.son.haruharu.domain.room.storage;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
-import java.util.UUID;
 
-public interface FinalSelectionJpaRepository extends JpaRepository<FinalSelectionEntity, UUID> {
+public interface FinalSelectionJpaRepository extends JpaRepository<FinalSelectionEntity, Long> {
 
-    Optional<FinalSelectionEntity> findByRoomMemberId(UUID roomMemberId);
+    Optional<FinalSelectionEntity> findByRoomMemberId(Long roomMemberId);
 
-    boolean existsByRoomMemberId(UUID roomMemberId);
+    boolean existsByRoomMemberId(Long roomMemberId);
 }

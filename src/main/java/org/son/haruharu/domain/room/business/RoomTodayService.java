@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.UUID;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
@@ -35,7 +34,7 @@ public class RoomTodayService {
         this.clock = clock;
     }
 
-    public TodayResponse getToday(UUID roomId, Long userId) {
+    public TodayResponse getToday(Long roomId, Long userId) {
         RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId);
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);

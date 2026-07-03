@@ -14,7 +14,6 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.domain.room.implement.MatchResult;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "match_results", uniqueConstraints = @UniqueConstraint(columnNames = {"member_a_id", "member_b_id"}))
@@ -22,14 +21,14 @@ import java.util.UUID;
 public class MatchResultEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
-    private UUID memberAId;
+    private Long memberAId;
 
     @Column(nullable = false)
-    private UUID memberBId;
+    private Long memberBId;
 
     @Column(nullable = false)
     private LocalDateTime matchedAt;

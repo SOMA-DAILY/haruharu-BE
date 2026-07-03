@@ -41,7 +41,7 @@ public class VideoController {
 
     @PostMapping("/rooms/{roomId}/video-posts")
     public ApiResponse<VideoPostResponse> upload(
-            @PathVariable UUID roomId, @Valid @RequestBody VideoUploadRequest request,
+            @PathVariable Long roomId, @Valid @RequestBody VideoUploadRequest request,
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(videoService.upload(userId, roomId, request.toCommand()));

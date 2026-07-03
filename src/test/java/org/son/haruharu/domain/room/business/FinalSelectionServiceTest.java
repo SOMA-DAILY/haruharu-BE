@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,10 +50,10 @@ class FinalSelectionServiceTest {
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-26T10:00:00Z"), ZoneId.of("Asia/Seoul"));
 
-    private final UUID roomId = UUID.randomUUID();
+    private final Long roomId = 10L;
     private final Long userId = 1L;
-    private final UUID meId = UUID.randomUUID();
-    private final UUID selectedId = UUID.randomUUID();
+    private final Long meId = 20L;
+    private final Long selectedId = 30L;
 
     @BeforeEach
     void setUp() {
@@ -62,7 +61,7 @@ class FinalSelectionServiceTest {
                 finalSelectionWriter, matchResultWriter, clock);
     }
 
-    private RoomMember member(UUID id, Long memberUserId, UUID memberRoomId) {
+    private RoomMember member(Long id, Long memberUserId, Long memberRoomId) {
         return new RoomMember(id, memberRoomId, memberUserId, "MALE", null, LocalDateTime.now());
     }
 
@@ -99,7 +98,7 @@ class FinalSelectionServiceTest {
         given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
         given(finalSelectionReader.findByRoomMemberId(selectedId))
-                .willReturn(Optional.of(new FinalSelection(UUID.randomUUID(), selectedId, meId, LocalDateTime.now())));
+                .willReturn(Optional.of(new FinalSelection(40L, selectedId, meId, LocalDateTime.now())));
 
         FinalSelectionResponse result = service.select(roomId, selectedId, userId);
 
@@ -145,7 +144,7 @@ class FinalSelectionServiceTest {
     @DisplayName("다른 방 멤버를 선택하면 RoomMemberNotFoundException이 발생한다")
     void givenMemberInAnotherRoom_whenSelect_thenThrows() {
         stubMeAndRoom(3);
-        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, UUID.randomUUID()));
+        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, 99L));
 
         assertThatThrownBy(() -> service.select(roomId, selectedId, userId))
                 .isInstanceOf(RoomMemberNotFoundException.class);

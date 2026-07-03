@@ -1,13 +1,12 @@
 package org.son.haruharu.domain.room.implement;
 
 import java.util.Optional;
-import java.util.UUID;
 
 public interface FinalSelectionRepository {
 
-    Optional<FinalSelection> findByRoomMemberId(UUID roomMemberId);
+    Optional<FinalSelection> findByRoomMemberId(Long roomMemberId);
 
-    boolean existsByRoomMemberId(UUID roomMemberId);
+    boolean existsByRoomMemberId(Long roomMemberId);
 
     FinalSelection save(FinalSelection finalSelection);
 }

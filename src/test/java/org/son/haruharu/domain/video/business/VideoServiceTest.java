@@ -57,12 +57,12 @@ class VideoServiceTest {
                 videoPostReader, videoPostWriter, clock);
     }
 
-    private RoomMember member(UUID id, Long userId) {
-        return new RoomMember(id, UUID.randomUUID(), userId, "MALE", null, LocalDateTime.now());
+    private RoomMember member(Long id, Long userId) {
+        return new RoomMember(id, 999L, userId, "MALE", null, LocalDateTime.now());
     }
 
     // startedAt=당일 09:00 앵커 → serviceAt(9/12) 기준 currentDay=1로 파생된다.
-    private Room activeDay1(UUID roomId) {
+    private Room activeDay1(Long roomId) {
         return new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
                 LocalDateTime.of(2026, 6, 26, 9, 0), null);
     }
@@ -98,8 +98,8 @@ class VideoServiceTest {
     @DisplayName("정상 업로드 시 현재 Day·슬롯으로 저장된다(미션·열쇠 없음)")
     void givenValidUpload_whenUpload_thenSaves() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
+        Long roomId = 10L;
+        Long memberId = 20L;
         RoomMember me = member(memberId, userId);
         String url = BASE + "users/" + userId + "/videos/v.mp4";
         var command = new VideoUploadCommand(SLOT_INDEX, url, null, "안녕");
@@ -121,10 +121,10 @@ class VideoServiceTest {
     @DisplayName("슬롯 시간창 밖(09시, 슬롯 12-15)에서 업로드 시 SlotWindowClosedException")
     void givenOutsideWindow_whenUpload_thenThrows() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
+        Long roomId = 11L;
         var command = new VideoUploadCommand(SLOT_INDEX, BASE + "x", null, null);
 
-        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(UUID.randomUUID(), userId));
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(500L, userId));
         given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
 
         assertThatThrownBy(() -> serviceAt(9).upload(userId, roomId, command))
@@ -135,8 +135,8 @@ class VideoServiceTest {
     @DisplayName("슬롯에 활성 영상이 이미 있으면 DuplicateSlotUploadException")
     void givenActiveExists_whenUpload_thenThrows() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
+        Long roomId = 12L;
+        Long memberId = 21L;
         String url = BASE + "users/" + userId + "/videos/v.mp4";
         var command = new VideoUploadCommand(SLOT_INDEX, url, null, null);
 
@@ -156,7 +156,7 @@ class VideoServiceTest {
     void givenOwner_whenDelete_thenSoftDeletes() {
         Long userId = 1L;
         UUID postId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
+        Long memberId = 30L;
         VideoPost post = new VideoPost(postId, memberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
 
@@ -176,7 +176,7 @@ class VideoServiceTest {
     void givenNotOwner_whenDelete_thenThrows() {
         Long userId = 1L;
         UUID postId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
+        Long memberId = 31L;
         VideoPost post = new VideoPost(postId, memberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
 

@@ -5,7 +5,6 @@ import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
@@ -34,7 +33,7 @@ public class RoomMembersService {
         this.clock = clock;
     }
 
-    public MembersResponse getMembers(UUID roomId, Long userId) {
+    public MembersResponse getMembers(Long roomId, Long userId) {
         roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         LocalDate today = LocalDate.now(clock);
 

@@ -27,7 +27,7 @@ public class VideoPostEntity {
     private UUID id;
 
     @Column(nullable = false)
-    private UUID roomMemberId;
+    private Long roomMemberId;
 
     @Column(nullable = false)
     private int dayNumber;

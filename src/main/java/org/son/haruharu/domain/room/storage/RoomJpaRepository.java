@@ -5,11 +5,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 
-public interface RoomJpaRepository extends JpaRepository<RoomEntity, UUID> {
+public interface RoomJpaRepository extends JpaRepository<RoomEntity, Long> {
 
-    List<RoomEntity> findByIdInAndStatusNot(List<UUID> ids, RoomStatus status);
+    List<RoomEntity> findByIdInAndStatusNot(List<Long> ids, RoomStatus status);
 
     List<RoomEntity> findAllByScheduledDateAndStatus(LocalDate scheduledDate, RoomStatus status);
 }

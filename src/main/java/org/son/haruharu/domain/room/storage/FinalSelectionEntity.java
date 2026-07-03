@@ -14,7 +14,6 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.domain.room.implement.FinalSelection;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "final_selections", uniqueConstraints = @UniqueConstraint(columnNames = "room_member_id"))
@@ -22,14 +21,14 @@ import java.util.UUID;
 public class FinalSelectionEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
-    private UUID roomMemberId;
+    private Long roomMemberId;
 
     @Column(nullable = false)
-    private UUID selectedMemberId;
+    private Long selectedMemberId;
 
     @Column(nullable = false)
     private LocalDateTime submittedAt;

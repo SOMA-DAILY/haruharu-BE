@@ -6,7 +6,7 @@ import java.util.UUID;
 /** 일상 영상 업로드. 슬롯은 (dayNumber, slotIndex) 자연키로 참조. missionId가 있으면 미션 영상(열쇠 지급 대상). */
 public record VideoPost(
         UUID id,
-        UUID roomMemberId,
+        Long roomMemberId,
         int dayNumber,
         int slotIndex,
         Long missionId,
@@ -18,7 +18,7 @@ public record VideoPost(
         LocalDateTime deletedAt,
         LocalDateTime createdAt
 ) {
-    public static VideoPost create(UUID roomMemberId, int dayNumber, int slotIndex, Long missionId,
+    public static VideoPost create(Long roomMemberId, int dayNumber, int slotIndex, Long missionId,
                                    String caption, String videoUrl, String thumbnailUrl,
                                    LocalDateTime createdAt) {
         return new VideoPost(null, roomMemberId, dayNumber, slotIndex, missionId, caption,
