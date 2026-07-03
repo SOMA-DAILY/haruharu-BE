@@ -30,7 +30,6 @@ import org.son.haruharu.domain.room.business.RoomService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -65,7 +64,7 @@ class MatchingServiceTest {
     private void givenSaveEcho() {
         given(matchingQueueWriter.save(any())).willAnswer(inv -> {
             MatchingQueue q = inv.getArgument(0);
-            return new MatchingQueue(UUID.randomUUID(), q.userId(), q.gender(), q.birthday(),
+            return new MatchingQueue(1L, q.userId(), q.gender(), q.birthday(),
                 q.status(), q.queuedAt(), q.matchedAt());
         });
     }
@@ -155,7 +154,7 @@ class MatchingServiceTest {
     @DisplayName("큐에 있는 유저가 취소 시 CANCELLED 전이 후 구름 5개를 환불 적립한다")
     void givenQueued_whenLeaveQueue_thenTransitionsCancelledAndRefunds() {
         Long userId = 1L;
-        UUID queueId = UUID.randomUUID();
+        Long queueId = 1L;
         MatchingQueue queued = new MatchingQueue(
             queueId, userId, "MALE", null, MatchingQueueStatus.QUEUED, LocalDateTime.now(), null);
         given(matchingQueueReader.getQueued(userId)).willReturn(queued);
@@ -163,7 +162,7 @@ class MatchingServiceTest {
 
         matchingService.leaveQueue(userId);
 
-        then(matchingQueueWriter).should().cancelIfQueued(any(UUID.class), any(LocalDateTime.class));
+        then(matchingQueueWriter).should().cancelIfQueued(any(Long.class), any(LocalDateTime.class));
 
         ArgumentCaptor<CoinCreditCommand> creditCaptor = ArgumentCaptor.forClass(CoinCreditCommand.class);
         then(coinService).should().credit(creditCaptor.capture());
@@ -181,7 +180,7 @@ class MatchingServiceTest {
     void givenConcurrentCancel_whenLeaveQueue_thenThrowsAndNoRefund() {
         Long userId = 1L;
         MatchingQueue queued = new MatchingQueue(
-            UUID.randomUUID(), userId, "MALE", null, MatchingQueueStatus.QUEUED, LocalDateTime.now(), null);
+            1L, userId, "MALE", null, MatchingQueueStatus.QUEUED, LocalDateTime.now(), null);
         given(matchingQueueReader.getQueued(userId)).willReturn(queued);
         given(matchingQueueWriter.cancelIfQueued(any(), any())).willReturn(false);
 
@@ -210,7 +209,7 @@ class MatchingServiceTest {
         Long userId = 1L;
         LocalDateTime queuedAt = LocalDateTime.of(2026, 7, 3, 12, 0);
         MatchingQueue queued = new MatchingQueue(
-            UUID.randomUUID(), userId, "MALE", null, MatchingQueueStatus.QUEUED, queuedAt, null);
+            1L, userId, "MALE", null, MatchingQueueStatus.QUEUED, queuedAt, null);
         given(matchingQueueReader.findQueued(userId)).willReturn(Optional.of(queued));
 
         QueueStatusResponse result = matchingService.getQueueStatus(userId);

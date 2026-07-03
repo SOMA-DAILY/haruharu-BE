@@ -2,10 +2,9 @@ package org.son.haruharu.domain.matching.implement;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 public record MatchingQueue(
-        UUID id,
+        Long id,
         Long userId,
         String gender,
         LocalDate birthday,

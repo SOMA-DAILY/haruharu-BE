@@ -19,7 +19,6 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * 매칭 실행 유스케이스. 스케줄러에서 분리되어 있어 스케줄러·어드민 API·worker 등 어떤 트리거에서도 재사용 가능하다.
@@ -69,7 +68,7 @@ public class MatchingExecutor {
         List<MatchingQueue> females = queued.stream().filter(q -> FEMALE.equals(q.gender())).toList();
 
         List<MatchGroup> groups = matchingStrategy.match(males, females);
-        Set<UUID> matchedIds = new HashSet<>();
+        Set<Long> matchedIds = new HashSet<>();
         for (MatchGroup group : groups) {
             Room room = roomWriter.save(Room.create(scheduledDate, ROOM_TOTAL_DAYS));
             List<RoomMember> members = group.all().stream()
@@ -86,7 +85,7 @@ public class MatchingExecutor {
         return groups.size();
     }
 
-    private void expireAndRefundLeftovers(List<MatchingQueue> queued, Set<UUID> matchedIds, LocalDateTime now) {
+    private void expireAndRefundLeftovers(List<MatchingQueue> queued, Set<Long> matchedIds, LocalDateTime now) {
         queued.stream()
             .filter(q -> !matchedIds.contains(q.id()))
             .forEach(q -> {

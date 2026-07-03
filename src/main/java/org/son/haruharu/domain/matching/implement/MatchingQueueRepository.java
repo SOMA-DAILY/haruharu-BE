@@ -3,7 +3,6 @@ package org.son.haruharu.domain.matching.implement;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 public interface MatchingQueueRepository {
 
@@ -15,5 +14,5 @@ public interface MatchingQueueRepository {
 
     MatchingQueue save(MatchingQueue queue);
 
-    boolean transitionStatus(UUID id, MatchingQueueStatus from, MatchingQueueStatus to, LocalDateTime now);
+    boolean transitionStatus(Long id, MatchingQueueStatus from, MatchingQueueStatus to, LocalDateTime now);
 }

@@ -9,9 +9,8 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
-public interface MatchingQueueJpaRepository extends JpaRepository<MatchingQueueEntity, UUID> {
+public interface MatchingQueueJpaRepository extends JpaRepository<MatchingQueueEntity, Long> {
 
     boolean existsByUserIdAndStatus(Long userId, MatchingQueueStatus status);
 
@@ -23,7 +22,7 @@ public interface MatchingQueueJpaRepository extends JpaRepository<MatchingQueueE
     @Modifying
     @Query("update MatchingQueueEntity q set q.status = :to, q.updatedAt = :now "
             + "where q.id = :id and q.status = :from")
-    int transitionStatus(@Param("id") UUID id,
+    int transitionStatus(@Param("id") Long id,
                          @Param("from") MatchingQueueStatus from,
                          @Param("to") MatchingQueueStatus to,
                          @Param("now") LocalDateTime now);

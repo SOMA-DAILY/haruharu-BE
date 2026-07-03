@@ -17,7 +17,6 @@ import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "matching_queue")
@@ -25,8 +24,8 @@ import java.util.UUID;
 public class MatchingQueueEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
     private Long userId;

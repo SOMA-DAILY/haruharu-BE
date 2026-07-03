@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,7 +16,7 @@ class FifoMatchingStrategyTest {
     private List<MatchingQueue> queues(String gender, int count) {
         return IntStream.range(0, count)
             .mapToObj(i -> new MatchingQueue(
-                UUID.randomUUID(), (long) i, gender, null,
+                (long) i, (long) i, gender, null,
                 MatchingQueueStatus.QUEUED, LocalDateTime.now().plusSeconds(i), null))
             .toList();
     }
