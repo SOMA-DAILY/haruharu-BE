@@ -12,7 +12,6 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.son.haruharu.domain.mission.implement.Mission;
 
-import java.util.UUID;
 
 @Entity
 @Table(name = "missions")
@@ -20,8 +19,8 @@ import java.util.UUID;
 public class MissionEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false, length = 500)
     private String description;

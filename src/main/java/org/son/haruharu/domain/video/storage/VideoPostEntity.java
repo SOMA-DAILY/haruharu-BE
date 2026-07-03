@@ -36,7 +36,7 @@ public class VideoPostEntity {
     private int slotIndex;
 
     @Column
-    private UUID missionId;
+    private Long missionId;
 
     @Column(length = 20)
     private String caption;

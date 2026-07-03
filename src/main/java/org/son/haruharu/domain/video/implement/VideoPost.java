@@ -9,7 +9,7 @@ public record VideoPost(
         UUID roomMemberId,
         int dayNumber,
         int slotIndex,
-        UUID missionId,
+        Long missionId,
         String caption,
         String videoUrl,
         String thumbnailUrl,
@@ -18,7 +18,7 @@ public record VideoPost(
         LocalDateTime deletedAt,
         LocalDateTime createdAt
 ) {
-    public static VideoPost create(UUID roomMemberId, int dayNumber, int slotIndex, UUID missionId,
+    public static VideoPost create(UUID roomMemberId, int dayNumber, int slotIndex, Long missionId,
                                    String caption, String videoUrl, String thumbnailUrl,
                                    LocalDateTime createdAt) {
         return new VideoPost(null, roomMemberId, dayNumber, slotIndex, missionId, caption,

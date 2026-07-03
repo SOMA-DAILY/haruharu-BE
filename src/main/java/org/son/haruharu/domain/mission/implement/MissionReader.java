@@ -5,7 +5,6 @@ import org.son.haruharu.domain.mission.storage.exception.MissionNotFoundExceptio
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.UUID;
 
 // MVP 미션 비활성화 동안 활성 소비자 없음(도메인 유지). 미션 재개 시 RoomToday/Video 흐름에서 다시 주입된다.
 @Component
@@ -19,7 +18,7 @@ public class MissionReader {
         return missionRepository.findActive();
     }
 
-    public Mission getById(UUID id) {
+    public Mission getById(Long id) {
         return missionRepository.findById(id)
                 .orElseThrow(MissionNotFoundException::new);
     }

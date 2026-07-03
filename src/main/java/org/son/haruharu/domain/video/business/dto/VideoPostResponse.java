@@ -12,7 +12,7 @@ public record VideoPostResponse(
         UUID videoPostId,
         int dayNumber,
         int slotIndex,
-        UUID missionId,
+        Long missionId,
         String videoUrl,
         String thumbnailUrl,
         String caption,
