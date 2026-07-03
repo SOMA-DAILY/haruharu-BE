@@ -14,7 +14,6 @@ import org.son.haruharu.domain.identity.implement.UserIdentity;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "user_identities")
@@ -22,8 +21,8 @@ import java.util.UUID;
 public class UserIdentityEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
     private Long userId;
