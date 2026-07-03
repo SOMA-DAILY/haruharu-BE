@@ -19,7 +19,7 @@ public class MissionRepositoryImpl implements MissionRepository {
     }
 
     @Override
-    public java.util.Optional<Mission> findById(java.util.UUID id) {
+    public java.util.Optional<Mission> findById(Long id) {
         return jpaRepository.findById(id).map(MissionEntity::toDomain);
     }
 
