@@ -4,10 +4,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 public record QueueResponse(
-        @JsonProperty("queue_id") UUID queueId,
+        @JsonProperty("queue_id") Long queueId,
         String status,
         String gender,
         @JsonProperty("queued_at") LocalDateTime queuedAt
