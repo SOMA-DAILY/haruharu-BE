@@ -3,7 +3,6 @@ package org.son.haruharu.domain.room.business;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,8 +42,8 @@ class RoomActivatorTest {
         LocalDate date = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
         given(roomReader.getScheduledPending(date)).willReturn(List.of(
-            new Room(UUID.randomUUID(), RoomStatus.PENDING, date, 3, null, null),
-            new Room(UUID.randomUUID(), RoomStatus.PENDING, date, 3, null, null)
+            new Room(1L, RoomStatus.PENDING, date, 3, null, null),
+            new Room(2L, RoomStatus.PENDING, date, 3, null, null)
         ));
 
         int activated = roomActivator.activate(date, now);

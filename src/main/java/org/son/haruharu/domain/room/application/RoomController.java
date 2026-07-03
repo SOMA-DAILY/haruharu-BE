@@ -1,7 +1,5 @@
 package org.son.haruharu.domain.room.application;
 
-import java.util.UUID;
-
 import jakarta.validation.Valid;
 
 import org.son.haruharu.common.ApiResponse;
@@ -61,32 +59,32 @@ public class RoomController {
     }
 
     @GetMapping("/{roomId}")
-    public ApiResponse<RoomResponse> getRoom(@PathVariable UUID roomId, Authentication authentication) {
+    public ApiResponse<RoomResponse> getRoom(@PathVariable Long roomId, Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(roomService.getRoom(roomId, userId));
     }
 
     @GetMapping("/{roomId}/today")
-    public ApiResponse<TodayResponse> getToday(@PathVariable UUID roomId, Authentication authentication) {
+    public ApiResponse<TodayResponse> getToday(@PathVariable Long roomId, Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(roomTodayService.getToday(roomId, userId));
     }
 
     @GetMapping("/{roomId}/members")
-    public ApiResponse<MembersResponse> getMembers(@PathVariable UUID roomId, Authentication authentication) {
+    public ApiResponse<MembersResponse> getMembers(@PathVariable Long roomId, Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(roomMembersService.getMembers(roomId, userId));
     }
 
     @GetMapping("/{roomId}/members/{memberId}/profile")
-    public ApiResponse<MemberProfileResponse> getMemberProfile(@PathVariable UUID roomId, @PathVariable UUID memberId,
+    public ApiResponse<MemberProfileResponse> getMemberProfile(@PathVariable Long roomId, @PathVariable Long memberId,
                                                                Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(memberProfileService.getMemberProfile(roomId, memberId, userId));
     }
 
     @PostMapping("/{roomId}/final-selection")
-    public ApiResponse<FinalSelectionResponse> selectFinal(@PathVariable UUID roomId,
+    public ApiResponse<FinalSelectionResponse> selectFinal(@PathVariable Long roomId,
                                                            @Valid @RequestBody FinalSelectionRequest request,
                                                            Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
@@ -94,13 +92,13 @@ public class RoomController {
     }
 
     @GetMapping("/{roomId}/match-result")
-    public ApiResponse<MatchResultResponse> getMatchResult(@PathVariable UUID roomId, Authentication authentication) {
+    public ApiResponse<MatchResultResponse> getMatchResult(@PathVariable Long roomId, Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(matchResultService.getMatchResult(roomId, userId));
     }
 
     @GetMapping("/{roomId}/feed")
-    public ApiResponse<FeedResponse> getFeed(@PathVariable UUID roomId, @RequestParam int day,
+    public ApiResponse<FeedResponse> getFeed(@PathVariable Long roomId, @RequestParam int day,
                                              Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(roomFeedService.getFeed(roomId, userId, day));

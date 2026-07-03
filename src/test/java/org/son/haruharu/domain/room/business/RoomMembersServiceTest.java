@@ -7,7 +7,6 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,8 +48,8 @@ class RoomMembersServiceTest {
                 location, "ABC대학교", 180, "INTJ", nickname, "SOMETIMES", "NONE");
     }
 
-    private RoomMember member(UUID roomId, Long userId) {
-        return new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", LocalDate.of(2000, 1, 1),
+    private RoomMember member(Long roomId, Long userId) {
+        return new RoomMember(900L, roomId, userId, "MALE", LocalDate.of(2000, 1, 1),
                 LocalDateTime.now(clock));
     }
 
@@ -58,7 +57,7 @@ class RoomMembersServiceTest {
     @DisplayName("목록은 닉네임·성별·지역·나이만 담고 Day 게이트 항목은 포함하지 않는다")
     void givenMember_whenGetMembers_thenBasicsOnly() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
+        Long roomId = 10L;
         RoomMember me = member(roomId, userId);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
@@ -80,7 +79,7 @@ class RoomMembersServiceTest {
     void givenMultipleMembers_whenGetMembers_thenLoadsProfilesInSingleBatch() {
         Long myUserId = 1L;
         Long otherUserId = 2L;
-        UUID roomId = UUID.randomUUID();
+        Long roomId = 11L;
         RoomMember me = member(roomId, myUserId);
         RoomMember other = member(roomId, otherUserId);
 
@@ -105,9 +104,9 @@ class RoomMembersServiceTest {
     @DisplayName("프로필이 없고 생년월일 스냅샷도 없으면 닉네임·지역·나이가 null로 내려간다")
     void givenMemberWithoutProfile_whenGetMembers_thenNullFields() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
+        Long roomId = 12L;
         // 나이는 프로필이 아닌 RoomMember.birthday(본인인증 스냅샷)에서 온다 → birthday null이면 나이도 null
-        RoomMember me = new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now(clock));
+        RoomMember me = new RoomMember(910L, roomId, userId, "MALE", null, LocalDateTime.now(clock));
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me));
@@ -126,7 +125,7 @@ class RoomMembersServiceTest {
     @DisplayName("방 멤버가 아니면 NotRoomMemberException이 발생한다")
     void givenNonMember_whenGetMembers_thenThrows() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
+        Long roomId = 13L;
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willThrow(new NotRoomMemberException());
 

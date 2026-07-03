@@ -2,7 +2,6 @@ package org.son.haruharu.domain.room.business;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
@@ -53,7 +52,7 @@ public class FinalSelectionService {
     }
 
     @Transactional
-    public FinalSelectionResponse select(UUID roomId, UUID selectedMemberId, Long userId) {
+    public FinalSelectionResponse select(Long roomId, Long selectedMemberId, Long userId) {
         RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
@@ -83,7 +82,7 @@ public class FinalSelectionService {
     }
 
     /** 상대(selectedMemberId)도 나(meId)를 최종선택했는지. */
-    private boolean isMutual(UUID selectedMemberId, UUID meId) {
+    private boolean isMutual(Long selectedMemberId, Long meId) {
         return finalSelectionReader.findByRoomMemberId(selectedMemberId)
                 .map(theirSelection -> theirSelection.selectedMemberId().equals(meId))
                 .orElse(false);

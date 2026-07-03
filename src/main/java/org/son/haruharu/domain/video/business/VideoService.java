@@ -69,7 +69,7 @@ public class VideoService {
     }
 
     @Transactional
-    public VideoPostResponse upload(Long userId, UUID roomId, VideoUploadCommand command) {
+    public VideoPostResponse upload(Long userId, Long roomId, VideoUploadCommand command) {
         RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);

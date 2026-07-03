@@ -39,11 +39,11 @@ class RoomFeedServiceTest {
         service = new RoomFeedService(roomMemberReader, videoPostReader);
     }
 
-    private RoomMember me(UUID id, Long userId) {
-        return new RoomMember(id, UUID.randomUUID(), userId, "MALE", null, LocalDateTime.now());
+    private RoomMember me(Long id, Long userId) {
+        return new RoomMember(id, 999L, userId, "MALE", null, LocalDateTime.now());
     }
 
-    private VideoPost post(UUID memberId, String url) {
+    private VideoPost post(Long memberId, String url) {
         return new VideoPost(UUID.randomUUID(), memberId, 1, 1, null, null, url, null, false, null, null,
                 LocalDateTime.now());
     }
@@ -52,8 +52,8 @@ class RoomFeedServiceTest {
     @DisplayName("내가 day N에 한 건도 안 올렸으면 피드가 잠긴다(locked, 빈 목록)")
     void givenNoUpload_whenFeed_thenLocked() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
+        Long roomId = 10L;
+        Long memberId = 20L;
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me(memberId, userId));
         given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
 
@@ -67,9 +67,9 @@ class RoomFeedServiceTest {
     @DisplayName("내가 day N에 업로드했으면 잠금이 풀리고 멤버 영상이 보이며 내 영상은 mine=true")
     void givenUploaded_whenFeed_thenUnlockedWithPosts() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
-        UUID otherMemberId = UUID.randomUUID();
+        Long roomId = 10L;
+        Long memberId = 20L;
+        Long otherMemberId = 30L;
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me(memberId, userId));
         given(videoPostReader.countUploaded(any(), anyInt())).willReturn(1L);
         given(roomMemberReader.getByRoomId(roomId))
@@ -92,8 +92,8 @@ class RoomFeedServiceTest {
     @DisplayName("슬롯이 없는 Day(0)면 잠금 없이 빈 목록을 반환한다")
     void givenDayWithoutSlots_whenFeed_thenEmptyUnlocked() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
-        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me(UUID.randomUUID(), userId));
+        Long roomId = 10L;
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me(500L, userId));
 
         FeedResponse result = service.getFeed(roomId, userId, 0);
 
@@ -105,7 +105,7 @@ class RoomFeedServiceTest {
     @DisplayName("방 멤버가 아니면 NotRoomMemberException이 발생한다")
     void givenNonMember_whenFeed_thenThrows() {
         Long userId = 1L;
-        UUID roomId = UUID.randomUUID();
+        Long roomId = 10L;
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willThrow(new NotRoomMemberException());
 
         assertThatThrownBy(() -> service.getFeed(roomId, userId, 1))

@@ -2,7 +2,6 @@ package org.son.haruharu.domain.room.storage;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,11 +22,11 @@ import lombok.NoArgsConstructor;
 public class RoomMemberEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
-    private UUID roomId;
+    private Long roomId;
 
     @Column(nullable = false)
     private Long userId;

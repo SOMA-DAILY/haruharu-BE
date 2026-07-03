@@ -12,7 +12,7 @@ public record FeedResponse(boolean locked, List<FeedItem> posts) {
 
     public record FeedItem(
             UUID videoPostId,
-            UUID roomMemberId,
+            Long roomMemberId,
             boolean mine,
             String videoUrl,
             String thumbnailUrl,

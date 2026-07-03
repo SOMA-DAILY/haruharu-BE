@@ -45,15 +45,15 @@ class VideoReactionServiceTest {
     }
 
     private void stubPostAndMembership(UUID postId, Long userId) {
-        UUID authorMemberId = UUID.randomUUID();
-        UUID roomId = UUID.randomUUID();
+        Long authorMemberId = 40L;
+        Long roomId = 50L;
         VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
                 .willReturn(new RoomMember(authorMemberId, roomId, 2L, "FEMALE", null, LocalDateTime.now()));
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-                .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now()));
+                .willReturn(new RoomMember(700L, roomId, userId, "MALE", null, LocalDateTime.now()));
     }
 
     @Test
@@ -119,8 +119,8 @@ class VideoReactionServiceTest {
     void givenNonMember_whenToggle_thenThrows() {
         Long userId = 1L;
         UUID postId = UUID.randomUUID();
-        UUID authorMemberId = UUID.randomUUID();
-        UUID roomId = UUID.randomUUID();
+        Long authorMemberId = 41L;
+        Long roomId = 51L;
         VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);

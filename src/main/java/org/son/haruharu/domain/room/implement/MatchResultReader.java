@@ -3,8 +3,6 @@ package org.son.haruharu.domain.room.implement;
 import org.son.haruharu.domain.room.storage.exception.MatchResultNotFoundException;
 import org.springframework.stereotype.Component;
 
-import java.util.UUID;
-
 @Component
 public class MatchResultReader {
 
@@ -14,7 +12,7 @@ public class MatchResultReader {
         this.matchResultRepository = matchResultRepository;
     }
 
-    public MatchResult getByMember(UUID memberId) {
+    public MatchResult getByMember(Long memberId) {
         return matchResultRepository.findByMember(memberId)
                 .orElseThrow(MatchResultNotFoundException::new);
     }

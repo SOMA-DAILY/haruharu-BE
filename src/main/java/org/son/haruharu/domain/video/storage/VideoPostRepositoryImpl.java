@@ -26,24 +26,24 @@ public class VideoPostRepositoryImpl implements VideoPostRepository {
     }
 
     @Override
-    public long countUploaded(UUID roomMemberId, int dayNumber) {
+    public long countUploaded(Long roomMemberId, int dayNumber) {
         return jpaRepository.countByRoomMemberIdAndDayNumberAndDeletedAtIsNull(roomMemberId, dayNumber);
     }
 
     @Override
-    public boolean existsActiveBySlot(UUID roomMemberId, int dayNumber, int slotIndex) {
+    public boolean existsActiveBySlot(Long roomMemberId, int dayNumber, int slotIndex) {
         return jpaRepository.existsByRoomMemberIdAndDayNumberAndSlotIndexAndDeletedAtIsNull(
                 roomMemberId, dayNumber, slotIndex);
     }
 
     @Override
-    public boolean existsMissionUploadBySlot(UUID roomMemberId, int dayNumber, int slotIndex) {
+    public boolean existsMissionUploadBySlot(Long roomMemberId, int dayNumber, int slotIndex) {
         return jpaRepository.existsByRoomMemberIdAndDayNumberAndSlotIndexAndMissionIdIsNotNull(
                 roomMemberId, dayNumber, slotIndex);
     }
 
     @Override
-    public List<VideoPost> findFeed(List<UUID> roomMemberIds, int dayNumber) {
+    public List<VideoPost> findFeed(List<Long> roomMemberIds, int dayNumber) {
         if (roomMemberIds.isEmpty()) {
             return List.of();
         }

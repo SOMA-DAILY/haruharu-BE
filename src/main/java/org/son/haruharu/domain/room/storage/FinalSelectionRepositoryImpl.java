@@ -5,7 +5,6 @@ import org.son.haruharu.domain.room.implement.FinalSelectionRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 public class FinalSelectionRepositoryImpl implements FinalSelectionRepository {
@@ -17,12 +16,12 @@ public class FinalSelectionRepositoryImpl implements FinalSelectionRepository {
     }
 
     @Override
-    public Optional<FinalSelection> findByRoomMemberId(UUID roomMemberId) {
+    public Optional<FinalSelection> findByRoomMemberId(Long roomMemberId) {
         return finalSelectionJpaRepository.findByRoomMemberId(roomMemberId).map(FinalSelectionEntity::toDomain);
     }
 
     @Override
-    public boolean existsByRoomMemberId(UUID roomMemberId) {
+    public boolean existsByRoomMemberId(Long roomMemberId) {
         return finalSelectionJpaRepository.existsByRoomMemberId(roomMemberId);
     }
 

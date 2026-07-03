@@ -3,10 +3,9 @@ package org.son.haruharu.domain.room.implement;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 
 public record Room(
-        UUID id,
+        Long id,
         RoomStatus status,
         LocalDate scheduledDate,
         int totalDays,

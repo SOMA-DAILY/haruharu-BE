@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.room.business;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,10 +27,10 @@ class MatchResultServiceTest {
 
     MatchResultService service;
 
-    private final UUID roomId = UUID.randomUUID();
+    private final Long roomId = 10L;
     private final Long userId = 1L;
-    private final UUID meId = UUID.randomUUID();
-    private final UUID partnerId = UUID.randomUUID();
+    private final Long meId = 20L;
+    private final Long partnerId = 30L;
 
     @BeforeEach
     void setUp() {
@@ -48,7 +47,7 @@ class MatchResultServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me());
         // me가 memberB인 케이스
         given(matchResultReader.getByMember(meId))
-                .willReturn(new MatchResult(UUID.randomUUID(), partnerId, meId, LocalDateTime.now()));
+                .willReturn(new MatchResult(40L, partnerId, meId, LocalDateTime.now()));
 
         MatchResultResponse result = service.getMatchResult(roomId, userId);
 

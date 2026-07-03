@@ -9,7 +9,6 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -23,12 +22,12 @@ public class RoomRepositoryImpl implements RoomRepository {
     }
 
     @Override
-    public Optional<Room> findById(UUID id) {
+    public Optional<Room> findById(Long id) {
         return jpaRepository.findById(id).map(RoomEntity::toDomain);
     }
 
     @Override
-    public List<Room> findByIdInAndStatusNot(List<UUID> ids, RoomStatus status) {
+    public List<Room> findByIdInAndStatusNot(List<Long> ids, RoomStatus status) {
         if (ids.isEmpty()) {
             return List.of();
         }

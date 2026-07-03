@@ -4,13 +4,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
-public interface RoomMemberJpaRepository extends JpaRepository<RoomMemberEntity, UUID> {
+public interface RoomMemberJpaRepository extends JpaRepository<RoomMemberEntity, Long> {
 
     List<RoomMemberEntity> findByUserId(Long userId);
 
-    List<RoomMemberEntity> findByRoomId(UUID roomId);
+    List<RoomMemberEntity> findByRoomId(Long roomId);
 
-    Optional<RoomMemberEntity> findByRoomIdAndUserId(UUID roomId, Long userId);
+    Optional<RoomMemberEntity> findByRoomIdAndUserId(Long roomId, Long userId);
 }

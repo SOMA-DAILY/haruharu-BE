@@ -3,7 +3,6 @@ package org.son.haruharu.domain.matching.business;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -66,7 +65,7 @@ class MatchingExecutorTest {
         given(matchingQueueReader.findAllQueued()).willReturn(all);
         given(roomWriter.save(any())).willAnswer(inv -> {
             Room r = inv.getArgument(0);
-            return new Room(UUID.randomUUID(), r.status(), r.scheduledDate(),
+            return new Room(1L, r.status(), r.scheduledDate(),
                 r.totalDays(), r.startedAt(), r.endedAt());
         });
 
@@ -87,7 +86,7 @@ class MatchingExecutorTest {
         given(matchingQueueReader.findAllQueued()).willReturn(all);
         given(roomWriter.save(any())).willAnswer(inv -> {
             Room r = inv.getArgument(0);
-            return new Room(UUID.randomUUID(), r.status(), r.scheduledDate(),
+            return new Room(1L, r.status(), r.scheduledDate(),
                 r.totalDays(), r.startedAt(), r.endedAt());
         });
 
@@ -131,7 +130,7 @@ class MatchingExecutorTest {
         given(matchingQueueWriter.expireIfQueued(any(), any())).willReturn(true);
         given(roomWriter.save(any())).willAnswer(inv -> {
             Room r = inv.getArgument(0);
-            return new Room(UUID.randomUUID(), r.status(), r.scheduledDate(),
+            return new Room(1L, r.status(), r.scheduledDate(),
                 r.totalDays(), r.startedAt(), r.endedAt());
         });
 

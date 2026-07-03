@@ -7,7 +7,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -33,17 +32,17 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     }
 
     @Override
-    public List<RoomMember> findByRoomId(UUID roomId) {
+    public List<RoomMember> findByRoomId(Long roomId) {
         return jpaRepository.findByRoomId(roomId).stream().map(RoomMemberEntity::toDomain).toList();
     }
 
     @Override
-    public Optional<RoomMember> findByRoomIdAndUserId(UUID roomId, Long userId) {
+    public Optional<RoomMember> findByRoomIdAndUserId(Long roomId, Long userId) {
         return jpaRepository.findByRoomIdAndUserId(roomId, userId).map(RoomMemberEntity::toDomain);
     }
 
     @Override
-    public Optional<RoomMember> findById(UUID id) {
+    public Optional<RoomMember> findById(Long id) {
         return jpaRepository.findById(id).map(RoomMemberEntity::toDomain);
     }
 }

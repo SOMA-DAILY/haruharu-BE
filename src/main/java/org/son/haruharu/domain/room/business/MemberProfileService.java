@@ -7,7 +7,6 @@ import java.time.Period;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -61,7 +60,7 @@ public class MemberProfileService {
         this.clock = clock;
     }
 
-    public MemberProfileResponse getMemberProfile(UUID roomId, UUID memberId, Long userId) {
+    public MemberProfileResponse getMemberProfile(Long roomId, Long memberId, Long userId) {
         roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         RoomMember target = roomMemberReader.getById(memberId);
         if (!target.roomId().equals(roomId)) {
