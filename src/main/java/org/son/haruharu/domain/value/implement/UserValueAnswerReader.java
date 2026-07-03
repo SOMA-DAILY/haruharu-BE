@@ -4,7 +4,6 @@ import org.son.haruharu.domain.value.storage.exception.UserValueAnswerNotFoundEx
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.UUID;
 
 @Component
 public class UserValueAnswerReader {
@@ -19,7 +18,7 @@ public class UserValueAnswerReader {
         return userValueAnswerRepository.findAllByUserId(userId);
     }
 
-    public UserValueAnswer getById(UUID id) {
+    public UserValueAnswer getById(Long id) {
         return userValueAnswerRepository.findById(id)
                 .orElseThrow(UserValueAnswerNotFoundException::new);
     }

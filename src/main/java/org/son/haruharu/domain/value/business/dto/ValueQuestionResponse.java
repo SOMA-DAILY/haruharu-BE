@@ -2,10 +2,8 @@ package org.son.haruharu.domain.value.business.dto;
 
 import org.son.haruharu.domain.value.implement.ValueQuestion;
 
-import java.util.UUID;
-
 public record ValueQuestionResponse(
-        UUID questionId,
+        Long questionId,
         String questionText,
         String category,
         int displayOrder

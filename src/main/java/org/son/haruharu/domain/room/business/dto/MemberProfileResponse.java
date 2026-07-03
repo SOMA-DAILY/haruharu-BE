@@ -25,8 +25,8 @@ public record MemberProfileResponse(
     ) {}
 
     public record ValueAnswerView(
-            UUID answerId,
-            UUID questionId,
+            Long answerId,
+            Long questionId,
             String questionText,
             boolean visible,
             String answer

@@ -6,7 +6,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 public class UserValueAnswerRepositoryImpl implements UserValueAnswerRepository {
@@ -26,7 +25,7 @@ public class UserValueAnswerRepositoryImpl implements UserValueAnswerRepository 
     }
 
     @Override
-    public Optional<UserValueAnswer> findById(UUID id) {
+    public Optional<UserValueAnswer> findById(Long id) {
         return userValueAnswerJpaRepository.findById(id).map(UserValueAnswerEntity::toDomain);
     }
 

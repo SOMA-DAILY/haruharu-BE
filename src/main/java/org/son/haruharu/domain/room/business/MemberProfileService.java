@@ -99,7 +99,7 @@ public class MemberProfileService {
 
     private List<ValueAnswerView> toValueAnswers(Long targetUserId, int currentDay, boolean self) {
         boolean visible = self || currentDay >= VALUE_REVEAL_DAY;
-        Map<UUID, ValueQuestion> questions = valueQuestionReader.getAllActive().stream()
+        Map<Long, ValueQuestion> questions = valueQuestionReader.getAllActive().stream()
                 .collect(Collectors.toMap(ValueQuestion::id, Function.identity()));
 
         return userValueAnswerReader.getAllByUserId(targetUserId).stream()

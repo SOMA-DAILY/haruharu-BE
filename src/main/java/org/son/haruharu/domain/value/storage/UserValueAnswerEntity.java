@@ -12,8 +12,6 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.value.implement.UserValueAnswer;
 
-import java.util.UUID;
-
 @Entity
 @Table(
         name = "user_value_answers",
@@ -23,15 +21,14 @@ import java.util.UUID;
 public class UserValueAnswerEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(columnDefinition = "uuid")
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(name = "question_id", nullable = false, columnDefinition = "uuid")
-    private UUID questionId;
+    @Column(name = "question_id", nullable = false)
+    private Long questionId;
 
     @Column(nullable = false, columnDefinition = "text")
     private String answer;

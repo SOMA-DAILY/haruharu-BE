@@ -1,10 +1,8 @@
 package org.son.haruharu.domain.value.implement;
 
-import java.util.UUID;
-
 public record UserValueAnswer(
-        UUID id,
+        Long id,
         Long userId,
-        UUID questionId,
+        Long questionId,
         String answer
 ) {}

@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.value.business;
 
 import java.util.List;
-import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,7 +44,7 @@ class ValueServiceTest {
     @DisplayName("활성 질문 조회 시 Reader가 반환한 질문 목록을 응답으로 변환한다")
     void givenActiveQuestions_whenGetActiveQuestions_thenReturnsMappedResponse() {
         // given
-        UUID questionId = UUID.randomUUID();
+        Long questionId = 1L;
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
                 new ValueQuestion(questionId, "주말에 무엇을 하나요?", "LIFESTYLE", 1, true)
         ));
@@ -66,8 +65,8 @@ class ValueServiceTest {
     void givenAnswers_whenSaveAnswers_thenSavesEachAndReturnsCount() {
         // given
         Long userId = 1L;
-        UUID q1 = UUID.randomUUID();
-        UUID q2 = UUID.randomUUID();
+        Long q1 = 1L;
+        Long q2 = 2L;
         var command = new SaveValueAnswersCommand(List.of(
                 new SaveValueAnswersCommand.AnswerItem(q1, "등산"),
                 new SaveValueAnswersCommand.AnswerItem(q2, "독서")
@@ -100,8 +99,8 @@ class ValueServiceTest {
     void givenExistingAnswer_whenSaveAnswers_thenUpdatesSameId() {
         // given
         Long userId = 1L;
-        UUID questionId = UUID.randomUUID();
-        UUID existingAnswerId = UUID.randomUUID();
+        Long questionId = 1L;
+        Long existingAnswerId = 100L;
         var command = new SaveValueAnswersCommand(List.of(
                 new SaveValueAnswersCommand.AnswerItem(questionId, "수정된 답변")
         ));
@@ -127,7 +126,7 @@ class ValueServiceTest {
     void givenNonExistentQuestionId_whenSaveAnswers_thenThrowsAndDoesNotSave() {
         // given
         Long userId = 1L;
-        UUID unknown = UUID.randomUUID();
+        Long unknown = 999L;
         var command = new SaveValueAnswersCommand(List.of(
                 new SaveValueAnswersCommand.AnswerItem(unknown, "등산")
         ));
