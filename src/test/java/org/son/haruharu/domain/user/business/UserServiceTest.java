@@ -23,7 +23,6 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,7 +53,7 @@ class UserServiceTest {
     @DisplayName("로그인한 유저가 내 프로필 조회 시 user_id·user_status·프로필·이미지를 반환한다")
     void givenLoggedInUser_whenGetMyProfile_thenReturnsAggregatedProfile() {
         Long userId = 1L;
-        UUID imageId = UUID.randomUUID();
+        Long imageId = 1L;
         ProfileResponse profileResponse = new ProfileResponse(
             "테스터", "서울", "직장인",
             175, "INFP", "가끔", "비흡연",

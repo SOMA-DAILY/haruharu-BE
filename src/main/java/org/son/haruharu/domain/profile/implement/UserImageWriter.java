@@ -2,8 +2,6 @@ package org.son.haruharu.domain.profile.implement;
 
 import org.springframework.stereotype.Component;
 
-import java.util.UUID;
-
 @Component
 public class UserImageWriter {
 
@@ -17,7 +15,7 @@ public class UserImageWriter {
         return userImageRepository.save(userImage);
     }
 
-    public void deleteById(UUID id) {
+    public void deleteById(Long id) {
         userImageRepository.deleteById(id);
     }
 

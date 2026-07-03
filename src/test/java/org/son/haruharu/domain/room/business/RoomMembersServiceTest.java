@@ -45,7 +45,7 @@ class RoomMembersServiceTest {
     }
 
     private UserProfile profile(Long userId, String nickname, String location) {
-        return new UserProfile(UUID.randomUUID(), userId,
+        return new UserProfile(1L, userId,
                 location, "ABC대학교", 180, "INTJ", nickname, "SOMETIMES", "NONE");
     }
 

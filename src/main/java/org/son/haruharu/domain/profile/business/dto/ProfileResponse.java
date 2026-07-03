@@ -5,7 +5,6 @@ import org.son.haruharu.domain.profile.implement.UserImage;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 
 import java.util.List;
-import java.util.UUID;
 
 public record ProfileResponse(
         String nickname,
@@ -18,7 +17,7 @@ public record ProfileResponse(
         List<ImageInfo> images
 ) {
     public record ImageInfo(
-            UUID id,
+            Long id,
             @JsonProperty("image_url") String imageUrl,
             @JsonProperty("sorted_order") int sortedOrder
     ) {}

@@ -65,7 +65,7 @@ class MemberProfileServiceTest {
     }
 
     private UserProfile profile(Long userId) {
-        return new UserProfile(UUID.randomUUID(), userId,
+        return new UserProfile(1L, userId,
                 "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE");
     }
 
