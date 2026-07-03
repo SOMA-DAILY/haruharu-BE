@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.value;
 
 import java.util.List;
-import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,7 +45,7 @@ class ValueApiIntegrationTest {
         return new UsernamePasswordAuthenticationToken(userId, null, List.of());
     }
 
-    private UUID saveQuestion(String text, String category, int displayOrder, boolean active) {
+    private Long saveQuestion(String text, String category, int displayOrder, boolean active) {
         ValueQuestionEntity saved = valueQuestionJpaRepository.save(
                 ValueQuestionEntity.from(new ValueQuestion(null, text, category, displayOrder, active))
         );
@@ -56,8 +55,8 @@ class ValueApiIntegrationTest {
     @Test
     @DisplayName("활성 질문만 display_order 오름차순으로 snake_case 응답된다")
     void givenActiveAndInactiveQuestions_whenGetQuestions_thenReturnsOnlyActiveSorted() throws Exception {
-        UUID second = saveQuestion("두 번째 질문", "RELATIONSHIP", 2, true);
-        UUID first = saveQuestion("첫 번째 질문", "LIFESTYLE", 1, true);
+        Long second = saveQuestion("두 번째 질문", "RELATIONSHIP", 2, true);
+        Long first = saveQuestion("첫 번째 질문", "LIFESTYLE", 1, true);
         saveQuestion("비활성 질문", "LIFESTYLE", 3, false);
 
         mockMvc.perform(get("/api/v1/value-questions")
@@ -65,10 +64,10 @@ class ValueApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.data.questions.length()").value(2))
-                .andExpect(jsonPath("$.data.questions[0].question_id").value(first.toString()))
+                .andExpect(jsonPath("$.data.questions[0].question_id").value(first.intValue()))
                 .andExpect(jsonPath("$.data.questions[0].question_text").value("첫 번째 질문"))
                 .andExpect(jsonPath("$.data.questions[0].display_order").value(1))
-                .andExpect(jsonPath("$.data.questions[1].question_id").value(second.toString()))
+                .andExpect(jsonPath("$.data.questions[1].question_id").value(second.intValue()))
                 .andExpect(jsonPath("$.data.questions[1].category").value("RELATIONSHIP"));
     }
 
@@ -87,12 +86,12 @@ class ValueApiIntegrationTest {
     @DisplayName("답변 일괄 저장 시 saved_count를 반환하고 user_value_answers에 저장된다")
     void givenAnswers_whenPostAnswers_thenSavesAndReturnsCount() throws Exception {
         Long userId = 1L;
-        UUID q1 = saveQuestion("질문1", "LIFESTYLE", 1, true);
-        UUID q2 = saveQuestion("질문2", "LIFESTYLE", 2, true);
+        Long q1 = saveQuestion("질문1", "LIFESTYLE", 1, true);
+        Long q2 = saveQuestion("질문2", "LIFESTYLE", 2, true);
         String body = """
                 { "answers": [
-                  { "question_id": "%s", "answer": "등산" },
-                  { "question_id": "%s", "answer": "독서" }
+                  { "question_id": %s, "answer": "등산" },
+                  { "question_id": %s, "answer": "독서" }
                 ] }
                 """.formatted(q1, q2);
 
@@ -115,18 +114,18 @@ class ValueApiIntegrationTest {
     @DisplayName("같은 questionId를 재제출하면 답변이 갱신되고 행은 하나만 유지된다(멱등)")
     void givenResubmittedAnswer_whenPostAnswers_thenUpsertsSingleRow() throws Exception {
         Long userId = 1L;
-        UUID questionId = saveQuestion("질문", "LIFESTYLE", 1, true);
+        Long questionId = saveQuestion("질문", "LIFESTYLE", 1, true);
 
         mockMvc.perform(post("/api/v1/value-answers")
                         .with(authentication(auth(userId)))
                         .contentType(APPLICATION_JSON)
-                        .content("{ \"answers\": [ { \"question_id\": \"%s\", \"answer\": \"등산\" } ] }".formatted(questionId)))
+                        .content("{ \"answers\": [ { \"question_id\": %s, \"answer\": \"등산\" } ] }".formatted(questionId)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/value-answers")
                         .with(authentication(auth(userId)))
                         .contentType(APPLICATION_JSON)
-                        .content("{ \"answers\": [ { \"question_id\": \"%s\", \"answer\": \"독서\" } ] }".formatted(questionId)))
+                        .content("{ \"answers\": [ { \"question_id\": %s, \"answer\": \"독서\" } ] }".formatted(questionId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.saved_count").value(1));
 

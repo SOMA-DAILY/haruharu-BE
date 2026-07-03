@@ -6,7 +6,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 public class ValueQuestionRepositoryImpl implements ValueQuestionRepository {
@@ -26,7 +25,7 @@ public class ValueQuestionRepositoryImpl implements ValueQuestionRepository {
     }
 
     @Override
-    public Optional<ValueQuestion> findById(UUID id) {
+    public Optional<ValueQuestion> findById(Long id) {
         return valueQuestionJpaRepository.findById(id)
                 .map(ValueQuestionEntity::toDomain);
     }

@@ -4,7 +4,6 @@ import org.son.haruharu.domain.value.storage.exception.ValueQuestionNotFoundExce
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.UUID;
 
 @Component
 public class ValueQuestionReader {
@@ -19,7 +18,7 @@ public class ValueQuestionReader {
         return valueQuestionRepository.findAllActive();
     }
 
-    public ValueQuestion getById(UUID id) {
+    public ValueQuestion getById(Long id) {
         return valueQuestionRepository.findById(id)
                 .orElseThrow(ValueQuestionNotFoundException::new);
     }
