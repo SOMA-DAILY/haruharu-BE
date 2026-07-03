@@ -96,7 +96,7 @@ public class PaymentService {
                 userId, product.id(), command.storeProductId(), command.storeTransactionId(),
                 command.store(), product.coinAmount(), command.purchasedAt()));
 
-        coinService.credit(CoinCreditCommand.purchase(userId, product.coinAmount(), REF_TYPE, saved.id()));
+        coinService.credit(CoinCreditCommand.purchase(userId, product.coinAmount(), REF_TYPE, saved.id().toString()));
         return saved.id();
     }
 
@@ -120,7 +120,7 @@ public class PaymentService {
         IapPurchase purchase = found.get();
         IapPurchase refunded = iapPurchaseWriter.save(purchase.refunded(LocalDateTime.now()));
         coinService.revoke(new CoinRevokeCommand(
-                purchase.userId(), purchase.coinAmount(), REF_TYPE, purchase.id()));
+                purchase.userId(), purchase.coinAmount(), REF_TYPE, purchase.id().toString()));
         return refunded.id();
     }
 }

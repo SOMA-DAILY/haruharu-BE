@@ -93,7 +93,7 @@ public class MatchingExecutor {
                 // 조건부 전이: 배치 조회 후 유저가 직접 취소(환불 완료)한 건은 전이 실패 → 환불 중복 방지.
                 if (matchingQueueWriter.expireIfQueued(q.id(), now)) {
                     coinService.credit(CoinCreditCommand.matchRefund(
-                        q.userId(), MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, q.id()));
+                        q.userId(), MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, q.id().toString()));
                 }
             });
     }

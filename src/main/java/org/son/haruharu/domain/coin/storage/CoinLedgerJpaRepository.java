@@ -5,9 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
-public interface CoinLedgerJpaRepository extends JpaRepository<CoinLedgerEntity, UUID> {
+public interface CoinLedgerJpaRepository extends JpaRepository<CoinLedgerEntity, Long> {
 
     List<CoinLedgerEntity> findByUserIdOrderByCreatedAtDescIdDesc(Long userId, Pageable pageable);
 

@@ -21,7 +21,6 @@ import org.son.haruharu.domain.coin.implement.CoinWalletWriter;
 import org.son.haruharu.domain.coin.storage.exception.CoinWalletNotFoundException;
 
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -65,12 +64,12 @@ class CoinServiceTest {
     @DisplayName("적립 시 지갑 잔액 증가와 원장 1건 기록이 함께 일어난다")
     void givenWallet_whenCredit_thenSaveWalletAndAppendLedger() {
         // given
-        CoinWallet wallet = new CoinWallet(UUID.randomUUID(), userId, 0, 0, null);
+        CoinWallet wallet = new CoinWallet(1L, userId, 0, 0, null);
         given(coinWalletReader.findByUserId(userId)).willReturn(Optional.of(wallet));
 
         // when
         coinService.credit(new CoinCreditCommand(
-                userId, CoinBucket.PAID, 100, CoinLedgerReason.PURCHASE, "IAP_PURCHASE", UUID.randomUUID()));
+                userId, CoinBucket.PAID, 100, CoinLedgerReason.PURCHASE, "IAP_PURCHASE", "ref-1"));
 
         // then
         ArgumentCaptor<CoinWallet> walletCaptor = ArgumentCaptor.forClass(CoinWallet.class);
@@ -83,12 +82,12 @@ class CoinServiceTest {
     @DisplayName("리워드+유료가 함께 차감되면 버킷별로 원장 2건이 기록된다")
     void givenRewardAndPaid_whenSpend_thenTwoLedgerEntries() {
         // given — 유료100·리워드50에서 80 소모 → 리워드50 + 유료30
-        CoinWallet wallet = new CoinWallet(UUID.randomUUID(), userId, 100, 50, null);
+        CoinWallet wallet = new CoinWallet(1L, userId, 100, 50, null);
         given(coinWalletReader.getByUserId(userId)).willReturn(wallet);
 
         // when
         coinService.spend(new CoinSpendCommand(
-                userId, 80, CoinLedgerReason.MATCH_ENTER, "MATCH", UUID.randomUUID()));
+                userId, 80, CoinLedgerReason.MATCH_ENTER, "MATCH", "ref-2"));
 
         // then
         ArgumentCaptor<CoinWallet> walletCaptor = ArgumentCaptor.forClass(CoinWallet.class);
