@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -108,7 +107,7 @@ public class CoinService {
         if (cursor == null || cursor.isBlank()) {
             return null;
         }
-        return coinLedgerReader.findById(UUID.fromString(cursor))
+        return coinLedgerReader.findById(Long.parseLong(cursor))
                 .map(CoinLedger::createdAt)
                 .orElse(null);
     }

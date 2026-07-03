@@ -11,17 +11,14 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.coin.implement.CoinWallet;
 
-import java.util.UUID;
-
 @Entity
 @Table(name = "coin_wallet")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CoinWalletEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(columnDefinition = "uuid")
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false, unique = true)
     private Long userId;

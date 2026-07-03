@@ -4,14 +4,13 @@ import org.son.haruharu.domain.coin.implement.exception.InsufficientCoinExceptio
 import org.son.haruharu.domain.coin.implement.exception.InvalidCoinAmountException;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * 코인 지갑. 유료(paid)/리워드(reward) 잔액을 분리해 보관한다.
  * 모든 변경은 새 인스턴스를 반환한다(불변). updatedAt은 영속 계층(Auditing)이 관리한다.
  */
 public record CoinWallet(
-        UUID id,
+        Long id,
         Long userId,
         long paidBalance,
         long rewardBalance,

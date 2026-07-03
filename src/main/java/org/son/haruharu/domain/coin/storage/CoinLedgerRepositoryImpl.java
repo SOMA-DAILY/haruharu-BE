@@ -9,7 +9,6 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -23,7 +22,7 @@ public class CoinLedgerRepositoryImpl implements CoinLedgerRepository {
     }
 
     @Override
-    public Optional<CoinLedger> findById(UUID id) {
+    public Optional<CoinLedger> findById(Long id) {
         return jpaRepository.findById(id).map(CoinLedgerEntity::toDomain);
     }
 

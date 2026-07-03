@@ -5,15 +5,14 @@ import org.son.haruharu.domain.coin.implement.CoinLedger;
 import org.son.haruharu.domain.coin.implement.CoinLedgerReason;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 public record LedgerResponse(
-        UUID id,
+        Long id,
         long delta,
         CoinBucket bucket,
         CoinLedgerReason reason,
         String refType,
-        UUID refId,
+        String refId,
         LocalDateTime createdAt
 ) {
     public static LedgerResponse from(CoinLedger ledger) {

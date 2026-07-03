@@ -134,7 +134,7 @@ class MatchingServiceTest {
         assertThat(spend.amount()).isEqualTo(MatchingQueue.ENTER_COST);
         assertThat(spend.reason()).isEqualTo(CoinLedgerReason.MATCH_ENTER);
         assertThat(spend.refType()).isEqualTo("MATCHING_QUEUE");
-        assertThat(spend.refId()).isEqualTo(result.queueId());
+        assertThat(spend.refId()).isEqualTo(result.queueId().toString());
     }
 
     @Test
@@ -173,7 +173,7 @@ class MatchingServiceTest {
         assertThat(credit.bucket()).isEqualTo(CoinBucket.REWARD);
         assertThat(credit.reason()).isEqualTo(CoinLedgerReason.MATCH_REFUND);
         assertThat(credit.refType()).isEqualTo("MATCHING_QUEUE");
-        assertThat(credit.refId()).isEqualTo(queueId);
+        assertThat(credit.refId()).isEqualTo(queueId.toString());
     }
 
     @Test

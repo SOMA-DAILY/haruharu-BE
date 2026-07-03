@@ -16,7 +16,6 @@ import org.son.haruharu.domain.coin.implement.CoinLedger;
 import org.son.haruharu.domain.coin.implement.CoinLedgerReason;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "coin_ledger", indexes = {
@@ -26,9 +25,8 @@ import java.util.UUID;
 public class CoinLedgerEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(columnDefinition = "uuid")
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
     private Long userId;
@@ -47,8 +45,8 @@ public class CoinLedgerEntity {
     @Column(length = 20)
     private String refType;
 
-    @Column(columnDefinition = "uuid")
-    private UUID refId;
+    @Column(length = 40)
+    private String refId;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

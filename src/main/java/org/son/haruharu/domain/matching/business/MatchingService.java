@@ -65,7 +65,7 @@ public class MatchingService {
             MatchingQueue.join(userId, verified.gender(), verified.birthday(), LocalDateTime.now()));
         // 차감 실패(잔액 부족) 시 예외로 트랜잭션 전체 롤백 → 큐 등록도 함께 취소된다.
         coinService.spend(CoinSpendCommand.matchEnter(
-            userId, MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, saved.id()));
+            userId, MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, saved.id().toString()));
         return QueueResponse.from(saved);
     }
 
@@ -77,6 +77,6 @@ public class MatchingService {
             throw new MatchingQueueNotFoundException();
         }
         coinService.credit(CoinCreditCommand.matchRefund(
-            userId, MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, queued.id()));
+            userId, MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, queued.id().toString()));
     }
 }

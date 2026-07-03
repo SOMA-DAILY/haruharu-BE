@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.coin.implement.exception.InsufficientCoinException;
 import org.son.haruharu.domain.coin.implement.exception.InvalidCoinAmountException;
 
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CoinWalletTest {
 
     private CoinWallet wallet(long paid, long reward) {
-        return new CoinWallet(UUID.randomUUID(), 1L, paid, reward, null);
+        return new CoinWallet(1L, 1L, paid, reward, null);
     }
 
     @Test

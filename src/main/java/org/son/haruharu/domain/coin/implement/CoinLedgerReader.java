@@ -6,7 +6,6 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -14,7 +13,7 @@ public class CoinLedgerReader {
 
     private final CoinLedgerRepository coinLedgerRepository;
 
-    public Optional<CoinLedger> findById(UUID id) {
+    public Optional<CoinLedger> findById(Long id) {
         return coinLedgerRepository.findById(id);
     }
 
