@@ -60,21 +60,21 @@ public class ProfileService {
         this.s3StoragePort = s3StoragePort;
     }
 
-    public ProfileResponse getProfile(UUID userId) {
+    public ProfileResponse getProfile(Long userId) {
         UserProfile profile = userProfileReader.getByUserId(userId);
         List<UserImage> images = userImageReader.getAllByUserId(userId);
         return ProfileResponse.from(profile, images);
     }
 
     @Transactional
-    public void deleteAllImages(UUID userId) {
+    public void deleteAllImages(Long userId) {
         List<UserImage> images = userImageReader.getAllByUserId(userId);
         s3StoragePort.deleteObjects(toKeys(images.stream().map(UserImage::imageUrl).toList()));
         userImageWriter.deleteAllByUserId(userId);
     }
 
     @Transactional
-    public ProfileResponse updateProfile(UUID userId, UpdateProfileCommand command) {
+    public ProfileResponse updateProfile(Long userId, UpdateProfileCommand command) {
         UserProfile existing = userProfileReader.findByUserId(userId)
             .orElseGet(() -> UserProfile.empty(userId));
         UserProfile updated = command.applyTo(existing);
@@ -83,7 +83,7 @@ public class ProfileService {
         return ProfileResponse.from(saved, images);
     }
 
-    public ImageUploadUrlResponse createImageUploadUrl(UUID userId, String filename) {
+    public ImageUploadUrlResponse createImageUploadUrl(Long userId, String filename) {
         String extension = extractExtension(filename);
         String contentType = ALLOWED_IMAGE_TYPES.get(extension);
         if (contentType == null) {
@@ -95,7 +95,7 @@ public class ProfileService {
     }
 
     @Transactional
-    public ImagesResponse updateImages(UUID userId, UpdateImagesCommand command) {
+    public ImagesResponse updateImages(Long userId, UpdateImagesCommand command) {
         List<String> urls = command.imageUrls();
         if (urls.size() < MIN_IMAGES) {
             throw new ImageMinLimitException();

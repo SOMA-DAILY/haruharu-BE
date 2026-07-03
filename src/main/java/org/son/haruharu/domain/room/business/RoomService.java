@@ -29,7 +29,7 @@ public class RoomService {
         this.clock = clock;
     }
 
-    public RoomResponse getMyRoom(UUID userId) {
+    public RoomResponse getMyRoom(Long userId) {
         Room currentRoom = roomReader.findCurrent(candidateRoomIds(userId))
             .orElseThrow(RoomNotFoundException::new);
 
@@ -39,7 +39,7 @@ public class RoomService {
     }
 
     /** 종료되지 않은(PENDING/ACTIVE) 방 보유 여부. 매칭 큐 참가 차단 등 도메인 간 조율에 쓰인다. */
-    public boolean hasCurrentRoom(UUID userId) {
+    public boolean hasCurrentRoom(Long userId) {
         List<UUID> candidateRoomIds = candidateRoomIds(userId);
         if (candidateRoomIds.isEmpty()) {
             return false;
@@ -48,13 +48,13 @@ public class RoomService {
     }
 
     /** 유저는 과거 방 이력(재매칭 방지용 보존)을 가질 수 있으므로, 후보 방 id를 모아 종료되지 않은 방을 한 번에 조회한다. */
-    private List<UUID> candidateRoomIds(UUID userId) {
+    private List<UUID> candidateRoomIds(Long userId) {
         return roomMemberReader.findByUserId(userId).stream()
             .map(RoomMember::roomId)
             .toList();
     }
 
-    public RoomResponse getRoom(UUID roomId, UUID userId) {
+    public RoomResponse getRoom(UUID roomId, Long userId) {
         roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         Room room = roomReader.findById(roomId)
             .orElseThrow(RoomNotFoundException::new);

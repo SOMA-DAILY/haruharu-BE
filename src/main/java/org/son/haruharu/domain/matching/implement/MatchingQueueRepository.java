@@ -7,9 +7,9 @@ import java.util.UUID;
 
 public interface MatchingQueueRepository {
 
-    boolean existsByUserIdAndStatus(UUID userId, MatchingQueueStatus status);
+    boolean existsByUserIdAndStatus(Long userId, MatchingQueueStatus status);
 
-    Optional<MatchingQueue> findByUserIdAndStatus(UUID userId, MatchingQueueStatus status);
+    Optional<MatchingQueue> findByUserIdAndStatus(Long userId, MatchingQueueStatus status);
 
     List<MatchingQueue> findAllByStatusOrderByQueuedAt(MatchingQueueStatus status);
 

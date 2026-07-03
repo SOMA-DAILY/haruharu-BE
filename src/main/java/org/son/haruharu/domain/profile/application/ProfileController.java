@@ -16,8 +16,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1/users/me")
 public class ProfileController {
@@ -32,7 +30,7 @@ public class ProfileController {
     public ApiResponse<ProfileResponse> updateProfile(
             @Valid @RequestBody ProfileUpdateRequest request,
             Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(profileService.updateProfile(userId, request.toCommand()));
     }
 
@@ -40,7 +38,7 @@ public class ProfileController {
     public ApiResponse<ImageUploadUrlResponse> createImageUploadUrl(
             @Valid @RequestBody PresignedUrlRequest request,
             Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(profileService.createImageUploadUrl(userId, request.filename()));
     }
 
@@ -48,7 +46,7 @@ public class ProfileController {
     public ApiResponse<ImagesResponse> updateImages(
             @Valid @RequestBody ImageUpdateRequest request,
             Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(profileService.updateImages(userId, request.toCommand()));
     }
 }

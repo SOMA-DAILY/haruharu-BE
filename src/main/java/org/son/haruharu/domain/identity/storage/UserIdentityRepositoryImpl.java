@@ -6,7 +6,6 @@ import org.son.haruharu.domain.identity.implement.UserIdentityRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -15,12 +14,12 @@ public class UserIdentityRepositoryImpl implements UserIdentityRepository {
     private final UserIdentityJpaRepository jpaRepository;
 
     @Override
-    public Optional<UserIdentity> findByUserId(UUID userId) {
+    public Optional<UserIdentity> findByUserId(Long userId) {
         return jpaRepository.findByUserId(userId).map(UserIdentityEntity::toDomain);
     }
 
     @Override
-    public boolean existsByUserId(UUID userId) {
+    public boolean existsByUserId(Long userId) {
         return jpaRepository.existsByUserId(userId);
     }
 
@@ -35,7 +34,7 @@ public class UserIdentityRepositoryImpl implements UserIdentityRepository {
     }
 
     @Override
-    public void deleteByUserId(UUID userId) {
+    public void deleteByUserId(Long userId) {
         jpaRepository.deleteByUserId(userId);
     }
 }

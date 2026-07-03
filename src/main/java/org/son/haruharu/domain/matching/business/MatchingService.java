@@ -19,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -45,14 +44,14 @@ public class MatchingService {
         this.roomService = roomService;
     }
 
-    public QueueStatusResponse getQueueStatus(UUID userId) {
+    public QueueStatusResponse getQueueStatus(Long userId) {
         return matchingQueueReader.findQueued(userId)
             .map(QueueStatusResponse::queued)
             .orElseGet(QueueStatusResponse::none);
     }
 
     @Transactional
-    public QueueResponse joinQueue(UUID userId) {
+    public QueueResponse joinQueue(Long userId) {
         // 성별·생년월일은 본인인증(identity)에서만 온다. 미인증이면 참가 차단.
         VerifiedIdentity verified = identityService.findVerified(userId)
             .orElseThrow(MatchingNotVerifiedException::new);
@@ -71,7 +70,7 @@ public class MatchingService {
     }
 
     @Transactional
-    public void leaveQueue(UUID userId) {
+    public void leaveQueue(Long userId) {
         MatchingQueue queued = matchingQueueReader.getQueued(userId);
         // 조건부 전이(QUEUED일 때만)로 동시 취소·배치 만료와의 경합 시 이중 환불을 차단한다.
         if (!matchingQueueWriter.cancelIfQueued(queued.id(), LocalDateTime.now())) {

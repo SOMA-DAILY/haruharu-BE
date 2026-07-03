@@ -50,7 +50,7 @@ class RoomServiceTest {
     @Test
     @DisplayName("종료되지 않은 방에 속한 유저가 조회 시 방 정보와 멤버 수를 반환한다")
     void givenActiveRoom_whenGetMyRoom_thenReturnsRoom() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, LocalDateTime.now(), null);
 
@@ -59,7 +59,7 @@ class RoomServiceTest {
         given(roomReader.findCurrent(List.of(roomId))).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
             new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now()),
-            new RoomMember(UUID.randomUUID(), roomId, UUID.randomUUID(), "FEMALE", null, LocalDateTime.now())
+            new RoomMember(UUID.randomUUID(), roomId, 2L, "FEMALE", null, LocalDateTime.now())
         ));
 
         RoomResponse result = roomService.getMyRoom(userId);
@@ -72,7 +72,7 @@ class RoomServiceTest {
     @Test
     @DisplayName("속한 방이 없으면 RoomNotFoundException이 발생한다")
     void givenNoRoom_whenGetMyRoom_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         given(roomMemberReader.findByUserId(userId)).willReturn(List.of());
         given(roomReader.findCurrent(List.of())).willReturn(Optional.empty());
 
@@ -83,7 +83,7 @@ class RoomServiceTest {
     @Test
     @DisplayName("방 멤버가 roomId로 조회 시 방 정보를 반환한다")
     void givenMember_whenGetRoom_thenReturnsRoom() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         // startedAt=전날 09:00 → clock(2026-06-26 12:00) 기준 currentDay=2로 파생
         Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 25), 3,
@@ -105,7 +105,7 @@ class RoomServiceTest {
     @Test
     @DisplayName("방 멤버가 아닌 유저가 roomId로 조회 시 NotRoomMemberException이 발생한다")
     void givenNonMember_whenGetRoom_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willThrow(new NotRoomMemberException());
@@ -117,7 +117,7 @@ class RoomServiceTest {
     @Test
     @DisplayName("종료되지 않은 방이 있는 유저는 hasCurrentRoom이 true다")
     void givenCurrentRoom_whenHasCurrentRoom_thenTrue() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         given(roomMemberReader.findByUserId(userId))
             .willReturn(List.of(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now())));
@@ -130,13 +130,13 @@ class RoomServiceTest {
     @Test
     @DisplayName("과거 방만 있거나 방 이력이 없는 유저는 hasCurrentRoom이 false다")
     void givenNoCurrentRoom_whenHasCurrentRoom_thenFalse() {
-        UUID withEndedOnly = UUID.randomUUID();
+        Long withEndedOnly = 1L;
         UUID endedRoomId = UUID.randomUUID();
         given(roomMemberReader.findByUserId(withEndedOnly))
             .willReturn(List.of(new RoomMember(UUID.randomUUID(), endedRoomId, withEndedOnly, "MALE", null, LocalDateTime.now())));
         given(roomReader.findCurrent(List.of(endedRoomId))).willReturn(Optional.empty());
 
-        UUID noHistory = UUID.randomUUID();
+        Long noHistory = 2L;
         given(roomMemberReader.findByUserId(noHistory)).willReturn(List.of());
 
         assertThat(roomService.hasCurrentRoom(withEndedOnly)).isFalse();

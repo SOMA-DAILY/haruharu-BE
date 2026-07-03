@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CoinWalletTest {
 
     private CoinWallet wallet(long paid, long reward) {
-        return new CoinWallet(UUID.randomUUID(), UUID.randomUUID(), paid, reward, null);
+        return new CoinWallet(UUID.randomUUID(), 1L, paid, reward, null);
     }
 
     @Test

@@ -30,7 +30,7 @@ public class RoomMemberEntity extends BaseEntity {
     private UUID roomId;
 
     @Column(nullable = false)
-    private UUID userId;
+    private Long userId;
 
     @Column(nullable = false, length = 10)
     private String gender;

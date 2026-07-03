@@ -6,8 +6,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface UserIdentityJpaRepository extends JpaRepository<UserIdentityEntity, UUID> {
-    Optional<UserIdentityEntity> findByUserId(UUID userId);
-    boolean existsByUserId(UUID userId);
+    Optional<UserIdentityEntity> findByUserId(Long userId);
+    boolean existsByUserId(Long userId);
     boolean existsByCi(String ci);
-    void deleteByUserId(UUID userId);
+    void deleteByUserId(Long userId);
 }

@@ -44,12 +44,12 @@ class RoomMembersServiceTest {
         return new RoomMembersService(roomMemberReader, userProfileReader, clock);
     }
 
-    private UserProfile profile(UUID userId, String nickname, String location) {
+    private UserProfile profile(Long userId, String nickname, String location) {
         return new UserProfile(UUID.randomUUID(), userId,
                 location, "ABC대학교", 180, "INTJ", nickname, "SOMETIMES", "NONE");
     }
 
-    private RoomMember member(UUID roomId, UUID userId) {
+    private RoomMember member(UUID roomId, Long userId) {
         return new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", LocalDate.of(2000, 1, 1),
                 LocalDateTime.now(clock));
     }
@@ -57,7 +57,7 @@ class RoomMembersServiceTest {
     @Test
     @DisplayName("목록은 닉네임·성별·지역·나이만 담고 Day 게이트 항목은 포함하지 않는다")
     void givenMember_whenGetMembers_thenBasicsOnly() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         RoomMember me = member(roomId, userId);
 
@@ -78,8 +78,8 @@ class RoomMembersServiceTest {
     @Test
     @DisplayName("멤버가 여러 명이어도 프로필은 배치 조회 1회로 해결하고 건별 조회는 하지 않는다")
     void givenMultipleMembers_whenGetMembers_thenLoadsProfilesInSingleBatch() {
-        UUID myUserId = UUID.randomUUID();
-        UUID otherUserId = UUID.randomUUID();
+        Long myUserId = 1L;
+        Long otherUserId = 2L;
         UUID roomId = UUID.randomUUID();
         RoomMember me = member(roomId, myUserId);
         RoomMember other = member(roomId, otherUserId);
@@ -104,7 +104,7 @@ class RoomMembersServiceTest {
     @Test
     @DisplayName("프로필이 없고 생년월일 스냅샷도 없으면 닉네임·지역·나이가 null로 내려간다")
     void givenMemberWithoutProfile_whenGetMembers_thenNullFields() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         // 나이는 프로필이 아닌 RoomMember.birthday(본인인증 스냅샷)에서 온다 → birthday null이면 나이도 null
         RoomMember me = new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now(clock));
@@ -125,7 +125,7 @@ class RoomMembersServiceTest {
     @Test
     @DisplayName("방 멤버가 아니면 NotRoomMemberException이 발생한다")
     void givenNonMember_whenGetMembers_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willThrow(new NotRoomMemberException());

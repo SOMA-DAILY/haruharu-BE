@@ -39,7 +39,7 @@ class CoinServiceTest {
 
     private CoinService coinService;
 
-    private final UUID userId = UUID.randomUUID();
+    private final Long userId = 1L;
 
     @BeforeEach
     void setUp() {

@@ -29,7 +29,7 @@ class MatchResultServiceTest {
     MatchResultService service;
 
     private final UUID roomId = UUID.randomUUID();
-    private final UUID userId = UUID.randomUUID();
+    private final Long userId = 1L;
     private final UUID meId = UUID.randomUUID();
     private final UUID partnerId = UUID.randomUUID();
 

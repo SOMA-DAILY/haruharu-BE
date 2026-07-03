@@ -4,7 +4,7 @@ import java.util.UUID;
 
 public record UserValueAnswer(
         UUID id,
-        UUID userId,
+        Long userId,
         UUID questionId,
         String answer
 ) {}

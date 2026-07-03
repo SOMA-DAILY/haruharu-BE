@@ -35,7 +35,7 @@ public class RoomTodayService {
         this.clock = clock;
     }
 
-    public TodayResponse getToday(UUID roomId, UUID userId) {
+    public TodayResponse getToday(UUID roomId, Long userId) {
         RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId);
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);

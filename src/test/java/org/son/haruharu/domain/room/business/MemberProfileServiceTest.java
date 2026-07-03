@@ -54,7 +54,7 @@ class MemberProfileServiceTest {
                 valueQuestionReader, userValueAnswerReader, clock);
     }
 
-    private RoomMember member(UUID id, UUID roomId, UUID userId) {
+    private RoomMember member(UUID id, UUID roomId, Long userId) {
         return new RoomMember(id, roomId, userId, "FEMALE", LocalDate.of(2000, 1, 1), LocalDateTime.now());
     }
 
@@ -64,7 +64,7 @@ class MemberProfileServiceTest {
         return new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), 3, startedAt, null);
     }
 
-    private UserProfile profile(UUID userId) {
+    private UserProfile profile(Long userId) {
         return new UserProfile(UUID.randomUUID(), userId,
                 "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE");
     }
@@ -73,7 +73,7 @@ class MemberProfileServiceTest {
         return res.fields().stream().filter(f -> f.key().equals(key)).findFirst().orElseThrow();
     }
 
-    private void stubBasics(UUID roomId, UUID userId, UUID meId, UUID targetId, UUID targetUserId, int currentDay) {
+    private void stubBasics(UUID roomId, Long userId, UUID meId, UUID targetId, Long targetUserId, int currentDay) {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
         given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, currentDay)));
@@ -85,8 +85,8 @@ class MemberProfileServiceTest {
     @Test
     @DisplayName("Day1에는 닉네임·성별만 노출되고 지역·나이·직업 등은 가려진다(재화·해금 없음)")
     void givenDay1_whenGetProfile_thenOnlyNicknameAndGenderVisible() {
-        UUID userId = UUID.randomUUID();
-        UUID targetUserId = UUID.randomUUID();
+        Long userId = 1L;
+        Long targetUserId = 2L;
         UUID roomId = UUID.randomUUID();
         UUID meId = UUID.randomUUID();
         UUID targetId = UUID.randomUUID();
@@ -111,8 +111,8 @@ class MemberProfileServiceTest {
     @Test
     @DisplayName("Day3에는 지역·나이·직업·키·MBTI·음주·흡연이 전원에게 자동 공개된다")
     void givenDay3_whenGetProfile_thenAllFieldsVisible() {
-        UUID userId = UUID.randomUUID();
-        UUID targetUserId = UUID.randomUUID();
+        Long userId = 1L;
+        Long targetUserId = 2L;
         UUID roomId = UUID.randomUUID();
         UUID meId = UUID.randomUUID();
         UUID targetId = UUID.randomUUID();
@@ -134,7 +134,7 @@ class MemberProfileServiceTest {
     @Test
     @DisplayName("본인 프로필은 Day와 무관하게 모든 항목이 공개된다")
     void givenSelf_whenGetProfile_thenAllVisibleEvenBeforeDay3() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         UUID meId = UUID.randomUUID();
         UUID targetId = UUID.randomUUID();
@@ -156,8 +156,8 @@ class MemberProfileServiceTest {
     @Test
     @DisplayName("프로필 미작성·birthday 없는 멤버는 Day3여도 예외 없이 닉네임·값·나이가 null로 내려간다")
     void givenNoProfileAndNoBirthday_whenGetProfile_thenNullSafe() {
-        UUID userId = UUID.randomUUID();
-        UUID targetUserId = UUID.randomUUID();
+        Long userId = 1L;
+        Long targetUserId = 2L;
         UUID roomId = UUID.randomUUID();
         UUID meId = UUID.randomUUID();
         UUID targetId = UUID.randomUUID();
@@ -184,7 +184,7 @@ class MemberProfileServiceTest {
     @Test
     @DisplayName("방 멤버가 아니면 NotRoomMemberException이 발생한다")
     void givenNonMember_whenGetProfile_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willThrow(new NotRoomMemberException());
 
@@ -195,14 +195,14 @@ class MemberProfileServiceTest {
     @Test
     @DisplayName("다른 방 멤버의 프로필을 조회하면 RoomMemberNotFoundException이 발생한다")
     void givenMemberInAnotherRoom_whenGetProfile_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         UUID otherRoomId = UUID.randomUUID();
         UUID meId = UUID.randomUUID();
         UUID targetId = UUID.randomUUID();
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
-        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, otherRoomId, UUID.randomUUID()));
+        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, otherRoomId, 2L));
 
         assertThatThrownBy(() -> service.getMemberProfile(roomId, targetId, userId))
                 .isInstanceOf(RoomMemberNotFoundException.class);

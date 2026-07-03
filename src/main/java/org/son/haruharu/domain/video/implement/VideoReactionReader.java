@@ -12,7 +12,7 @@ public class VideoReactionReader {
 
     private final VideoReactionRepository videoReactionRepository;
 
-    public Optional<VideoReaction> findMine(UUID videoPostId, UUID userId) {
+    public Optional<VideoReaction> findMine(UUID videoPostId, Long userId) {
         return videoReactionRepository.findByVideoPostIdAndUserId(videoPostId, userId);
     }
 }

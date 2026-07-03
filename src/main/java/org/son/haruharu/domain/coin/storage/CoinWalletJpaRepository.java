@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface CoinWalletJpaRepository extends JpaRepository<CoinWalletEntity, UUID> {
 
-    Optional<CoinWalletEntity> findByUserId(UUID userId);
+    Optional<CoinWalletEntity> findByUserId(Long userId);
 }

@@ -53,7 +53,7 @@ class UserServiceTest {
     @Test
     @DisplayName("로그인한 유저가 내 프로필 조회 시 user_id·user_status·프로필·이미지를 반환한다")
     void givenLoggedInUser_whenGetMyProfile_thenReturnsAggregatedProfile() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID imageId = UUID.randomUUID();
         ProfileResponse profileResponse = new ProfileResponse(
             "테스터", "서울", "직장인",
@@ -79,7 +79,7 @@ class UserServiceTest {
     @Test
     @DisplayName("미인증 유저 조회 시 user_status가 UNVERIFIED로 반환된다")
     void givenUnverifiedUser_whenGetMyProfile_thenUserStatusUnverified() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         given(profileService.getProfile(userId)).willReturn(new ProfileResponse(
             "유저", "서울", "학생", 160, "ENFP", "안함", "비흡연", List.of()));
         // 미인증: findVerified가 empty → user_status UNVERIFIED
@@ -92,7 +92,7 @@ class UserServiceTest {
     @Test
     @DisplayName("로그인한 유저가 탈퇴 시 이미지·인증 정보 삭제 후 상태가 DELETED로 변경된다")
     void givenLoggedInUser_whenWithdraw_thenDeletesPiiAndChangesStatusToDeleted() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         User user = new User(userId, UserStatus.ACTIVE, LocalDateTime.now());
 
         given(userReader.getById(userId)).willReturn(user);

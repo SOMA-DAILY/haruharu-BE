@@ -5,7 +5,7 @@ import java.util.UUID;
 
 public interface VideoReactionRepository {
 
-    Optional<VideoReaction> findByVideoPostIdAndUserId(UUID videoPostId, UUID userId);
+    Optional<VideoReaction> findByVideoPostIdAndUserId(UUID videoPostId, Long userId);
 
     VideoReaction save(VideoReaction reaction);
 

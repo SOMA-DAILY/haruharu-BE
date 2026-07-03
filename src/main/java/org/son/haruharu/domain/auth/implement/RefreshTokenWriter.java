@@ -3,8 +3,6 @@ package org.son.haruharu.domain.auth.implement;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.UUID;
-
 @Component
 @RequiredArgsConstructor
 public class RefreshTokenWriter {
@@ -15,7 +13,7 @@ public class RefreshTokenWriter {
         return refreshTokenRepository.save(refreshToken);
     }
 
-    public void revokeAllByUserId(UUID userId) {
+    public void revokeAllByUserId(Long userId) {
         refreshTokenRepository.revokeAllByUserId(userId);
     }
 

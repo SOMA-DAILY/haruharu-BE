@@ -9,7 +9,7 @@ import java.util.UUID;
  */
 public record CoinLedger(
         UUID id,
-        UUID userId,
+        Long userId,
         long delta,
         CoinBucket bucket,
         CoinLedgerReason reason,
@@ -18,7 +18,7 @@ public record CoinLedger(
         LocalDateTime createdAt
 ) {
     public static CoinLedger of(
-            UUID userId,
+            Long userId,
             long delta,
             CoinBucket bucket,
             CoinLedgerReason reason,

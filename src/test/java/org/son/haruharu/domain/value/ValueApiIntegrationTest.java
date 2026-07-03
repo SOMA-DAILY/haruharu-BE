@@ -42,7 +42,7 @@ class ValueApiIntegrationTest {
         valueQuestionJpaRepository.deleteAll();
     }
 
-    private static UsernamePasswordAuthenticationToken auth(UUID userId) {
+    private static UsernamePasswordAuthenticationToken auth(Long userId) {
         return new UsernamePasswordAuthenticationToken(userId, null, List.of());
     }
 
@@ -61,7 +61,7 @@ class ValueApiIntegrationTest {
         saveQuestion("비활성 질문", "LIFESTYLE", 3, false);
 
         mockMvc.perform(get("/api/v1/value-questions")
-                        .with(authentication(auth(UUID.randomUUID()))))
+                        .with(authentication(auth(1L))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.data.questions.length()").value(2))
@@ -86,7 +86,7 @@ class ValueApiIntegrationTest {
     @Test
     @DisplayName("답변 일괄 저장 시 saved_count를 반환하고 user_value_answers에 저장된다")
     void givenAnswers_whenPostAnswers_thenSavesAndReturnsCount() throws Exception {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID q1 = saveQuestion("질문1", "LIFESTYLE", 1, true);
         UUID q2 = saveQuestion("질문2", "LIFESTYLE", 2, true);
         String body = """
@@ -114,7 +114,7 @@ class ValueApiIntegrationTest {
     @Test
     @DisplayName("같은 questionId를 재제출하면 답변이 갱신되고 행은 하나만 유지된다(멱등)")
     void givenResubmittedAnswer_whenPostAnswers_thenUpsertsSingleRow() throws Exception {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID questionId = saveQuestion("질문", "LIFESTYLE", 1, true);
 
         mockMvc.perform(post("/api/v1/value-answers")
@@ -140,7 +140,7 @@ class ValueApiIntegrationTest {
     @DisplayName("빈 answers로 요청 시 400을 반환한다")
     void givenEmptyAnswers_whenPostAnswers_thenReturns400() throws Exception {
         mockMvc.perform(post("/api/v1/value-answers")
-                        .with(authentication(auth(UUID.randomUUID())))
+                        .with(authentication(auth(1L)))
                         .contentType(APPLICATION_JSON)
                         .content("{ \"answers\": [] }"))
                 .andExpect(status().isBadRequest())

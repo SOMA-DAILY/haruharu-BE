@@ -1,9 +1,8 @@
 package org.son.haruharu.domain.user.implement;
 
 import java.util.Optional;
-import java.util.UUID;
 
 public interface UserRepository {
-    Optional<User> findById(UUID id);
+    Optional<User> findById(Long id);
     User save(User user);
 }

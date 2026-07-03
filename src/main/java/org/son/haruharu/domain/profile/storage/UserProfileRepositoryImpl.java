@@ -7,7 +7,6 @@ import org.springframework.stereotype.Repository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 public class UserProfileRepositoryImpl implements UserProfileRepository {
@@ -19,13 +18,13 @@ public class UserProfileRepositoryImpl implements UserProfileRepository {
     }
 
     @Override
-    public Optional<UserProfile> findByUserId(UUID userId) {
+    public Optional<UserProfile> findByUserId(Long userId) {
         return userProfileJpaRepository.findByUserId(userId)
                 .map(UserProfileEntity::toDomain);
     }
 
     @Override
-    public List<UserProfile> findByUserIdIn(Collection<UUID> userIds) {
+    public List<UserProfile> findByUserIdIn(Collection<Long> userIds) {
         return userProfileJpaRepository.findByUserIdIn(userIds).stream()
                 .map(UserProfileEntity::toDomain)
                 .toList();

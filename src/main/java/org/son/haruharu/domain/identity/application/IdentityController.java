@@ -10,8 +10,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1/users/me")
 public class IdentityController {
@@ -26,7 +24,7 @@ public class IdentityController {
     public ApiResponse<Void> verifyIdentity(
             @Valid @RequestBody IdentityVerifyRequest request,
             Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         identityService.verifyIdentity(userId, request.toCommand());
         return ApiResponse.ok(null);
     }

@@ -33,23 +33,23 @@ public class IdentityService {
         this.passVerificationPort = passVerificationPort;
     }
 
-    public boolean isVerified(UUID userId) {
+    public boolean isVerified(Long userId) {
         return userIdentityReader.existsByUserId(userId);
     }
 
     /** 본인인증된 유저의 성별·생년월일을 반환한다. 미인증(인증 정보 없음)이면 empty. */
-    public Optional<VerifiedIdentity> findVerified(UUID userId) {
+    public Optional<VerifiedIdentity> findVerified(Long userId) {
         return userIdentityReader.findByUserId(userId)
                 .map(i -> new VerifiedIdentity(i.gender(), i.birthday()));
     }
 
     @Transactional
-    public void deleteIdentity(UUID userId) {
+    public void deleteIdentity(Long userId) {
         userIdentityWriter.deleteByUserId(userId);
     }
 
     @Transactional
-    public void verifyIdentity(UUID userId, VerifyIdentityCommand command) {
+    public void verifyIdentity(Long userId, VerifyIdentityCommand command) {
         if (userIdentityReader.existsByUserId(userId)) {
             throw new UserAlreadyVerifiedException();
         }

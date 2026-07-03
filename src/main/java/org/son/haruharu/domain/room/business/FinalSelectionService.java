@@ -53,7 +53,7 @@ public class FinalSelectionService {
     }
 
     @Transactional
-    public FinalSelectionResponse select(UUID roomId, UUID selectedMemberId, UUID userId) {
+    public FinalSelectionResponse select(UUID roomId, UUID selectedMemberId, Long userId) {
         RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);

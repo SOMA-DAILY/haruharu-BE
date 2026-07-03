@@ -57,7 +57,7 @@ class MatchingServiceTest {
             matchingQueueReader, matchingQueueWriter, identityService, coinService, roomService);
     }
 
-    private void givenVerified(UUID userId) {
+    private void givenVerified(Long userId) {
         given(identityService.findVerified(userId))
             .willReturn(Optional.of(new VerifiedIdentity("MALE", LocalDate.of(1997, 5, 20))));
     }
@@ -73,7 +73,7 @@ class MatchingServiceTest {
     @Test
     @DisplayName("미인증 유저가 매칭 큐 참가 시 MatchingNotVerifiedException이 발생하고 저장하지 않는다")
     void givenUnverified_whenJoinQueue_thenThrowsNotVerified() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         given(identityService.findVerified(userId)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> matchingService.joinQueue(userId))
@@ -86,7 +86,7 @@ class MatchingServiceTest {
     @Test
     @DisplayName("종료되지 않은 방에 참여 중인 유저가 큐 참가 시 MatchingRoomInProgressException이 발생한다")
     void givenRoomInProgress_whenJoinQueue_thenThrowsRoomInProgress() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         givenVerified(userId);
         given(roomService.hasCurrentRoom(userId)).willReturn(true);
 
@@ -100,7 +100,7 @@ class MatchingServiceTest {
     @Test
     @DisplayName("이미 큐에 있는 유저가 다시 참가 시 MatchingAlreadyQueuedException이 발생한다")
     void givenAlreadyQueued_whenJoinQueue_thenThrowsAlreadyQueued() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         givenVerified(userId);
         given(roomService.hasCurrentRoom(userId)).willReturn(false);
         given(matchingQueueReader.isQueued(userId)).willReturn(true);
@@ -115,7 +115,7 @@ class MatchingServiceTest {
     @Test
     @DisplayName("인증된 미참가 유저가 큐 참가 시 QUEUED 저장 후 구름 5개를 MATCH_ENTER로 차감한다")
     void givenVerifiedNotQueued_whenJoinQueue_thenSavesQueuedAndSpendsCoins() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         givenVerified(userId);
         given(roomService.hasCurrentRoom(userId)).willReturn(false);
         given(matchingQueueReader.isQueued(userId)).willReturn(false);
@@ -140,7 +140,7 @@ class MatchingServiceTest {
     @Test
     @DisplayName("구름 잔액이 부족한 유저가 큐 참가 시 InsufficientCoinException이 전파된다(트랜잭션 롤백으로 큐 미등록)")
     void givenInsufficientCoin_whenJoinQueue_thenThrowsInsufficient() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         givenVerified(userId);
         given(roomService.hasCurrentRoom(userId)).willReturn(false);
         given(matchingQueueReader.isQueued(userId)).willReturn(false);
@@ -154,7 +154,7 @@ class MatchingServiceTest {
     @Test
     @DisplayName("큐에 있는 유저가 취소 시 CANCELLED 전이 후 구름 5개를 환불 적립한다")
     void givenQueued_whenLeaveQueue_thenTransitionsCancelledAndRefunds() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID queueId = UUID.randomUUID();
         MatchingQueue queued = new MatchingQueue(
             queueId, userId, "MALE", null, MatchingQueueStatus.QUEUED, LocalDateTime.now(), null);
@@ -179,7 +179,7 @@ class MatchingServiceTest {
     @Test
     @DisplayName("동시 취소로 CANCELLED 전이에 실패하면 예외가 발생하고 환불하지 않는다(이중 환불 방지)")
     void givenConcurrentCancel_whenLeaveQueue_thenThrowsAndNoRefund() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         MatchingQueue queued = new MatchingQueue(
             UUID.randomUUID(), userId, "MALE", null, MatchingQueueStatus.QUEUED, LocalDateTime.now(), null);
         given(matchingQueueReader.getQueued(userId)).willReturn(queued);
@@ -194,7 +194,7 @@ class MatchingServiceTest {
     @Test
     @DisplayName("큐에 없는 유저가 취소 시 MatchingQueueNotFoundException이 발생하고 환불하지 않는다")
     void givenNotQueued_whenLeaveQueue_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         given(matchingQueueReader.getQueued(userId)).willThrow(new MatchingQueueNotFoundException());
 
         assertThatThrownBy(() -> matchingService.leaveQueue(userId))
@@ -207,7 +207,7 @@ class MatchingServiceTest {
     @Test
     @DisplayName("큐에 참가 중인 유저가 상태 조회 시 QUEUED와 queuedAt을 반환한다")
     void givenQueued_whenGetQueueStatus_thenReturnsQueued() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         LocalDateTime queuedAt = LocalDateTime.of(2026, 7, 3, 12, 0);
         MatchingQueue queued = new MatchingQueue(
             UUID.randomUUID(), userId, "MALE", null, MatchingQueueStatus.QUEUED, queuedAt, null);
@@ -222,7 +222,7 @@ class MatchingServiceTest {
     @Test
     @DisplayName("큐에 없는 유저가 상태 조회 시 NONE과 null queuedAt을 반환한다")
     void givenNotQueued_whenGetQueueStatus_thenReturnsNone() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         given(matchingQueueReader.findQueued(userId)).willReturn(Optional.empty());
 
         QueueStatusResponse result = matchingService.getQueueStatus(userId);

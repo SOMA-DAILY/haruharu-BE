@@ -6,7 +6,6 @@ import org.son.haruharu.domain.coin.implement.CoinWalletRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -15,7 +14,7 @@ public class CoinWalletRepositoryImpl implements CoinWalletRepository {
     private final CoinWalletJpaRepository jpaRepository;
 
     @Override
-    public Optional<CoinWallet> findByUserId(UUID userId) {
+    public Optional<CoinWallet> findByUserId(Long userId) {
         return jpaRepository.findByUserId(userId).map(CoinWalletEntity::toDomain);
     }
 

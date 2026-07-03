@@ -13,8 +13,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1")
 public class ValueController {
@@ -34,7 +32,7 @@ public class ValueController {
     public ApiResponse<SavedAnswersResponse> saveAnswers(
             @Valid @RequestBody SaveValueAnswersRequest request,
             Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(valueService.saveAnswers(userId, request.toCommand()));
     }
 }

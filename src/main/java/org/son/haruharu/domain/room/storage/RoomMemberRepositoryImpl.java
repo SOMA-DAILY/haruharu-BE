@@ -28,7 +28,7 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     }
 
     @Override
-    public List<RoomMember> findByUserId(UUID userId) {
+    public List<RoomMember> findByUserId(Long userId) {
         return jpaRepository.findByUserId(userId).stream().map(RoomMemberEntity::toDomain).toList();
     }
 
@@ -38,7 +38,7 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     }
 
     @Override
-    public Optional<RoomMember> findByRoomIdAndUserId(UUID roomId, UUID userId) {
+    public Optional<RoomMember> findByRoomIdAndUserId(UUID roomId, Long userId) {
         return jpaRepository.findByRoomIdAndUserId(roomId, userId).map(RoomMemberEntity::toDomain);
     }
 

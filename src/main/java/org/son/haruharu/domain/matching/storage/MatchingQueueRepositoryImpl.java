@@ -18,12 +18,12 @@ public class MatchingQueueRepositoryImpl implements MatchingQueueRepository {
     private final MatchingQueueJpaRepository jpaRepository;
 
     @Override
-    public boolean existsByUserIdAndStatus(UUID userId, MatchingQueueStatus status) {
+    public boolean existsByUserIdAndStatus(Long userId, MatchingQueueStatus status) {
         return jpaRepository.existsByUserIdAndStatus(userId, status);
     }
 
     @Override
-    public Optional<MatchingQueue> findByUserIdAndStatus(UUID userId, MatchingQueueStatus status) {
+    public Optional<MatchingQueue> findByUserIdAndStatus(Long userId, MatchingQueueStatus status) {
         return jpaRepository.findByUserIdAndStatus(userId, status).map(MatchingQueueEntity::toDomain);
     }
 

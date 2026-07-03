@@ -44,14 +44,14 @@ public class CoinService {
     }
 
     /** 코인 잔액 조회. 지갑이 아직 없으면 0 잔액으로 응답한다. */
-    public WalletResponse getWallet(UUID userId) {
+    public WalletResponse getWallet(Long userId) {
         CoinWallet wallet = coinWalletReader.findByUserId(userId)
                 .orElseGet(() -> CoinWallet.init(userId));
         return WalletResponse.from(wallet);
     }
 
     /** 코인 내역 조회(최신순 커서 페이징). */
-    public LedgerPageResponse getLedger(UUID userId, String cursor, int size) {
+    public LedgerPageResponse getLedger(Long userId, String cursor, int size) {
         LocalDateTime before = resolveCursor(cursor);
         List<CoinLedger> rows = coinLedgerReader.findPage(userId, before, size + 1);
 

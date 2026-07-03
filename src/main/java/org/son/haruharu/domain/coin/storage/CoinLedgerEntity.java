@@ -30,8 +30,8 @@ public class CoinLedgerEntity {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
-    @Column(nullable = false, columnDefinition = "uuid")
-    private UUID userId;
+    @Column(nullable = false)
+    private Long userId;
 
     @Column(nullable = false)
     private long delta;

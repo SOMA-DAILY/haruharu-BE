@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface UserValueAnswerJpaRepository extends JpaRepository<UserValueAnswerEntity, UUID> {
 
-    List<UserValueAnswerEntity> findAllByUserId(UUID userId);
+    List<UserValueAnswerEntity> findAllByUserId(Long userId);
 }

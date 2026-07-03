@@ -6,7 +6,6 @@ import org.son.haruharu.domain.auth.implement.RefreshTokenRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -26,7 +25,7 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
     }
 
     @Override
-    public void revokeAllByUserId(UUID userId) {
+    public void revokeAllByUserId(Long userId) {
         refreshTokenJpaRepository.deleteByUserId(userId);
     }
 

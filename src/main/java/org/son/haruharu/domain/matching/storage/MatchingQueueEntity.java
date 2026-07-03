@@ -29,7 +29,7 @@ public class MatchingQueueEntity extends BaseEntity {
     private UUID id;
 
     @Column(nullable = false)
-    private UUID userId;
+    private Long userId;
 
     @Column(nullable = false, length = 10)
     private String gender;

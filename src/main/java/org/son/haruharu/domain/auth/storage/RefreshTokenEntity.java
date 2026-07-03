@@ -12,7 +12,6 @@ import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.auth.implement.RefreshToken;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 // 주의: ERD의 refresh_tokens 테이블에는 updated_at 컬럼이 없으나,
 // BaseEntity 상속 규칙에 따라 updated_at 컬럼이 추가됩니다.
@@ -22,11 +21,11 @@ import java.util.UUID;
 public class RefreshTokenEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(name = "user_id", nullable = false)
-    private UUID userId;
+    private Long userId;
 
     @Column(name = "token_hash", nullable = false, unique = true, length = 255)
     private String tokenHash;

@@ -58,7 +58,7 @@ public class VideoService {
     }
 
     /** 영상 업로드용 presigned PUT URL 발급. 영상은 비공개 prefix(users/{id}/videos/). */
-    public VideoUploadUrlResponse createPresignUrl(UUID userId, String filename) {
+    public VideoUploadUrlResponse createPresignUrl(Long userId, String filename) {
         String extension = extractExtension(filename);
         String contentType = ALLOWED_VIDEO_TYPES.get(extension);
         if (contentType == null) {
@@ -69,7 +69,7 @@ public class VideoService {
     }
 
     @Transactional
-    public VideoPostResponse upload(UUID userId, UUID roomId, VideoUploadCommand command) {
+    public VideoPostResponse upload(Long userId, UUID roomId, VideoUploadCommand command) {
         RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
@@ -99,7 +99,7 @@ public class VideoService {
     }
 
     @Transactional
-    public void delete(UUID userId, UUID videoPostId) {
+    public void delete(Long userId, UUID videoPostId) {
         VideoPost post = videoPostReader.getById(videoPostId);
         if (post.deletedAt() != null) {
             throw new org.son.haruharu.domain.video.storage.exception.VideoPostNotFoundException();
@@ -112,7 +112,7 @@ public class VideoService {
         // MVP: 미션 비활성화로 열쇠 지급 자체가 없어 회수 로직도 없다.
     }
 
-    private void validateOwnUrl(UUID userId, String videoUrl) {
+    private void validateOwnUrl(Long userId, String videoUrl) {
         String ownPrefix = s3StoragePort.publicBaseUrl() + "users/" + userId + "/videos/";
         if (videoUrl == null || !videoUrl.startsWith(ownPrefix)) {
             throw new InvalidVideoUrlException();

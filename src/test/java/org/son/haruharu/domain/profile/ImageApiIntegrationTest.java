@@ -16,7 +16,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -39,7 +38,7 @@ class ImageApiIntegrationTest {
 
     @MockitoBean S3StoragePort s3StoragePort;
 
-    private static UsernamePasswordAuthenticationToken auth(UUID userId) {
+    private static UsernamePasswordAuthenticationToken auth(Long userId) {
         return new UsernamePasswordAuthenticationToken(userId, null, List.of());
     }
 
@@ -50,7 +49,7 @@ class ImageApiIntegrationTest {
             .willReturn(new PresignedUpload("https://presigned-put", "https://media/object.jpg"));
 
         mockMvc.perform(post("/api/v1/users/me/images/presigned-url")
-                .with(authentication(auth(UUID.randomUUID())))
+                .with(authentication(auth(1L)))
                 .contentType(APPLICATION_JSON)
                 .content("{\"filename\":\"profile.jpg\"}"))
             .andExpect(status().isOk())
@@ -62,7 +61,7 @@ class ImageApiIntegrationTest {
     @Test
     @DisplayName("이미지 저장 응답이 정렬된 image_urls(snake_case 문자열 배열)로 통일되어 반환된다")
     void givenTwoImages_whenPutImages_thenReturnsImageUrls() throws Exception {
-        UUID userId = UUID.randomUUID();
+        Long userId = 2L;
         String base = "https://test-bucket.s3.ap-northeast-2.amazonaws.com/";
         String prefix = base + "users/" + userId + "/images/";
         given(s3StoragePort.publicBaseUrl()).willReturn(base);
@@ -80,7 +79,7 @@ class ImageApiIntegrationTest {
     @DisplayName("이미지가 1개면 IMAGE_400_MIN_LIMIT 에러를 반환한다")
     void givenOneImage_whenPutImages_thenReturnsMinLimitError() throws Exception {
         mockMvc.perform(put("/api/v1/users/me/images")
-                .with(authentication(auth(UUID.randomUUID())))
+                .with(authentication(auth(3L)))
                 .contentType(APPLICATION_JSON)
                 .content("{\"image_urls\":[\"https://only.jpg\"]}"))
             .andExpect(status().isBadRequest())
@@ -91,7 +90,7 @@ class ImageApiIntegrationTest {
     @Test
     @DisplayName("마이페이지 조회 응답이 user_id·user_status·profile 중첩·images 객체배열(snake_case)로 직렬화되고 birthday는 노출되지 않는다")
     void givenProfile_whenGetMe_thenReturnsNestedSnakeCase() throws Exception {
-        UUID userId = UUID.randomUUID();
+        Long userId = 4L;
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",
             178, "ENFP", "하루", "가끔", "비흡연"));

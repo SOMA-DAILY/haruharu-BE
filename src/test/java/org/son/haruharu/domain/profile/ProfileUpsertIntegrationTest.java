@@ -14,7 +14,6 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,7 +28,7 @@ class ProfileUpsertIntegrationTest {
     @Test
     @DisplayName("프로필이 없는 신규 유저가 PUT 시 새 프로필이 생성되고 id가 부여된다")
     void givenNoProfile_whenUpdateProfile_thenCreatesWithGeneratedId() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UpdateProfileCommand command = new UpdateProfileCommand(
             "서울", "회사원",
             178, "ENFP", "하루", "가끔", "비흡연");
@@ -44,7 +43,7 @@ class ProfileUpsertIntegrationTest {
     @Test
     @DisplayName("같은 유저가 두 번 PUT 해도 row는 1개로 유지되고 최신 값으로 갱신된다")
     void givenExistingProfile_whenUpdateAgain_thenUpsertsSingleRow() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 2L;
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",
             178, "ENFP", "하루", "가끔", "비흡연"));

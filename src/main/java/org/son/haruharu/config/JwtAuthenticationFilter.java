@@ -12,7 +12,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.UUID;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -29,9 +28,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String token = extractToken(request);
         if (token != null && jwtProvider.isValid(token) && jwtProvider.isAccessToken(token)) {
-            UUID userId = jwtProvider.extractUserId(token);
-            var auth = new UsernamePasswordAuthenticationToken(userId, null, List.of());
-            SecurityContextHolder.getContext().setAuthentication(auth);
+            try {
+                Long userId = jwtProvider.extractUserId(token);
+                var auth = new UsernamePasswordAuthenticationToken(userId, null, List.of());
+                SecurityContextHolder.getContext().setAuthentication(auth);
+            } catch (NumberFormatException e) {
+                // subject가 Long이 아님(예: 마이그레이션 이전 발급된 구 UUID subject 토큰).
+                // 인증을 설정하지 않고 통과시켜 401로 자연스럽게 이어지도록 한다.
+            }
         }
         filterChain.doFilter(request, response);
     }

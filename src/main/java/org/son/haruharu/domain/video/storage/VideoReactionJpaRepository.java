@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface VideoReactionJpaRepository extends JpaRepository<VideoReactionEntity, UUID> {
 
-    Optional<VideoReactionEntity> findByVideoPostIdAndUserId(UUID videoPostId, UUID userId);
+    Optional<VideoReactionEntity> findByVideoPostIdAndUserId(UUID videoPostId, Long userId);
 }

@@ -23,8 +23,8 @@ public class CoinWalletEntity extends BaseEntity {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
-    @Column(nullable = false, unique = true, columnDefinition = "uuid")
-    private UUID userId;
+    @Column(nullable = false, unique = true)
+    private Long userId;
 
     @Column(nullable = false)
     private long paidBalance;

@@ -12,8 +12,6 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 
-import java.util.UUID;
-
 @Entity
 @Table(
         name = "user_credentials",
@@ -26,11 +24,11 @@ import java.util.UUID;
 public class UserCredentialEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(name = "user_id", nullable = false)
-    private UUID userId;
+    private Long userId;
 
     @Column(name = "provider_type", nullable = false, length = 20)
     private String providerType;

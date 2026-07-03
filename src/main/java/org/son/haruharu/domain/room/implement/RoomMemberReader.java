@@ -19,7 +19,7 @@ public class RoomMemberReader {
                 .orElseThrow(RoomMemberNotFoundException::new);
     }
 
-    public List<RoomMember> findByUserId(UUID userId) {
+    public List<RoomMember> findByUserId(Long userId) {
         return roomMemberRepository.findByUserId(userId);
     }
 
@@ -28,7 +28,7 @@ public class RoomMemberReader {
     }
 
     /** 방-유저 멤버십 확인. 참여자가 아니면 예외(거의 모든 방 API의 인가 게이트). */
-    public RoomMember getByRoomIdAndUserId(UUID roomId, UUID userId) {
+    public RoomMember getByRoomIdAndUserId(UUID roomId, Long userId) {
         return roomMemberRepository.findByRoomIdAndUserId(roomId, userId)
                 .orElseThrow(NotRoomMemberException::new);
     }

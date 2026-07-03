@@ -34,13 +34,13 @@ public class RoomMembersService {
         this.clock = clock;
     }
 
-    public MembersResponse getMembers(UUID roomId, UUID userId) {
+    public MembersResponse getMembers(UUID roomId, Long userId) {
         roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         LocalDate today = LocalDate.now(clock);
 
         List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
-        List<UUID> userIds = members.stream().map(RoomMember::userId).toList();
-        Map<UUID, UserProfile> profiles = userProfileReader.findByUserIdIn(userIds);
+        List<Long> userIds = members.stream().map(RoomMember::userId).toList();
+        Map<Long, UserProfile> profiles = userProfileReader.findByUserIdIn(userIds);
 
         List<MemberView> views = members.stream()
                 .map(member -> toView(member, profiles.get(member.userId()), userId, today))
@@ -49,7 +49,7 @@ public class RoomMembersService {
         return new MembersResponse(views);
     }
 
-    private MemberView toView(RoomMember member, UserProfile profile, UUID meUserId, LocalDate today) {
+    private MemberView toView(RoomMember member, UserProfile profile, Long meUserId, LocalDate today) {
         String nickname = profile == null ? null : profile.nickname();
         String location = profile == null ? null : profile.location();
         Integer age = member.birthday() == null
