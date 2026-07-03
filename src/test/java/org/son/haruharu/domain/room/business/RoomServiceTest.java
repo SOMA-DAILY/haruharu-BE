@@ -113,4 +113,33 @@ class RoomServiceTest {
         assertThatThrownBy(() -> roomService.getRoom(roomId, userId))
             .isInstanceOf(NotRoomMemberException.class);
     }
+
+    @Test
+    @DisplayName("종료되지 않은 방이 있는 유저는 hasCurrentRoom이 true다")
+    void givenCurrentRoom_whenHasCurrentRoom_thenTrue() {
+        UUID userId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+        given(roomMemberReader.findByUserId(userId))
+            .willReturn(List.of(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now())));
+        given(roomReader.findCurrent(List.of(roomId))).willReturn(Optional.of(
+            new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, LocalDateTime.now(), null)));
+
+        assertThat(roomService.hasCurrentRoom(userId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("과거 방만 있거나 방 이력이 없는 유저는 hasCurrentRoom이 false다")
+    void givenNoCurrentRoom_whenHasCurrentRoom_thenFalse() {
+        UUID withEndedOnly = UUID.randomUUID();
+        UUID endedRoomId = UUID.randomUUID();
+        given(roomMemberReader.findByUserId(withEndedOnly))
+            .willReturn(List.of(new RoomMember(UUID.randomUUID(), endedRoomId, withEndedOnly, "MALE", null, LocalDateTime.now())));
+        given(roomReader.findCurrent(List.of(endedRoomId))).willReturn(Optional.empty());
+
+        UUID noHistory = UUID.randomUUID();
+        given(roomMemberReader.findByUserId(noHistory)).willReturn(List.of());
+
+        assertThat(roomService.hasCurrentRoom(withEndedOnly)).isFalse();
+        assertThat(roomService.hasCurrentRoom(noHistory)).isFalse();
+    }
 }

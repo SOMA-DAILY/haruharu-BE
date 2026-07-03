@@ -5,6 +5,7 @@ import org.son.haruharu.domain.matching.storage.exception.MatchingQueueNotFoundE
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -15,6 +16,10 @@ public class MatchingQueueReader {
 
     public boolean isQueued(UUID userId) {
         return matchingQueueRepository.existsByUserIdAndStatus(userId, MatchingQueueStatus.QUEUED);
+    }
+
+    public Optional<MatchingQueue> findQueued(UUID userId) {
+        return matchingQueueRepository.findByUserIdAndStatus(userId, MatchingQueueStatus.QUEUED);
     }
 
     public MatchingQueue getQueued(UUID userId) {

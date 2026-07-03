@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.matching.business;
 
+import org.son.haruharu.domain.coin.business.CoinService;
+import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
 import org.son.haruharu.domain.matching.implement.MatchGroup;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.matching.implement.MatchingQueueReader;
@@ -14,7 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * 매칭 실행 유스케이스. 스케줄러에서 분리되어 있어 스케줄러·어드민 API·worker 등 어떤 트리거에서도 재사용 가능하다.
@@ -34,22 +39,29 @@ public class MatchingExecutor {
     private final MatchingStrategy matchingStrategy;
     private final RoomWriter roomWriter;
     private final RoomMemberWriter roomMemberWriter;
+    private final CoinService coinService;
 
     public MatchingExecutor(
         MatchingQueueReader matchingQueueReader,
         MatchingQueueWriter matchingQueueWriter,
         MatchingStrategy matchingStrategy,
         RoomWriter roomWriter,
-        RoomMemberWriter roomMemberWriter
+        RoomMemberWriter roomMemberWriter,
+        CoinService coinService
     ) {
         this.matchingQueueReader = matchingQueueReader;
         this.matchingQueueWriter = matchingQueueWriter;
         this.matchingStrategy = matchingStrategy;
         this.roomWriter = roomWriter;
         this.roomMemberWriter = roomMemberWriter;
+        this.coinService = coinService;
     }
 
-    /** scheduledDate 당일에 시작될 방을 확정한다. matchedAt은 큐 MATCHED·멤버 입장 시각으로 함께 기록한다. 반환값은 생성된 방 수. */
+    /**
+     * scheduledDate 당일에 시작될 방을 확정한다. matchedAt은 큐 MATCHED·멤버 입장 시각으로 함께 기록한다.
+     * 매칭되지 못한 잔류 큐는 EXPIRED로 만료 처리하고 참가 구름을 환불한다(같은 트랜잭션, 부분 실패 금지).
+     * 반환값은 생성된 방 수.
+     */
     @Transactional
     public int execute(LocalDate scheduledDate, LocalDateTime matchedAt) {
         List<MatchingQueue> queued = matchingQueueReader.findAllQueued();
@@ -57,14 +69,32 @@ public class MatchingExecutor {
         List<MatchingQueue> females = queued.stream().filter(q -> FEMALE.equals(q.gender())).toList();
 
         List<MatchGroup> groups = matchingStrategy.match(males, females);
+        Set<UUID> matchedIds = new HashSet<>();
         for (MatchGroup group : groups) {
             Room room = roomWriter.save(Room.create(scheduledDate, ROOM_TOTAL_DAYS));
             List<RoomMember> members = group.all().stream()
                 .map(q -> RoomMember.of(room.id(), q.userId(), q.gender(), q.birthday(), matchedAt))
                 .toList();
             roomMemberWriter.saveAll(members);
-            group.all().forEach(q -> matchingQueueWriter.save(q.matched(matchedAt)));
+            group.all().forEach(q -> {
+                matchingQueueWriter.save(q.matched(matchedAt));
+                matchedIds.add(q.id());
+            });
         }
+
+        expireAndRefundLeftovers(queued, matchedIds, matchedAt);
         return groups.size();
+    }
+
+    private void expireAndRefundLeftovers(List<MatchingQueue> queued, Set<UUID> matchedIds, LocalDateTime now) {
+        queued.stream()
+            .filter(q -> !matchedIds.contains(q.id()))
+            .forEach(q -> {
+                // 조건부 전이: 배치 조회 후 유저가 직접 취소(환불 완료)한 건은 전이 실패 → 환불 중복 방지.
+                if (matchingQueueWriter.expireIfQueued(q.id(), now)) {
+                    coinService.credit(CoinCreditCommand.matchRefund(
+                        q.userId(), MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, q.id()));
+                }
+            });
     }
 }
