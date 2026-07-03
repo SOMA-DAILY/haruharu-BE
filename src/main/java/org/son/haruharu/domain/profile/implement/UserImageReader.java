@@ -3,7 +3,6 @@ package org.son.haruharu.domain.profile.implement;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.UUID;
 
 @Component
 public class UserImageReader {
@@ -14,7 +13,7 @@ public class UserImageReader {
         this.userImageRepository = userImageRepository;
     }
 
-    public List<UserImage> getAllByUserId(UUID userId) {
+    public List<UserImage> getAllByUserId(Long userId) {
         return userImageRepository.findAllByUserId(userId);
     }
 }

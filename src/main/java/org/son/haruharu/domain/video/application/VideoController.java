@@ -35,7 +35,7 @@ public class VideoController {
     @PostMapping("/video-posts/presign")
     public ApiResponse<VideoUploadUrlResponse> presign(
             @Valid @RequestBody VideoPresignRequest request, Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(videoService.createPresignUrl(userId, request.filename()));
     }
 
@@ -43,13 +43,13 @@ public class VideoController {
     public ApiResponse<VideoPostResponse> upload(
             @PathVariable UUID roomId, @Valid @RequestBody VideoUploadRequest request,
             Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(videoService.upload(userId, roomId, request.toCommand()));
     }
 
     @DeleteMapping("/video-posts/{videoPostId}")
     public ApiResponse<Void> delete(@PathVariable UUID videoPostId, Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         videoService.delete(userId, videoPostId);
         return ApiResponse.ok(null);
     }
@@ -58,7 +58,7 @@ public class VideoController {
     public ApiResponse<ReactionResponse> react(
             @PathVariable UUID videoPostId, @Valid @RequestBody ReactionRequest request,
             Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(videoReactionService.toggle(userId, videoPostId, request.reactionType()));
     }
 }

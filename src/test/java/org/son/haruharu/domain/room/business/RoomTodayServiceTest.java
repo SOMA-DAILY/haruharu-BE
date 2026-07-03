@@ -46,7 +46,7 @@ class RoomTodayServiceTest {
     @Test
     @DisplayName("ACTIVE Day1 조회 시 Day1 슬롯 5개·업로드 진행을 반환하고 12시엔 12-15 슬롯만 열려 있다")
     void givenActiveDay1_whenGetToday_thenReturnsSlots() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         // startedAt=당일 09:00 앵커 → serviceAt 기준(2026-06-26) currentDay=1로 파생
@@ -71,7 +71,7 @@ class RoomTodayServiceTest {
     @Test
     @DisplayName("PENDING(currentDay=0) 방은 슬롯이 없어 빈 목록을 반환한다")
     void givenPendingRoom_whenGetToday_thenEmptySlots() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         Room room = new Room(roomId, RoomStatus.PENDING, LocalDate.now(), 3, null, null);
 
@@ -90,7 +90,7 @@ class RoomTodayServiceTest {
     @Test
     @DisplayName("방 멤버가 아니면 NotRoomMemberException이 발생한다")
     void givenNonMember_whenGetToday_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willThrow(new NotRoomMemberException());

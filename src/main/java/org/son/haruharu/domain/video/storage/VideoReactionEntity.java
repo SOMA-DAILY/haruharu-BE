@@ -27,7 +27,7 @@ public class VideoReactionEntity {
     private UUID videoPostId;
 
     @Column(nullable = false)
-    private UUID userId;
+    private Long userId;
 
     @Column(nullable = false, length = 20)
     private String reactionType;

@@ -7,13 +7,13 @@ import java.util.UUID;
 public record RoomMember(
         UUID id,
         UUID roomId,
-        UUID userId,
+        Long userId,
         String gender,
         LocalDate birthday,
         LocalDateTime joinedAt
 ) {
     /** 방 입장. 성별·생년월일은 본인인증값 스냅샷. */
-    public static RoomMember of(UUID roomId, UUID userId, String gender, LocalDate birthday, LocalDateTime joinedAt) {
+    public static RoomMember of(UUID roomId, Long userId, String gender, LocalDate birthday, LocalDateTime joinedAt) {
         return new RoomMember(null, roomId, userId, gender, birthday, joinedAt);
     }
 }

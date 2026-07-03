@@ -27,8 +27,8 @@ public class UserValueAnswerEntity extends BaseEntity {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
-    @Column(name = "user_id", nullable = false, columnDefinition = "uuid")
-    private UUID userId;
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
 
     @Column(name = "question_id", nullable = false, columnDefinition = "uuid")
     private UUID questionId;

@@ -23,7 +23,7 @@ public class MatchResultService {
         this.matchResultReader = matchResultReader;
     }
 
-    public MatchResultResponse getMatchResult(UUID roomId, UUID userId) {
+    public MatchResultResponse getMatchResult(UUID roomId, Long userId) {
         RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         MatchResult match = matchResultReader.getByMember(me.id());
 

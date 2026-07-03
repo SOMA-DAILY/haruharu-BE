@@ -42,7 +42,7 @@ public class VideoReactionService {
         this.clock = clock;
     }
 
-    public ReactionResponse toggle(UUID userId, UUID videoPostId, String reactionType) {
+    public ReactionResponse toggle(Long userId, UUID videoPostId, String reactionType) {
         if (!ALLOWED_TYPES.contains(reactionType)) {
             throw new InvalidReactionTypeException();
         }

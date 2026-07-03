@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public interface UserValueAnswerRepository {
 
-    List<UserValueAnswer> findAllByUserId(UUID userId);
+    List<UserValueAnswer> findAllByUserId(Long userId);
 
     Optional<UserValueAnswer> findById(UUID id);
 

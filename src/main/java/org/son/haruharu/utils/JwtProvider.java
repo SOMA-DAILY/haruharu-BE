@@ -11,7 +11,6 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
-import java.util.UUID;
 
 @Component
 public class JwtProvider {
@@ -30,11 +29,11 @@ public class JwtProvider {
         this.refreshTokenExpiryMs = refreshTokenExpiryMs;
     }
 
-    public String generateAccessToken(UUID userId) {
+    public String generateAccessToken(Long userId) {
         return buildToken(userId, accessTokenExpiryMs, "ACCESS");
     }
 
-    public String generateRefreshToken(UUID userId) {
+    public String generateRefreshToken(Long userId) {
         return buildToken(userId, refreshTokenExpiryMs, "REFRESH");
     }
 
@@ -42,8 +41,8 @@ public class JwtProvider {
         return refreshTokenExpiryMs;
     }
 
-    public UUID extractUserId(String token) {
-        return UUID.fromString(parseClaims(token).getSubject());
+    public Long extractUserId(String token) {
+        return Long.parseLong(parseClaims(token).getSubject());
     }
 
     public boolean isValid(String token) {
@@ -63,7 +62,7 @@ public class JwtProvider {
         }
     }
 
-    private String buildToken(UUID userId, long expiryMs, String type) {
+    private String buildToken(Long userId, long expiryMs, String type) {
         Instant now = Instant.now();
         return Jwts.builder()
             .subject(userId.toString())

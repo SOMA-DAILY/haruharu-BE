@@ -6,7 +6,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -14,15 +13,15 @@ public class MatchingQueueReader {
 
     private final MatchingQueueRepository matchingQueueRepository;
 
-    public boolean isQueued(UUID userId) {
+    public boolean isQueued(Long userId) {
         return matchingQueueRepository.existsByUserIdAndStatus(userId, MatchingQueueStatus.QUEUED);
     }
 
-    public Optional<MatchingQueue> findQueued(UUID userId) {
+    public Optional<MatchingQueue> findQueued(Long userId) {
         return matchingQueueRepository.findByUserIdAndStatus(userId, MatchingQueueStatus.QUEUED);
     }
 
-    public MatchingQueue getQueued(UUID userId) {
+    public MatchingQueue getQueued(Long userId) {
         return matchingQueueRepository.findByUserIdAndStatus(userId, MatchingQueueStatus.QUEUED)
                 .orElseThrow(MatchingQueueNotFoundException::new);
     }

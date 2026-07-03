@@ -17,7 +17,6 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -43,7 +42,7 @@ public class UserService {
         this.clock = clock;
     }
 
-    public UserProfileResponse getMyProfile(UUID userId) {
+    public UserProfileResponse getMyProfile(Long userId) {
         ProfileResponse profile = profileService.getProfile(userId);
         Optional<VerifiedIdentity> verified = identityService.findVerified(userId);
         String gender = verified.map(VerifiedIdentity::gender).orElse(null);
@@ -55,7 +54,7 @@ public class UserService {
     }
 
     @Transactional
-    public void withdraw(UUID userId) {
+    public void withdraw(Long userId) {
         profileService.deleteAllImages(userId);
         identityService.deleteIdentity(userId);
         User user = userReader.getById(userId);

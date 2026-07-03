@@ -5,7 +5,6 @@ import org.son.haruharu.domain.user.implement.UserRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 public class UserRepositoryImpl implements UserRepository {
@@ -17,7 +16,7 @@ public class UserRepositoryImpl implements UserRepository {
     }
 
     @Override
-    public Optional<User> findById(UUID id) {
+    public Optional<User> findById(Long id) {
         return userJpaRepository.findById(id)
                 .map(UserEntity::toDomain);
     }

@@ -14,7 +14,6 @@ import org.son.haruharu.infrastructure.pass.PassVerificationPort;
 import org.son.haruharu.infrastructure.pass.PassVerificationResult;
 
 import java.time.LocalDate;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,7 +39,7 @@ class IdentityServiceTest {
     @Test
     @DisplayName("이미 인증된 유저가 본인인증 요청 시 UserAlreadyVerifiedException이 발생한다")
     void givenAlreadyVerifiedUser_whenVerifyIdentity_thenThrowsUserAlreadyVerifiedException() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         VerifyIdentityCommand command = new VerifyIdentityCommand("pass-token");
 
         given(userIdentityReader.existsByUserId(userId)).willReturn(true);
@@ -52,7 +51,7 @@ class IdentityServiceTest {
     @Test
     @DisplayName("미인증 유저가 유효한 PASS 토큰으로 인증 요청 시 인증 정보가 저장된다")
     void givenUnverifiedUser_whenVerifyIdentityWithValidToken_thenSavesIdentity() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 2L;
         VerifyIdentityCommand command = new VerifyIdentityCommand("pass-token");
         PassVerificationResult passResult = new PassVerificationResult(
             "ci-value", "di-value", "010-1234-5678",

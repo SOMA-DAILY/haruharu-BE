@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.auth.implement;
 
 import java.util.Optional;
-import java.util.UUID;
 
 public interface RefreshTokenRepository {
 
@@ -9,7 +8,7 @@ public interface RefreshTokenRepository {
 
     RefreshToken save(RefreshToken refreshToken);
 
-    void revokeAllByUserId(UUID userId);
+    void revokeAllByUserId(Long userId);
 
     void revokeByTokenHash(String tokenHash);
 }

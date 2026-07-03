@@ -7,7 +7,7 @@ import java.util.UUID;
 
 public interface UserImageJpaRepository extends JpaRepository<UserImageEntity, UUID> {
 
-    List<UserImageEntity> findAllByUserIdOrderBySortedOrderAsc(UUID userId);
+    List<UserImageEntity> findAllByUserIdOrderBySortedOrderAsc(Long userId);
 
-    void deleteAllByUserId(UUID userId);
+    void deleteAllByUserId(Long userId);
 }

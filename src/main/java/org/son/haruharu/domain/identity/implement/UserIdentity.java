@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public record UserIdentity(
         UUID id,
-        UUID userId,
+        Long userId,
         String ci,
         String di,
         String phoneNumber,

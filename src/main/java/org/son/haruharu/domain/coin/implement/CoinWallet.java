@@ -12,13 +12,13 @@ import java.util.UUID;
  */
 public record CoinWallet(
         UUID id,
-        UUID userId,
+        Long userId,
         long paidBalance,
         long rewardBalance,
         LocalDateTime updatedAt
 ) {
     /** 신규 지갑: 잔액 0. id/updatedAt은 영속화 시점에 부여된다. */
-    public static CoinWallet init(UUID userId) {
+    public static CoinWallet init(Long userId) {
         return new CoinWallet(null, userId, 0L, 0L, null);
     }
 

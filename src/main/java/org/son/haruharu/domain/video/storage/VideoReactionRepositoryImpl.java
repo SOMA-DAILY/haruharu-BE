@@ -15,7 +15,7 @@ public class VideoReactionRepositoryImpl implements VideoReactionRepository {
     private final VideoReactionJpaRepository jpaRepository;
 
     @Override
-    public Optional<VideoReaction> findByVideoPostIdAndUserId(UUID videoPostId, UUID userId) {
+    public Optional<VideoReaction> findByVideoPostIdAndUserId(UUID videoPostId, Long userId) {
         return jpaRepository.findByVideoPostIdAndUserId(videoPostId, userId).map(VideoReactionEntity::toDomain);
     }
 

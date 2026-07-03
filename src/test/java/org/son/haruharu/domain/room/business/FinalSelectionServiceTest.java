@@ -52,7 +52,7 @@ class FinalSelectionServiceTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-26T10:00:00Z"), ZoneId.of("Asia/Seoul"));
 
     private final UUID roomId = UUID.randomUUID();
-    private final UUID userId = UUID.randomUUID();
+    private final Long userId = 1L;
     private final UUID meId = UUID.randomUUID();
     private final UUID selectedId = UUID.randomUUID();
 
@@ -62,7 +62,7 @@ class FinalSelectionServiceTest {
                 finalSelectionWriter, matchResultWriter, clock);
     }
 
-    private RoomMember member(UUID id, UUID memberUserId, UUID memberRoomId) {
+    private RoomMember member(UUID id, Long memberUserId, UUID memberRoomId) {
         return new RoomMember(id, memberRoomId, memberUserId, "MALE", null, LocalDateTime.now());
     }
 
@@ -81,7 +81,7 @@ class FinalSelectionServiceTest {
     @DisplayName("Day3에 상대가 아직 나를 선택하지 않았으면 저장만 하고 matched=false")
     void givenDay3AndNoMutual_whenSelect_thenSavedNotMatched() {
         stubMeAndRoom(3);
-        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, UUID.randomUUID(), roomId));
+        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
         given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
 
@@ -96,7 +96,7 @@ class FinalSelectionServiceTest {
     @DisplayName("상대도 나를 선택했으면 즉시 매칭되고 MatchResult는 canonical 정렬(a<b)로 저장된다")
     void givenMutual_whenSelect_thenMatchedAndCanonicalSaved() {
         stubMeAndRoom(3);
-        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, UUID.randomUUID(), roomId));
+        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
         given(finalSelectionReader.findByRoomMemberId(selectedId))
                 .willReturn(Optional.of(new FinalSelection(UUID.randomUUID(), selectedId, meId, LocalDateTime.now())));
@@ -133,7 +133,7 @@ class FinalSelectionServiceTest {
     @DisplayName("이미 최종선택했으면 AlreadySelectedException이 발생한다(1회 확정)")
     void givenAlreadySelected_whenSelect_thenThrows() {
         stubMeAndRoom(3);
-        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, UUID.randomUUID(), roomId));
+        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(true);
 
         assertThatThrownBy(() -> service.select(roomId, selectedId, userId))
@@ -145,7 +145,7 @@ class FinalSelectionServiceTest {
     @DisplayName("다른 방 멤버를 선택하면 RoomMemberNotFoundException이 발생한다")
     void givenMemberInAnotherRoom_whenSelect_thenThrows() {
         stubMeAndRoom(3);
-        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, UUID.randomUUID(), UUID.randomUUID()));
+        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, UUID.randomUUID()));
 
         assertThatThrownBy(() -> service.select(roomId, selectedId, userId))
                 .isInstanceOf(RoomMemberNotFoundException.class);

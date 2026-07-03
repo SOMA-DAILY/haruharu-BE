@@ -5,7 +5,6 @@ import org.son.haruharu.domain.identity.storage.exception.UserIdentityNotFoundEx
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -13,16 +12,16 @@ public class UserIdentityReader {
 
     private final UserIdentityRepository userIdentityRepository;
 
-    public UserIdentity getByUserId(UUID userId) {
+    public UserIdentity getByUserId(Long userId) {
         return userIdentityRepository.findByUserId(userId)
                 .orElseThrow(UserIdentityNotFoundException::new);
     }
 
-    public boolean existsByUserId(UUID userId) {
+    public boolean existsByUserId(Long userId) {
         return userIdentityRepository.existsByUserId(userId);
     }
 
-    public Optional<UserIdentity> findByUserId(UUID userId) {
+    public Optional<UserIdentity> findByUserId(Long userId) {
         return userIdentityRepository.findByUserId(userId);
     }
 

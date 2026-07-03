@@ -10,11 +10,11 @@ public interface RoomMemberRepository {
 
     RoomMember save(RoomMember member);
 
-    List<RoomMember> findByUserId(UUID userId);
+    List<RoomMember> findByUserId(Long userId);
 
     List<RoomMember> findByRoomId(UUID roomId);
 
-    Optional<RoomMember> findByRoomIdAndUserId(UUID roomId, UUID userId);
+    Optional<RoomMember> findByRoomIdAndUserId(UUID roomId, Long userId);
 
     Optional<RoomMember> findById(UUID id);
 }

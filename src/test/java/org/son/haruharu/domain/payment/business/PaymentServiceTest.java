@@ -46,7 +46,7 @@ class PaymentServiceTest {
 
     private PaymentService paymentService;
 
-    private final String userId = UUID.randomUUID().toString();
+    private final String userId = "1";
     private final String txId = "TXN-123";
     private final String storeProductId = "org.son.haruharu.coin.100";
 
@@ -67,7 +67,7 @@ class PaymentServiceTest {
     }
 
     private IapPurchase ownedPurchase(UUID id) {
-        return new IapPurchase(id, UUID.fromString(userId), UUID.randomUUID(), storeProductId, txId,
+        return new IapPurchase(id, Long.parseLong(userId), UUID.randomUUID(), storeProductId, txId,
                 IapStore.APP_STORE, 100, org.son.haruharu.domain.payment.implement.IapPurchaseStatus.OWNED,
                 LocalDateTime.now(), null);
     }
@@ -146,7 +146,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    @DisplayName("구매 이벤트의 app_user_id가 UUID 형식이 아니면 InvalidWebhookPayloadException이 발생한다")
+    @DisplayName("구매 이벤트의 app_user_id가 숫자 형식이 아니면 InvalidWebhookPayloadException이 발생한다")
     void givenInvalidAppUserId_whenHandlePurchase_thenThrows() {
         // given
         given(iapWebhookEventReader.isProcessed("EVT-1")).willReturn(false);

@@ -44,14 +44,14 @@ class VideoReactionServiceTest {
         return new VideoReactionService(videoPostReader, roomMemberReader, videoReactionReader, videoReactionWriter, clock);
     }
 
-    private void stubPostAndMembership(UUID postId, UUID userId) {
+    private void stubPostAndMembership(UUID postId, Long userId) {
         UUID authorMemberId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
-                .willReturn(new RoomMember(authorMemberId, roomId, UUID.randomUUID(), "FEMALE", null, LocalDateTime.now()));
+                .willReturn(new RoomMember(authorMemberId, roomId, 2L, "FEMALE", null, LocalDateTime.now()));
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
                 .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now()));
     }
@@ -59,7 +59,7 @@ class VideoReactionServiceTest {
     @Test
     @DisplayName("반응이 없으면 새로 생성하고 reacted=true를 반환한다")
     void givenNoReaction_whenToggle_thenInsert() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID postId = UUID.randomUUID();
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
@@ -75,7 +75,7 @@ class VideoReactionServiceTest {
     @Test
     @DisplayName("같은 타입 재탭 시 반응이 해제(삭제)되고 reacted=false를 반환한다")
     void givenSameType_whenToggle_thenRemove() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID postId = UUID.randomUUID();
         UUID reactionId = UUID.randomUUID();
         stubPostAndMembership(postId, userId);
@@ -92,7 +92,7 @@ class VideoReactionServiceTest {
     @Test
     @DisplayName("다른 타입으로 토글 시 같은 행을 교체하고 reacted=true·새 타입을 반환한다")
     void givenDifferentType_whenToggle_thenReplace() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID postId = UUID.randomUUID();
         UUID reactionId = UUID.randomUUID();
         stubPostAndMembership(postId, userId);
@@ -110,14 +110,14 @@ class VideoReactionServiceTest {
     @Test
     @DisplayName("허용하지 않는 반응 타입이면 InvalidReactionTypeException")
     void givenInvalidType_whenToggle_thenThrows() {
-        assertThatThrownBy(() -> service().toggle(UUID.randomUUID(), UUID.randomUUID(), "ANGRY"))
+        assertThatThrownBy(() -> service().toggle(1L, UUID.randomUUID(), "ANGRY"))
             .isInstanceOf(InvalidReactionTypeException.class);
     }
 
     @Test
     @DisplayName("영상이 속한 방의 멤버가 아니면 NotRoomMemberException")
     void givenNonMember_whenToggle_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID postId = UUID.randomUUID();
         UUID authorMemberId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
@@ -125,7 +125,7 @@ class VideoReactionServiceTest {
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
-                .willReturn(new RoomMember(authorMemberId, roomId, UUID.randomUUID(), "FEMALE", null, LocalDateTime.now()));
+                .willReturn(new RoomMember(authorMemberId, roomId, 2L, "FEMALE", null, LocalDateTime.now()));
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willThrow(new NotRoomMemberException());
 
         assertThatThrownBy(() -> service().toggle(userId, postId, "LIKE"))

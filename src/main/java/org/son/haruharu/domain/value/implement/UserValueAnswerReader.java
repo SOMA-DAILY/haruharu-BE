@@ -15,7 +15,7 @@ public class UserValueAnswerReader {
         this.userValueAnswerRepository = userValueAnswerRepository;
     }
 
-    public List<UserValueAnswer> getAllByUserId(UUID userId) {
+    public List<UserValueAnswer> getAllByUserId(Long userId) {
         return userValueAnswerRepository.findAllByUserId(userId);
     }
 

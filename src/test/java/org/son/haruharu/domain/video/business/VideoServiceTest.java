@@ -57,7 +57,7 @@ class VideoServiceTest {
                 videoPostReader, videoPostWriter, clock);
     }
 
-    private RoomMember member(UUID id, UUID userId) {
+    private RoomMember member(UUID id, Long userId) {
         return new RoomMember(id, UUID.randomUUID(), userId, "MALE", null, LocalDateTime.now());
     }
 
@@ -72,14 +72,14 @@ class VideoServiceTest {
     @Test
     @DisplayName("허용하지 않는 확장자(exe)로 presign 요청 시 예외가 발생한다")
     void givenInvalidExtension_whenPresign_thenThrows() {
-        assertThatThrownBy(() -> serviceAt(12).createPresignUrl(UUID.randomUUID(), "malware.exe"))
+        assertThatThrownBy(() -> serviceAt(12).createPresignUrl(1L, "malware.exe"))
             .isInstanceOf(InvalidVideoExtensionException.class);
     }
 
     @Test
     @DisplayName("mp4 presign 요청 시 비공개 videos prefix 키로 발급한다")
     void givenMp4_whenPresign_thenVideosPrefix() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         given(s3StoragePort.createPresignedPutUrl(org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("video/mp4")))
             .willReturn(new PresignedUpload("https://put", "https://obj"));
@@ -97,7 +97,7 @@ class VideoServiceTest {
     @Test
     @DisplayName("정상 업로드 시 현재 Day·슬롯으로 저장된다(미션·열쇠 없음)")
     void givenValidUpload_whenUpload_thenSaves() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         RoomMember me = member(memberId, userId);
@@ -120,7 +120,7 @@ class VideoServiceTest {
     @Test
     @DisplayName("슬롯 시간창 밖(09시, 슬롯 12-15)에서 업로드 시 SlotWindowClosedException")
     void givenOutsideWindow_whenUpload_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         var command = new VideoUploadCommand(SLOT_INDEX, BASE + "x", null, null);
 
@@ -134,7 +134,7 @@ class VideoServiceTest {
     @Test
     @DisplayName("슬롯에 활성 영상이 이미 있으면 DuplicateSlotUploadException")
     void givenActiveExists_whenUpload_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID roomId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         String url = BASE + "users/" + userId + "/videos/v.mp4";
@@ -154,7 +154,7 @@ class VideoServiceTest {
     @Test
     @DisplayName("본인 영상은 소프트삭제된다")
     void givenOwner_whenDelete_thenSoftDeletes() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID postId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         VideoPost post = new VideoPost(postId, memberId, 1, 1, null, null,
@@ -174,14 +174,14 @@ class VideoServiceTest {
     @Test
     @DisplayName("타인 영상 삭제 시 NotVideoOwnerException")
     void givenNotOwner_whenDelete_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID postId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         VideoPost post = new VideoPost(postId, memberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
 
         given(videoPostReader.getById(postId)).willReturn(post);
-        given(roomMemberReader.getById(memberId)).willReturn(member(memberId, UUID.randomUUID())); // 다른 userId
+        given(roomMemberReader.getById(memberId)).willReturn(member(memberId, 2L)); // 다른 userId
 
         assertThatThrownBy(() -> serviceAt(12).delete(userId, postId))
             .isInstanceOf(NotVideoOwnerException.class);

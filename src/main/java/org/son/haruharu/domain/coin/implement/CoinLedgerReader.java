@@ -18,7 +18,7 @@ public class CoinLedgerReader {
         return coinLedgerRepository.findById(id);
     }
 
-    public List<CoinLedger> findPage(UUID userId, LocalDateTime before, int limit) {
+    public List<CoinLedger> findPage(Long userId, LocalDateTime before, int limit) {
         return coinLedgerRepository.findPage(userId, before, limit);
     }
 }

@@ -90,7 +90,7 @@ public class PaymentService {
             return existing.get().id();
         }
 
-        UUID userId = parseUserId(command.appUserId());
+        Long userId = parseUserId(command.appUserId());
         IapProduct product = iapProductReader.getByStoreProductId(command.storeProductId());
         IapPurchase saved = iapPurchaseWriter.save(IapPurchase.owned(
                 userId, product.id(), command.storeProductId(), command.storeTransactionId(),
@@ -100,13 +100,13 @@ public class PaymentService {
         return saved.id();
     }
 
-    private UUID parseUserId(String appUserId) {
+    private Long parseUserId(String appUserId) {
         if (appUserId == null || appUserId.isBlank()) {
             throw new InvalidWebhookPayloadException();
         }
         try {
-            return UUID.fromString(appUserId);
-        } catch (IllegalArgumentException e) {
+            return Long.parseLong(appUserId);
+        } catch (NumberFormatException e) {
             throw new InvalidWebhookPayloadException();
         }
     }

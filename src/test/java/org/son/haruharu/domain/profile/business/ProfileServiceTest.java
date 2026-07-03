@@ -62,7 +62,7 @@ class ProfileServiceTest {
     @Test
     @DisplayName("프로필 수정 시 저장 후 업데이트된 프로필과 이미지를 반환한다")
     void givenUpdateCommand_whenUpdateProfile_thenSavesAndReturnsProfileResponse() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UpdateProfileCommand command = new UpdateProfileCommand(
             "서울", "직장인",
             175, "INFP", "새닉네임", "가끔", "비흡연"
@@ -85,7 +85,7 @@ class ProfileServiceTest {
     @Test
     @DisplayName("프로필이 없는 신규 유저가 수정 요청 시 새 프로필을 생성해 저장한다")
     void givenNoProfile_whenUpdateProfile_thenCreatesAndSaves() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UpdateProfileCommand command = new UpdateProfileCommand(
             "서울", "회사원",
             178, "ENFP", "하루", "가끔", "비흡연"
@@ -111,7 +111,7 @@ class ProfileServiceTest {
     @Test
     @DisplayName("이미지 업데이트 시 기존 이미지를 전체 삭제하고 새 이미지를 순서대로 저장한 뒤 응답을 반환한다")
     void givenValidImages_whenUpdateImages_thenDeletesOldAndSavesNewAndReturnsResponse() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         String prefix = BASE_URL + "users/" + userId + "/images/";
         UpdateImagesCommand command = new UpdateImagesCommand(
             List.of(prefix + "a.jpg", prefix + "b.jpg", prefix + "c.jpg")
@@ -130,11 +130,11 @@ class ProfileServiceTest {
     @Test
     @DisplayName("본인 prefix가 아닌 URL을 저장하려 하면 ImageInvalidUrlException이 발생하고 저장하지 않는다")
     void givenForeignUrl_whenUpdateImages_thenThrowsInvalidUrl() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE_URL);
         UpdateImagesCommand command = new UpdateImagesCommand(List.of(
             BASE_URL + "users/" + userId + "/images/mine.jpg",
-            BASE_URL + "users/" + UUID.randomUUID() + "/images/stolen.jpg" // 타 유저 prefix
+            BASE_URL + "users/" + 2L + "/images/stolen.jpg" // 타 유저 prefix
         ));
 
         assertThatThrownBy(() -> profileService.updateImages(userId, command))
@@ -147,7 +147,7 @@ class ProfileServiceTest {
     @Test
     @DisplayName("이미지가 최소 개수(2개) 미만이면 ImageMinLimitException이 발생하고 저장하지 않는다")
     void givenTooFewImages_whenUpdateImages_thenThrowsMinLimit() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UpdateImagesCommand command = new UpdateImagesCommand(List.of("https://only-one.png"));
 
         assertThatThrownBy(() -> profileService.updateImages(userId, command))
@@ -160,7 +160,7 @@ class ProfileServiceTest {
     @Test
     @DisplayName("이미지 전체 삭제 시 S3 객체를 먼저 삭제하고 DB 행을 삭제한다")
     void givenImages_whenDeleteAllImages_thenDeletesS3ObjectsAndDbRows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         String prefix = BASE_URL + "users/" + userId + "/images/";
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE_URL);
         given(userImageReader.getAllByUserId(userId)).willReturn(List.of(
@@ -183,7 +183,7 @@ class ProfileServiceTest {
     @Test
     @DisplayName("유효한 파일명으로 presigned URL 발급 시 image_url과 presigned_url을 반환한다")
     void givenValidFilename_whenCreateUploadUrl_thenReturnsUrls() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         given(s3StoragePort.createPresignedPutUrl(anyString(), eq("image/jpeg")))
             .willReturn(new PresignedUpload("https://presigned-put", "https://bucket/object.jpg"));
 
@@ -201,7 +201,7 @@ class ProfileServiceTest {
     @Test
     @DisplayName("허용되지 않는 확장자로 presigned URL 발급 시 ImageInvalidExtensionException이 발생한다")
     void givenInvalidExtension_whenCreateUploadUrl_thenThrows() {
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
 
         assertThatThrownBy(() -> profileService.createImageUploadUrl(userId, "malware.exe"))
             .isInstanceOf(ImageInvalidExtensionException.class);

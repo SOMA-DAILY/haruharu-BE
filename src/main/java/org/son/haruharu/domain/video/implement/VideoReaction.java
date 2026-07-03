@@ -7,11 +7,11 @@ import java.util.UUID;
 public record VideoReaction(
         UUID id,
         UUID videoPostId,
-        UUID userId,
+        Long userId,
         String reactionType,
         LocalDateTime createdAt
 ) {
-    public static VideoReaction create(UUID videoPostId, UUID userId, String reactionType, LocalDateTime createdAt) {
+    public static VideoReaction create(UUID videoPostId, Long userId, String reactionType, LocalDateTime createdAt) {
         return new VideoReaction(null, videoPostId, userId, reactionType, createdAt);
     }
 

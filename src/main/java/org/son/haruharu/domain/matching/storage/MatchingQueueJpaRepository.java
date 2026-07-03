@@ -13,9 +13,9 @@ import java.util.UUID;
 
 public interface MatchingQueueJpaRepository extends JpaRepository<MatchingQueueEntity, UUID> {
 
-    boolean existsByUserIdAndStatus(UUID userId, MatchingQueueStatus status);
+    boolean existsByUserIdAndStatus(Long userId, MatchingQueueStatus status);
 
-    Optional<MatchingQueueEntity> findByUserIdAndStatus(UUID userId, MatchingQueueStatus status);
+    Optional<MatchingQueueEntity> findByUserIdAndStatus(Long userId, MatchingQueueStatus status);
 
     List<MatchingQueueEntity> findAllByStatusOrderByQueuedAtAsc(MatchingQueueStatus status);
 

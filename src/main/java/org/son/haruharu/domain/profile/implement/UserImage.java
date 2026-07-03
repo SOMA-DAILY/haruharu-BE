@@ -4,7 +4,7 @@ import java.util.UUID;
 
 public record UserImage(
         UUID id,
-        UUID userId,
+        Long userId,
         String imageUrl,
         int sortedOrder
 ) {}

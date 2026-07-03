@@ -11,8 +11,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1/matching")
 public class MatchingController {
@@ -25,19 +23,19 @@ public class MatchingController {
 
     @GetMapping("/queue")
     public ApiResponse<QueueStatusResponse> getQueueStatus(Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(matchingService.getQueueStatus(userId));
     }
 
     @PostMapping("/queue")
     public ApiResponse<QueueResponse> joinQueue(Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(matchingService.joinQueue(userId));
     }
 
     @DeleteMapping("/queue")
     public ApiResponse<Void> leaveQueue(Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         matchingService.leaveQueue(userId);
         return ApiResponse.ok(null);
     }

@@ -10,7 +10,6 @@ import org.son.haruharu.domain.user.storage.exception.UserNotFoundException;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -32,7 +31,7 @@ class UserReaderTest {
     @Test
     @DisplayName("존재하는 유저 ID로 조회 시 User를 반환한다")
     void givenExistingUserId_whenGetById_thenReturnsUser() {
-        var userId = UUID.randomUUID();
+        Long userId = 1L;
         var user = new User(userId, UserStatus.ACTIVE, LocalDateTime.now());
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
 
@@ -45,7 +44,7 @@ class UserReaderTest {
     @Test
     @DisplayName("존재하지 않는 ID로 조회 시 UserNotFoundException이 발생한다")
     void givenNonExistentId_whenGetById_thenThrowsUserNotFoundException() {
-        var unknownId = UUID.randomUUID();
+        Long unknownId = 2L;
         given(userRepository.findById(unknownId)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> userReader.getById(unknownId))

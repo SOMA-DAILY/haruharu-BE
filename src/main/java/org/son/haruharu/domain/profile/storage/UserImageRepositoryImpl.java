@@ -17,7 +17,7 @@ public class UserImageRepositoryImpl implements UserImageRepository {
     }
 
     @Override
-    public List<UserImage> findAllByUserId(UUID userId) {
+    public List<UserImage> findAllByUserId(Long userId) {
         return userImageJpaRepository.findAllByUserIdOrderBySortedOrderAsc(userId)
                 .stream()
                 .map(UserImageEntity::toDomain)
@@ -35,7 +35,7 @@ public class UserImageRepositoryImpl implements UserImageRepository {
     }
 
     @Override
-    public void deleteAllByUserId(UUID userId) {
+    public void deleteAllByUserId(Long userId) {
         userImageJpaRepository.deleteAllByUserId(userId);
     }
 }

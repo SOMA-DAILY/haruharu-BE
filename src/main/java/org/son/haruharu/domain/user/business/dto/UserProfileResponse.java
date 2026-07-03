@@ -4,10 +4,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 
 import java.util.List;
-import java.util.UUID;
 
 public record UserProfileResponse(
-        @JsonProperty("user_id") UUID userId,
+        @JsonProperty("user_id") Long userId,
         @JsonProperty("user_status") String userStatus,
         ProfileSection profile,
         List<ProfileResponse.ImageInfo> images
@@ -25,7 +24,7 @@ public record UserProfileResponse(
     ) {}
 
     /** gender·age는 프로필이 아니라 본인인증(identity)에서 수급한다. */
-    public static UserProfileResponse from(UUID userId, ProfileResponse profile,
+    public static UserProfileResponse from(Long userId, ProfileResponse profile,
                                            String gender, Integer age, String userStatus) {
         return new UserProfileResponse(
             userId,

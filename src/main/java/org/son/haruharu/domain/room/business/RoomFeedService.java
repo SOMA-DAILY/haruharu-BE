@@ -25,7 +25,7 @@ public class RoomFeedService {
         this.videoPostReader = videoPostReader;
     }
 
-    public FeedResponse getFeed(UUID roomId, UUID userId, int day) {
+    public FeedResponse getFeed(UUID roomId, Long userId, int day) {
         RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId);
 
         if (UploadSlot.ofDay(day).isEmpty()) {

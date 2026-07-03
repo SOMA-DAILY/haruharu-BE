@@ -5,11 +5,11 @@ import java.util.UUID;
 
 public interface UserImageRepository {
 
-    List<UserImage> findAllByUserId(UUID userId);
+    List<UserImage> findAllByUserId(Long userId);
 
     UserImage save(UserImage userImage);
 
     void deleteById(UUID id);
 
-    void deleteAllByUserId(UUID userId);
+    void deleteAllByUserId(Long userId);
 }

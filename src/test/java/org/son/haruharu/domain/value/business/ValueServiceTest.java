@@ -65,7 +65,7 @@ class ValueServiceTest {
     @DisplayName("답변 일괄 저장 시 각 답변을 신규 INSERT하고 저장 개수를 반환한다")
     void givenAnswers_whenSaveAnswers_thenSavesEachAndReturnsCount() {
         // given
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID q1 = UUID.randomUUID();
         UUID q2 = UUID.randomUUID();
         var command = new SaveValueAnswersCommand(List.of(
@@ -99,7 +99,7 @@ class ValueServiceTest {
     @DisplayName("이미 답변한 questionId 재제출 시 기존 답변 id로 갱신한다(멱등)")
     void givenExistingAnswer_whenSaveAnswers_thenUpdatesSameId() {
         // given
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID questionId = UUID.randomUUID();
         UUID existingAnswerId = UUID.randomUUID();
         var command = new SaveValueAnswersCommand(List.of(
@@ -126,7 +126,7 @@ class ValueServiceTest {
     @DisplayName("존재하지 않는 questionId로 답변 저장 시 ValueQuestionNotFoundException이 발생한다")
     void givenNonExistentQuestionId_whenSaveAnswers_thenThrowsAndDoesNotSave() {
         // given
-        UUID userId = UUID.randomUUID();
+        Long userId = 1L;
         UUID unknown = UUID.randomUUID();
         var command = new SaveValueAnswersCommand(List.of(
                 new SaveValueAnswersCommand.AnswerItem(unknown, "등산")

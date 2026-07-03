@@ -18,7 +18,7 @@ public class UserValueAnswerRepositoryImpl implements UserValueAnswerRepository 
     }
 
     @Override
-    public List<UserValueAnswer> findAllByUserId(UUID userId) {
+    public List<UserValueAnswer> findAllByUserId(Long userId) {
         return userValueAnswerJpaRepository.findAllByUserId(userId)
                 .stream()
                 .map(UserValueAnswerEntity::toDomain)

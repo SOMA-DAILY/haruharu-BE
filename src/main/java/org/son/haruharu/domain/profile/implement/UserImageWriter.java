@@ -21,7 +21,7 @@ public class UserImageWriter {
         userImageRepository.deleteById(id);
     }
 
-    public void deleteAllByUserId(UUID userId) {
+    public void deleteAllByUserId(Long userId) {
         userImageRepository.deleteAllByUserId(userId);
     }
 }

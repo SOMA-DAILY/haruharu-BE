@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public record MatchingQueue(
         UUID id,
-        UUID userId,
+        Long userId,
         String gender,
         LocalDate birthday,
         MatchingQueueStatus status,
@@ -20,7 +20,7 @@ public record MatchingQueue(
     public static final String COIN_REF_TYPE = "MATCHING_QUEUE";
 
     /** 큐 참가: 신규 대기 항목 생성. id는 영속화 시점에 부여, matchedAt은 매칭 확정 전까지 null. */
-    public static MatchingQueue join(UUID userId, String gender, LocalDate birthday, LocalDateTime queuedAt) {
+    public static MatchingQueue join(Long userId, String gender, LocalDate birthday, LocalDateTime queuedAt) {
         return new MatchingQueue(null, userId, gender, birthday, MatchingQueueStatus.QUEUED, queuedAt, null);
     }
 

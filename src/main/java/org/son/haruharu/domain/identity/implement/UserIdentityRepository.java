@@ -1,12 +1,11 @@
 package org.son.haruharu.domain.identity.implement;
 
 import java.util.Optional;
-import java.util.UUID;
 
 public interface UserIdentityRepository {
-    Optional<UserIdentity> findByUserId(UUID userId);
-    boolean existsByUserId(UUID userId);
+    Optional<UserIdentity> findByUserId(Long userId);
+    boolean existsByUserId(Long userId);
     boolean existsByCi(String ci);
     UserIdentity save(UserIdentity userIdentity);
-    void deleteByUserId(UUID userId);
+    void deleteByUserId(Long userId);
 }

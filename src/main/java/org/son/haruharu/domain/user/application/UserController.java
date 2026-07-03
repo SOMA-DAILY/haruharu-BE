@@ -9,8 +9,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1/users/me")
 public class UserController {
@@ -23,13 +21,13 @@ public class UserController {
 
     @GetMapping
     public ApiResponse<UserProfileResponse> getMyProfile(Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(userService.getMyProfile(userId));
     }
 
     @DeleteMapping
     public ApiResponse<Void> withdraw(Authentication authentication) {
-        UUID userId = (UUID) authentication.getPrincipal();
+        Long userId = (Long) authentication.getPrincipal();
         userService.withdraw(userId);
         return ApiResponse.ok(null);
     }

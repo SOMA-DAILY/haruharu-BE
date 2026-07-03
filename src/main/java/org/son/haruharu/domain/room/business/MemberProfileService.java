@@ -61,7 +61,7 @@ public class MemberProfileService {
         this.clock = clock;
     }
 
-    public MemberProfileResponse getMemberProfile(UUID roomId, UUID memberId, UUID userId) {
+    public MemberProfileResponse getMemberProfile(UUID roomId, UUID memberId, Long userId) {
         roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         RoomMember target = roomMemberReader.getById(memberId);
         if (!target.roomId().equals(roomId)) {
@@ -97,7 +97,7 @@ public class MemberProfileService {
         return views;
     }
 
-    private List<ValueAnswerView> toValueAnswers(UUID targetUserId, int currentDay, boolean self) {
+    private List<ValueAnswerView> toValueAnswers(Long targetUserId, int currentDay, boolean self) {
         boolean visible = self || currentDay >= VALUE_REVEAL_DAY;
         Map<UUID, ValueQuestion> questions = valueQuestionReader.getAllActive().stream()
                 .collect(Collectors.toMap(ValueQuestion::id, Function.identity()));

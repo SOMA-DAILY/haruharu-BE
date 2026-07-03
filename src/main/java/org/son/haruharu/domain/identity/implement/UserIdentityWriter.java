@@ -3,8 +3,6 @@ package org.son.haruharu.domain.identity.implement;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.UUID;
-
 @Component
 @RequiredArgsConstructor
 public class UserIdentityWriter {
@@ -15,7 +13,7 @@ public class UserIdentityWriter {
         return userIdentityRepository.save(userIdentity);
     }
 
-    public void deleteByUserId(UUID userId) {
+    public void deleteByUserId(Long userId) {
         userIdentityRepository.deleteByUserId(userId);
     }
 }

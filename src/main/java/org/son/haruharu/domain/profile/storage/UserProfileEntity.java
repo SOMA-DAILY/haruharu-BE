@@ -19,8 +19,8 @@ public class UserProfileEntity extends BaseEntity {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
-    @Column(nullable = false, columnDefinition = "uuid")
-    private UUID userId;
+    @Column(nullable = false)
+    private Long userId;
 
     @Column(length = 100)
     private String location;

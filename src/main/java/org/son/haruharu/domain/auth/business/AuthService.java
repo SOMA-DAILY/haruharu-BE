@@ -29,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -50,7 +49,7 @@ public class AuthService {
     public AuthTokenResponse authenticate(SocialAuthCommand command) {
         OAuthUserInfo userInfo = oAuthProviderRegistry.get(command.providerType()).verify(command.idToken());
 
-        UUID userId = userCredentialReader
+        Long userId = userCredentialReader
             .findByProviderTypeAndProviderId(command.providerType().name(), userInfo.providerId())
             .map(credential -> {
                 User user = userReader.getById(credential.userId());
@@ -114,21 +113,21 @@ public class AuthService {
         refreshTokenWriter.revokeByTokenHash(tokenHash);
     }
 
-    private AuthTokenResponse issueNewTokenPair(UUID userId, String userStatus) {
+    private AuthTokenResponse issueNewTokenPair(Long userId, String userStatus) {
         String accessToken = jwtProvider.generateAccessToken(userId);
         String refreshToken = jwtProvider.generateRefreshToken(userId);
         saveRefreshToken(userId, refreshToken);
         return AuthTokenResponse.withStatus(accessToken, refreshToken, userStatus);
     }
 
-    private AuthTokenResponse issueNewTokenPairOnly(UUID userId) {
+    private AuthTokenResponse issueNewTokenPairOnly(Long userId) {
         String accessToken = jwtProvider.generateAccessToken(userId);
         String refreshToken = jwtProvider.generateRefreshToken(userId);
         saveRefreshToken(userId, refreshToken);
         return AuthTokenResponse.tokenOnly(accessToken, refreshToken);
     }
 
-    private void saveRefreshToken(UUID userId, String refreshToken) {
+    private void saveRefreshToken(Long userId, String refreshToken) {
         String tokenHash = TokenHashUtils.sha256Hex(refreshToken);
         LocalDateTime expiresAt = LocalDateTime.now().plus(jwtProvider.getRefreshTokenExpiryMs(), ChronoUnit.MILLIS);
         refreshTokenWriter.save(new RefreshToken(null, userId, tokenHash, expiresAt, null));

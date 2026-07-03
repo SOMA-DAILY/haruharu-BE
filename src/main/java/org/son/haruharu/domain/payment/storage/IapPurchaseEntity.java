@@ -32,8 +32,8 @@ public class IapPurchaseEntity extends BaseEntity {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
-    @Column(nullable = false, columnDefinition = "uuid")
-    private UUID userId;
+    @Column(nullable = false)
+    private Long userId;
 
     @Column(nullable = false, columnDefinition = "uuid")
     private UUID productId;
