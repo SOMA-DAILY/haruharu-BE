@@ -36,7 +36,7 @@ class ProfileUpsertIntegrationTest {
         profileService.updateProfile(userId, command);
 
         UserProfile saved = userProfileReader.getByUserId(userId);
-        assertThat(saved.id()).isNotNull();          // @GeneratedValue(UUID)가 id 생성 (persist 경로 검증)
+        assertThat(saved.id()).isNotNull();          // @GeneratedValue(IDENTITY)가 id 생성 (persist 경로 검증)
         assertThat(saved.nickname()).isEqualTo("하루");
     }
 

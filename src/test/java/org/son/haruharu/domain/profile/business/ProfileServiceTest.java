@@ -28,7 +28,6 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -67,7 +66,7 @@ class ProfileServiceTest {
             "서울", "직장인",
             175, "INFP", "새닉네임", "가끔", "비흡연"
         );
-        UserProfile existing = new UserProfile(UUID.randomUUID(), userId,
+        UserProfile existing = new UserProfile(1L, userId,
             "부산", "학생",
             175, "INFP", "기존닉", "안함", "비흡연");
         UserProfile updated = command.applyTo(existing);
@@ -164,8 +163,8 @@ class ProfileServiceTest {
         String prefix = BASE_URL + "users/" + userId + "/images/";
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE_URL);
         given(userImageReader.getAllByUserId(userId)).willReturn(List.of(
-            new UserImage(UUID.randomUUID(), userId, prefix + "a.jpg", 0),
-            new UserImage(UUID.randomUUID(), userId, prefix + "b.jpg", 1)
+            new UserImage(1L, userId, prefix + "a.jpg", 0),
+            new UserImage(2L, userId, prefix + "b.jpg", 1)
         ));
 
         profileService.deleteAllImages(userId);

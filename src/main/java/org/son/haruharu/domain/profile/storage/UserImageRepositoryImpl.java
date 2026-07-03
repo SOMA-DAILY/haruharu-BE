@@ -5,7 +5,6 @@ import org.son.haruharu.domain.profile.implement.UserImageRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.UUID;
 
 @Repository
 public class UserImageRepositoryImpl implements UserImageRepository {
@@ -30,7 +29,7 @@ public class UserImageRepositoryImpl implements UserImageRepository {
     }
 
     @Override
-    public void deleteById(UUID id) {
+    public void deleteById(Long id) {
         userImageJpaRepository.deleteById(id);
     }
 

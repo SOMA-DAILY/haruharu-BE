@@ -120,7 +120,7 @@ public class ProfileService {
 
         userImageWriter.deleteAllByUserId(userId);
         for (int order = 0; order < urls.size(); order++) {
-            // id는 null로 두어 영속화 시 @GeneratedValue(UUID)가 생성하게 한다(신규 INSERT 보장).
+            // id는 null로 두어 영속화 시 @GeneratedValue(IDENTITY)가 생성하게 한다(신규 INSERT 보장).
             userImageWriter.save(new UserImage(null, userId, urls.get(order), order));
         }
         return ImagesResponse.from(urls);

@@ -1,9 +1,7 @@
 package org.son.haruharu.domain.profile.implement;
 
-import java.util.UUID;
-
 public record UserProfile(
-        UUID id,
+        Long id,
         Long userId,
         String location,
         String affiliation,

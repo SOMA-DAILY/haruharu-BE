@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.profile.implement;
 
 import java.util.List;
-import java.util.UUID;
 
 public interface UserImageRepository {
 
@@ -9,7 +8,7 @@ public interface UserImageRepository {
 
     UserImage save(UserImage userImage);
 
-    void deleteById(UUID id);
+    void deleteById(Long id);
 
     void deleteAllByUserId(Long userId);
 }
