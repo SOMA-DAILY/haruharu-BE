@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.identity.business.IdentityService;
+import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.user.business.dto.UserProfileResponse;
@@ -15,9 +16,13 @@ import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.domain.user.implement.UserStatus;
 import org.son.haruharu.domain.user.implement.UserWriter;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,11 +38,16 @@ class UserServiceTest {
     @Mock ProfileService profileService;
     @Mock IdentityService identityService;
 
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    // 2026-06-26 고정 → 1999-06-26생은 27세
+    private final Clock clock = Clock.fixed(
+            ZonedDateTime.of(2026, 6, 26, 12, 0, 0, 0, SEOUL).toInstant(), SEOUL);
+
     UserService userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userReader, userWriter, profileService, identityService);
+        userService = new UserService(userReader, userWriter, profileService, identityService, clock);
     }
 
     @Test
@@ -46,13 +56,14 @@ class UserServiceTest {
         UUID userId = UUID.randomUUID();
         UUID imageId = UUID.randomUUID();
         ProfileResponse profileResponse = new ProfileResponse(
-            "테스터", "MALE", 27, "서울", "직장인",
-            175, "INFP", "가끔", "비흡연", "무교",
+            "테스터", "서울", "직장인",
+            175, "INFP", "가끔", "비흡연",
             List.of(new ProfileResponse.ImageInfo(imageId, "https://image1.png", 0))
         );
 
         given(profileService.getProfile(userId)).willReturn(profileResponse);
-        given(identityService.isVerified(userId)).willReturn(true);
+        given(identityService.findVerified(userId))
+            .willReturn(Optional.of(new VerifiedIdentity("MALE", LocalDate.of(1999, 6, 26))));
 
         UserProfileResponse result = userService.getMyProfile(userId);
 
@@ -70,8 +81,8 @@ class UserServiceTest {
     void givenUnverifiedUser_whenGetMyProfile_thenUserStatusUnverified() {
         UUID userId = UUID.randomUUID();
         given(profileService.getProfile(userId)).willReturn(new ProfileResponse(
-            "유저", "FEMALE", 25, "서울", "학생", 160, "ENFP", "안함", "비흡연", "무교", List.of()));
-        given(identityService.isVerified(userId)).willReturn(false);
+            "유저", "서울", "학생", 160, "ENFP", "안함", "비흡연", List.of()));
+        // 미인증: findVerified가 empty → user_status UNVERIFIED
 
         UserProfileResponse result = userService.getMyProfile(userId);
 

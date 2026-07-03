@@ -1,5 +1,8 @@
 package org.son.haruharu.domain.value;
 
+import java.util.List;
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,9 +18,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -48,7 +48,7 @@ class ValueApiIntegrationTest {
 
     private UUID saveQuestion(String text, String category, int displayOrder, boolean active) {
         ValueQuestionEntity saved = valueQuestionJpaRepository.save(
-                ValueQuestionEntity.from(new ValueQuestion(null, text, category, displayOrder, active, 10))
+                ValueQuestionEntity.from(new ValueQuestion(null, text, category, displayOrder, active))
         );
         return saved.toDomain().id();
     }

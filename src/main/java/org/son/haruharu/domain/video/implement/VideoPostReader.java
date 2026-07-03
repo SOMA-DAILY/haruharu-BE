@@ -26,6 +26,7 @@ public class VideoPostReader {
         return videoPostRepository.existsActiveBySlot(roomMemberId, dayNumber, slotIndex);
     }
 
+    // MVP 미션 비활성화 동안 미호출(도메인 유지). 미션 재개 시 VideoService의 슬롯당 1회 열쇠 지급 게이트로 복원.
     public boolean hasEverUploadedMission(UUID roomMemberId, int dayNumber, int slotIndex) {
         return videoPostRepository.existsMissionUploadBySlot(roomMemberId, dayNumber, slotIndex);
     }

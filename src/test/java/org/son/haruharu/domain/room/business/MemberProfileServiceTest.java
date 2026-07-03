@@ -1,28 +1,5 @@
 package org.son.haruharu.domain.room.business;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.son.haruharu.domain.profile.implement.ProfileFieldCatalog;
-import org.son.haruharu.domain.profile.implement.ProfileFieldCatalogReader;
-import org.son.haruharu.domain.profile.implement.ProfileFieldUnlockReader;
-import org.son.haruharu.domain.profile.implement.UserProfile;
-import org.son.haruharu.domain.profile.implement.UserProfileReader;
-import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
-import org.son.haruharu.domain.room.business.dto.MemberProfileResponse.UnlockableFieldView;
-import org.son.haruharu.domain.room.implement.Room;
-import org.son.haruharu.domain.room.implement.RoomMember;
-import org.son.haruharu.domain.room.implement.RoomMemberReader;
-import org.son.haruharu.domain.room.implement.RoomStatus;
-import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
-import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
-import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
-import org.son.haruharu.domain.value.implement.ValueAnswerUnlockReader;
-import org.son.haruharu.domain.value.implement.ValueQuestionReader;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -31,6 +8,25 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.profile.implement.UserProfile;
+import org.son.haruharu.domain.profile.implement.UserProfileReader;
+import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
+import org.son.haruharu.domain.room.business.dto.MemberProfileResponse.ProfileFieldView;
+import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomMember;
+import org.son.haruharu.domain.room.implement.RoomMemberReader;
+import org.son.haruharu.domain.room.implement.RoomStatus;
+import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
+import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
+import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
+import org.son.haruharu.domain.value.implement.ValueQuestionReader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -46,81 +42,120 @@ class MemberProfileServiceTest {
     @Mock UserProfileReader userProfileReader;
     @Mock ValueQuestionReader valueQuestionReader;
     @Mock UserValueAnswerReader userValueAnswerReader;
-    @Mock ValueAnswerUnlockReader valueAnswerUnlockReader;
-    @Mock ProfileFieldCatalogReader profileFieldCatalogReader;
-    @Mock ProfileFieldUnlockReader profileFieldUnlockReader;
 
     MemberProfileService service;
 
+    // 2026-06-26 19:00 KST 고정 → 방날짜 2026-06-26. startedAt 앵커로 currentDay를 파생한다.
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-26T10:00:00Z"), ZONE);
 
     @BeforeEach
     void setUp() {
         service = new MemberProfileService(roomReader, roomMemberReader, userProfileReader,
-                valueQuestionReader, userValueAnswerReader, valueAnswerUnlockReader,
-                profileFieldCatalogReader, profileFieldUnlockReader, clock);
+                valueQuestionReader, userValueAnswerReader, clock);
     }
 
     private RoomMember member(UUID id, UUID roomId, UUID userId) {
-        return new RoomMember(id, roomId, userId, "FEMALE", 30, LocalDateTime.now());
+        return new RoomMember(id, roomId, userId, "FEMALE", LocalDate.of(2000, 1, 1), LocalDateTime.now());
     }
 
+    // startedAt=방날짜(2026-06-26) 09:00에서 (currentDay-1)일 전 앵커 → currentDayAt(clock)=currentDay
     private Room room(UUID roomId, int currentDay) {
-        return new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), 3, currentDay,
-                LocalDateTime.now(), null);
+        LocalDateTime startedAt = LocalDateTime.of(2026, 6, 26, 9, 0).minusDays(currentDay - 1L);
+        return new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), 3, startedAt, null);
     }
 
     private UserProfile profile(UUID userId) {
-        return new UserProfile(UUID.randomUUID(), userId, "FEMALE", LocalDate.of(2000, 1, 1),
-                "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE", "NONE");
+        return new UserProfile(UUID.randomUUID(), userId,
+                "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE");
     }
 
-    private List<ProfileFieldCatalog> catalog() {
-        return List.of(
-                new ProfileFieldCatalog(UUID.randomUUID(), "affiliation", 10, 3, true),
-                new ProfileFieldCatalog(UUID.randomUUID(), "height", 15, 3, true),
-                new ProfileFieldCatalog(UUID.randomUUID(), "mbti", 5, 3, true));
+    private ProfileFieldView field(MemberProfileResponse res, String key) {
+        return res.fields().stream().filter(f -> f.key().equals(key)).findFirst().orElseThrow();
     }
 
-    private UnlockableFieldView field(MemberProfileResponse res, String key) {
-        return res.unlockableFields().stream().filter(f -> f.fieldKey().equals(key)).findFirst().orElseThrow();
+    private void stubBasics(UUID roomId, UUID userId, UUID meId, UUID targetId, UUID targetUserId, int currentDay) {
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
+        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, currentDay)));
+        given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
+        given(valueQuestionReader.getAllActive()).willReturn(List.of());
+        given(userValueAnswerReader.getAllByUserId(targetUserId)).willReturn(List.of());
     }
 
     @Test
-    @DisplayName("Day3 이전에는 해금 대상 항목이 unlockable=false·미해금이고 닉네임·지역·나이는 노출된다")
-    void givenBeforeDay3_whenGetProfile_thenFieldsNotUnlockable() {
+    @DisplayName("Day1에는 닉네임·성별만 노출되고 지역·나이·직업 등은 가려진다(재화·해금 없음)")
+    void givenDay1_whenGetProfile_thenOnlyNicknameAndGenderVisible() {
         UUID userId = UUID.randomUUID();
         UUID targetUserId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         UUID meId = UUID.randomUUID();
         UUID targetId = UUID.randomUUID();
 
-        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
-        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
-        given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, 1)));
-        given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
-        given(profileFieldCatalogReader.getAllActive()).willReturn(catalog());
-        given(profileFieldUnlockReader.getUnlockedFieldKeys(meId, targetId)).willReturn(List.of());
-        given(valueQuestionReader.getAllActive()).willReturn(List.of());
-        given(userValueAnswerReader.getAllByUserId(targetUserId)).willReturn(List.of());
-        given(valueAnswerUnlockReader.getUnlockedAnswerIds(meId)).willReturn(List.of());
+        stubBasics(roomId, userId, meId, targetId, targetUserId, 1);
 
         MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
 
         assertThat(result.nickname()).isEqualTo("하루");
-        assertThat(result.location()).isEqualTo("서울");
-        assertThat(result.age()).isEqualTo(26);
-        UnlockableFieldView height = field(result, "height");
-        assertThat(height.unlockable()).isFalse();
-        assertThat(height.unlocked()).isFalse();
+        assertThat(result.gender()).isEqualTo("FEMALE");
+
+        assertThat(field(result, "location").visible()).isFalse();
+        assertThat(field(result, "location").value()).isNull();
+        assertThat(field(result, "age").visible()).isFalse();
+        assertThat(field(result, "age").value()).isNull();
+        ProfileFieldView height = field(result, "height");
+        assertThat(height.visible()).isFalse();
         assertThat(height.value()).isNull();
-        assertThat(height.unlockCost()).isEqualTo(15);
         assertThat(height.availableFromDay()).isEqualTo(3);
     }
 
     @Test
-    @DisplayName("Day3에 미해금 항목은 unlockable=true지만 값은 가려지고, 해금한 항목만 값이 보인다")
-    void givenDay3_whenGetProfile_thenUnlockableButValueGatedByUnlock() {
+    @DisplayName("Day3에는 지역·나이·직업·키·MBTI·음주·흡연이 전원에게 자동 공개된다")
+    void givenDay3_whenGetProfile_thenAllFieldsVisible() {
+        UUID userId = UUID.randomUUID();
+        UUID targetUserId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+        UUID meId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+
+        stubBasics(roomId, userId, meId, targetId, targetUserId, 3);
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        assertThat(field(result, "location").value()).isEqualTo("서울");
+        assertThat(field(result, "affiliation").value()).isEqualTo("카카오");
+        assertThat(field(result, "height").value()).isEqualTo("165");
+        assertThat(field(result, "mbti").value()).isEqualTo("INFP");
+        assertThat(field(result, "drinking").value()).isEqualTo("SOMETIMES");
+        assertThat(field(result, "smoking").value()).isEqualTo("NONE");
+        assertThat(field(result, "age").value()).isEqualTo("26");
+        assertThat(result.fields()).allMatch(ProfileFieldView::visible);
+    }
+
+    @Test
+    @DisplayName("본인 프로필은 Day와 무관하게 모든 항목이 공개된다")
+    void givenSelf_whenGetProfile_thenAllVisibleEvenBeforeDay3() {
+        UUID userId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+        UUID meId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
+        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, userId)); // target==me
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, 1)));
+        given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(profile(userId)));
+        given(valueQuestionReader.getAllActive()).willReturn(List.of());
+        given(userValueAnswerReader.getAllByUserId(userId)).willReturn(List.of());
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        assertThat(field(result, "affiliation").value()).isEqualTo("카카오");
+        assertThat(field(result, "age").value()).isEqualTo("26");
+        assertThat(result.fields()).allMatch(ProfileFieldView::visible);
+    }
+
+    @Test
+    @DisplayName("프로필 미작성·birthday 없는 멤버는 Day3여도 예외 없이 닉네임·값·나이가 null로 내려간다")
+    void givenNoProfileAndNoBirthday_whenGetProfile_thenNullSafe() {
         UUID userId = UUID.randomUUID();
         UUID targetUserId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
@@ -128,26 +163,22 @@ class MemberProfileServiceTest {
         UUID targetId = UUID.randomUUID();
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
-        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
+        // birthday null인 대상 멤버
+        given(roomMemberReader.getById(targetId)).willReturn(
+                new RoomMember(targetId, roomId, targetUserId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, 3)));
-        given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
-        given(profileFieldCatalogReader.getAllActive()).willReturn(catalog());
-        given(profileFieldUnlockReader.getUnlockedFieldKeys(meId, targetId)).willReturn(List.of("affiliation"));
+        given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.empty()); // 프로필 미작성
         given(valueQuestionReader.getAllActive()).willReturn(List.of());
         given(userValueAnswerReader.getAllByUserId(targetUserId)).willReturn(List.of());
-        given(valueAnswerUnlockReader.getUnlockedAnswerIds(meId)).willReturn(List.of());
 
         MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
 
-        UnlockableFieldView affiliation = field(result, "affiliation");
-        assertThat(affiliation.unlockable()).isTrue();
-        assertThat(affiliation.unlocked()).isTrue();
-        assertThat(affiliation.value()).isEqualTo("카카오");
-
-        UnlockableFieldView mbti = field(result, "mbti");
-        assertThat(mbti.unlockable()).isTrue();
-        assertThat(mbti.unlocked()).isFalse();
-        assertThat(mbti.value()).isNull();
+        assertThat(result.nickname()).isNull();
+        // Day3라 visible=true지만 프로필이 없어 값은 null
+        assertThat(field(result, "affiliation").visible()).isTrue();
+        assertThat(field(result, "affiliation").value()).isNull();
+        assertThat(field(result, "age").visible()).isTrue();
+        assertThat(field(result, "age").value()).isNull();
     }
 
     @Test

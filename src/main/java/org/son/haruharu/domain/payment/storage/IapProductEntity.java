@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.payment.storage;
 
+import org.son.haruharu.common.entity.BaseEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,7 +20,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "iap_product")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class IapProductEntity {
+public class IapProductEntity extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

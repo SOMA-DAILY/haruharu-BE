@@ -6,16 +6,13 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
 
-import java.util.UUID;
-
 public record VideoUploadRequest(
         @NotNull @Positive Integer slotIndex,
-        UUID missionId,
         @NotBlank String videoUrl,
         String thumbnailUrl,
         @Size(max = 20) String caption
 ) {
     public VideoUploadCommand toCommand() {
-        return new VideoUploadCommand(slotIndex, missionId, videoUrl, thumbnailUrl, caption);
+        return new VideoUploadCommand(slotIndex, videoUrl, thumbnailUrl, caption);
     }
 }

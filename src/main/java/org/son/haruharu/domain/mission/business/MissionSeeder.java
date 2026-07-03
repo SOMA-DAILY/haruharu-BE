@@ -7,16 +7,16 @@ import org.son.haruharu.domain.mission.implement.MissionReader;
 import org.son.haruharu.domain.mission.implement.MissionWriter;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 /**
  * 미션 풀 시드. 비어 있을 때만 1회 삽입(멱등). 미션 내용/포인트는 운영 확정 전 잠정값 — 어드민 CRUD는 후속.
+ * MVP 동안 미션 기능 비활성화로 @Component를 제거해 시드를 실행하지 않는다.
+ * 미션 재개 시 @Component를 복원하면 된다(클래스·시드 데이터는 유지).
  */
 @Slf4j
-@Component
 @RequiredArgsConstructor
 public class MissionSeeder implements ApplicationRunner {
 

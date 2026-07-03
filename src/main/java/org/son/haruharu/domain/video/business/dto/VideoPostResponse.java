@@ -1,11 +1,13 @@
 package org.son.haruharu.domain.video.business.dto;
 
-import org.son.haruharu.domain.video.implement.VideoPost;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** 업로드 결과. grantedPoints>0면 미션 영상으로 열쇠가 지급됨, keyBalance는 지급 후 잔액. */
+import org.son.haruharu.domain.video.implement.VideoPost;
+
+/**
+ * 업로드 결과. MVP: 미션 비활성화로 missionId=null 고정. 세션 재화(열쇠) 제거됨.
+ */
 public record VideoPostResponse(
         UUID videoPostId,
         int dayNumber,
@@ -14,13 +16,11 @@ public record VideoPostResponse(
         String videoUrl,
         String thumbnailUrl,
         String caption,
-        int grantedPoints,
-        int keyBalance,
         LocalDateTime createdAt
 ) {
-    public static VideoPostResponse of(VideoPost post, int grantedPoints, int keyBalance) {
+    public static VideoPostResponse of(VideoPost post) {
         return new VideoPostResponse(
                 post.id(), post.dayNumber(), post.slotIndex(), post.missionId(), post.videoUrl(),
-                post.thumbnailUrl(), post.caption(), grantedPoints, keyBalance, post.createdAt());
+                post.thumbnailUrl(), post.caption(), post.createdAt());
     }
 }

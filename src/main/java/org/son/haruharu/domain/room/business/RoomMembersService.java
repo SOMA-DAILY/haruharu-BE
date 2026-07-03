@@ -1,5 +1,12 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.Period;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MembersResponse;
@@ -8,12 +15,6 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Clock;
-import java.time.LocalDate;
-import java.time.Period;
-import java.util.List;
-import java.util.UUID;
 
 /**
  * 방 멤버 목록 조회. 항상 노출되는 기본 정보(닉네임·성별·지역·나이)만 담는다.
@@ -34,23 +35,25 @@ public class RoomMembersService {
     }
 
     public MembersResponse getMembers(UUID roomId, UUID userId) {
-        RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId);
+        roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         LocalDate today = LocalDate.now(clock);
 
-        List<MemberView> views = roomMemberReader.getByRoomId(roomId).stream()
-                .map(member -> toView(member, userId, today))
+        List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
+        List<UUID> userIds = members.stream().map(RoomMember::userId).toList();
+        Map<UUID, UserProfile> profiles = userProfileReader.findByUserIdIn(userIds);
+
+        List<MemberView> views = members.stream()
+                .map(member -> toView(member, profiles.get(member.userId()), userId, today))
                 .toList();
 
-        return new MembersResponse(me.pointSum(), views);
+        return new MembersResponse(views);
     }
 
-    private MemberView toView(RoomMember member, UUID meUserId, LocalDate today) {
-        UserProfile profile = userProfileReader.findByUserId(member.userId()).orElse(null);
-
+    private MemberView toView(RoomMember member, UserProfile profile, UUID meUserId, LocalDate today) {
         String nickname = profile == null ? null : profile.nickname();
         String location = profile == null ? null : profile.location();
-        Integer age = (profile == null || profile.birthday() == null)
-                ? null : Period.between(profile.birthday(), today).getYears();
+        Integer age = member.birthday() == null
+                ? null : Period.between(member.birthday(), today).getYears();
 
         return new MemberView(member.id(), member.userId().equals(meUserId), nickname, member.gender(), location, age);
     }

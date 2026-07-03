@@ -64,12 +64,12 @@ class ProfileServiceTest {
     void givenUpdateCommand_whenUpdateProfile_thenSavesAndReturnsProfileResponse() {
         UUID userId = UUID.randomUUID();
         UpdateProfileCommand command = new UpdateProfileCommand(
-            "MALE", LocalDate.of(1998, 5, 15), "서울", "직장인",
-            175, "INFP", "새닉네임", "가끔", "비흡연", "무교"
+            "서울", "직장인",
+            175, "INFP", "새닉네임", "가끔", "비흡연"
         );
         UserProfile existing = new UserProfile(UUID.randomUUID(), userId,
-            "MALE", LocalDate.of(1998, 5, 15), "부산", "학생",
-            175, "INFP", "기존닉", "안함", "비흡연", "무교");
+            "부산", "학생",
+            175, "INFP", "기존닉", "안함", "비흡연");
         UserProfile updated = command.applyTo(existing);
 
         given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(existing));
@@ -87,8 +87,8 @@ class ProfileServiceTest {
     void givenNoProfile_whenUpdateProfile_thenCreatesAndSaves() {
         UUID userId = UUID.randomUUID();
         UpdateProfileCommand command = new UpdateProfileCommand(
-            "MALE", LocalDate.of(1995, 3, 1), "서울", "회사원",
-            178, "ENFP", "하루", "가끔", "비흡연", "무교"
+            "서울", "회사원",
+            178, "ENFP", "하루", "가끔", "비흡연"
         );
 
         given(userProfileReader.findByUserId(userId)).willReturn(Optional.empty());

@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.payment.storage;
 
+import org.son.haruharu.common.entity.BaseEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -16,7 +18,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "iap_webhook_event")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class IapWebhookEventEntity {
+public class IapWebhookEventEntity extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

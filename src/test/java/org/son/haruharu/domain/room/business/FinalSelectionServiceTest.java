@@ -1,5 +1,13 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Optional;
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,14 +30,6 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -63,12 +63,13 @@ class FinalSelectionServiceTest {
     }
 
     private RoomMember member(UUID id, UUID memberUserId, UUID memberRoomId) {
-        return new RoomMember(id, memberRoomId, memberUserId, "MALE", 0, LocalDateTime.now());
+        return new RoomMember(id, memberRoomId, memberUserId, "MALE", null, LocalDateTime.now());
     }
 
+    // currentDay는 startedAt에서 파생된다. clock=2026-06-26 19:00(KST) 기준 방날짜에서 (currentDay-1)일 전 09:00 앵커.
     private Room room(int currentDay) {
-        return new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), 3, currentDay,
-                LocalDateTime.now(), null);
+        LocalDateTime startedAt = LocalDateTime.of(2026, 6, 26, 9, 0).minusDays(currentDay - 1L);
+        return new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), 3, startedAt, null);
     }
 
     private void stubMeAndRoom(int currentDay) {

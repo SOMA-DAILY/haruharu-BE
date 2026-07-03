@@ -1,5 +1,11 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
@@ -9,19 +15,18 @@ import org.son.haruharu.domain.room.implement.RoomReader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.UUID;
-
 @Service
 @Transactional(readOnly = true)
 public class RoomService {
 
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
+    private final Clock clock;
 
-    public RoomService(RoomReader roomReader, RoomMemberReader roomMemberReader) {
+    public RoomService(RoomReader roomReader, RoomMemberReader roomMemberReader, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
+        this.clock = clock;
     }
 
     public RoomResponse getMyRoom(UUID userId) {
@@ -33,7 +38,8 @@ public class RoomService {
             .orElseThrow(RoomNotFoundException::new);
 
         List<RoomMember> members = roomMemberReader.getByRoomId(currentRoom.id());
-        return RoomResponse.from(currentRoom, members);
+        return RoomResponse.from(currentRoom, members,
+                currentRoom.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour()));
     }
 
     public RoomResponse getRoom(UUID roomId, UUID userId) {
@@ -41,6 +47,7 @@ public class RoomService {
         Room room = roomReader.findById(roomId)
             .orElseThrow(RoomNotFoundException::new);
         List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
-        return RoomResponse.from(room, members);
+        return RoomResponse.from(room, members,
+                room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour()));
     }
 }

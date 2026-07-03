@@ -1,5 +1,12 @@
 package org.son.haruharu.domain.matching.business;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,13 +21,6 @@ import org.son.haruharu.domain.matching.implement.MatchingQueueWriter;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomWriter;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,7 +49,7 @@ class MatchingExecutorTest {
     private List<MatchingQueue> queues(String gender, int count) {
         return IntStream.range(0, count)
             .mapToObj(i -> new MatchingQueue(
-                UUID.randomUUID(), UUID.randomUUID(), gender,
+                UUID.randomUUID(), UUID.randomUUID(), gender, null,
                 MatchingQueueStatus.QUEUED, LocalDateTime.now().plusSeconds(i), null))
             .toList();
     }
@@ -62,7 +62,7 @@ class MatchingExecutorTest {
         given(roomWriter.save(any())).willAnswer(inv -> {
             Room r = inv.getArgument(0);
             return new Room(UUID.randomUUID(), r.status(), r.scheduledDate(),
-                r.totalDays(), r.currentDay(), r.startedAt(), r.endedAt());
+                r.totalDays(), r.startedAt(), r.endedAt());
         });
 
         int created = executor.execute(LocalDate.now(), LocalDateTime.now());
@@ -81,7 +81,7 @@ class MatchingExecutorTest {
         given(roomWriter.save(any())).willAnswer(inv -> {
             Room r = inv.getArgument(0);
             return new Room(UUID.randomUUID(), r.status(), r.scheduledDate(),
-                r.totalDays(), r.currentDay(), r.startedAt(), r.endedAt());
+                r.totalDays(), r.startedAt(), r.endedAt());
         });
 
         int created = executor.execute(LocalDate.now(), LocalDateTime.now());

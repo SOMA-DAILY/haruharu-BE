@@ -1,5 +1,12 @@
 package org.son.haruharu.domain.video.business;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Optional;
+import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,13 +22,6 @@ import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoReaction;
 import org.son.haruharu.domain.video.implement.VideoReactionReader;
 import org.son.haruharu.domain.video.implement.VideoReactionWriter;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.LocalDateTime;
-import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -51,9 +51,9 @@ class VideoReactionServiceTest {
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
-                .willReturn(new RoomMember(authorMemberId, roomId, UUID.randomUUID(), "FEMALE", 0, LocalDateTime.now()));
+                .willReturn(new RoomMember(authorMemberId, roomId, UUID.randomUUID(), "FEMALE", null, LocalDateTime.now()));
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-                .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", 0, LocalDateTime.now()));
+                .willReturn(new RoomMember(UUID.randomUUID(), roomId, userId, "MALE", null, LocalDateTime.now()));
     }
 
     @Test
@@ -125,7 +125,7 @@ class VideoReactionServiceTest {
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
-                .willReturn(new RoomMember(authorMemberId, roomId, UUID.randomUUID(), "FEMALE", 0, LocalDateTime.now()));
+                .willReturn(new RoomMember(authorMemberId, roomId, UUID.randomUUID(), "FEMALE", null, LocalDateTime.now()));
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willThrow(new NotRoomMemberException());
 
         assertThatThrownBy(() -> service().toggle(userId, postId, "LIKE"))
