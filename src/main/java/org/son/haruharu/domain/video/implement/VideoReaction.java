@@ -1,17 +1,16 @@
 package org.son.haruharu.domain.video.implement;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /** 영상 반응(좋아요/궁금해요/공감). 유저당 영상당 1행. */
 public record VideoReaction(
-        UUID id,
-        UUID videoPostId,
+        Long id,
+        Long videoPostId,
         Long userId,
         String reactionType,
         LocalDateTime createdAt
 ) {
-    public static VideoReaction create(UUID videoPostId, Long userId, String reactionType, LocalDateTime createdAt) {
+    public static VideoReaction create(Long videoPostId, Long userId, String reactionType, LocalDateTime createdAt) {
         return new VideoReaction(null, videoPostId, userId, reactionType, createdAt);
     }
 

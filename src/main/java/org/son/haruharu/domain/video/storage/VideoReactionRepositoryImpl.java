@@ -6,7 +6,6 @@ import org.son.haruharu.domain.video.implement.VideoReactionRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -15,7 +14,7 @@ public class VideoReactionRepositoryImpl implements VideoReactionRepository {
     private final VideoReactionJpaRepository jpaRepository;
 
     @Override
-    public Optional<VideoReaction> findByVideoPostIdAndUserId(UUID videoPostId, Long userId) {
+    public Optional<VideoReaction> findByVideoPostIdAndUserId(Long videoPostId, Long userId) {
         return jpaRepository.findByVideoPostIdAndUserId(videoPostId, userId).map(VideoReactionEntity::toDomain);
     }
 
@@ -25,7 +24,7 @@ public class VideoReactionRepositoryImpl implements VideoReactionRepository {
     }
 
     @Override
-    public void deleteById(UUID id) {
+    public void deleteById(Long id) {
         jpaRepository.deleteById(id);
     }
 }

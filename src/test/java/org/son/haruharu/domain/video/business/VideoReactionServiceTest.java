@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,7 +43,7 @@ class VideoReactionServiceTest {
         return new VideoReactionService(videoPostReader, roomMemberReader, videoReactionReader, videoReactionWriter, clock);
     }
 
-    private void stubPostAndMembership(UUID postId, Long userId) {
+    private void stubPostAndMembership(Long postId, Long userId) {
         Long authorMemberId = 40L;
         Long roomId = 50L;
         VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
@@ -60,7 +59,7 @@ class VideoReactionServiceTest {
     @DisplayName("반응이 없으면 새로 생성하고 reacted=true를 반환한다")
     void givenNoReaction_whenToggle_thenInsert() {
         Long userId = 1L;
-        UUID postId = UUID.randomUUID();
+        Long postId = 1L;
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
 
@@ -76,8 +75,8 @@ class VideoReactionServiceTest {
     @DisplayName("같은 타입 재탭 시 반응이 해제(삭제)되고 reacted=false를 반환한다")
     void givenSameType_whenToggle_thenRemove() {
         Long userId = 1L;
-        UUID postId = UUID.randomUUID();
-        UUID reactionId = UUID.randomUUID();
+        Long postId = 1L;
+        Long reactionId = 2L;
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId))
                 .willReturn(Optional.of(new VideoReaction(reactionId, postId, userId, "LIKE", LocalDateTime.now())));
@@ -93,8 +92,8 @@ class VideoReactionServiceTest {
     @DisplayName("다른 타입으로 토글 시 같은 행을 교체하고 reacted=true·새 타입을 반환한다")
     void givenDifferentType_whenToggle_thenReplace() {
         Long userId = 1L;
-        UUID postId = UUID.randomUUID();
-        UUID reactionId = UUID.randomUUID();
+        Long postId = 1L;
+        Long reactionId = 2L;
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId))
                 .willReturn(Optional.of(new VideoReaction(reactionId, postId, userId, "LIKE", LocalDateTime.now())));
@@ -110,7 +109,7 @@ class VideoReactionServiceTest {
     @Test
     @DisplayName("허용하지 않는 반응 타입이면 InvalidReactionTypeException")
     void givenInvalidType_whenToggle_thenThrows() {
-        assertThatThrownBy(() -> service().toggle(1L, UUID.randomUUID(), "ANGRY"))
+        assertThatThrownBy(() -> service().toggle(1L, 1L, "ANGRY"))
             .isInstanceOf(InvalidReactionTypeException.class);
     }
 
@@ -118,7 +117,7 @@ class VideoReactionServiceTest {
     @DisplayName("영상이 속한 방의 멤버가 아니면 NotRoomMemberException")
     void givenNonMember_whenToggle_thenThrows() {
         Long userId = 1L;
-        UUID postId = UUID.randomUUID();
+        Long postId = 1L;
         Long authorMemberId = 41L;
         Long roomId = 51L;
         VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,

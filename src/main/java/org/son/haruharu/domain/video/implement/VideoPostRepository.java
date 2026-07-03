@@ -2,13 +2,12 @@ package org.son.haruharu.domain.video.implement;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 public interface VideoPostRepository {
 
     VideoPost save(VideoPost post);
 
-    Optional<VideoPost> findById(UUID id);
+    Optional<VideoPost> findById(Long id);
 
     /** 해당 멤버가 그 Day에 올린(삭제 안 된) 영상 수. /today의 업로드 진행 파생. */
     long countUploaded(Long roomMemberId, int dayNumber);

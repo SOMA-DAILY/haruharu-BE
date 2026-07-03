@@ -5,7 +5,6 @@ import org.son.haruharu.domain.video.storage.exception.VideoPostNotFoundExceptio
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -13,7 +12,7 @@ public class VideoPostReader {
 
     private final VideoPostRepository videoPostRepository;
 
-    public VideoPost getById(UUID id) {
+    public VideoPost getById(Long id) {
         return videoPostRepository.findById(id)
                 .orElseThrow(VideoPostNotFoundException::new);
     }

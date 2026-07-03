@@ -18,8 +18,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1")
 public class VideoController {
@@ -48,7 +46,7 @@ public class VideoController {
     }
 
     @DeleteMapping("/video-posts/{videoPostId}")
-    public ApiResponse<Void> delete(@PathVariable UUID videoPostId, Authentication authentication) {
+    public ApiResponse<Void> delete(@PathVariable Long videoPostId, Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         videoService.delete(userId, videoPostId);
         return ApiResponse.ok(null);
@@ -56,7 +54,7 @@ public class VideoController {
 
     @PostMapping("/video-posts/{videoPostId}/reactions")
     public ApiResponse<ReactionResponse> react(
-            @PathVariable UUID videoPostId, @Valid @RequestBody ReactionRequest request,
+            @PathVariable Long videoPostId, @Valid @RequestBody ReactionRequest request,
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(videoReactionService.toggle(userId, videoPostId, request.reactionType()));

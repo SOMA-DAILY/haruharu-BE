@@ -7,7 +7,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -21,7 +20,7 @@ public class VideoPostRepositoryImpl implements VideoPostRepository {
     }
 
     @Override
-    public Optional<VideoPost> findById(UUID id) {
+    public Optional<VideoPost> findById(Long id) {
         return jpaRepository.findById(id).map(VideoPostEntity::toDomain);
     }
 

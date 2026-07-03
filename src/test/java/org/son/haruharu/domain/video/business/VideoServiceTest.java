@@ -6,7 +6,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -155,7 +154,7 @@ class VideoServiceTest {
     @DisplayName("본인 영상은 소프트삭제된다")
     void givenOwner_whenDelete_thenSoftDeletes() {
         Long userId = 1L;
-        UUID postId = UUID.randomUUID();
+        Long postId = 1L;
         Long memberId = 30L;
         VideoPost post = new VideoPost(postId, memberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
@@ -175,7 +174,7 @@ class VideoServiceTest {
     @DisplayName("타인 영상 삭제 시 NotVideoOwnerException")
     void givenNotOwner_whenDelete_thenThrows() {
         Long userId = 1L;
-        UUID postId = UUID.randomUUID();
+        Long postId = 1L;
         Long memberId = 31L;
         VideoPost post = new VideoPost(postId, memberId, 1, 1, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
