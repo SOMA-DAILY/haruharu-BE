@@ -18,7 +18,6 @@ import org.son.haruharu.domain.payment.implement.IapPurchaseStatus;
 import org.son.haruharu.domain.payment.implement.IapStore;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "iap_purchase", indexes = {
@@ -28,15 +27,14 @@ import java.util.UUID;
 public class IapPurchaseEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(columnDefinition = "uuid")
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
     private Long userId;
 
-    @Column(nullable = false, columnDefinition = "uuid")
-    private UUID productId;
+    @Column(nullable = false)
+    private Long productId;
 
     @Column(nullable = false, length = 100)
     private String storeProductId;

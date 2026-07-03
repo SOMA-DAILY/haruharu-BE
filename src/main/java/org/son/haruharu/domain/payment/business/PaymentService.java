@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -73,7 +72,7 @@ public class PaymentService {
             return;
         }
 
-        UUID purchaseId = switch (command.eventType()) {
+        Long purchaseId = switch (command.eventType()) {
             case TYPE_PURCHASE, TYPE_INITIAL_PURCHASE -> handlePurchase(command);
             case TYPE_CANCELLATION -> handleCancellation(command);
             default -> null;
@@ -83,7 +82,7 @@ public class PaymentService {
                 command.eventId(), command.eventType(), purchaseId, command.rawPayload(), LocalDateTime.now()));
     }
 
-    private UUID handlePurchase(IapWebhookCommand command) {
+    private Long handlePurchase(IapWebhookCommand command) {
         // 거래 단위 멱등 — 동일 transaction 재수신 시 중복 적립 방지
         Optional<IapPurchase> existing = iapPurchaseReader.findByStoreTransactionId(command.storeTransactionId());
         if (existing.isPresent()) {
@@ -111,7 +110,7 @@ public class PaymentService {
         }
     }
 
-    private UUID handleCancellation(IapWebhookCommand command) {
+    private Long handleCancellation(IapWebhookCommand command) {
         Optional<IapPurchase> found = iapPurchaseReader.findByStoreTransactionId(command.storeTransactionId());
         if (found.isEmpty() || !found.get().isOwned()) {
             return found.map(IapPurchase::id).orElse(null);
