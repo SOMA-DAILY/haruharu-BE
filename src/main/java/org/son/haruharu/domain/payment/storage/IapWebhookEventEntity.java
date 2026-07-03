@@ -13,7 +13,6 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.domain.payment.implement.IapWebhookEvent;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "iap_webhook_event")
@@ -21,9 +20,8 @@ import java.util.UUID;
 public class IapWebhookEventEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(columnDefinition = "uuid")
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false, unique = true, length = 100)
     private String eventId;
@@ -31,8 +29,8 @@ public class IapWebhookEventEntity extends BaseEntity {
     @Column(nullable = false, length = 50)
     private String eventType;
 
-    @Column(columnDefinition = "uuid")
-    private UUID purchaseId;
+    @Column
+    private Long purchaseId;
 
     @Column(columnDefinition = "text")
     private String payload;

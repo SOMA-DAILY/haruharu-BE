@@ -25,7 +25,6 @@ import org.son.haruharu.domain.payment.implement.IapWebhookEventWriter;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -63,11 +62,11 @@ class PaymentServiceTest {
     }
 
     private IapProduct product() {
-        return new IapProduct(UUID.randomUUID(), storeProductId, IapStore.APP_STORE, 100, 1200, "KRW", true);
+        return new IapProduct(1L, storeProductId, IapStore.APP_STORE, 100, 1200, "KRW", true);
     }
 
-    private IapPurchase ownedPurchase(UUID id) {
-        return new IapPurchase(id, Long.parseLong(userId), UUID.randomUUID(), storeProductId, txId,
+    private IapPurchase ownedPurchase(Long id) {
+        return new IapPurchase(id, Long.parseLong(userId), 1L, storeProductId, txId,
                 IapStore.APP_STORE, 100, org.son.haruharu.domain.payment.implement.IapPurchaseStatus.OWNED,
                 LocalDateTime.now(), null);
     }
@@ -79,7 +78,7 @@ class PaymentServiceTest {
         given(iapWebhookEventReader.isProcessed("EVT-1")).willReturn(false);
         given(iapPurchaseReader.findByStoreTransactionId(txId)).willReturn(Optional.empty());
         given(iapProductReader.getByStoreProductId(storeProductId)).willReturn(product());
-        given(iapPurchaseWriter.save(any())).willReturn(ownedPurchase(UUID.randomUUID()));
+        given(iapPurchaseWriter.save(any())).willReturn(ownedPurchase(1L));
 
         // when
         paymentService.handleWebhook(command("NON_RENEWING_PURCHASE"));
@@ -99,8 +98,8 @@ class PaymentServiceTest {
     void givenCancellationEvent_whenHandle_thenRefundAndRevokeCoin() {
         // given
         given(iapWebhookEventReader.isProcessed("EVT-1")).willReturn(false);
-        given(iapPurchaseReader.findByStoreTransactionId(txId)).willReturn(Optional.of(ownedPurchase(UUID.randomUUID())));
-        given(iapPurchaseWriter.save(any())).willReturn(ownedPurchase(UUID.randomUUID()));
+        given(iapPurchaseReader.findByStoreTransactionId(txId)).willReturn(Optional.of(ownedPurchase(1L)));
+        given(iapPurchaseWriter.save(any())).willReturn(ownedPurchase(1L));
 
         // when
         paymentService.handleWebhook(command("CANCELLATION"));
@@ -134,7 +133,7 @@ class PaymentServiceTest {
     void givenDuplicateTransaction_whenHandlePurchase_thenNoDoubleCredit() {
         // given
         given(iapWebhookEventReader.isProcessed("EVT-1")).willReturn(false);
-        given(iapPurchaseReader.findByStoreTransactionId(txId)).willReturn(Optional.of(ownedPurchase(UUID.randomUUID())));
+        given(iapPurchaseReader.findByStoreTransactionId(txId)).willReturn(Optional.of(ownedPurchase(1L)));
 
         // when
         paymentService.handleWebhook(command("NON_RENEWING_PURCHASE"));

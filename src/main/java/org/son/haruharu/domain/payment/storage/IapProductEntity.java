@@ -15,7 +15,6 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.domain.payment.implement.IapProduct;
 import org.son.haruharu.domain.payment.implement.IapStore;
 
-import java.util.UUID;
 
 @Entity
 @Table(name = "iap_product")
@@ -23,9 +22,8 @@ import java.util.UUID;
 public class IapProductEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(columnDefinition = "uuid")
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false, unique = true, length = 100)
     private String storeProductId;

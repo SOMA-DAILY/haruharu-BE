@@ -1,13 +1,12 @@
 package org.son.haruharu.domain.payment.implement;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /** 검증된 인앱결제 구매. RevenueCat webhook으로 확인된 거래만 기록된다. */
 public record IapPurchase(
-        UUID id,
+        Long id,
         Long userId,
-        UUID productId,
+        Long productId,
         String storeProductId,
         String storeTransactionId,
         IapStore store,
@@ -19,7 +18,7 @@ public record IapPurchase(
     /** 신규 구매: OWNED 상태로 생성. id는 영속화 시점에 부여, refundedAt은 null. */
     public static IapPurchase owned(
             Long userId,
-            UUID productId,
+            Long productId,
             String storeProductId,
             String storeTransactionId,
             IapStore store,
