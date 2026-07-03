@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -55,7 +54,7 @@ public class IdentityService {
         }
         PassVerificationResult result = passVerificationPort.verify(command.passToken());
         UserIdentity identity = new UserIdentity(
-            UUID.randomUUID(), userId,
+            null, userId,
             result.ci(), result.di(),
             result.phoneNumber(), result.birthday(), result.gender(),
             result.userName(), result.operator(), result.isForeigner(),
