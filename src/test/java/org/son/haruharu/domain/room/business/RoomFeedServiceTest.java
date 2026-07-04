@@ -2,7 +2,6 @@ package org.son.haruharu.domain.room.business;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,7 +43,7 @@ class RoomFeedServiceTest {
     }
 
     private VideoPost post(Long memberId, String url) {
-        return new VideoPost(UUID.randomUUID(), memberId, 1, 1, null, null, url, null, false, null, null,
+        return new VideoPost(1L, memberId, 1, 1, null, null, url, null, false, null, null,
                 LocalDateTime.now());
     }
 

@@ -1,11 +1,10 @@
 package org.son.haruharu.domain.video.implement;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /** 일상 영상 업로드. 슬롯은 (dayNumber, slotIndex) 자연키로 참조. missionId가 있으면 미션 영상(열쇠 지급 대상). */
 public record VideoPost(
-        UUID id,
+        Long id,
         Long roomMemberId,
         int dayNumber,
         int slotIndex,

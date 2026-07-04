@@ -12,7 +12,6 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.domain.video.implement.VideoReaction;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "video_reactions", uniqueConstraints = @UniqueConstraint(columnNames = {"video_post_id", "user_id"}))
@@ -20,11 +19,11 @@ import java.util.UUID;
 public class VideoReactionEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
-    private UUID videoPostId;
+    private Long videoPostId;
 
     @Column(nullable = false)
     private Long userId;

@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.video.business.dto;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 import org.son.haruharu.domain.video.implement.VideoPost;
 
@@ -9,7 +8,7 @@ import org.son.haruharu.domain.video.implement.VideoPost;
  * 업로드 결과. MVP: 미션 비활성화로 missionId=null 고정. 세션 재화(열쇠) 제거됨.
  */
 public record VideoPostResponse(
-        UUID videoPostId,
+        Long videoPostId,
         int dayNumber,
         int slotIndex,
         Long missionId,

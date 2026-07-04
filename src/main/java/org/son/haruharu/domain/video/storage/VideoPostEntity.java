@@ -11,7 +11,6 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.domain.video.implement.VideoPost;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * 슬롯당 1업로드(재촬영 제외) 유니크는 partial index(WHERE deleted_at IS NULL)라
@@ -23,8 +22,8 @@ import java.util.UUID;
 public class VideoPostEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
     private Long roomMemberId;

@@ -99,7 +99,7 @@ public class VideoService {
     }
 
     @Transactional
-    public void delete(Long userId, UUID videoPostId) {
+    public void delete(Long userId, Long videoPostId) {
         VideoPost post = videoPostReader.getById(videoPostId);
         if (post.deletedAt() != null) {
             throw new org.son.haruharu.domain.video.storage.exception.VideoPostNotFoundException();

@@ -2,7 +2,6 @@ package org.son.haruharu.domain.room.business.dto;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * day N 영상 피드. locked=true면 내가 해당 Day에 업로드하지 않아 타 멤버 영상이 잠긴 상태(posts 빈 목록).
@@ -11,7 +10,7 @@ import java.util.UUID;
 public record FeedResponse(boolean locked, List<FeedItem> posts) {
 
     public record FeedItem(
-            UUID videoPostId,
+            Long videoPostId,
             Long roomMemberId,
             boolean mine,
             String videoUrl,

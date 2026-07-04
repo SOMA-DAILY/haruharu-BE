@@ -17,7 +17,6 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 
 /** 영상 반응 토글. 유저당 영상당 1행(UNIQUE) — 없으면 생성/같은 타입이면 해제/다른 타입이면 교체. */
 @Service
@@ -42,7 +41,7 @@ public class VideoReactionService {
         this.clock = clock;
     }
 
-    public ReactionResponse toggle(Long userId, UUID videoPostId, String reactionType) {
+    public ReactionResponse toggle(Long userId, Long videoPostId, String reactionType) {
         if (!ALLOWED_TYPES.contains(reactionType)) {
             throw new InvalidReactionTypeException();
         }
