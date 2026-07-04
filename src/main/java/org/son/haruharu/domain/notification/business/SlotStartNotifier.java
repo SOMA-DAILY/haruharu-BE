@@ -44,6 +44,9 @@ public class SlotStartNotifier {
     }
 
     private int notifyRoom(Room room, LocalDateTime now) {
+        if (room.hasEndedBy(now, UploadSlot.dayStartHour())) {
+            return 0;
+        }
         int currentDay = room.currentDayAt(now, UploadSlot.dayStartHour());
         Optional<UploadSlot> openingSlot = findOpeningSlot(currentDay, now.getHour());
         if (openingSlot.isEmpty()) {

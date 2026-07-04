@@ -72,4 +72,54 @@ class RoomTest {
         Room room = activeRoom(3, STARTED_AT);
         assertThat(room.currentDayAt(LocalDateTime.of(2026, 6, 23, 12, 0), DAY_START_HOUR)).isEqualTo(1);
     }
+
+    @Test
+    @DisplayName("마지막 날(Day3) 중에는 아직 종료 대상이 아니다")
+    void givenLastDay_whenHasEndedBy_thenFalse() {
+        Room room = activeRoom(3, STARTED_AT);
+        assertThat(room.hasEndedBy(LocalDateTime.of(2026, 6, 26, 12, 0), DAY_START_HOUR)).isFalse();
+    }
+
+    @Test
+    @DisplayName("마지막 날 경계(다음날 08:59)까지는 종료 대상이 아니다")
+    void givenJustBeforeEndBoundary_whenHasEndedBy_thenFalse() {
+        Room room = activeRoom(3, STARTED_AT);
+        assertThat(room.hasEndedBy(LocalDateTime.of(2026, 6, 27, 8, 59), DAY_START_HOUR)).isFalse();
+    }
+
+    @Test
+    @DisplayName("마지막 날 다음날 09:00(Day+1 첫 경계)부터 종료 대상이 된다")
+    void givenEndBoundaryExact_whenHasEndedBy_thenTrue() {
+        Room room = activeRoom(3, STARTED_AT);
+        assertThat(room.hasEndedBy(LocalDateTime.of(2026, 6, 27, 9, 0), DAY_START_HOUR)).isTrue();
+    }
+
+    @Test
+    @DisplayName("PENDING 방은 종료 대상이 아니다")
+    void givenPending_whenHasEndedBy_thenFalse() {
+        Room room = new Room(null, RoomStatus.PENDING, LocalDate.of(2026, 6, 24), 3, null, null);
+        assertThat(room.hasEndedBy(LocalDateTime.of(2026, 7, 1, 9, 0), DAY_START_HOUR)).isFalse();
+    }
+
+    @Test
+    @DisplayName("이미 ENDED인 방은 종료 대상이 아니다")
+    void givenEnded_whenHasEndedBy_thenFalse() {
+        Room room = new Room(1L, RoomStatus.ENDED, LocalDate.of(2026, 6, 24), 3, STARTED_AT,
+                LocalDateTime.of(2026, 6, 27, 9, 0));
+        assertThat(room.hasEndedBy(LocalDateTime.of(2026, 7, 1, 9, 0), DAY_START_HOUR)).isFalse();
+    }
+
+    @Test
+    @DisplayName("ended()는 ACTIVE 방을 ENDED로 전환하고 endedAt을 앵커한다")
+    void givenActiveRoom_whenEnded_thenStatusEndedWithAnchor() {
+        Room room = activeRoom(3, STARTED_AT);
+        LocalDateTime endedAt = LocalDateTime.of(2026, 6, 27, 9, 0);
+
+        Room result = room.ended(endedAt);
+
+        assertThat(result.status()).isEqualTo(RoomStatus.ENDED);
+        assertThat(result.endedAt()).isEqualTo(endedAt);
+        assertThat(result.startedAt()).isEqualTo(STARTED_AT);
+        assertThat(result.totalDays()).isEqualTo(3);
+    }
 }
