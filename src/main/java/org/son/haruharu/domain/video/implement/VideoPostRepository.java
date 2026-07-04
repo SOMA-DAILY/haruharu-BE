@@ -12,6 +12,9 @@ public interface VideoPostRepository {
     /** 해당 멤버가 그 Day에 올린(삭제 안 된) 영상 수. /today의 업로드 진행 파생. */
     long countUploaded(Long roomMemberId, int dayNumber);
 
+    /** 해당 멤버가 그 Day에 업로드(삭제 안 됨)한 슬롯 인덱스 목록(중복 제거). 슬롯별 잠금 판정용 배치 조회. */
+    List<Integer> findUploadedSlotIndexes(Long roomMemberId, int dayNumber);
+
     /** 업로드 가능 여부 게이트: 슬롯에 활성(미삭제) 영상이 이미 있는지. 재촬영은 DELETE 선행 필요. */
     boolean existsActiveBySlot(Long roomMemberId, int dayNumber, int slotIndex);
 
