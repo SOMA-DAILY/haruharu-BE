@@ -1,8 +1,10 @@
 package org.son.haruharu.domain.room.business;
 
+import org.son.haruharu.domain.room.business.event.RoomStartedEvent;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomWriter;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,17 +18,23 @@ public class RoomActivator {
 
     private final RoomReader roomReader;
     private final RoomWriter roomWriter;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public RoomActivator(RoomReader roomReader, RoomWriter roomWriter) {
+    public RoomActivator(RoomReader roomReader, RoomWriter roomWriter,
+                         ApplicationEventPublisher eventPublisher) {
         this.roomReader = roomReader;
         this.roomWriter = roomWriter;
+        this.eventPublisher = eventPublisher;
     }
 
     /** scheduledDate 당일 시작 예정(PENDING) 방을 모두 시작시킨다. 반환값은 시작된 방 수. */
     @Transactional
     public int activate(LocalDate scheduledDate, LocalDateTime startedAt) {
         List<Room> pending = roomReader.getScheduledPending(scheduledDate);
-        pending.forEach(room -> roomWriter.save(room.started(startedAt)));
+        pending.forEach(room -> {
+            roomWriter.save(room.started(startedAt));
+            eventPublisher.publishEvent(new RoomStartedEvent(room.id()));
+        });
         return pending.size();
     }
 }
