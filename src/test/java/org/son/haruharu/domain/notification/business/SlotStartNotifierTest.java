@@ -99,6 +99,21 @@ class SlotStartNotifierTest {
     }
 
     @Test
+    @DisplayName("세션 종료(마지막 날 경과) 방은 아직 ACTIVE여도 09시 SLOT_START 대상에서 제외된다")
+    void givenSessionEndedRoom_whenNotify_thenExcludedBeforeMemberLookup() {
+        // startedAt Day1 09:00, totalDays=3 → Day4(+3일) 09:00은 마지막 날 경과(hasEndedBy).
+        // terminate 배치가 아직 ENDED로 전환하기 전(같은 09:00 tick)이라도 발송하면 안 된다.
+        LocalDateTime now = DAY1.plusDays(3).atTime(9, 0);
+        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+
+        int notified = notifier.notifyOpeningSlots(now);
+
+        assertThat(notified).isZero();
+        then(roomMemberReader).should(never()).getByRoomId(any());
+        then(pushSendService).should(never()).sendToUsers(anyList(), any(), anyMap());
+    }
+
+    @Test
     @DisplayName("해당 슬롯을 모두 이미 업로드했으면 발송하지 않는다")
     void givenAllUploaded_whenNotify_thenNoPush() {
         LocalDateTime now = DAY1.atTime(15, 0); // DAY1_SLOT3(15~18시) 시작

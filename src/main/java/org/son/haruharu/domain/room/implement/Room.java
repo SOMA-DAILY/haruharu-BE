@@ -22,6 +22,11 @@ public record Room(
         return new Room(id, RoomStatus.ACTIVE, scheduledDate, totalDays, startedAt, endedAt);
     }
 
+    /** 세션 종료: ACTIVE → ENDED, endedAt 앵커. 종료 후 getActive()·findCurrent 조회에서 제외된다. */
+    public Room ended(LocalDateTime endedAt) {
+        return new Room(id, RoomStatus.ENDED, scheduledDate, totalDays, startedAt, endedAt);
+    }
+
     /**
      * 현재 Day = min(totalDays, 1 + startedAt~now 경과일). 하루 경계 시각(dayStartHour, 예: 09:00)은
      * business 계층이 UploadSlot.dayStartHour()에서 읽어 주입한다(room 도메인이 mission에 결합되지 않도록).
@@ -31,10 +36,24 @@ public record Room(
         if (status != RoomStatus.ACTIVE || startedAt == null) {
             return 0;
         }
+        return (int) Math.min(totalDays, rawDayAt(now, dayStartHour));
+    }
+
+    /**
+     * 마지막 날(totalDays)이 지나 세션이 끝났는지. Day+1의 하루 경계(dayStartHour)를 넘긴 ACTIVE 방이 true.
+     * currentDayAt은 totalDays로 캡되어 "경과"를 구분할 수 없으므로 캡 이전 raw day로 판정한다.
+     */
+    public boolean hasEndedBy(LocalDateTime now, int dayStartHour) {
+        if (status != RoomStatus.ACTIVE || startedAt == null) {
+            return false;
+        }
+        return rawDayAt(now, dayStartHour) > totalDays;
+    }
+
+    private long rawDayAt(LocalDateTime now, int dayStartHour) {
         long elapsedDays = ChronoUnit.DAYS.between(
                 startedAt.minusHours(dayStartHour).toLocalDate(),
                 now.minusHours(dayStartHour).toLocalDate());
-        long day = 1 + Math.max(0, elapsedDays);
-        return (int) Math.min(totalDays, day);
+        return 1 + Math.max(0, elapsedDays);
     }
 }
