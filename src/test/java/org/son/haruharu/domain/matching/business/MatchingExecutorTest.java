@@ -16,7 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
 import org.son.haruharu.domain.coin.implement.CoinLedgerReason;
-import org.son.haruharu.domain.matching.business.event.RoomMatchedEvent;
 import org.son.haruharu.domain.matching.implement.FifoMatchingStrategy;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.matching.implement.MatchingQueueReader;
@@ -25,7 +24,6 @@ import org.son.haruharu.domain.matching.implement.MatchingQueueWriter;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomWriter;
-import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -42,7 +40,6 @@ class MatchingExecutorTest {
     @Mock RoomWriter roomWriter;
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock CoinService coinService;
-    @Mock ApplicationEventPublisher eventPublisher;
 
     MatchingExecutor executor;
 
@@ -50,7 +47,7 @@ class MatchingExecutorTest {
     void setUp() {
         executor = new MatchingExecutor(
             matchingQueueReader, matchingQueueWriter,
-            new FifoMatchingStrategy(), roomWriter, roomMemberWriter, coinService, eventPublisher);
+            new FifoMatchingStrategy(), roomWriter, roomMemberWriter, coinService);
     }
 
     private List<MatchingQueue> queues(String gender, int count) {
@@ -143,39 +140,6 @@ class MatchingExecutorTest {
         then(matchingQueueWriter).should(times(6)).save(any()); // MATCHED 6건
         then(matchingQueueWriter).should(times(1)).expireIfQueued(any(), any());
         then(coinService).should(times(1)).credit(any());
-    }
-
-    @Test
-    @DisplayName("방이 확정되면 방마다 멤버 전원 userId를 담은 RoomMatchedEvent를 발행한다")
-    void givenMatched_whenExecute_thenPublishesRoomMatchedEventPerRoom() {
-        List<MatchingQueue> all = Stream.concat(queues("MALE", 3).stream(), queues("FEMALE", 3).stream()).toList();
-        given(matchingQueueReader.findAllQueued()).willReturn(all);
-        given(roomWriter.save(any())).willAnswer(inv -> {
-            Room r = inv.getArgument(0);
-            return new Room(1L, r.status(), r.scheduledDate(),
-                r.totalDays(), r.startedAt(), r.endedAt());
-        });
-
-        executor.execute(LocalDate.now(), LocalDateTime.now());
-
-        ArgumentCaptor<RoomMatchedEvent> eventCaptor = ArgumentCaptor.forClass(RoomMatchedEvent.class);
-        then(eventPublisher).should(times(1)).publishEvent(eventCaptor.capture());
-        RoomMatchedEvent event = eventCaptor.getValue();
-        assertThat(event.roomId()).isEqualTo(1L);
-        assertThat(event.userIds())
-            .containsExactlyInAnyOrderElementsOf(all.stream().map(MatchingQueue::userId).toList());
-    }
-
-    @Test
-    @DisplayName("매칭이 없으면 RoomMatchedEvent를 발행하지 않는다")
-    void givenNoMatch_whenExecute_thenNoEvent() {
-        List<MatchingQueue> all = queues("MALE", 2);
-        given(matchingQueueReader.findAllQueued()).willReturn(all);
-        given(matchingQueueWriter.expireIfQueued(any(), any())).willReturn(true);
-
-        executor.execute(LocalDate.now(), LocalDateTime.now());
-
-        then(eventPublisher).should(never()).publishEvent(any(RoomMatchedEvent.class));
     }
 
     @Test

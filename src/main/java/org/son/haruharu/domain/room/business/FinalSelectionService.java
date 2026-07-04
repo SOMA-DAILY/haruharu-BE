@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
+import org.son.haruharu.domain.room.business.event.MemberSelectedEvent;
+import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.business.exception.AlreadySelectedException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSelfException;
 import org.son.haruharu.domain.room.business.exception.NotFinalSelectionDayException;
@@ -19,6 +21,7 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,16 +41,19 @@ public class FinalSelectionService {
     private final FinalSelectionReader finalSelectionReader;
     private final FinalSelectionWriter finalSelectionWriter;
     private final MatchResultWriter matchResultWriter;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public FinalSelectionService(RoomReader roomReader, RoomMemberReader roomMemberReader,
                                  FinalSelectionReader finalSelectionReader, FinalSelectionWriter finalSelectionWriter,
-                                 MatchResultWriter matchResultWriter, Clock clock) {
+                                 MatchResultWriter matchResultWriter, ApplicationEventPublisher eventPublisher,
+                                 Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.finalSelectionReader = finalSelectionReader;
         this.finalSelectionWriter = finalSelectionWriter;
         this.matchResultWriter = matchResultWriter;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -76,6 +82,9 @@ public class FinalSelectionService {
         boolean matched = isMutual(selectedMemberId, me.id());
         if (matched) {
             matchResultWriter.save(MatchResult.of(me.id(), selectedMemberId, now));
+            eventPublisher.publishEvent(new MutualMatchEvent(roomId, me.userId(), selected.userId()));
+        } else {
+            eventPublisher.publishEvent(new MemberSelectedEvent(roomId, selected.userId()));
         }
 
         return new FinalSelectionResponse(selectedMemberId, matched);

@@ -2,7 +2,6 @@ package org.son.haruharu.domain.matching.business;
 
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
-import org.son.haruharu.domain.matching.business.event.RoomMatchedEvent;
 import org.son.haruharu.domain.matching.implement.MatchGroup;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.matching.implement.MatchingQueueReader;
@@ -12,7 +11,6 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomWriter;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,7 +39,6 @@ public class MatchingExecutor {
     private final RoomWriter roomWriter;
     private final RoomMemberWriter roomMemberWriter;
     private final CoinService coinService;
-    private final ApplicationEventPublisher eventPublisher;
 
     public MatchingExecutor(
         MatchingQueueReader matchingQueueReader,
@@ -49,8 +46,7 @@ public class MatchingExecutor {
         MatchingStrategy matchingStrategy,
         RoomWriter roomWriter,
         RoomMemberWriter roomMemberWriter,
-        CoinService coinService,
-        ApplicationEventPublisher eventPublisher
+        CoinService coinService
     ) {
         this.matchingQueueReader = matchingQueueReader;
         this.matchingQueueWriter = matchingQueueWriter;
@@ -58,7 +54,6 @@ public class MatchingExecutor {
         this.roomWriter = roomWriter;
         this.roomMemberWriter = roomMemberWriter;
         this.coinService = coinService;
-        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -84,8 +79,6 @@ public class MatchingExecutor {
                 matchingQueueWriter.save(q.matched(matchedAt));
                 matchedIds.add(q.id());
             });
-            eventPublisher.publishEvent(new RoomMatchedEvent(
-                room.id(), group.all().stream().map(MatchingQueue::userId).toList()));
         }
 
         expireAndRefundLeftovers(queued, matchedIds, matchedAt);
