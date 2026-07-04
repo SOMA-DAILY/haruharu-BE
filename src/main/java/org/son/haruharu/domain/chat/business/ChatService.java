@@ -1,0 +1,139 @@
+package org.son.haruharu.domain.chat.business;
+
+import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
+import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
+import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
+import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
+import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
+import org.son.haruharu.domain.chat.business.dto.ReadResponse;
+import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
+import org.son.haruharu.domain.chat.implement.ChatMessage;
+import org.son.haruharu.domain.chat.implement.ChatMessageReader;
+import org.son.haruharu.domain.chat.implement.ChatRoom;
+import org.son.haruharu.domain.chat.implement.ChatRoomMember;
+import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
+import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
+import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.profile.business.ProfileService;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * 채팅 유스케이스(조회·상태 변경). 실시간 메시지 송수신은 #60(STOMP)에서 담당한다.
+ * 상대 프로필은 profile 도메인을 서비스 레벨에서 조율해 조회한다.
+ */
+@Service
+@Transactional(readOnly = true)
+public class ChatService {
+
+    private static final int MAX_MESSAGE_PAGE_SIZE = 100;
+
+    private final ChatRoomReader chatRoomReader;
+    private final ChatRoomMemberReader chatRoomMemberReader;
+    private final ChatRoomMemberWriter chatRoomMemberWriter;
+    private final ChatMessageReader chatMessageReader;
+    private final ProfileService profileService;
+    private final Clock clock;
+
+    public ChatService(ChatRoomReader chatRoomReader,
+                       ChatRoomMemberReader chatRoomMemberReader,
+                       ChatRoomMemberWriter chatRoomMemberWriter,
+                       ChatMessageReader chatMessageReader,
+                       ProfileService profileService,
+                       Clock clock) {
+        this.chatRoomReader = chatRoomReader;
+        this.chatRoomMemberReader = chatRoomMemberReader;
+        this.chatRoomMemberWriter = chatRoomMemberWriter;
+        this.chatMessageReader = chatMessageReader;
+        this.profileService = profileService;
+        this.clock = clock;
+    }
+
+    /** 내 채팅방 목록. 마지막 메시지 최신순으로 정렬한다. */
+    public ChatRoomsResponse getMyRooms(Long userId) {
+        List<ChatRoomsResponse.ChatRoomSummary> summaries = chatRoomMemberReader.findActiveByUserId(userId).stream()
+                .map(me -> toSummary(me, userId))
+                .sorted(Comparator.comparing(
+                        ChatRoomsResponse.ChatRoomSummary::lastMessageAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+        return new ChatRoomsResponse(summaries);
+    }
+
+    public ChatRoomDetailResponse getRoom(Long chatRoomId, Long userId) {
+        requireMember(chatRoomId, userId);
+        ChatRoom room = chatRoomReader.getById(chatRoomId);
+        return new ChatRoomDetailResponse(chatRoomId, partnerBrief(chatRoomId, userId), room.createdAt());
+    }
+
+    /** 매칭 상대의 공개 프로필. */
+    public PartnerProfileResponse getPartner(Long chatRoomId, Long userId) {
+        requireMember(chatRoomId, userId);
+        Long partnerUserId = partnerUserId(chatRoomId, userId);
+        return new PartnerProfileResponse(partnerUserId, profileService.getProfile(partnerUserId));
+    }
+
+    /** 과거 메시지(최신순 커서 페이지). 삭제된 메시지는 제외. */
+    public MessagePageResponse getMessages(Long chatRoomId, Long userId, Long cursor, int size) {
+        requireMember(chatRoomId, userId);
+        int limit = Math.min(Math.max(size, 1), MAX_MESSAGE_PAGE_SIZE);
+        List<ChatMessage> messages = chatMessageReader.findPage(chatRoomId, cursor, limit);
+        return MessagePageResponse.of(messages, limit);
+    }
+
+    /** 읽음 커서 갱신. 커서는 뒤로만 이동한다(역행 방지). */
+    @Transactional
+    public ReadResponse markRead(Long chatRoomId, Long userId, Long lastReadMessageId) {
+        ChatRoomMember member = requireMember(chatRoomId, userId);
+        ChatRoomMember updated = chatRoomMemberWriter.save(member.readUpTo(lastReadMessageId));
+        long unread = chatMessageReader.countUnread(chatRoomId, updated.lastReadMessageId(), userId);
+        return new ReadResponse(chatRoomId, unread);
+    }
+
+    /** 채팅방 나가기. leftAt을 기록한다(방·메시지 데이터는 보존). */
+    @Transactional
+    public void leaveRoom(Long chatRoomId, Long userId) {
+        ChatRoomMember member = requireMember(chatRoomId, userId);
+        chatRoomMemberWriter.save(member.leave(LocalDateTime.now(clock)));
+    }
+
+    private ChatRoomsResponse.ChatRoomSummary toSummary(ChatRoomMember me, Long userId) {
+        Long partnerUserId = partnerUserId(me.chatRoomId(), userId);
+        String nickname = profileService.getProfile(partnerUserId).nickname();
+        Optional<ChatMessage> last = chatMessageReader.findLast(me.chatRoomId());
+        long unread = chatMessageReader.countUnread(me.chatRoomId(), me.lastReadMessageId(), userId);
+        return new ChatRoomsResponse.ChatRoomSummary(
+                me.chatRoomId(),
+                new PartnerBrief(partnerUserId, nickname),
+                last.map(ChatMessage::content).orElse(null),
+                last.map(ChatMessage::createdAt).orElse(null),
+                unread);
+    }
+
+    private PartnerBrief partnerBrief(Long chatRoomId, Long userId) {
+        Long partnerUserId = partnerUserId(chatRoomId, userId);
+        return new PartnerBrief(partnerUserId, profileService.getProfile(partnerUserId).nickname());
+    }
+
+    /** 방 존재(404) 확인 후 요청자가 참여자(403)인지 검증하고 멤버십을 반환한다. */
+    private ChatRoomMember requireMember(Long chatRoomId, Long userId) {
+        chatRoomReader.getById(chatRoomId);
+        return chatRoomMemberReader.findMembership(chatRoomId, userId)
+                .filter(member -> !member.hasLeft())
+                .orElseThrow(ChatNotMemberException::new);
+    }
+
+    private Long partnerUserId(Long chatRoomId, Long userId) {
+        return chatRoomMemberReader.findByChatRoomId(chatRoomId).stream()
+                .map(ChatRoomMember::userId)
+                .filter(id -> !id.equals(userId))
+                .findFirst()
+                .orElseThrow(ChatNotMemberException::new);
+    }
+}
