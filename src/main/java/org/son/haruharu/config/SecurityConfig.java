@@ -42,6 +42,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/v1/value-questions").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
+                // WebSocket 핸드셰이크는 HTTP 레벨에서 열고, 실제 인증은 STOMP CONNECT(StompAuthChannelInterceptor)에서 한다.
+                .requestMatchers("/ws-chat/**").permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, e) -> {
