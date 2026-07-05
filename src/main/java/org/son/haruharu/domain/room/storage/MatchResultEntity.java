@@ -24,10 +24,11 @@ public class MatchResultEntity extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    // 네이밍 전략이 단일 대문자 접미(memberAId)를 memberaid로 접어 유니크 제약과 어긋나므로 컬럼명을 명시한다 (#96)
+    @Column(name = "member_a_id", nullable = false)
     private Long memberAId;
 
-    @Column(nullable = false)
+    @Column(name = "member_b_id", nullable = false)
     private Long memberBId;
 
     @Column(nullable = false)
