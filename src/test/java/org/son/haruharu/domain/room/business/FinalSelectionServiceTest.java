@@ -135,6 +135,57 @@ class FinalSelectionServiceTest {
         then(finalSelectionWriter).should(never()).save(any());
     }
 
+    private FinalSelectionService serviceWith(Clock fixedClock) {
+        return new FinalSelectionService(roomReader, roomMemberReader, finalSelectionReader,
+                finalSelectionWriter, matchResultWriter, eventPublisher, fixedClock);
+    }
+
+    @Test
+    @DisplayName("Day3라도 마지막 슬롯 종료(18:00) 전이면 NotFinalSelectionDayException이 발생한다")
+    void givenDay3Before18_whenSelect_thenThrows() {
+        // 2026-06-26 17:00 KST — Day3 slot3(15~18) 진행 중
+        FinalSelectionService early = serviceWith(
+                Clock.fixed(Instant.parse("2026-06-26T08:00:00Z"), ZoneId.of("Asia/Seoul")));
+        stubMeAndRoom(3);
+
+        assertThatThrownBy(() -> early.select(roomId, selectedId, userId))
+                .isInstanceOf(NotFinalSelectionDayException.class);
+        then(finalSelectionWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Day3 18:00 정각부터 최종선택이 가능하다")
+    void givenDay3At18_whenSelect_thenAllowed() {
+        FinalSelectionService atOpen = serviceWith(
+                Clock.fixed(Instant.parse("2026-06-26T09:00:00Z"), ZoneId.of("Asia/Seoul")));
+        stubMeAndRoom(3);
+        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, roomId));
+        given(finalSelectionReader.hasSelected(meId)).willReturn(false);
+        given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
+
+        FinalSelectionResponse result = atOpen.select(roomId, selectedId, userId);
+
+        assertThat(result.matched()).isFalse();
+        then(finalSelectionWriter).should().save(any(FinalSelection.class));
+    }
+
+    @Test
+    @DisplayName("Day3 심야(익일 02:00, 하루 경계 09:00 이전)에도 최종선택이 가능하다")
+    void givenDay3LateNight_whenSelect_thenAllowed() {
+        // 2026-06-27 02:00 KST — 하루 경계(09:00) 전이므로 여전히 Day3, 18:00 오픈 이후
+        FinalSelectionService lateNight = serviceWith(
+                Clock.fixed(Instant.parse("2026-06-26T17:00:00Z"), ZoneId.of("Asia/Seoul")));
+        stubMeAndRoom(3);
+        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, roomId));
+        given(finalSelectionReader.hasSelected(meId)).willReturn(false);
+        given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
+
+        FinalSelectionResponse result = lateNight.select(roomId, selectedId, userId);
+
+        assertThat(result.matched()).isFalse();
+        then(finalSelectionWriter).should().save(any(FinalSelection.class));
+    }
+
     @Test
     @DisplayName("자기 자신을 선택하면 CannotSelectSelfException이 발생한다")
     void givenSelfSelection_whenSelect_thenThrows() {

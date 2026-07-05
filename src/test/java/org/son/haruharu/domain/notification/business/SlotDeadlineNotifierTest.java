@@ -110,17 +110,29 @@ class SlotDeadlineNotifierTest {
     }
 
     @Test
-    @DisplayName("Day3 23:30이면 마지막 슬롯(21~24시) 미업로드 멤버에게 발송한다")
+    @DisplayName("Day3 17:30이면 마지막 슬롯(15~18시) 미업로드 멤버에게 발송한다")
     void givenLastSlotClosing_whenNotify_thenPushes() {
-        LocalDateTime now = DAY1.plusDays(2).atTime(23, 30);
+        LocalDateTime now = DAY1.plusDays(2).atTime(17, 30);
         given(roomReader.getActive()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L)));
-        given(videoPostReader.hasActiveUpload(100L, 3, 5)).willReturn(false);
+        given(videoPostReader.hasActiveUpload(100L, 3, 3)).willReturn(false);
 
         int notified = notifier.notifyClosingSlots(now);
 
         assertThat(notified).isEqualTo(1);
         then(pushSendService).should().sendToUsers(
                 List.of(1L), NotificationType.SLOT_DEADLINE_SOON, Map.of("roomId", "7"));
+    }
+
+    @Test
+    @DisplayName("Day3 23:30은 최종선택 시간이라 마감 임박 슬롯이 없어 발송하지 않는다")
+    void givenDay3AfterSlots_whenNotify_thenSkips() {
+        LocalDateTime now = DAY1.plusDays(2).atTime(23, 30);
+        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+
+        int notified = notifier.notifyClosingSlots(now);
+
+        assertThat(notified).isZero();
+        then(pushSendService).should(never()).sendToUsers(anyList(), any(), anyMap());
     }
 }
