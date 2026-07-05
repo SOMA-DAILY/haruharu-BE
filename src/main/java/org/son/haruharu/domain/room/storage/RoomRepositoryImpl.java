@@ -42,4 +42,11 @@ public class RoomRepositoryImpl implements RoomRepository {
                 .map(RoomEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    public List<Room> findAllByStatus(RoomStatus status) {
+        return jpaRepository.findAllByStatus(status).stream()
+                .map(RoomEntity::toDomain)
+                .toList();
+    }
 }

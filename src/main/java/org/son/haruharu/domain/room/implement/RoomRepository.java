@@ -13,4 +13,6 @@ public interface RoomRepository {
     List<Room> findByIdInAndStatusNot(List<Long> ids, RoomStatus status);
 
     List<Room> findAllByScheduledDateAndStatus(LocalDate scheduledDate, RoomStatus status);
+
+    List<Room> findAllByStatus(RoomStatus status);
 }
