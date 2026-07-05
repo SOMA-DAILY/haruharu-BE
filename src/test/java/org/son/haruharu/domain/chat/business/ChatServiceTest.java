@@ -7,12 +7,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
+import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
@@ -33,6 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,6 +46,7 @@ class ChatServiceTest {
     @Mock ChatRoomMemberReader chatRoomMemberReader;
     @Mock ChatRoomMemberWriter chatRoomMemberWriter;
     @Mock ChatMessageReader chatMessageReader;
+    @Mock ChatMessageWriter chatMessageWriter;
     @Mock ProfileService profileService;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-03T03:00:00Z"), ZoneOffset.UTC);
@@ -54,7 +59,7 @@ class ChatServiceTest {
     @BeforeEach
     void setUp() {
         chatService = new ChatService(chatRoomReader, chatRoomMemberReader, chatRoomMemberWriter,
-                chatMessageReader, profileService, clock);
+                chatMessageReader, chatMessageWriter, profileService, clock);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -188,5 +193,31 @@ class ChatServiceTest {
         ArgumentCaptor<ChatRoomMember> captor = ArgumentCaptor.forClass(ChatRoomMember.class);
         verify(chatRoomMemberWriter).save(captor.capture());
         assertThat(captor.getValue().leftAt()).isEqualTo(LocalDateTime.now(clock));
+    }
+
+    @Test
+    @DisplayName("참여자가 메시지 전송 시 저장 후 브로드캐스트 payload를 반환한다")
+    void sendMessage_whenMember_savesAndReturnsBroadcast() {
+        given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, 99L, LocalDateTime.now(clock)));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatMessageWriter.save(any()))
+                .willReturn(new ChatMessage(42L, ROOM, ME, "안녕", LocalDateTime.now(clock)));
+
+        ChatMessageBroadcast result = chatService.sendMessage(ROOM, ME, "안녕");
+
+        assertThat(result.messageId()).isEqualTo(42L);
+        assertThat(result.senderId()).isEqualTo(ME);
+        assertThat(result.content()).isEqualTo("안녕");
+    }
+
+    @Test
+    @DisplayName("참여자가 아닌 유저가 메시지 전송 시 ChatNotMemberException이 발생하고 저장하지 않는다")
+    void sendMessage_whenNotMember_throwsAndDoesNotSave() {
+        given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, 99L, LocalDateTime.now(clock)));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> chatService.sendMessage(ROOM, ME, "안녕"))
+                .isInstanceOf(ChatNotMemberException.class);
+        then(chatMessageWriter).should(never()).save(any());
     }
 }

@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.chat.business;
 
+import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
@@ -9,6 +10,7 @@ import org.son.haruharu.domain.chat.business.dto.ReadResponse;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
+import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
@@ -38,6 +40,7 @@ public class ChatService {
     private final ChatRoomMemberReader chatRoomMemberReader;
     private final ChatRoomMemberWriter chatRoomMemberWriter;
     private final ChatMessageReader chatMessageReader;
+    private final ChatMessageWriter chatMessageWriter;
     private final ProfileService profileService;
     private final Clock clock;
 
@@ -45,14 +48,27 @@ public class ChatService {
                        ChatRoomMemberReader chatRoomMemberReader,
                        ChatRoomMemberWriter chatRoomMemberWriter,
                        ChatMessageReader chatMessageReader,
+                       ChatMessageWriter chatMessageWriter,
                        ProfileService profileService,
                        Clock clock) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomMemberReader = chatRoomMemberReader;
         this.chatRoomMemberWriter = chatRoomMemberWriter;
         this.chatMessageReader = chatMessageReader;
+        this.chatMessageWriter = chatMessageWriter;
         this.profileService = profileService;
         this.clock = clock;
+    }
+
+    /**
+     * 메시지 전송(#60 STOMP). 발신자가 방 참여자인지 검증 후 저장하고, 브로드캐스트 payload를 반환한다.
+     * 실제 브로드캐스트(convertAndSend)는 application 계층(ChatStompController)이 담당한다.
+     */
+    @Transactional
+    public ChatMessageBroadcast sendMessage(Long chatRoomId, Long senderId, String content) {
+        requireMember(chatRoomId, senderId);
+        ChatMessage saved = chatMessageWriter.save(ChatMessage.create(chatRoomId, senderId, content));
+        return ChatMessageBroadcast.from(saved);
     }
 
     /** 내 채팅방 목록. 마지막 메시지 최신순으로 정렬한다. */

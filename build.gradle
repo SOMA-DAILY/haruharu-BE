@@ -31,6 +31,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+    // WebSocket (STOMP 실시간 채팅 — #60)
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
     // Actuator (헬스체크 — 배포 검증용)
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
