@@ -114,7 +114,7 @@ class VideoReactionServiceTest {
     @DisplayName("다른 유저가 새 반응을 남기면 영상 작성자에게 VideoReactedEvent가 발행된다")
     void givenNewReactionByOther_whenToggle_thenPublishesEvent() {
         Long userId = 1L; // 작성자(2L)와 다른 유저
-        UUID postId = UUID.randomUUID();
+        Long postId = 100L;
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
 
@@ -127,7 +127,7 @@ class VideoReactionServiceTest {
     @DisplayName("자기 영상에 자기가 반응하면 이벤트를 발행하지 않는다")
     void givenSelfReaction_whenToggle_thenNoEvent() {
         Long userId = 2L; // 작성자 본인
-        UUID postId = UUID.randomUUID();
+        Long postId = 100L;
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
 
@@ -140,10 +140,10 @@ class VideoReactionServiceTest {
     @DisplayName("반응 해제(같은 타입 재탭) 시 이벤트를 발행하지 않는다")
     void givenSameType_whenToggle_thenNoEvent() {
         Long userId = 1L;
-        UUID postId = UUID.randomUUID();
+        Long postId = 100L;
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId))
-                .willReturn(Optional.of(new VideoReaction(UUID.randomUUID(), postId, userId, "LIKE", LocalDateTime.now())));
+                .willReturn(Optional.of(new VideoReaction(3L, postId, userId, "LIKE", LocalDateTime.now())));
 
         service().toggle(userId, postId, "LIKE");
 
