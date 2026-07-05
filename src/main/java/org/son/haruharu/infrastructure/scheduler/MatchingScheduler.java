@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.domain.matching.business.MatchingExecutor;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
-import org.son.haruharu.domain.notification.business.MorningMatchNotifier;
 import org.son.haruharu.domain.room.business.RoomActivator;
 import org.son.haruharu.domain.room.business.RoomTerminator;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -30,7 +29,6 @@ public class MatchingScheduler {
     private final MatchingExecutor matchingExecutor;
     private final RoomActivator roomActivator;
     private final RoomTerminator roomTerminator;
-    private final MorningMatchNotifier morningMatchNotifier;
 
     @Scheduled(cron = "0 0 22 * * *", zone = "Asia/Seoul")
     public void runMatching() {
@@ -39,16 +37,6 @@ public class MatchingScheduler {
             log.info("매칭 배치 완료: {}개 방 확정", rooms);
         } catch (Exception e) {
             log.error("매칭 배치 실패", e);
-        }
-    }
-
-    @Scheduled(cron = "0 0 8 * * *", zone = "Asia/Seoul")
-    public void notifyMatched() {
-        try {
-            int notified = morningMatchNotifier.notifyMatched(LocalDate.now(SEOUL));
-            log.info("매칭 완료 알림 배치 완료: {}개 방", notified);
-        } catch (Exception e) {
-            log.error("매칭 완료 알림 배치 실패", e);
         }
     }
 
