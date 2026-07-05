@@ -9,7 +9,9 @@ import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoReaction;
 import org.son.haruharu.domain.video.implement.VideoReactionReader;
 import org.son.haruharu.domain.video.implement.VideoReactionWriter;
+import org.son.haruharu.domain.video.business.event.VideoReactedEvent;
 import org.son.haruharu.domain.video.storage.exception.VideoPostNotFoundException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,15 +32,18 @@ public class VideoReactionService {
     private final RoomMemberReader roomMemberReader;
     private final VideoReactionReader videoReactionReader;
     private final VideoReactionWriter videoReactionWriter;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public VideoReactionService(VideoPostReader videoPostReader, RoomMemberReader roomMemberReader,
                                 VideoReactionReader videoReactionReader,
-                                VideoReactionWriter videoReactionWriter, Clock clock) {
+                                VideoReactionWriter videoReactionWriter,
+                                ApplicationEventPublisher eventPublisher, Clock clock) {
         this.videoPostReader = videoPostReader;
         this.roomMemberReader = roomMemberReader;
         this.videoReactionReader = videoReactionReader;
         this.videoReactionWriter = videoReactionWriter;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -57,6 +62,9 @@ public class VideoReactionService {
         Optional<VideoReaction> existing = videoReactionReader.findMine(videoPostId, userId);
         if (existing.isEmpty()) {
             videoReactionWriter.save(VideoReaction.create(videoPostId, userId, reactionType, LocalDateTime.now(clock)));
+            if (!author.userId().equals(userId)) {
+                eventPublisher.publishEvent(new VideoReactedEvent(author.userId(), videoPostId));
+            }
             return new ReactionResponse(true, reactionType);
         }
         VideoReaction current = existing.get();
