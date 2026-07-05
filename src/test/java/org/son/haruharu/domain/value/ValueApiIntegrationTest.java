@@ -47,7 +47,7 @@ class ValueApiIntegrationTest {
 
     private Long saveQuestion(String text, String category, int displayOrder, boolean active) {
         ValueQuestionEntity saved = valueQuestionJpaRepository.save(
-                ValueQuestionEntity.from(new ValueQuestion(null, text, category, displayOrder, active))
+                ValueQuestionEntity.from(new ValueQuestion(null, text, "선택지A", "선택지B", category, displayOrder, active))
         );
         return saved.toDomain().id();
     }
@@ -66,6 +66,8 @@ class ValueApiIntegrationTest {
                 .andExpect(jsonPath("$.data.questions.length()").value(2))
                 .andExpect(jsonPath("$.data.questions[0].question_id").value(first.intValue()))
                 .andExpect(jsonPath("$.data.questions[0].question_text").value("첫 번째 질문"))
+                .andExpect(jsonPath("$.data.questions[0].option_a").value("선택지A"))
+                .andExpect(jsonPath("$.data.questions[0].option_b").value("선택지B"))
                 .andExpect(jsonPath("$.data.questions[0].display_order").value(1))
                 .andExpect(jsonPath("$.data.questions[1].question_id").value(second.intValue()))
                 .andExpect(jsonPath("$.data.questions[1].category").value("RELATIONSHIP"));
