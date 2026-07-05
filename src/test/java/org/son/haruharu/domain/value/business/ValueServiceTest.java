@@ -46,7 +46,7 @@ class ValueServiceTest {
         // given
         Long questionId = 1L;
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
-                new ValueQuestion(questionId, "주말에 무엇을 하나요?", "LIFESTYLE", 1, true)
+                new ValueQuestion(questionId, "주말엔 집 vs 밖, 어느 쪽?", "집순이", "밖순이", "LIFESTYLE", 1, true)
         ));
 
         // when
@@ -55,7 +55,9 @@ class ValueServiceTest {
         // then
         assertThat(response.questions()).hasSize(1);
         assertThat(response.questions().get(0).questionId()).isEqualTo(questionId);
-        assertThat(response.questions().get(0).questionText()).isEqualTo("주말에 무엇을 하나요?");
+        assertThat(response.questions().get(0).questionText()).isEqualTo("주말엔 집 vs 밖, 어느 쪽?");
+        assertThat(response.questions().get(0).optionA()).isEqualTo("집순이");
+        assertThat(response.questions().get(0).optionB()).isEqualTo("밖순이");
         assertThat(response.questions().get(0).category()).isEqualTo("LIFESTYLE");
         assertThat(response.questions().get(0).displayOrder()).isEqualTo(1);
     }
@@ -72,8 +74,8 @@ class ValueServiceTest {
                 new SaveValueAnswersCommand.AnswerItem(q2, "독서")
         ));
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
-                new ValueQuestion(q1, "질문1", "LIFESTYLE", 1, true),
-                new ValueQuestion(q2, "질문2", "LIFESTYLE", 2, true)
+                new ValueQuestion(q1, "질문1", "A", "B", "LIFESTYLE", 1, true),
+                new ValueQuestion(q2, "질문2", "A", "B", "LIFESTYLE", 2, true)
         ));
         given(userValueAnswerReader.getAllByUserId(userId)).willReturn(List.of());
 
@@ -105,7 +107,7 @@ class ValueServiceTest {
                 new SaveValueAnswersCommand.AnswerItem(questionId, "수정된 답변")
         ));
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
-                new ValueQuestion(questionId, "질문", "LIFESTYLE", 1, true)
+                new ValueQuestion(questionId, "질문", "A", "B", "LIFESTYLE", 1, true)
         ));
         given(userValueAnswerReader.getAllByUserId(userId)).willReturn(List.of(
                 new UserValueAnswer(existingAnswerId, userId, questionId, "이전 답변")

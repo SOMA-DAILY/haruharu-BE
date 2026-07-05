@@ -76,12 +76,12 @@ class ImageApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("이미지가 1개면 IMAGE_400_MIN_LIMIT 에러를 반환한다")
-    void givenOneImage_whenPutImages_thenReturnsMinLimitError() throws Exception {
+    @DisplayName("이미지가 0개면 IMAGE_400_MIN_LIMIT 에러를 반환한다 (최소 1장)")
+    void givenNoImage_whenPutImages_thenReturnsMinLimitError() throws Exception {
         mockMvc.perform(put("/api/v1/users/me/images")
                 .with(authentication(auth(3L)))
                 .contentType(APPLICATION_JSON)
-                .content("{\"image_urls\":[\"https://only.jpg\"]}"))
+                .content("{\"image_urls\":[]}"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.isSuccess").value(false))
             .andExpect(jsonPath("$.error.code").value("IMAGE_400_MIN_LIMIT"));

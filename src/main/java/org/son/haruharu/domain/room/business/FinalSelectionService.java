@@ -62,7 +62,11 @@ public class FinalSelectionService {
         RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
-        if (room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour()) < FINAL_SELECTION_DAY) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (room.currentDayAt(now, UploadSlot.dayStartHour()) < FINAL_SELECTION_DAY) {
+            throw new NotFinalSelectionDayException();
+        }
+        if (now.isBefore(selectionOpensAt(room))) {
             throw new NotFinalSelectionDayException();
         }
         if (selectedMemberId.equals(me.id())) {
@@ -76,7 +80,6 @@ public class FinalSelectionService {
             throw new AlreadySelectedException(); // 1회 확정
         }
 
-        LocalDateTime now = LocalDateTime.now(clock);
         finalSelectionWriter.save(FinalSelection.of(me.id(), selectedMemberId, now));
 
         boolean matched = isMutual(selectedMemberId, me.id());
@@ -88,6 +91,17 @@ public class FinalSelectionService {
         }
 
         return new FinalSelectionResponse(selectedMemberId, matched);
+    }
+
+    /**
+     * 최종선택 오픈 시각 = 마지막 날 마지막 슬롯 종료 시각(Day3 18:00).
+     * 하루 경계가 09:00이라 Day3 심야(익일 00~09시)에도 열려 있어야 하므로 시(hour) 비교가 아닌 시각 비교로 판정한다.
+     * 선행 currentDayAt 게이트가 PENDING(startedAt null)을 걸러 dateOfDay 호출이 안전하다.
+     */
+    private LocalDateTime selectionOpensAt(Room room) {
+        int opensHour = UploadSlot.ofDay(FINAL_SELECTION_DAY).getLast().endHour();
+        return room.dateOfDay(FINAL_SELECTION_DAY, UploadSlot.dayStartHour())
+                .atStartOfDay().plusHours(opensHour);
     }
 
     /** 상대(selectedMemberId)도 나(meId)를 최종선택했는지. */

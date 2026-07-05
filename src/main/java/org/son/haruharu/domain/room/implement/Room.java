@@ -52,8 +52,17 @@ public record Room(
 
     private long rawDayAt(LocalDateTime now, int dayStartHour) {
         long elapsedDays = ChronoUnit.DAYS.between(
-                startedAt.minusHours(dayStartHour).toLocalDate(),
+                dateOfDay(1, dayStartHour),
                 now.minusHours(dayStartHour).toLocalDate());
         return 1 + Math.max(0, elapsedDays);
+    }
+
+    /**
+     * Day N의 달력 날짜. currentDayAt과 같은 앵커(startedAt - dayStartHour)에서 파생해
+     * Day 판정과 특정 시각 판정(예: 최종선택 오픈)이 서로 다른 경계를 쓰지 않게 한다.
+     * ACTIVE + startedAt 존재를 전제한다(호출측이 currentDayAt 게이트로 보장).
+     */
+    public LocalDate dateOfDay(int dayNumber, int dayStartHour) {
+        return startedAt.minusHours(dayStartHour).toLocalDate().plusDays(dayNumber - 1L);
     }
 }

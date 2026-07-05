@@ -19,11 +19,10 @@ public enum UploadSlot {
     DAY2_SLOT3(2, 3, 15, 18),
     DAY2_SLOT4(2, 4, 18, 21),
     DAY2_SLOT5(2, 5, 21, 24),
+    // Day3은 slot3(15~18) 종료 후 최종선택 시간으로 전환되므로 3개만 둔다
     DAY3_SLOT1(3, 1, 9, 12),
     DAY3_SLOT2(3, 2, 12, 15),
-    DAY3_SLOT3(3, 3, 15, 18),
-    DAY3_SLOT4(3, 4, 18, 21),
-    DAY3_SLOT5(3, 5, 21, 24);
+    DAY3_SLOT3(3, 3, 15, 18);
 
     private final int dayNumber;
     private final int slotIndex;

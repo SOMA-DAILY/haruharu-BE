@@ -5,6 +5,8 @@ import org.son.haruharu.domain.value.implement.ValueQuestion;
 public record ValueQuestionResponse(
         Long questionId,
         String questionText,
+        String optionA,
+        String optionB,
         String category,
         int displayOrder
 ) {
@@ -13,6 +15,8 @@ public record ValueQuestionResponse(
         return new ValueQuestionResponse(
                 question.id(),
                 question.questionText(),
+                question.optionA(),
+                question.optionB(),
                 question.category(),
                 question.displayOrder()
         );

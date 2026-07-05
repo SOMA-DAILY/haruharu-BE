@@ -30,7 +30,7 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class ProfileService {
 
-    private static final int MIN_IMAGES = 2;
+    private static final int MIN_IMAGES = 1;
     private static final int MAX_IMAGES = 10;
 
     private static final Map<String, String> ALLOWED_IMAGE_TYPES = Map.of(

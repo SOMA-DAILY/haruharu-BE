@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
-/** 세션 마지막 날 09:05(방 활성화 09:00 직후)에 최종선택 오픈 안내를 트리거한다. */
+/** 세션 마지막 날 18:05(마지막 슬롯 15~18시 종료 직후)에 최종선택 오픈 안내를 트리거한다. */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -19,7 +19,7 @@ public class RoomDayScheduler {
 
     private final FinalSelectionOpenNotifier finalSelectionOpenNotifier;
 
-    @Scheduled(cron = "0 5 9 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 5 18 * * *", zone = "Asia/Seoul")
     public void notifyFinalSelectionOpen() {
         try {
             int notified = finalSelectionOpenNotifier.notifyFinalSelectionOpen(LocalDateTime.now(SEOUL));
