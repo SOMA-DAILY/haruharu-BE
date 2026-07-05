@@ -144,16 +144,31 @@ class ProfileServiceTest {
     }
 
     @Test
-    @DisplayName("이미지가 최소 개수(2개) 미만이면 ImageMinLimitException이 발생하고 저장하지 않는다")
-    void givenTooFewImages_whenUpdateImages_thenThrowsMinLimit() {
+    @DisplayName("이미지가 없으면(0개) ImageMinLimitException이 발생하고 저장하지 않는다")
+    void givenNoImages_whenUpdateImages_thenThrowsMinLimit() {
         Long userId = 1L;
-        UpdateImagesCommand command = new UpdateImagesCommand(List.of("https://only-one.png"));
+        UpdateImagesCommand command = new UpdateImagesCommand(List.of());
 
         assertThatThrownBy(() -> profileService.updateImages(userId, command))
             .isInstanceOf(ImageMinLimitException.class);
 
         then(userImageWriter).should(never()).deleteAllByUserId(any());
         then(userImageWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("대표 사진 1장만으로도 저장할 수 있다 (최소 1장)")
+    void givenSingleImage_whenUpdateImages_thenSaves() {
+        Long userId = 1L;
+        String prefix = BASE_URL + "users/" + userId + "/images/";
+        UpdateImagesCommand command = new UpdateImagesCommand(List.of(prefix + "main.jpg"));
+        given(s3StoragePort.publicBaseUrl()).willReturn(BASE_URL);
+        given(userImageReader.getAllByUserId(userId)).willReturn(List.of());
+
+        ImagesResponse response = profileService.updateImages(userId, command);
+
+        then(userImageWriter).should().save(any());
+        assertThat(response.imageUrls()).containsExactly(prefix + "main.jpg");
     }
 
     @Test
