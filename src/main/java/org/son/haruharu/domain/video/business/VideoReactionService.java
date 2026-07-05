@@ -4,6 +4,7 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
 import org.son.haruharu.domain.video.business.exception.InvalidReactionTypeException;
+import org.son.haruharu.domain.video.implement.ReactionType;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoReaction;
@@ -16,14 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.Set;
 
 /** 영상 반응 토글. 유저당 영상당 1행(UNIQUE) — 없으면 생성/같은 타입이면 해제/다른 타입이면 교체. */
 @Service
 @Transactional
 public class VideoReactionService {
-
-    private static final Set<String> ALLOWED_TYPES = Set.of("LIKE", "CURIOUS", "EMPATHY");
 
     private final VideoPostReader videoPostReader;
     private final RoomMemberReader roomMemberReader;
@@ -42,7 +40,7 @@ public class VideoReactionService {
     }
 
     public ReactionResponse toggle(Long userId, Long videoPostId, String reactionType) {
-        if (!ALLOWED_TYPES.contains(reactionType)) {
+        if (!ReactionType.isValid(reactionType)) {
             throw new InvalidReactionTypeException();
         }
         VideoPost post = videoPostReader.getById(videoPostId);

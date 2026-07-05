@@ -8,6 +8,7 @@ import org.son.haruharu.domain.room.business.dto.FeedResponse.SlotStatus;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.video.implement.ReactionCount;
+import org.son.haruharu.domain.video.implement.ReactionType;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoReactionReader;
@@ -75,12 +76,15 @@ public class RoomFeedService {
     private Map<Long, ReactionCounts> aggregateCounts(List<ReactionCount> rows) {
         Map<Long, long[]> acc = new HashMap<>(); // [like, curious, empathy]
         for (ReactionCount row : rows) {
+            ReactionType type = ReactionType.parse(row.reactionType());
+            if (type == null) {
+                continue; // DB에 저장된 알 수 없는 값 방어(토글 API가 enum으로 제한)
+            }
             long[] c = acc.computeIfAbsent(row.videoPostId(), k -> new long[3]);
-            switch (row.reactionType()) {
-                case "LIKE" -> c[0] = row.count();
-                case "CURIOUS" -> c[1] = row.count();
-                case "EMPATHY" -> c[2] = row.count();
-                default -> { } // 알 수 없는 타입은 무시(토글 API가 3종으로 제한)
+            switch (type) {
+                case LIKE -> c[0] = row.count();
+                case CURIOUS -> c[1] = row.count();
+                case EMPATHY -> c[2] = row.count();
             }
         }
         Map<Long, ReactionCounts> result = new HashMap<>();
