@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.domain.notification.implement.DeviceToken;
 import org.son.haruharu.domain.notification.implement.DeviceTokenReader;
 import org.son.haruharu.domain.notification.implement.DeviceTokenWriter;
+import org.son.haruharu.domain.notification.implement.NotificationSettingReader;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.infrastructure.fcm.PushMessage;
 import org.son.haruharu.infrastructure.fcm.PushPort;
@@ -23,18 +24,24 @@ public class PushSendService {
 
     private final DeviceTokenReader deviceTokenReader;
     private final DeviceTokenWriter deviceTokenWriter;
+    private final NotificationSettingReader notificationSettingReader;
     private final PushPort pushPort;
 
     public PushSendService(DeviceTokenReader deviceTokenReader, DeviceTokenWriter deviceTokenWriter,
-                           PushPort pushPort) {
+                           NotificationSettingReader notificationSettingReader, PushPort pushPort) {
         this.deviceTokenReader = deviceTokenReader;
         this.deviceTokenWriter = deviceTokenWriter;
+        this.notificationSettingReader = notificationSettingReader;
         this.pushPort = pushPort;
     }
 
     public void sendToUsers(List<Long> userIds, NotificationType type, Map<String, String> data) {
         try {
-            List<String> tokens = deviceTokenReader.findAllByUserIds(userIds).stream()
+            List<Long> enabledUserIds = excludePushDisabled(userIds);
+            if (enabledUserIds.isEmpty()) {
+                return;
+            }
+            List<String> tokens = deviceTokenReader.findAllByUserIds(enabledUserIds).stream()
                     .map(DeviceToken::token)
                     .toList();
             if (tokens.isEmpty()) {
@@ -49,5 +56,13 @@ public class PushSendService {
         } catch (Exception e) {
             log.error("푸시 발송 실패: type={} userIds={}", type, userIds, e);
         }
+    }
+
+    private List<Long> excludePushDisabled(List<Long> userIds) {
+        List<Long> disabled = notificationSettingReader.findPushDisabledUserIds(userIds);
+        if (disabled.isEmpty()) {
+            return userIds;
+        }
+        return userIds.stream().filter(id -> !disabled.contains(id)).toList();
     }
 }
