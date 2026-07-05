@@ -16,4 +16,8 @@ public class ChatRoomReader {
         return chatRoomRepository.findById(id)
                 .orElseThrow(ChatRoomNotFoundException::new);
     }
+
+    public boolean existsByMatchResultId(Long matchResultId) {
+        return chatRoomRepository.existsByMatchResultId(matchResultId);
+    }
 }

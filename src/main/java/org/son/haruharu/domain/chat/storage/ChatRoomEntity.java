@@ -6,13 +6,20 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 
 @Entity
-@Table(name = "chat_rooms")
+@Table(
+        name = "chat_rooms",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_chat_rooms_match_result",
+                columnNames = "match_result_id"
+        )
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatRoomEntity extends BaseEntity {
 

@@ -108,6 +108,8 @@ class FinalSelectionServiceTest {
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
         given(finalSelectionReader.findByRoomMemberId(selectedId))
                 .willReturn(Optional.of(new FinalSelection(40L, selectedId, meId, LocalDateTime.now())));
+        given(matchResultWriter.save(any()))
+                .willReturn(new MatchResult(500L, meId, selectedId, LocalDateTime.now()));
 
         FinalSelectionResponse result = service.select(roomId, selectedId, userId);
 
@@ -121,6 +123,7 @@ class FinalSelectionServiceTest {
         then(eventPublisher).should().publishEvent(eventCaptor.capture());
         MutualMatchEvent event = eventCaptor.getValue();
         assertThat(event.roomId()).isEqualTo(roomId);
+        assertThat(event.matchResultId()).isEqualTo(500L); // 저장된 MatchResult id가 이벤트에 실림(#61 방 자동생성용)
         assertThat(event.userIdA()).isEqualTo(userId);   // 나
         assertThat(event.userIdB()).isEqualTo(2L);        // 상대
     }
