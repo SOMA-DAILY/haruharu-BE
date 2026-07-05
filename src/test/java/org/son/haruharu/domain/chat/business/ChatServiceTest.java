@@ -20,6 +20,7 @@ import org.son.haruharu.domain.chat.implement.ChatRoomMember;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.chat.storage.exception.ChatRoomNotFoundException;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
@@ -37,12 +38,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class ChatServiceTest {
 
     @Mock ChatRoomReader chatRoomReader;
+    @Mock ChatRoomWriter chatRoomWriter;
     @Mock ChatRoomMemberReader chatRoomMemberReader;
     @Mock ChatRoomMemberWriter chatRoomMemberWriter;
     @Mock ChatMessageReader chatMessageReader;
@@ -58,8 +61,8 @@ class ChatServiceTest {
 
     @BeforeEach
     void setUp() {
-        chatService = new ChatService(chatRoomReader, chatRoomMemberReader, chatRoomMemberWriter,
-                chatMessageReader, chatMessageWriter, profileService, clock);
+        chatService = new ChatService(chatRoomReader, chatRoomWriter, chatRoomMemberReader,
+                chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, clock);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -219,5 +222,31 @@ class ChatServiceTest {
         assertThatThrownBy(() -> chatService.sendMessage(ROOM, ME, "안녕"))
                 .isInstanceOf(ChatNotMemberException.class);
         then(chatMessageWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("상호매칭 성사 시 채팅방과 두 참여자를 생성한다")
+    void createRoomFromMatch_createsRoomAndTwoMembers() {
+        given(chatRoomReader.existsByMatchResultId(500L)).willReturn(false);
+        given(chatRoomWriter.save(any())).willReturn(new ChatRoom(77L, 500L, LocalDateTime.now(clock)));
+
+        chatService.createRoomFromMatch(500L, 1L, 2L);
+
+        verify(chatRoomWriter).save(any());
+        ArgumentCaptor<ChatRoomMember> captor = ArgumentCaptor.forClass(ChatRoomMember.class);
+        verify(chatRoomMemberWriter, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(ChatRoomMember::userId).containsExactlyInAnyOrder(1L, 2L);
+        assertThat(captor.getAllValues()).allSatisfy(m -> assertThat(m.chatRoomId()).isEqualTo(77L));
+    }
+
+    @Test
+    @DisplayName("이미 방이 있는 매칭이면 중복 생성하지 않는다(멱등)")
+    void createRoomFromMatch_whenAlreadyExists_skips() {
+        given(chatRoomReader.existsByMatchResultId(500L)).willReturn(true);
+
+        chatService.createRoomFromMatch(500L, 1L, 2L);
+
+        then(chatRoomWriter).should(never()).save(any());
+        then(chatRoomMemberWriter).should(never()).save(any());
     }
 }

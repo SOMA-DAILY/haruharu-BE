@@ -84,8 +84,9 @@ public class FinalSelectionService {
 
         boolean matched = isMutual(selectedMemberId, me.id());
         if (matched) {
-            matchResultWriter.save(MatchResult.of(me.id(), selectedMemberId, now));
-            eventPublisher.publishEvent(new MutualMatchEvent(roomId, me.userId(), selected.userId()));
+            MatchResult savedMatch = matchResultWriter.save(MatchResult.of(me.id(), selectedMemberId, now));
+            eventPublisher.publishEvent(
+                    new MutualMatchEvent(roomId, savedMatch.id(), me.userId(), selected.userId()));
         } else {
             eventPublisher.publishEvent(new MemberSelectedEvent(roomId, selected.userId()));
         }

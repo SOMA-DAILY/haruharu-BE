@@ -16,6 +16,7 @@ import org.son.haruharu.domain.chat.implement.ChatRoomMember;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +38,7 @@ public class ChatService {
     private static final int MAX_MESSAGE_PAGE_SIZE = 100;
 
     private final ChatRoomReader chatRoomReader;
+    private final ChatRoomWriter chatRoomWriter;
     private final ChatRoomMemberReader chatRoomMemberReader;
     private final ChatRoomMemberWriter chatRoomMemberWriter;
     private final ChatMessageReader chatMessageReader;
@@ -45,6 +47,7 @@ public class ChatService {
     private final Clock clock;
 
     public ChatService(ChatRoomReader chatRoomReader,
+                       ChatRoomWriter chatRoomWriter,
                        ChatRoomMemberReader chatRoomMemberReader,
                        ChatRoomMemberWriter chatRoomMemberWriter,
                        ChatMessageReader chatMessageReader,
@@ -52,12 +55,28 @@ public class ChatService {
                        ProfileService profileService,
                        Clock clock) {
         this.chatRoomReader = chatRoomReader;
+        this.chatRoomWriter = chatRoomWriter;
         this.chatRoomMemberReader = chatRoomMemberReader;
         this.chatRoomMemberWriter = chatRoomMemberWriter;
         this.chatMessageReader = chatMessageReader;
         this.chatMessageWriter = chatMessageWriter;
         this.profileService = profileService;
         this.clock = clock;
+    }
+
+    /**
+     * 상호매칭 성사 시 두 유저의 1:1 채팅방을 생성한다(#61, MutualMatchEvent 커밋 후 호출).
+     * match_result_id 당 1방 멱등 — 이벤트 재발행·재시도에도 중복 생성하지 않는다(unique + 사전 검사).
+     */
+    @Transactional
+    public void createRoomFromMatch(Long matchResultId, Long userIdA, Long userIdB) {
+        if (chatRoomReader.existsByMatchResultId(matchResultId)) {
+            return;
+        }
+        ChatRoom room = chatRoomWriter.save(ChatRoom.create(matchResultId));
+        LocalDateTime now = LocalDateTime.now(clock);
+        chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), userIdA, now));
+        chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), userIdB, now));
     }
 
     /**

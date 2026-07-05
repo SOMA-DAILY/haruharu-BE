@@ -22,4 +22,9 @@ public class ChatRoomRepositoryImpl implements ChatRoomRepository {
     public Optional<ChatRoom> findById(Long id) {
         return chatRoomJpaRepository.findById(id).map(ChatRoomEntity::toDomain);
     }
+
+    @Override
+    public boolean existsByMatchResultId(Long matchResultId) {
+        return chatRoomJpaRepository.existsByMatchResultId(matchResultId);
+    }
 }
