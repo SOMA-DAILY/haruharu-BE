@@ -15,12 +15,14 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
+import org.son.haruharu.domain.video.business.event.VideoReactedEvent;
 import org.son.haruharu.domain.video.business.exception.InvalidReactionTypeException;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoReaction;
 import org.son.haruharu.domain.video.implement.VideoReactionReader;
 import org.son.haruharu.domain.video.implement.VideoReactionWriter;
+import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,11 +38,13 @@ class VideoReactionServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock VideoReactionReader videoReactionReader;
     @Mock VideoReactionWriter videoReactionWriter;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-26T03:00:00Z"), ZoneId.of("Asia/Seoul"));
 
     private VideoReactionService service() {
-        return new VideoReactionService(videoPostReader, roomMemberReader, videoReactionReader, videoReactionWriter, clock);
+        return new VideoReactionService(videoPostReader, roomMemberReader, videoReactionReader,
+                videoReactionWriter, eventPublisher, clock);
     }
 
     private void stubPostAndMembership(Long postId, Long userId) {
@@ -104,6 +108,46 @@ class VideoReactionServiceTest {
         assertThat(result.reactionType()).isEqualTo("CURIOUS");
         then(videoReactionWriter).should().save(any());
         then(videoReactionWriter).should(never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("다른 유저가 새 반응을 남기면 영상 작성자에게 VideoReactedEvent가 발행된다")
+    void givenNewReactionByOther_whenToggle_thenPublishesEvent() {
+        Long userId = 1L; // 작성자(2L)와 다른 유저
+        Long postId = 100L;
+        stubPostAndMembership(postId, userId);
+        given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
+
+        service().toggle(userId, postId, "LIKE");
+
+        then(eventPublisher).should().publishEvent(new VideoReactedEvent(2L, postId));
+    }
+
+    @Test
+    @DisplayName("자기 영상에 자기가 반응하면 이벤트를 발행하지 않는다")
+    void givenSelfReaction_whenToggle_thenNoEvent() {
+        Long userId = 2L; // 작성자 본인
+        Long postId = 100L;
+        stubPostAndMembership(postId, userId);
+        given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
+
+        service().toggle(userId, postId, "LIKE");
+
+        then(eventPublisher).should(never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("반응 해제(같은 타입 재탭) 시 이벤트를 발행하지 않는다")
+    void givenSameType_whenToggle_thenNoEvent() {
+        Long userId = 1L;
+        Long postId = 100L;
+        stubPostAndMembership(postId, userId);
+        given(videoReactionReader.findMine(postId, userId))
+                .willReturn(Optional.of(new VideoReaction(3L, postId, userId, "LIKE", LocalDateTime.now())));
+
+        service().toggle(userId, postId, "LIKE");
+
+        then(eventPublisher).should(never()).publishEvent(any());
     }
 
     @Test

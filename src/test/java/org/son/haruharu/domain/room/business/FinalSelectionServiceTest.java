@@ -26,9 +26,12 @@ import org.son.haruharu.domain.room.implement.MatchResultWriter;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
+import org.son.haruharu.domain.room.business.event.MemberSelectedEvent;
+import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
+import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -45,6 +48,7 @@ class FinalSelectionServiceTest {
     @Mock FinalSelectionReader finalSelectionReader;
     @Mock FinalSelectionWriter finalSelectionWriter;
     @Mock MatchResultWriter matchResultWriter;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     FinalSelectionService service;
 
@@ -58,7 +62,7 @@ class FinalSelectionServiceTest {
     @BeforeEach
     void setUp() {
         service = new FinalSelectionService(roomReader, roomMemberReader, finalSelectionReader,
-                finalSelectionWriter, matchResultWriter, clock);
+                finalSelectionWriter, matchResultWriter, eventPublisher, clock);
     }
 
     private RoomMember member(Long id, Long memberUserId, Long memberRoomId) {
@@ -89,6 +93,11 @@ class FinalSelectionServiceTest {
         assertThat(result.matched()).isFalse();
         then(finalSelectionWriter).should().save(any(FinalSelection.class));
         then(matchResultWriter).should(never()).save(any());
+
+        ArgumentCaptor<MemberSelectedEvent> captor = ArgumentCaptor.forClass(MemberSelectedEvent.class);
+        then(eventPublisher).should().publishEvent(captor.capture());
+        assertThat(captor.getValue().roomId()).isEqualTo(roomId);
+        assertThat(captor.getValue().selectedUserId()).isEqualTo(2L); // 선택받은 멤버의 userId
     }
 
     @Test
@@ -107,6 +116,13 @@ class FinalSelectionServiceTest {
         then(matchResultWriter).should().save(captor.capture());
         MatchResult saved = captor.getValue();
         assertThat(saved.memberAId().compareTo(saved.memberBId())).isLessThan(0);
+
+        ArgumentCaptor<MutualMatchEvent> eventCaptor = ArgumentCaptor.forClass(MutualMatchEvent.class);
+        then(eventPublisher).should().publishEvent(eventCaptor.capture());
+        MutualMatchEvent event = eventCaptor.getValue();
+        assertThat(event.roomId()).isEqualTo(roomId);
+        assertThat(event.userIdA()).isEqualTo(userId);   // 나
+        assertThat(event.userIdB()).isEqualTo(2L);        // 상대
     }
 
     @Test

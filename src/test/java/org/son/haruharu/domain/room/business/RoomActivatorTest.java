@@ -11,10 +11,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.room.business.event.RoomStartedEvent;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
+import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,12 +30,13 @@ class RoomActivatorTest {
 
     @Mock RoomReader roomReader;
     @Mock RoomWriter roomWriter;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     RoomActivator roomActivator;
 
     @BeforeEach
     void setUp() {
-        roomActivator = new RoomActivator(roomReader, roomWriter);
+        roomActivator = new RoomActivator(roomReader, roomWriter, eventPublisher);
     }
 
     @Test
@@ -53,6 +56,11 @@ class RoomActivatorTest {
         then(roomWriter).should(times(2)).save(captor.capture());
         assertThat(captor.getAllValues())
             .allMatch(r -> r.status() == RoomStatus.ACTIVE && r.startedAt() == now);
+
+        ArgumentCaptor<RoomStartedEvent> eventCaptor = ArgumentCaptor.forClass(RoomStartedEvent.class);
+        then(eventPublisher).should(times(2)).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getAllValues()).extracting(RoomStartedEvent::roomId)
+            .containsExactly(1L, 2L);
     }
 
     @Test
@@ -65,5 +73,6 @@ class RoomActivatorTest {
 
         assertThat(activated).isZero();
         then(roomWriter).should(never()).save(any());
+        then(eventPublisher).should(never()).publishEvent(any());
     }
 }
