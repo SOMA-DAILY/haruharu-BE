@@ -26,4 +26,8 @@ public class RoomReader {
     public List<Room> getScheduledPending(LocalDate scheduledDate) {
         return roomRepository.findAllByScheduledDateAndStatus(scheduledDate, RoomStatus.PENDING);
     }
+
+    public List<Room> getActive() {
+        return roomRepository.findAllByStatus(RoomStatus.ACTIVE);
+    }
 }
