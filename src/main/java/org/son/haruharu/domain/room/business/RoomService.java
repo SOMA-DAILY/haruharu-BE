@@ -3,6 +3,7 @@ package org.son.haruharu.domain.room.business;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
@@ -29,12 +30,14 @@ public class RoomService {
     }
 
     public RoomResponse getMyRoom(Long userId) {
-        Room currentRoom = roomReader.findCurrent(candidateRoomIds(userId))
-            .orElseThrow(RoomNotFoundException::new);
+        return findMyRoom(userId).orElseThrow(RoomNotFoundException::new);
+    }
 
-        List<RoomMember> members = roomMemberReader.getByRoomId(currentRoom.id());
-        return RoomResponse.from(currentRoom, members,
-                currentRoom.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour()));
+    /** 종료되지 않은 내 방(없으면 empty). 홈 화면 등 도메인 간 집계에서 404 대신 부재로 다루기 위한 변형. */
+    public Optional<RoomResponse> findMyRoom(Long userId) {
+        return roomReader.findCurrent(candidateRoomIds(userId))
+            .map(room -> RoomResponse.from(room, roomMemberReader.getByRoomId(room.id()),
+                    room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour())));
     }
 
     /** 종료되지 않은(PENDING/ACTIVE) 방 보유 여부. 매칭 큐 참가 차단 등 도메인 간 조율에 쓰인다. */
