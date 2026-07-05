@@ -3,14 +3,20 @@ package org.son.haruharu.domain.room.business;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.FeedResponse;
 import org.son.haruharu.domain.room.business.dto.FeedResponse.FeedItem;
+import org.son.haruharu.domain.room.business.dto.FeedResponse.ReactionCounts;
 import org.son.haruharu.domain.room.business.dto.FeedResponse.SlotStatus;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
+import org.son.haruharu.domain.video.implement.ReactionCount;
+import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
+import org.son.haruharu.domain.video.implement.VideoReactionReader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** day N 영상 피드. 슬롯(시간대)별로 잠금: 내가 업로드한 슬롯의 타 멤버 영상만 열람 가능(참여 유도). */
@@ -20,10 +26,13 @@ public class RoomFeedService {
 
     private final RoomMemberReader roomMemberReader;
     private final VideoPostReader videoPostReader;
+    private final VideoReactionReader videoReactionReader;
 
-    public RoomFeedService(RoomMemberReader roomMemberReader, VideoPostReader videoPostReader) {
+    public RoomFeedService(RoomMemberReader roomMemberReader, VideoPostReader videoPostReader,
+                           VideoReactionReader videoReactionReader) {
         this.roomMemberReader = roomMemberReader;
         this.videoPostReader = videoPostReader;
+        this.videoReactionReader = videoReactionReader;
     }
 
     public FeedResponse getFeed(Long roomId, Long userId, int day) {
@@ -45,12 +54,37 @@ public class RoomFeedService {
 
         List<Long> roomMemberIds = roomMemberReader.getByRoomId(roomId).stream()
                 .map(RoomMember::id).toList();
-        List<FeedItem> posts = videoPostReader.getFeed(roomMemberIds, day).stream()
+        List<VideoPost> visible = videoPostReader.getFeed(roomMemberIds, day).stream()
                 .filter(p -> mySlots.contains(p.slotIndex()))
+                .toList();
+
+        List<Long> postIds = visible.stream().map(VideoPost::id).toList();
+        Map<Long, ReactionCounts> countsByPost = aggregateCounts(videoReactionReader.getReactionCounts(postIds));
+        Map<Long, String> myReactionByPost = videoReactionReader.getMyReactions(postIds, userId);
+
+        List<FeedItem> posts = visible.stream()
                 .map(p -> new FeedItem(
                         p.id(), p.roomMemberId(), p.roomMemberId().equals(me.id()),
-                        p.slotIndex(), p.videoUrl(), p.thumbnailUrl(), p.caption(), p.createdAt()))
+                        p.slotIndex(), p.videoUrl(), p.thumbnailUrl(), p.caption(), p.createdAt(),
+                        countsByPost.getOrDefault(p.id(), ReactionCounts.zero()),
+                        myReactionByPost.get(p.id())))
                 .toList();
         return new FeedResponse(slots, posts);
+    }
+
+    private Map<Long, ReactionCounts> aggregateCounts(List<ReactionCount> rows) {
+        Map<Long, long[]> acc = new HashMap<>(); // [like, curious, empathy]
+        for (ReactionCount row : rows) {
+            long[] c = acc.computeIfAbsent(row.videoPostId(), k -> new long[3]);
+            switch (row.reactionType()) {
+                case "LIKE" -> c[0] = row.count();
+                case "CURIOUS" -> c[1] = row.count();
+                case "EMPATHY" -> c[2] = row.count();
+                default -> { } // 알 수 없는 타입은 무시(토글 API가 3종으로 제한)
+            }
+        }
+        Map<Long, ReactionCounts> result = new HashMap<>();
+        acc.forEach((postId, c) -> result.put(postId, new ReactionCounts(c[0], c[1], c[2])));
+        return result;
     }
 }
