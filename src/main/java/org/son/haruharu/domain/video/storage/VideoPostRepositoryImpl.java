@@ -30,6 +30,11 @@ public class VideoPostRepositoryImpl implements VideoPostRepository {
     }
 
     @Override
+    public List<Integer> findUploadedSlotIndexes(Long roomMemberId, int dayNumber) {
+        return jpaRepository.findUploadedSlotIndexes(roomMemberId, dayNumber);
+    }
+
+    @Override
     public boolean existsActiveBySlot(Long roomMemberId, int dayNumber, int slotIndex) {
         return jpaRepository.existsByRoomMemberIdAndDayNumberAndSlotIndexAndDeletedAtIsNull(
                 roomMemberId, dayNumber, slotIndex);

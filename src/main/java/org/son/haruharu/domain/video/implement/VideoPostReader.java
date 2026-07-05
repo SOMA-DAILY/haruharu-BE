@@ -21,6 +21,10 @@ public class VideoPostReader {
         return videoPostRepository.countUploaded(roomMemberId, dayNumber);
     }
 
+    public List<Integer> getUploadedSlotIndexes(Long roomMemberId, int dayNumber) {
+        return videoPostRepository.findUploadedSlotIndexes(roomMemberId, dayNumber);
+    }
+
     public boolean hasActiveUpload(Long roomMemberId, int dayNumber, int slotIndex) {
         return videoPostRepository.existsActiveBySlot(roomMemberId, dayNumber, slotIndex);
     }
