@@ -18,6 +18,9 @@ public record MatchingQueue(
     /** 코인 원장 참조 타입. 차감·환불 ledger의 ref_type으로 기록된다. */
     public static final String COIN_REF_TYPE = "MATCHING_QUEUE";
 
+    /** 매칭 확정 시각(시). MatchingScheduler의 확정 cron과 홈 카운트다운(신청 마감·결과 발표)의 공통 기준. */
+    public static final int CONFIRM_HOUR = 22;
+
     /** 큐 참가: 신규 대기 항목 생성. id는 영속화 시점에 부여, matchedAt은 매칭 확정 전까지 null. */
     public static MatchingQueue join(Long userId, String gender, LocalDate birthday, LocalDateTime queuedAt) {
         return new MatchingQueue(null, userId, gender, birthday, MatchingQueueStatus.QUEUED, queuedAt, null);
