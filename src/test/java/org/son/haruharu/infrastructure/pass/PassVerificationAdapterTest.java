@@ -89,6 +89,31 @@ class PassVerificationAdapterTest {
     }
 
     @Test
+    @DisplayName("VERIFIED이지만 필수값(ci)이 누락되면 PassVerificationException이 발생한다")
+    void givenVerifiedButMissingRequiredField_whenVerify_thenThrowsPassVerificationException() {
+        String body = """
+            {
+              "status": "VERIFIED",
+              "verifiedCustomer": {
+                "ci": null,
+                "di": "di-value",
+                "name": "홍길동",
+                "birthDate": "1998-05-15",
+                "gender": "MALE",
+                "phoneNumber": "01012345678",
+                "operator": "SKT",
+                "isForeigner": false
+              }
+            }
+            """;
+        server.expect(requestTo(EXPECTED_URI))
+              .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> adapter.verify(IV_ID))
+            .isInstanceOf(PassVerificationException.class);
+    }
+
+    @Test
     @DisplayName("포트원 조회가 404로 실패하면 PassVerificationException이 발생한다")
     void givenNotFound_whenVerify_thenThrowsPassVerificationException() {
         server.expect(requestTo(EXPECTED_URI))

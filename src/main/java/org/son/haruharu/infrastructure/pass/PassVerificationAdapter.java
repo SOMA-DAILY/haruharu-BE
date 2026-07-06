@@ -58,13 +58,18 @@ public class PassVerificationAdapter implements PassVerificationPort {
     }
 
     private PassVerificationResult toResult(PortOneIdentityResponse.VerifiedCustomer c) {
+        if (c.ci() == null || c.di() == null || c.name() == null
+                || c.birthDate() == null || c.gender() == null
+                || c.phoneNumber() == null || c.operator() == null) {
+            throw new PassVerificationException();
+        }
         try {
             return new PassVerificationResult(
                     c.ci(), c.di(), c.phoneNumber(),
                     LocalDate.parse(c.birthDate()),
                     c.gender(), c.name(), c.operator(), c.isForeigner()
             );
-        } catch (DateTimeParseException | NullPointerException e) {
+        } catch (DateTimeParseException e) {
             throw new PassVerificationException();
         }
     }
