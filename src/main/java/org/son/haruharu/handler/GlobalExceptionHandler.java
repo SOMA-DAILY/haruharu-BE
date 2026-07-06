@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.common.ApiErrorDetail;
 import org.son.haruharu.common.ApiResponse;
+import org.son.haruharu.common.exception.BadGatewayException;
 import org.son.haruharu.common.exception.BadRequestException;
 import org.son.haruharu.common.exception.ConflictException;
 import org.son.haruharu.common.exception.ForbiddenException;
@@ -52,6 +53,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
+    }
+
+    @ExceptionHandler(BadGatewayException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBadGateway(BadGatewayException e) {
+        log.error("Upstream service error: {}", e.getCode(), e);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 

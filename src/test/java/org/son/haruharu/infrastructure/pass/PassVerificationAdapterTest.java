@@ -3,6 +3,7 @@ package org.son.haruharu.infrastructure.pass;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.son.haruharu.infrastructure.pass.exception.PassProviderException;
 import org.son.haruharu.infrastructure.pass.exception.PassVerificationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -98,12 +99,12 @@ class PassVerificationAdapterTest {
     }
 
     @Test
-    @DisplayName("포트원 서버 오류(5xx) 시 PassVerificationException이 발생한다")
-    void givenServerError_whenVerify_thenThrowsPassVerificationException() {
+    @DisplayName("포트원 서버 오류(5xx) 시 PassProviderException이 발생한다")
+    void givenServerError_whenVerify_thenThrowsPassProviderException() {
         server.expect(requestTo(EXPECTED_URI))
               .andRespond(withServerError());
 
         assertThatThrownBy(() -> adapter.verify(IV_ID))
-            .isInstanceOf(PassVerificationException.class);
+            .isInstanceOf(PassProviderException.class);
     }
 }

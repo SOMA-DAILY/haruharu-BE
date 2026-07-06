@@ -9,7 +9,7 @@ public final class MaskingUtils {
         if (value == null || value.isBlank()) {
             return "***";
         }
-        int keep = Math.min(4, value.length());
+        int keep = Math.min(4, value.length() / 2);
         return value.substring(0, keep) + "***";
     }
 }
