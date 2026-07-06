@@ -43,6 +43,15 @@ oauth:
       issuer: https://appleid.apple.com
       public-key-uri: https://appleid.apple.com/auth/keys
 
+portone:
+  store-id: ${PORTONE_STORE_ID:}
+  api-secret: ${PORTONE_V2_API_SECRET:}
+  channel-key: ${PORTONE_CHANNEL_KEY:}
+
+identity:
+  encryption:
+    key: ${IDENTITY_ENCRYPTION_KEY:}
+
 management:
   endpoints:
     web:

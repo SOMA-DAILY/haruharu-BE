@@ -7,6 +7,6 @@ import java.util.Optional;
 public interface UserIdentityJpaRepository extends JpaRepository<UserIdentityEntity, Long> {
     Optional<UserIdentityEntity> findByUserId(Long userId);
     boolean existsByUserId(Long userId);
-    boolean existsByCi(String ci);
+    boolean existsByCiHash(String ciHash);
     void deleteByUserId(Long userId);
 }

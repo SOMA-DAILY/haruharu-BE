@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
+import org.son.haruharu.domain.identity.business.exception.DuplicateCiException;
 import org.son.haruharu.domain.identity.business.exception.UserAlreadyVerifiedException;
 import org.son.haruharu.domain.identity.implement.UserIdentityReader;
 import org.son.haruharu.domain.identity.implement.UserIdentityWriter;
@@ -40,7 +41,7 @@ class IdentityServiceTest {
     @DisplayName("이미 인증된 유저가 본인인증 요청 시 UserAlreadyVerifiedException이 발생한다")
     void givenAlreadyVerifiedUser_whenVerifyIdentity_thenThrowsUserAlreadyVerifiedException() {
         Long userId = 1L;
-        VerifyIdentityCommand command = new VerifyIdentityCommand("pass-token");
+        VerifyIdentityCommand command = new VerifyIdentityCommand("iv-token");
 
         given(userIdentityReader.existsByUserId(userId)).willReturn(true);
 
@@ -49,20 +50,40 @@ class IdentityServiceTest {
     }
 
     @Test
-    @DisplayName("미인증 유저가 유효한 PASS 토큰으로 인증 요청 시 인증 정보가 저장된다")
-    void givenUnverifiedUser_whenVerifyIdentityWithValidToken_thenSavesIdentity() {
+    @DisplayName("미인증 유저가 유효한 인증 식별자로 요청 시 인증 정보가 저장된다")
+    void givenUnverifiedUser_whenVerifyIdentityWithValidId_thenSavesIdentity() {
         Long userId = 2L;
-        VerifyIdentityCommand command = new VerifyIdentityCommand("pass-token");
+        VerifyIdentityCommand command = new VerifyIdentityCommand("iv-token");
         PassVerificationResult passResult = new PassVerificationResult(
             "ci-value", "di-value", "010-1234-5678",
             LocalDate.of(1998, 5, 15), "MALE", "홍길동", "SKT", false
         );
 
         given(userIdentityReader.existsByUserId(userId)).willReturn(false);
-        given(passVerificationPort.verify("pass-token")).willReturn(passResult);
+        given(passVerificationPort.verify("iv-token")).willReturn(passResult);
+        given(userIdentityReader.existsByCi("ci-value")).willReturn(false);
 
         identityService.verifyIdentity(userId, command);
 
         then(userIdentityWriter).should().save(any());
+    }
+
+    @Test
+    @DisplayName("이미 다른 계정에 연결된 CI로 인증 요청 시 DuplicateCiException이 발생한다")
+    void givenDuplicateCi_whenVerifyIdentity_thenThrowsDuplicateCiException() {
+        Long userId = 3L;
+        VerifyIdentityCommand command = new VerifyIdentityCommand("iv-token");
+        PassVerificationResult passResult = new PassVerificationResult(
+            "ci-value", "di-value", "010-1234-5678",
+            LocalDate.of(1998, 5, 15), "MALE", "홍길동", "SKT", false
+        );
+
+        given(userIdentityReader.existsByUserId(userId)).willReturn(false);
+        given(passVerificationPort.verify("iv-token")).willReturn(passResult);
+        given(userIdentityReader.existsByCi("ci-value")).willReturn(true);
+
+        assertThatThrownBy(() -> identityService.verifyIdentity(userId, command))
+            .isInstanceOf(DuplicateCiException.class);
+        then(userIdentityWriter).shouldHaveNoInteractions();
     }
 }
