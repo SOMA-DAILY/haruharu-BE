@@ -4,13 +4,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
+import org.son.haruharu.domain.user.business.dto.OnboardingStatusResponse;
 import org.son.haruharu.domain.user.business.dto.UserProfileResponse;
+import org.son.haruharu.domain.user.business.exception.InactiveUserException;
+import org.son.haruharu.domain.user.business.exception.OnboardingIncompleteException;
+import org.son.haruharu.domain.value.business.ValueService;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.domain.user.implement.UserStatus;
@@ -25,9 +30,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -36,6 +43,7 @@ class UserServiceTest {
     @Mock UserWriter userWriter;
     @Mock ProfileService profileService;
     @Mock IdentityService identityService;
+    @Mock ValueService valueService;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     // 2026-06-26 고정 → 1999-06-26생은 27세
@@ -46,7 +54,7 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userReader, userWriter, profileService, identityService, clock);
+        userService = new UserService(userReader, userWriter, profileService, identityService, valueService, clock);
     }
 
     @Test
@@ -86,6 +94,93 @@ class UserServiceTest {
         UserProfileResponse result = userService.getMyProfile(userId);
 
         assertThat(result.userStatus()).isEqualTo("UNVERIFIED");
+    }
+
+    // ===================== completeOnboarding =====================
+
+    @Test
+    @DisplayName("프로필·가치관·이미지가 모두 완료된 ONBOARDING 유저가 온보딩 완료 시 ACTIVE로 전이된다")
+    void givenCompletedData_whenCompleteOnboarding_thenTransitionsToActive() {
+        Long userId = 1L;
+        LocalDateTime createdAt = LocalDateTime.of(2026, 6, 1, 0, 0);
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ONBOARDING, createdAt));
+        given(profileService.hasCompletedProfile(userId)).willReturn(true);
+        given(valueService.hasAnswered(userId)).willReturn(true);
+        given(identityService.findVerified(userId)).willReturn(Optional.empty());
+        given(userWriter.save(any())).willReturn(new User(userId, UserStatus.ACTIVE, createdAt));
+
+        OnboardingStatusResponse result = userService.completeOnboarding(userId);
+
+        assertThat(result.userStatus()).isEqualTo("ACTIVE");
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        then(userWriter).should().save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(captor.getValue().createdAt()).isEqualTo(createdAt);
+    }
+
+    @Test
+    @DisplayName("온보딩 완료 후 본인인증까지 되어 있으면 user_status가 VERIFIED로 반환된다")
+    void givenVerifiedIdentity_whenCompleteOnboarding_thenReturnsVerified() {
+        Long userId = 1L;
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ONBOARDING, LocalDateTime.now()));
+        given(profileService.hasCompletedProfile(userId)).willReturn(true);
+        given(valueService.hasAnswered(userId)).willReturn(true);
+        given(identityService.findVerified(userId))
+            .willReturn(Optional.of(new VerifiedIdentity("MALE", LocalDate.of(1999, 6, 26))));
+        given(userWriter.save(any())).willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.now()));
+
+        OnboardingStatusResponse result = userService.completeOnboarding(userId);
+
+        assertThat(result.userStatus()).isEqualTo("VERIFIED");
+    }
+
+    @Test
+    @DisplayName("프로필이 미완인 유저가 온보딩 완료 시 예외가 발생하고 상태가 전이되지 않는다")
+    void givenIncompleteProfile_whenCompleteOnboarding_thenThrows() {
+        Long userId = 1L;
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ONBOARDING, LocalDateTime.now()));
+        given(profileService.hasCompletedProfile(userId)).willReturn(false);
+
+        assertThatThrownBy(() -> userService.completeOnboarding(userId))
+            .isInstanceOf(OnboardingIncompleteException.class);
+        then(userWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("가치관 답변이 없는 유저가 온보딩 완료 시 예외가 발생한다")
+    void givenNoValueAnswers_whenCompleteOnboarding_thenThrows() {
+        Long userId = 1L;
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ONBOARDING, LocalDateTime.now()));
+        given(profileService.hasCompletedProfile(userId)).willReturn(true);
+        given(valueService.hasAnswered(userId)).willReturn(false);
+
+        assertThatThrownBy(() -> userService.completeOnboarding(userId))
+            .isInstanceOf(OnboardingIncompleteException.class);
+        then(userWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("차단(BANNED)된 유저가 온보딩 완료 호출 시 InactiveUserException이 발생하고 상태가 전이되지 않는다")
+    void givenBannedUser_whenCompleteOnboarding_thenThrowsForbidden() {
+        Long userId = 1L;
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.BANNED, LocalDateTime.now()));
+
+        assertThatThrownBy(() -> userService.completeOnboarding(userId))
+            .isInstanceOf(InactiveUserException.class);
+        then(userWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("이미 ACTIVE인 유저가 온보딩 완료 시 재저장 없이 현재 상태를 반환한다(멱등)")
+    void givenAlreadyActiveUser_whenCompleteOnboarding_thenIdempotentNoWrite() {
+        Long userId = 1L;
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.now()));
+        given(identityService.findVerified(userId)).willReturn(Optional.empty());
+
+        OnboardingStatusResponse result = userService.completeOnboarding(userId);
+
+        assertThat(result.userStatus()).isEqualTo("ACTIVE");
+        then(userWriter).should(never()).save(any());
     }
 
     @Test

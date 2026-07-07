@@ -39,6 +39,11 @@ public class ValueService {
         return ValueQuestionsResponse.from(valueQuestionReader.getAllActive());
     }
 
+    /** 온보딩 완료 판정용: 가치관 답변이 하나라도 저장되어 있는지 여부. */
+    public boolean hasAnswered(Long userId) {
+        return !userValueAnswerReader.getAllByUserId(userId).isEmpty();
+    }
+
     @Transactional
     public SavedAnswersResponse saveAnswers(Long userId, SaveValueAnswersCommand command) {
         // 질문은 참조 데이터(소량, enum 성격)이므로 활성 질문 전체와 기존 답변을 각 1회만 로드한다(N+1 제거).

@@ -27,4 +27,12 @@ public record CoinCreditCommand(
     public static CoinCreditCommand matchRefund(Long userId, long amount, String refType, String refId) {
         return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.MATCH_REFUND, refType, refId);
     }
+
+    /**
+     * 첫 가입 보너스 적립. 리워드 버킷(환불 회수 무관)으로 적립하고, refType/refId로 유저당 1회 멱등을 보장한다.
+     */
+    public static CoinCreditCommand signupBonus(Long userId, long amount) {
+        return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.SIGNUP_BONUS,
+                "SIGNUP_BONUS", String.valueOf(userId));
+    }
 }
