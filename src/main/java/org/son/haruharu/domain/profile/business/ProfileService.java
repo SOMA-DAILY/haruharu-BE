@@ -82,6 +82,13 @@ public class ProfileService {
         userImageWriter.deleteAllByUserId(userId);
     }
 
+    /** 회원 탈퇴 시 프로필·이미지 삭제(soft). 이미지 원본은 S3에서 함께 제거한다. */
+    @Transactional
+    public void deleteProfileAndImages(Long userId) {
+        deleteAllImages(userId);
+        userProfileWriter.deleteByUserId(userId);
+    }
+
     @Transactional
     public ProfileResponse updateProfile(Long userId, UpdateProfileCommand command) {
         UserProfile existing = userProfileReader.findByUserId(userId)

@@ -14,4 +14,8 @@ public class UserValueAnswerWriter {
     public UserValueAnswer save(UserValueAnswer userValueAnswer) {
         return userValueAnswerRepository.save(userValueAnswer);
     }
+
+    public void deleteByUserId(Long userId) {
+        userValueAnswerRepository.deleteByUserId(userId);
+    }
 }

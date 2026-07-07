@@ -7,4 +7,6 @@ import java.util.Optional;
 public interface CoinWalletJpaRepository extends JpaRepository<CoinWalletEntity, Long> {
 
     Optional<CoinWalletEntity> findByUserId(Long userId);
+
+    void deleteByUserId(Long userId);
 }

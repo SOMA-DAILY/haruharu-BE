@@ -12,4 +12,8 @@ public class CoinWalletWriter {
     public CoinWallet save(CoinWallet wallet) {
         return coinWalletRepository.save(wallet);
     }
+
+    public void deleteByUserId(Long userId) {
+        coinWalletRepository.deleteByUserId(userId);
+    }
 }

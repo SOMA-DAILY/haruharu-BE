@@ -107,6 +107,15 @@ public class CoinService {
         }
     }
 
+    /**
+     * 회원 탈퇴 시 구름 지갑 삭제(soft). 유저의 다른 데이터와 동일하게 지갑 행을 soft-delete한다.
+     * 물리 삭제가 아니므로 원장·지갑 데이터는 결제 보관·환불 대응을 위해 그대로 남는다. 지갑이 없으면 무시.
+     */
+    @Transactional
+    public void deleteWallet(Long userId) {
+        coinWalletWriter.deleteByUserId(userId);
+    }
+
     /** 코인 환불 회수. PAID 잔액에서 차감(음수 허용)하고 원장에 기록한다. */
     @Transactional
     public void revoke(CoinRevokeCommand command) {

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.profile.business.ProfileService;
@@ -46,6 +47,7 @@ class UserServiceTest {
     @Mock ProfileService profileService;
     @Mock IdentityService identityService;
     @Mock ValueService valueService;
+    @Mock CoinService coinService;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     // 2026-06-26 고정 → 1999-06-26생은 27세
@@ -56,7 +58,7 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userReader, userWriter, profileService, identityService, valueService, clock);
+        userService = new UserService(userReader, userWriter, profileService, identityService, valueService, coinService, clock);
     }
 
     @Test
@@ -186,8 +188,8 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("로그인한 유저가 탈퇴 시 이미지·인증 정보 삭제 후 상태가 DELETED로 변경된다")
-    void givenLoggedInUser_whenWithdraw_thenDeletesPiiAndChangesStatusToDeleted() {
+    @DisplayName("로그인한 유저가 탈퇴 시 프로필·이미지·가치관·구름 지갑을 soft-delete 캐스케이드하고 상태가 DELETED로 변경된다")
+    void givenLoggedInUser_whenWithdraw_thenCascadesSoftDeleteAndSetsDeleted() {
         Long userId = 1L;
         User user = new User(userId, UserStatus.ACTIVE, LocalDateTime.now());
 
@@ -196,8 +198,13 @@ class UserServiceTest {
 
         userService.withdraw(userId);
 
-        then(profileService).should().deleteAllImages(userId);
+        then(profileService).should().deleteProfileAndImages(userId);
+        then(valueService).should().deleteAnswers(userId);
+        then(coinService).should().deleteWallet(userId);
         then(identityService).should().deleteIdentity(userId);
-        then(userWriter).should().save(any());
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        then(userWriter).should().save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(UserStatus.DELETED);
     }
 }
