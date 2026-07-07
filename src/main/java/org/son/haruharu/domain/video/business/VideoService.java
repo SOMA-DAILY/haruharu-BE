@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** 영상 업로드 라이프사이클(presign 발급 → 업로드 제출 → 재촬영 삭제). */
 @Service
+@Transactional(readOnly = true)
 public class VideoService {
 
     private static final Map<String, String> ALLOWED_VIDEO_TYPES = Map.of(

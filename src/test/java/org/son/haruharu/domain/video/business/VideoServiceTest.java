@@ -20,6 +20,7 @@ import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
 import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
+import org.son.haruharu.domain.video.business.event.VideoUploadedEvent;
 import org.son.haruharu.domain.video.business.exception.DuplicateSlotUploadException;
 import org.son.haruharu.domain.video.business.exception.InvalidVideoExtensionException;
 import org.son.haruharu.domain.video.business.exception.NotVideoOwnerException;
@@ -116,6 +117,8 @@ class VideoServiceTest {
         assertThat(result.dayNumber()).isEqualTo(1);
         assertThat(result.slotIndex()).isEqualTo(SLOT_INDEX);
         assertThat(result.missionId()).isNull();
+        // 완주 보상 트리거용 업로드 이벤트가 발행된다
+        then(eventPublisher).should().publishEvent(new VideoUploadedEvent(memberId, 1));
     }
 
     @Test

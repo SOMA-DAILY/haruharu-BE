@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
  * (roomMemberId, dayNumber)당 1회 — daily_upload_reward 테이블 UNIQUE로 멱등 보장. 재촬영 삭제/재업로드에도 재지급·회수 없음.
  */
 @Service
+@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class UploadRewardService {
 
