@@ -34,6 +34,11 @@ jwt:
   access-token-expiry-ms: 1800000
   refresh-token-expiry-ms: 2592000000
 
+# 매칭 정책. enter-cost: 신청 차감 = 미성사 환불 = 불발 통지 개수(구름). 값 변경은 이 설정만 수정.
+haruharu:
+  matching:
+    enter-cost: ${MATCHING_ENTER_COST:5}
+
 oauth:
   providers:
     kakao:

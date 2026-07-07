@@ -112,6 +112,7 @@ class PaymentServiceTest {
         ArgumentCaptor<PaymentCompletedEvent> captor = ArgumentCaptor.forClass(PaymentCompletedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().userId()).isEqualTo(Long.parseLong(userId));
+        assertThat(captor.getValue().coinAmount()).isEqualTo(100);
     }
 
     @Test

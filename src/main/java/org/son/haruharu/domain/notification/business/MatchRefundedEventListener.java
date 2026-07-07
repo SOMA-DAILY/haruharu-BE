@@ -20,6 +20,6 @@ public class MatchRefundedEventListener {
     // 커밋 후 발송 — FCM 장애가 매칭 배치를 롤백시키지 않도록
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(MatchRefundedEvent event) {
-        pushSendService.sendToUsers(event.userIds(), NotificationType.COIN_REFUNDED, Map.of());
+        pushSendService.sendToUsers(event.userIds(), NotificationType.COIN_REFUNDED, Map.of(), event.refundAmount());
     }
 }

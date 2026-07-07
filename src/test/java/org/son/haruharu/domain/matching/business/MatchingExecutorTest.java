@@ -46,12 +46,13 @@ class MatchingExecutorTest {
     @Mock ApplicationEventPublisher eventPublisher;
 
     MatchingExecutor executor;
+    final MatchingProperties matchingProperties = new MatchingProperties(5L);
 
     @BeforeEach
     void setUp() {
         executor = new MatchingExecutor(
             matchingQueueReader, matchingQueueWriter,
-            new FifoMatchingStrategy(), roomWriter, roomMemberWriter, coinService, eventPublisher);
+            new FifoMatchingStrategy(), roomWriter, roomMemberWriter, coinService, eventPublisher, matchingProperties);
     }
 
     private List<MatchingQueue> queues(String gender, int count) {
@@ -118,7 +119,7 @@ class MatchingExecutorTest {
         ArgumentCaptor<CoinCreditCommand> creditCaptor = ArgumentCaptor.forClass(CoinCreditCommand.class);
         then(coinService).should(times(5)).credit(creditCaptor.capture());
         assertThat(creditCaptor.getAllValues()).allSatisfy(c -> {
-            assertThat(c.amount()).isEqualTo(MatchingQueue.ENTER_COST);
+            assertThat(c.amount()).isEqualTo(matchingProperties.enterCost());
             assertThat(c.reason()).isEqualTo(CoinLedgerReason.MATCH_REFUND);
         });
         // 환불 대상 userId가 잔류 큐 유저와 일치
@@ -204,6 +205,7 @@ class MatchingExecutorTest {
         then(eventPublisher).should(times(1)).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().userIds())
             .containsExactlyInAnyOrderElementsOf(all.stream().map(MatchingQueue::userId).toList());
+        assertThat(eventCaptor.getValue().refundAmount()).isEqualTo(matchingProperties.enterCost());
     }
 
     @Test

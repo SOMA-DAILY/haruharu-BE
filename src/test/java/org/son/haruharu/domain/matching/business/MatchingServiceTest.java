@@ -49,11 +49,12 @@ class MatchingServiceTest {
     @Mock RoomService roomService;
 
     MatchingService matchingService;
+    final MatchingProperties matchingProperties = new MatchingProperties(5L);
 
     @BeforeEach
     void setUp() {
         matchingService = new MatchingService(
-            matchingQueueReader, matchingQueueWriter, identityService, coinService, roomService);
+            matchingQueueReader, matchingQueueWriter, identityService, coinService, roomService, matchingProperties);
     }
 
     private void givenVerified(Long userId) {
@@ -130,7 +131,7 @@ class MatchingServiceTest {
         then(coinService).should().spend(captor.capture());
         CoinSpendCommand spend = captor.getValue();
         assertThat(spend.userId()).isEqualTo(userId);
-        assertThat(spend.amount()).isEqualTo(MatchingQueue.ENTER_COST);
+        assertThat(spend.amount()).isEqualTo(matchingProperties.enterCost());
         assertThat(spend.reason()).isEqualTo(CoinLedgerReason.MATCH_ENTER);
         assertThat(spend.refType()).isEqualTo("MATCHING_QUEUE");
         assertThat(spend.refId()).isEqualTo(result.queueId().toString());
@@ -168,7 +169,7 @@ class MatchingServiceTest {
         then(coinService).should().credit(creditCaptor.capture());
         CoinCreditCommand credit = creditCaptor.getValue();
         assertThat(credit.userId()).isEqualTo(userId);
-        assertThat(credit.amount()).isEqualTo(MatchingQueue.ENTER_COST);
+        assertThat(credit.amount()).isEqualTo(matchingProperties.enterCost());
         assertThat(credit.bucket()).isEqualTo(CoinBucket.REWARD);
         assertThat(credit.reason()).isEqualTo(CoinLedgerReason.MATCH_REFUND);
         assertThat(credit.refType()).isEqualTo("MATCHING_QUEUE");

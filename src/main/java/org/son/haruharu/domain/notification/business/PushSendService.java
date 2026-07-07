@@ -35,7 +35,11 @@ public class PushSendService {
         this.pushPort = pushPort;
     }
 
-    public void sendToUsers(List<Long> userIds, NotificationType type, Map<String, String> data) {
+    /**
+     * bodyArgs는 type의 title/body에 있는 %d 등 포맷 지정자를 치환한다(환불·충전 개수 등 가변값).
+     * 지정자가 없는 타입은 bodyArgs를 넘기지 않으면 되고, 넘겨도 무시된다.
+     */
+    public void sendToUsers(List<Long> userIds, NotificationType type, Map<String, String> data, Object... bodyArgs) {
         try {
             List<Long> enabledUserIds = excludePushDisabled(userIds);
             if (enabledUserIds.isEmpty()) {
@@ -49,13 +53,19 @@ public class PushSendService {
             }
             Map<String, String> payload = new HashMap<>(data);
             payload.put("type", type.name());
-            List<String> invalidTokens = pushPort.send(new PushMessage(tokens, type.title(), type.body(), payload));
+            String title = format(type.title(), bodyArgs);
+            String body = format(type.body(), bodyArgs);
+            List<String> invalidTokens = pushPort.send(new PushMessage(tokens, title, body, payload));
             if (!invalidTokens.isEmpty()) {
                 deviceTokenWriter.deleteAllByTokens(invalidTokens);
             }
         } catch (Exception e) {
             log.error("푸시 발송 실패: type={} userIds={}", type, userIds, e);
         }
+    }
+
+    private static String format(String template, Object[] args) {
+        return args.length == 0 ? template : String.format(template, args);
     }
 
     private List<Long> excludePushDisabled(List<Long> userIds) {

@@ -44,6 +44,7 @@ public class MatchingExecutor {
     private final RoomMemberWriter roomMemberWriter;
     private final CoinService coinService;
     private final ApplicationEventPublisher eventPublisher;
+    private final MatchingProperties matchingProperties;
 
     public MatchingExecutor(
         MatchingQueueReader matchingQueueReader,
@@ -52,7 +53,8 @@ public class MatchingExecutor {
         RoomWriter roomWriter,
         RoomMemberWriter roomMemberWriter,
         CoinService coinService,
-        ApplicationEventPublisher eventPublisher
+        ApplicationEventPublisher eventPublisher,
+        MatchingProperties matchingProperties
     ) {
         this.matchingQueueReader = matchingQueueReader;
         this.matchingQueueWriter = matchingQueueWriter;
@@ -61,6 +63,7 @@ public class MatchingExecutor {
         this.roomMemberWriter = roomMemberWriter;
         this.coinService = coinService;
         this.eventPublisher = eventPublisher;
+        this.matchingProperties = matchingProperties;
     }
 
     /**
@@ -93,7 +96,7 @@ public class MatchingExecutor {
         List<Long> refundedUserIds = expireAndRefundLeftovers(queued, matchedIds, matchedAt);
         if (!refundedUserIds.isEmpty()) {
             // 커밋 후 발송 — 불발 통지 푸시 실패가 매칭 배치를 롤백시키지 않도록
-            eventPublisher.publishEvent(new MatchRefundedEvent(refundedUserIds));
+            eventPublisher.publishEvent(new MatchRefundedEvent(refundedUserIds, matchingProperties.enterCost()));
         }
         return groups.size();
     }
@@ -107,7 +110,7 @@ public class MatchingExecutor {
                 // 조건부 전이: 배치 조회 후 유저가 직접 취소(환불 완료)한 건은 전이 실패 → 환불 중복 방지.
                 if (matchingQueueWriter.expireIfQueued(q.id(), now)) {
                     coinService.credit(CoinCreditCommand.matchRefund(
-                        q.userId(), MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, q.id().toString()));
+                        q.userId(), matchingProperties.enterCost(), MatchingQueue.COIN_REF_TYPE, q.id().toString()));
                     refundedUserIds.add(q.userId());
                 }
             });

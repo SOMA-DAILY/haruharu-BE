@@ -68,6 +68,22 @@ class PushSendServiceTest {
     }
 
     @Test
+    @DisplayName("bodyArgs를 넘기면 문구의 %d가 실제 값으로 치환된다")
+    void givenBodyArgs_whenSend_thenFormatsPlaceholder() {
+        given(deviceTokenReader.findAllByUserIds(List.of(1L)))
+                .willReturn(List.of(new DeviceToken(10L, 1L, "token-1")));
+        given(pushPort.send(any())).willReturn(List.of());
+
+        service.sendToUsers(List.of(1L), NotificationType.COIN_REFUNDED, Map.of(), 5L);
+
+        ArgumentCaptor<PushMessage> captor = ArgumentCaptor.forClass(PushMessage.class);
+        then(pushPort).should().send(captor.capture());
+        assertThat(captor.getValue().title())
+                .contains("5")
+                .doesNotContain("%d");
+    }
+
+    @Test
     @DisplayName("FCM이 UNREGISTERED로 응답한 토큰은 삭제하고 흐름은 계속된다")
     void givenUnregisteredTokens_whenSend_thenDeletesThem() {
         given(deviceTokenReader.findAllByUserIds(List.of(1L))).willReturn(List.of(

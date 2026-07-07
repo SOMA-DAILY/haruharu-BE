@@ -12,9 +12,6 @@ public record MatchingQueue(
         LocalDateTime queuedAt,
         LocalDateTime matchedAt
 ) {
-    /** 참가 비용(구름). 취소·미성사 환불액과 동일해야 한다. */
-    public static final long ENTER_COST = 5L;
-
     /** 코인 원장 참조 타입. 차감·환불 ledger의 ref_type으로 기록된다. */
     public static final String COIN_REF_TYPE = "MATCHING_QUEUE";
 

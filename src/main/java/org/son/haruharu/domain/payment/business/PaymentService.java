@@ -102,7 +102,7 @@ public class PaymentService {
 
         coinService.credit(CoinCreditCommand.purchase(userId, product.coinAmount(), REF_TYPE, saved.id().toString()));
         // 커밋 후 발송 — 결제 완료 통지 푸시 실패가 충전 처리를 롤백시키지 않도록
-        eventPublisher.publishEvent(new PaymentCompletedEvent(userId));
+        eventPublisher.publishEvent(new PaymentCompletedEvent(userId, product.coinAmount()));
         return saved.id();
     }
 
