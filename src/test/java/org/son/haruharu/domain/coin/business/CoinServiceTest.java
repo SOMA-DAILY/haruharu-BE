@@ -8,6 +8,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
+import org.son.haruharu.domain.coin.business.command.CoinRevokeCommand;
 import org.son.haruharu.domain.coin.business.command.CoinSpendCommand;
 import org.son.haruharu.domain.coin.business.dto.WalletResponse;
 import org.son.haruharu.domain.coin.implement.CoinBucket;
@@ -105,7 +106,11 @@ class CoinServiceTest {
         ArgumentCaptor<CoinWallet> walletCaptor = ArgumentCaptor.forClass(CoinWallet.class);
         verify(coinWalletWriter).save(walletCaptor.capture());
         assertThat(walletCaptor.getValue().paidBalance()).isEqualTo(100);
-        verify(coinLedgerWriter, times(1)).append(org.mockito.ArgumentMatchers.any(CoinLedger.class));
+
+        // 원장에 거래 후 총 잔액(balance_after) 스냅샷이 기록된다
+        ArgumentCaptor<CoinLedger> ledgerCaptor = ArgumentCaptor.forClass(CoinLedger.class);
+        verify(coinLedgerWriter, times(1)).append(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue().balanceAfter()).isEqualTo(100);
     }
 
     @Test
@@ -127,9 +132,25 @@ class CoinServiceTest {
 
         ArgumentCaptor<CoinLedger> ledgerCaptor = ArgumentCaptor.forClass(CoinLedger.class);
         verify(coinLedgerWriter, times(2)).append(ledgerCaptor.capture());
+        // 총 150에서 80 소모: 리워드 -50 → 잔액 100, 유료 -30 → 잔액 70 (순차 balance_after)
         assertThat(ledgerCaptor.getAllValues())
-                .anyMatch(l -> l.bucket() == CoinBucket.REWARD && l.delta() == -50)
-                .anyMatch(l -> l.bucket() == CoinBucket.PAID && l.delta() == -30);
+                .anyMatch(l -> l.bucket() == CoinBucket.REWARD && l.delta() == -50 && l.balanceAfter() == 100)
+                .anyMatch(l -> l.bucket() == CoinBucket.PAID && l.delta() == -30 && l.balanceAfter() == 70);
+    }
+
+    @Test
+    @DisplayName("환불 회수 시 PAID를 차감하고 차감 후 총 잔액을 balance_after로 원장에 기록한다")
+    void givenWallet_whenRevoke_thenAppendsLedgerWithSnapshot() {
+        // paid=100, reward=20 (총 120) → 30 회수 → paid 70, 총 잔액 90
+        given(coinWalletReader.getByUserId(userId)).willReturn(new CoinWallet(1L, userId, 100, 20, null));
+
+        coinService.revoke(new CoinRevokeCommand(userId, 30, "REFUND", "ref-x"));
+
+        ArgumentCaptor<CoinLedger> captor = ArgumentCaptor.forClass(CoinLedger.class);
+        verify(coinLedgerWriter).append(captor.capture());
+        assertThat(captor.getValue().delta()).isEqualTo(-30);
+        assertThat(captor.getValue().bucket()).isEqualTo(CoinBucket.PAID);
+        assertThat(captor.getValue().balanceAfter()).isEqualTo(90);
     }
 
     @Test

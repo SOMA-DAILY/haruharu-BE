@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
+import org.son.haruharu.domain.room.business.dto.TodayResponse.RewardStatus;
+import org.son.haruharu.domain.room.implement.DailyUploadRewardReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -35,11 +38,16 @@ class RoomTodayServiceTest {
     @Mock RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
     @Mock VideoPostReader videoPostReader;
+    @Mock DailyUploadRewardReader dailyUploadRewardReader;
+
+    private final UploadRewardProperties rewardProps =
+            new UploadRewardProperties(Map.of(1, 2L, 2, 2L, 3, 1L));
 
     private RoomTodayService serviceAt(int hour) {
         ZonedDateTime fixed = ZonedDateTime.of(2026, 6, 26, hour, 0, 0, 0, SEOUL);
         Clock clock = Clock.fixed(fixed.toInstant(), SEOUL);
-        return new RoomTodayService(roomReader, roomMemberReader, videoPostReader, clock);
+        return new RoomTodayService(roomReader, roomMemberReader, videoPostReader,
+                dailyUploadRewardReader, rewardProps, clock);
     }
 
     @Test
@@ -84,6 +92,46 @@ class RoomTodayServiceTest {
         assertThat(result.currentDay()).isZero();
         assertThat(result.slots()).isEmpty();
         assertThat(result.totalSlots()).isZero();
+    }
+
+    @Test
+    @DisplayName("완주 보상 미지급 상태면 Day1 rewardAmount=2·rewardStatus=LOCKED을 반환한다")
+    void givenNotRewarded_whenGetToday_thenRewardLocked() {
+        Long userId = 1L;
+        Long roomId = 100L;
+        Long memberId = 200L;
+        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
+            LocalDateTime.of(2026, 6, 26, 9, 0), null);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
+            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room));
+        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(2L);
+        given(dailyUploadRewardReader.isRewarded(memberId, 1)).willReturn(false);
+
+        TodayResponse result = serviceAt(12).getToday(roomId, userId);
+
+        assertThat(result.rewardAmount()).isEqualTo(2);
+        assertThat(result.rewardStatus()).isEqualTo(RewardStatus.LOCKED);
+    }
+
+    @Test
+    @DisplayName("완주 보상이 이미 지급됐으면 rewardStatus=EARNED을 반환한다")
+    void givenRewarded_whenGetToday_thenRewardEarned() {
+        Long userId = 1L;
+        Long roomId = 100L;
+        Long memberId = 200L;
+        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
+            LocalDateTime.of(2026, 6, 26, 9, 0), null);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
+            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room));
+        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(5L);
+        given(dailyUploadRewardReader.isRewarded(memberId, 1)).willReturn(true);
+
+        TodayResponse result = serviceAt(12).getToday(roomId, userId);
+
+        assertThat(result.rewardStatus()).isEqualTo(RewardStatus.EARNED);
+        assertThat(result.rewardAmount()).isEqualTo(2);
     }
 
     @Test

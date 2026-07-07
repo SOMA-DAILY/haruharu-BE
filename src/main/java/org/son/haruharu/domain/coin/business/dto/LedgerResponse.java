@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public record LedgerResponse(
         Long id,
         long delta,
+        long balanceAfter,
         CoinBucket bucket,
         CoinLedgerReason reason,
         String refType,
@@ -19,6 +20,7 @@ public record LedgerResponse(
         return new LedgerResponse(
                 ledger.id(),
                 ledger.delta(),
+                ledger.balanceAfter(),
                 ledger.bucket(),
                 ledger.reason(),
                 ledger.refType(),
