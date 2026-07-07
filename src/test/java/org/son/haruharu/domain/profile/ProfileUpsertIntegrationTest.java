@@ -60,4 +60,25 @@ class ProfileUpsertIntegrationTest {
         assertThat(rows).hasSize(1);                 // upsert 계약: row 1개 유지 (중복 생성 없음)
         assertThat(rows.get(0).toDomain().nickname()).isEqualTo("이틀");
     }
+
+    @Test
+    @DisplayName("마이페이지 편집(음주·흡연 미전송)으로 PUT 시 온보딩에서 설정한 음주·흡연이 보존된다")
+    void givenOmittedDrinkingSmoking_whenUpdate_thenPreservesExisting() {
+        Long userId = 3L;
+        // 온보딩: 음주·흡연 포함 저장
+        profileService.updateProfile(userId, new UpdateProfileCommand(
+            "서울", "회사원",
+            178, "ENFP", "하루", DrinkingStatus.OFTEN, SmokingStatus.E_CIGARETTE));
+
+        // 마이페이지 편집: 음주·흡연 미전송(null) → 기존 값 보존되어야 함
+        profileService.updateProfile(userId, new UpdateProfileCommand(
+            "부산", "학생",
+            165, "INFJ", "이틀", null, null));
+
+        UserProfile saved = userProfileReader.getByUserId(userId);
+        assertThat(saved.nickname()).isEqualTo("이틀");        // 편집 필드는 갱신
+        assertThat(saved.location()).isEqualTo("부산");
+        assertThat(saved.drinkingStatus()).isEqualTo(DrinkingStatus.OFTEN);       // 미전송 → 보존
+        assertThat(saved.smokingStatus()).isEqualTo(SmokingStatus.E_CIGARETTE);   // 미전송 → 보존
+    }
 }
