@@ -81,13 +81,14 @@ public class CoinService {
     public void credit(CoinCreditCommand command) {
         CoinWallet wallet = coinWalletReader.findByUserId(command.userId())
                 .orElseGet(() -> CoinWallet.init(command.userId()));
-        coinWalletWriter.save(wallet.credit(command.bucket(), command.amount()));
+        CoinWallet credited = wallet.credit(command.bucket(), command.amount());
+        coinWalletWriter.save(credited);
         coinLedgerWriter.append(CoinLedger.of(
-                command.userId(), command.amount(), command.bucket(),
+                command.userId(), command.amount(), credited.totalBalance(), command.bucket(),
                 command.reason(), command.refType(), command.refId(), LocalDateTime.now()));
     }
 
-    /** 코인 소모(리워드 먼저). 차감된 버킷마다 원장 항목을 남긴다. */
+    /** 코인 소모(리워드 먼저). 차감된 버킷마다 원장 항목을 남긴다. balanceAfter는 각 항목 적용 후의 총 잔액(순차). */
     @Transactional
     public void spend(CoinSpendCommand command) {
         CoinWallet wallet = coinWalletReader.getByUserId(command.userId());
@@ -95,14 +96,17 @@ public class CoinService {
         coinWalletWriter.save(spend.wallet());
 
         LocalDateTime now = LocalDateTime.now();
+        long balanceAfter = wallet.totalBalance();
         if (spend.fromReward() > 0) {
+            balanceAfter -= spend.fromReward();
             coinLedgerWriter.append(CoinLedger.of(
-                    command.userId(), -spend.fromReward(), CoinBucket.REWARD,
+                    command.userId(), -spend.fromReward(), balanceAfter, CoinBucket.REWARD,
                     command.reason(), command.refType(), command.refId(), now));
         }
         if (spend.fromPaid() > 0) {
+            balanceAfter -= spend.fromPaid();
             coinLedgerWriter.append(CoinLedger.of(
-                    command.userId(), -spend.fromPaid(), CoinBucket.PAID,
+                    command.userId(), -spend.fromPaid(), balanceAfter, CoinBucket.PAID,
                     command.reason(), command.refType(), command.refId(), now));
         }
     }
@@ -111,9 +115,10 @@ public class CoinService {
     @Transactional
     public void revoke(CoinRevokeCommand command) {
         CoinWallet wallet = coinWalletReader.getByUserId(command.userId());
-        coinWalletWriter.save(wallet.revokePaid(command.amount()));
+        CoinWallet revoked = wallet.revokePaid(command.amount());
+        coinWalletWriter.save(revoked);
         coinLedgerWriter.append(CoinLedger.of(
-                command.userId(), -command.amount(), CoinBucket.PAID,
+                command.userId(), -command.amount(), revoked.totalBalance(), CoinBucket.PAID,
                 CoinLedgerReason.REFUND_REVOKE, command.refType(), command.refId(), LocalDateTime.now()));
     }
 

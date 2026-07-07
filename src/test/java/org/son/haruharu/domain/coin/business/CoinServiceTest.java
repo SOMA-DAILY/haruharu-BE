@@ -105,7 +105,11 @@ class CoinServiceTest {
         ArgumentCaptor<CoinWallet> walletCaptor = ArgumentCaptor.forClass(CoinWallet.class);
         verify(coinWalletWriter).save(walletCaptor.capture());
         assertThat(walletCaptor.getValue().paidBalance()).isEqualTo(100);
-        verify(coinLedgerWriter, times(1)).append(org.mockito.ArgumentMatchers.any(CoinLedger.class));
+
+        // 원장에 거래 후 총 잔액(balance_after) 스냅샷이 기록된다
+        ArgumentCaptor<CoinLedger> ledgerCaptor = ArgumentCaptor.forClass(CoinLedger.class);
+        verify(coinLedgerWriter, times(1)).append(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue().balanceAfter()).isEqualTo(100);
     }
 
     @Test
@@ -127,9 +131,10 @@ class CoinServiceTest {
 
         ArgumentCaptor<CoinLedger> ledgerCaptor = ArgumentCaptor.forClass(CoinLedger.class);
         verify(coinLedgerWriter, times(2)).append(ledgerCaptor.capture());
+        // 총 150에서 80 소모: 리워드 -50 → 잔액 100, 유료 -30 → 잔액 70 (순차 balance_after)
         assertThat(ledgerCaptor.getAllValues())
-                .anyMatch(l -> l.bucket() == CoinBucket.REWARD && l.delta() == -50)
-                .anyMatch(l -> l.bucket() == CoinBucket.PAID && l.delta() == -30);
+                .anyMatch(l -> l.bucket() == CoinBucket.REWARD && l.delta() == -50 && l.balanceAfter() == 100)
+                .anyMatch(l -> l.bucket() == CoinBucket.PAID && l.delta() == -30 && l.balanceAfter() == 70);
     }
 
     @Test

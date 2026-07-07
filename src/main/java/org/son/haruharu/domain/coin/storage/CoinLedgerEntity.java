@@ -34,6 +34,10 @@ public class CoinLedgerEntity {
     @Column(nullable = false)
     private long delta;
 
+    // 이 항목 적용 직후의 총 잔액 스냅샷(거래별 잔액 표시용). 페이지네이션 중간에서도 정확한 잔액 제공.
+    @Column(nullable = false)
+    private long balanceAfter;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     private CoinBucket bucket;
@@ -56,6 +60,7 @@ public class CoinLedgerEntity {
         entity.id = ledger.id();
         entity.userId = ledger.userId();
         entity.delta = ledger.delta();
+        entity.balanceAfter = ledger.balanceAfter();
         entity.bucket = ledger.bucket();
         entity.reason = ledger.reason();
         entity.refType = ledger.refType();
@@ -65,6 +70,6 @@ public class CoinLedgerEntity {
     }
 
     public CoinLedger toDomain() {
-        return new CoinLedger(id, userId, delta, bucket, reason, refType, refId, createdAt);
+        return new CoinLedger(id, userId, delta, balanceAfter, bucket, reason, refType, refId, createdAt);
     }
 }
