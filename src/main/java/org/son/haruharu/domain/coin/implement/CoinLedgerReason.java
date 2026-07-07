@@ -17,5 +17,7 @@ public enum CoinLedgerReason {
     /** 환불 회수(PAID 차감) */
     REFUND_REVOKE,
     /** 첫 가입 보너스 적립 */
-    SIGNUP_BONUS
+    SIGNUP_BONUS,
+    /** 일일 업로드 슬롯 완주 보상 적립 */
+    UPLOAD_COMPLETION_REWARD
 }

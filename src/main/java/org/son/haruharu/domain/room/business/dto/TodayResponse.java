@@ -16,16 +16,23 @@ public record TodayResponse(
         String status,
         int totalSlots,
         long uploadedCount,
+        long rewardAmount,
+        RewardStatus rewardStatus,
         List<SlotView> slots
 ) {
     public record SlotView(int slotIndex, int startHour, int endHour, boolean openNow) {}
 
-    public static TodayResponse of(Room room, int currentDay, List<UploadSlot> slots, int nowHour, long uploadedCount) {
+    /** 완주 보상 상태. EARNED=이미 지급됨, LOCKED=아직 미지급. */
+    public enum RewardStatus { LOCKED, EARNED }
+
+    public static TodayResponse of(Room room, int currentDay, List<UploadSlot> slots, int nowHour,
+                                   long uploadedCount, long rewardAmount, RewardStatus rewardStatus) {
         List<SlotView> slotViews = slots.stream()
                 .map(s -> new SlotView(s.slotIndex(), s.startHour(), s.endHour(),
                         nowHour >= s.startHour() && nowHour < s.endHour()))
                 .toList();
         return new TodayResponse(
-                currentDay, room.status().name(), slots.size(), uploadedCount, slotViews);
+                currentDay, room.status().name(), slots.size(), uploadedCount,
+                rewardAmount, rewardStatus, slotViews);
     }
 }

@@ -38,6 +38,12 @@ jwt:
 haruharu:
   matching:
     enter-cost: ${MATCHING_ENTER_COST:5}
+  room:
+    upload-reward:
+      daily-completion:
+        1: 2
+        2: 2
+        3: 1
 
 oauth:
   providers:

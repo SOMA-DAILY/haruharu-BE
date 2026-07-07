@@ -29,6 +29,7 @@ import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoPostWriter;
 import org.son.haruharu.infrastructure.s3.PresignedUpload;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
+import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -49,11 +50,12 @@ class VideoServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock VideoPostReader videoPostReader;
     @Mock VideoPostWriter videoPostWriter;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     private VideoService serviceAt(int hour) {
         Clock clock = Clock.fixed(ZonedDateTime.of(2026, 6, 26, hour, 0, 0, 0, SEOUL).toInstant(), SEOUL);
         return new VideoService(s3StoragePort, roomReader, roomMemberReader,
-                videoPostReader, videoPostWriter, clock);
+                videoPostReader, videoPostWriter, eventPublisher, clock);
     }
 
     private RoomMember member(Long id, Long userId) {

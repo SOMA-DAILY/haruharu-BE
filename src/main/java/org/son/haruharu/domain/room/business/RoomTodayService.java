@@ -7,7 +7,9 @@ import java.util.List;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
+import org.son.haruharu.domain.room.business.dto.TodayResponse.RewardStatus;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
+import org.son.haruharu.domain.room.implement.DailyUploadRewardReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -24,13 +26,18 @@ public class RoomTodayService {
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
     private final VideoPostReader videoPostReader;
+    private final DailyUploadRewardReader dailyUploadRewardReader;
+    private final UploadRewardProperties uploadRewardProperties;
     private final Clock clock;
 
     public RoomTodayService(RoomReader roomReader, RoomMemberReader roomMemberReader,
-                            VideoPostReader videoPostReader, Clock clock) {
+                            VideoPostReader videoPostReader, DailyUploadRewardReader dailyUploadRewardReader,
+                            UploadRewardProperties uploadRewardProperties, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.videoPostReader = videoPostReader;
+        this.dailyUploadRewardReader = dailyUploadRewardReader;
+        this.uploadRewardProperties = uploadRewardProperties;
         this.clock = clock;
     }
 
@@ -44,6 +51,10 @@ public class RoomTodayService {
         long uploadedCount = videoPostReader.countUploaded(member.id(), currentDay);
         int nowHour = LocalTime.now(clock).getHour();
 
-        return TodayResponse.of(room, currentDay, slots, nowHour, uploadedCount);
+        long rewardAmount = uploadRewardProperties.amountFor(currentDay);
+        RewardStatus rewardStatus = dailyUploadRewardReader.isRewarded(member.id(), currentDay)
+                ? RewardStatus.EARNED : RewardStatus.LOCKED;
+
+        return TodayResponse.of(room, currentDay, slots, nowHour, uploadedCount, rewardAmount, rewardStatus);
     }
 }
