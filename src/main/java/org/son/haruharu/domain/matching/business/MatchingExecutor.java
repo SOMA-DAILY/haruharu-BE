@@ -2,6 +2,7 @@ package org.son.haruharu.domain.matching.business;
 
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
+import org.son.haruharu.domain.matching.business.event.MatchRefundedEvent;
 import org.son.haruharu.domain.matching.business.event.RoomMatchedEvent;
 import org.son.haruharu.domain.matching.implement.MatchGroup;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -88,11 +90,17 @@ public class MatchingExecutor {
                 room.id(), group.all().stream().map(MatchingQueue::userId).toList()));
         }
 
-        expireAndRefundLeftovers(queued, matchedIds, matchedAt);
+        List<Long> refundedUserIds = expireAndRefundLeftovers(queued, matchedIds, matchedAt);
+        if (!refundedUserIds.isEmpty()) {
+            // 커밋 후 발송 — 불발 통지 푸시 실패가 매칭 배치를 롤백시키지 않도록
+            eventPublisher.publishEvent(new MatchRefundedEvent(refundedUserIds));
+        }
         return groups.size();
     }
 
-    private void expireAndRefundLeftovers(List<MatchingQueue> queued, Set<Long> matchedIds, LocalDateTime now) {
+    /** 반환값은 실제 환불이 일어난(전이 성공) 유저 id 목록 — 불발 통지 대상. */
+    private List<Long> expireAndRefundLeftovers(List<MatchingQueue> queued, Set<Long> matchedIds, LocalDateTime now) {
+        List<Long> refundedUserIds = new ArrayList<>();
         queued.stream()
             .filter(q -> !matchedIds.contains(q.id()))
             .forEach(q -> {
@@ -100,7 +108,9 @@ public class MatchingExecutor {
                 if (matchingQueueWriter.expireIfQueued(q.id(), now)) {
                     coinService.credit(CoinCreditCommand.matchRefund(
                         q.userId(), MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, q.id().toString()));
+                    refundedUserIds.add(q.userId());
                 }
             });
+        return refundedUserIds;
     }
 }

@@ -3,8 +3,6 @@ package org.son.haruharu.domain.notification.implement;
 /**
  * 푸시 문구의 단일 관리 지점. 타입 추가 = 상수 한 줄 + 발송 트리거 연결.
  * title/body는 AI 초안(2026-07-04, 사용자 요청) — 기획 최종검수 후 확정 대상.
- * 현재 발송 트리거가 연결된 타입은 ROOM_MATCHED, SLOT_DEADLINE_SOON 두 개뿐이고
- * 나머지는 카탈로그 스캐폴딩(트리거는 후속 이슈에서 연결).
  */
 public enum NotificationType {
 

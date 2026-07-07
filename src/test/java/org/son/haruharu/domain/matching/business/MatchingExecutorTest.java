@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
 import org.son.haruharu.domain.coin.implement.CoinLedgerReason;
+import org.son.haruharu.domain.matching.business.event.MatchRefundedEvent;
 import org.son.haruharu.domain.matching.business.event.RoomMatchedEvent;
 import org.son.haruharu.domain.matching.implement.FifoMatchingStrategy;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
@@ -188,5 +189,32 @@ class MatchingExecutorTest {
         executor.execute(LocalDate.now(), LocalDateTime.now());
 
         then(coinService).should(never()).credit(any());
+    }
+
+    @Test
+    @DisplayName("잔류 큐를 환불하면 환불된 userId를 담은 MatchRefundedEvent를 발행한다")
+    void givenLeftoverRefunded_whenExecute_thenPublishesMatchRefundedEvent() {
+        List<MatchingQueue> all = Stream.concat(queues("MALE", 2).stream(), queues("FEMALE", 3).stream()).toList();
+        given(matchingQueueReader.findAllQueued()).willReturn(all);
+        given(matchingQueueWriter.expireIfQueued(any(), any())).willReturn(true);
+
+        executor.execute(LocalDate.now(), LocalDateTime.now());
+
+        ArgumentCaptor<MatchRefundedEvent> eventCaptor = ArgumentCaptor.forClass(MatchRefundedEvent.class);
+        then(eventPublisher).should(times(1)).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().userIds())
+            .containsExactlyInAnyOrderElementsOf(all.stream().map(MatchingQueue::userId).toList());
+    }
+
+    @Test
+    @DisplayName("환불 대상이 없으면(전이 실패) MatchRefundedEvent를 발행하지 않는다")
+    void givenNoRefund_whenExecute_thenNoMatchRefundedEvent() {
+        List<MatchingQueue> all = Stream.concat(queues("MALE", 2).stream(), queues("FEMALE", 3).stream()).toList();
+        given(matchingQueueReader.findAllQueued()).willReturn(all);
+        given(matchingQueueWriter.expireIfQueued(any(), any())).willReturn(false);
+
+        executor.execute(LocalDate.now(), LocalDateTime.now());
+
+        then(eventPublisher).should(never()).publishEvent(any(MatchRefundedEvent.class));
     }
 }

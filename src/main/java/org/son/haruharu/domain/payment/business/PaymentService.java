@@ -7,6 +7,7 @@ import org.son.haruharu.domain.payment.business.command.IapWebhookCommand;
 import org.son.haruharu.domain.payment.business.exception.InvalidWebhookPayloadException;
 import org.son.haruharu.domain.payment.business.dto.ProductResponse;
 import org.son.haruharu.domain.payment.business.dto.ProductsResponse;
+import org.son.haruharu.domain.payment.business.event.PaymentCompletedEvent;
 import org.son.haruharu.domain.payment.implement.IapProduct;
 import org.son.haruharu.domain.payment.implement.IapProductReader;
 import org.son.haruharu.domain.payment.implement.IapPurchase;
@@ -15,6 +16,7 @@ import org.son.haruharu.domain.payment.implement.IapPurchaseWriter;
 import org.son.haruharu.domain.payment.implement.IapWebhookEvent;
 import org.son.haruharu.domain.payment.implement.IapWebhookEventReader;
 import org.son.haruharu.domain.payment.implement.IapWebhookEventWriter;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,7 @@ public class PaymentService {
     private final IapWebhookEventReader iapWebhookEventReader;
     private final IapWebhookEventWriter iapWebhookEventWriter;
     private final CoinService coinService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PaymentService(
             IapProductReader iapProductReader,
@@ -44,7 +47,8 @@ public class PaymentService {
             IapPurchaseWriter iapPurchaseWriter,
             IapWebhookEventReader iapWebhookEventReader,
             IapWebhookEventWriter iapWebhookEventWriter,
-            CoinService coinService
+            CoinService coinService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.iapProductReader = iapProductReader;
         this.iapPurchaseReader = iapPurchaseReader;
@@ -52,6 +56,7 @@ public class PaymentService {
         this.iapWebhookEventReader = iapWebhookEventReader;
         this.iapWebhookEventWriter = iapWebhookEventWriter;
         this.coinService = coinService;
+        this.eventPublisher = eventPublisher;
     }
 
     /** 활성 코인 상품 목록. */
@@ -96,6 +101,8 @@ public class PaymentService {
                 command.store(), product.coinAmount(), command.purchasedAt()));
 
         coinService.credit(CoinCreditCommand.purchase(userId, product.coinAmount(), REF_TYPE, saved.id().toString()));
+        // 커밋 후 발송 — 결제 완료 통지 푸시 실패가 충전 처리를 롤백시키지 않도록
+        eventPublisher.publishEvent(new PaymentCompletedEvent(userId));
         return saved.id();
     }
 
