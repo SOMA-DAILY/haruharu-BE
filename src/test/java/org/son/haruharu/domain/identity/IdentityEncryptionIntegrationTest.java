@@ -35,7 +35,9 @@ class IdentityEncryptionIntegrationTest {
 
     @BeforeEach
     void clean() {
-        jpaRepository.deleteAll();
+        // BaseEntity @SoftDelete 전역 필터로 deleteAll()이 soft-delete가 되어 물리 행이 남는다.
+        // 비트랜잭션 테스트의 격리는 native 물리삭제로 복원한다.
+        jdbcTemplate.update("DELETE FROM user_identities");
     }
 
     private PassVerificationResult passResult() {
