@@ -33,7 +33,10 @@ import org.son.haruharu.domain.value.implement.ValueQuestionReader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class MemberProfileServiceTest {
@@ -156,6 +159,9 @@ class MemberProfileServiceTest {
         assertThat(field(result, "affiliation").value()).isEqualTo("카카오");
         assertThat(field(result, "age").value()).isEqualTo("26");
         assertThat(result.fields()).allMatch(ProfileFieldView::visible);
+        // 본인 프로필은 매칭 조회 없이 사진도 공개된다(단락평가로 isMatched 미호출)
+        assertThat(result.imageRevealed()).isTrue();
+        then(matchResultReader).should(never()).isMatched(any(), any());
     }
 
     @Test
