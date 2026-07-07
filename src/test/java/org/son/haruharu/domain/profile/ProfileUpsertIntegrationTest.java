@@ -4,6 +4,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.command.UpdateProfileCommand;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.profile.storage.UserProfileEntity;
@@ -31,7 +33,7 @@ class ProfileUpsertIntegrationTest {
         Long userId = 1L;
         UpdateProfileCommand command = new UpdateProfileCommand(
             "서울", "회사원",
-            178, "ENFP", "하루", "가끔", "비흡연");
+            178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE);
 
         profileService.updateProfile(userId, command);
 
@@ -46,11 +48,11 @@ class ProfileUpsertIntegrationTest {
         Long userId = 2L;
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",
-            178, "ENFP", "하루", "가끔", "비흡연"));
+            178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE));
 
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "부산", "학생",
-            165, "INFJ", "이틀", "안함", "비흡연"));
+            165, "INFJ", "이틀", DrinkingStatus.NONE, SmokingStatus.NONE));
 
         List<UserProfileEntity> rows = jpaRepository.findAll().stream()
             .filter(e -> e.toDomain().userId().equals(userId))

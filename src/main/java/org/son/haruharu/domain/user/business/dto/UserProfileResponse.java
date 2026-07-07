@@ -2,6 +2,8 @@ package org.son.haruharu.domain.user.business.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 
 import java.util.List;
 
@@ -19,8 +21,8 @@ public record UserProfileResponse(
             String affiliation,
             Integer height,
             String mbti,
-            @JsonProperty("drinking_status") String drinkingStatus,
-            @JsonProperty("smoking_status") String smokingStatus
+            @JsonProperty("drinking_status") DrinkingStatus drinkingStatus,
+            @JsonProperty("smoking_status") SmokingStatus smokingStatus
     ) {}
 
     /** gender·age는 프로필이 아니라 본인인증(identity)에서 수급한다. */

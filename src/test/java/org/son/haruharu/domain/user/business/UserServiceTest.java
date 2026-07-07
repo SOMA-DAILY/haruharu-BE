@@ -10,6 +10,8 @@ import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.user.business.dto.UserProfileResponse;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserReader;
@@ -56,7 +58,7 @@ class UserServiceTest {
         Long imageId = 1L;
         ProfileResponse profileResponse = new ProfileResponse(
             "테스터", "서울", "직장인",
-            175, "INFP", "가끔", "비흡연",
+            175, "INFP", DrinkingStatus.SOMETIMES, SmokingStatus.NONE,
             List.of(new ProfileResponse.ImageInfo(imageId, "https://image1.png", 0))
         );
 
@@ -80,7 +82,7 @@ class UserServiceTest {
     void givenUnverifiedUser_whenGetMyProfile_thenUserStatusUnverified() {
         Long userId = 1L;
         given(profileService.getProfile(userId)).willReturn(new ProfileResponse(
-            "유저", "서울", "학생", 160, "ENFP", "안함", "비흡연", List.of()));
+            "유저", "서울", "학생", 160, "ENFP", DrinkingStatus.NONE, SmokingStatus.NONE, List.of()));
         // 미인증: findVerified가 empty → user_status UNVERIFIED
 
         UserProfileResponse result = userService.getMyProfile(userId);

@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
@@ -65,7 +67,7 @@ class MemberProfileServiceTest {
 
     private UserProfile profile(Long userId) {
         return new UserProfile(1L, userId,
-                "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE");
+                "서울", "카카오", 165, "INFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE);
     }
 
     private ProfileFieldView field(MemberProfileResponse res, String key) {
@@ -124,8 +126,8 @@ class MemberProfileServiceTest {
         assertThat(field(result, "affiliation").value()).isEqualTo("카카오");
         assertThat(field(result, "height").value()).isEqualTo("165");
         assertThat(field(result, "mbti").value()).isEqualTo("INFP");
-        assertThat(field(result, "drinking").value()).isEqualTo("SOMETIMES");
-        assertThat(field(result, "smoking").value()).isEqualTo("NONE");
+        assertThat(field(result, "drinking").value()).isEqualTo("가끔");
+        assertThat(field(result, "smoking").value()).isEqualTo("안 피움");
         assertThat(field(result, "age").value()).isEqualTo("26");
         assertThat(result.fields()).allMatch(ProfileFieldView::visible);
     }

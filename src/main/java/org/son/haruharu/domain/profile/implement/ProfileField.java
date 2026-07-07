@@ -12,8 +12,8 @@ public enum ProfileField {
     AFFILIATION("affiliation", "직업", 3, UserProfile::affiliation),
     HEIGHT("height", "키", 3, p -> p.height() == null ? null : String.valueOf(p.height())),
     MBTI("mbti", "MBTI", 3, UserProfile::mbti),
-    DRINKING("drinking", "음주", 3, UserProfile::drinkingStatus),
-    SMOKING("smoking", "흡연", 3, UserProfile::smokingStatus);
+    DRINKING("drinking", "음주", 3, p -> p.drinkingStatus() == null ? null : p.drinkingStatus().displayName()),
+    SMOKING("smoking", "흡연", 3, p -> p.smokingStatus() == null ? null : p.smokingStatus().displayName());
 
     private final String key;
     private final String label;

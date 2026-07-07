@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.profile.business.command;
 
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 
 public record UpdateProfileCommand(
@@ -8,8 +10,8 @@ public record UpdateProfileCommand(
         Integer height,
         String mbti,
         String nickname,
-        String drinkingStatus,
-        String smokingStatus
+        DrinkingStatus drinkingStatus,
+        SmokingStatus smokingStatus
 ) {
     public UserProfile applyTo(UserProfile existing) {
         return new UserProfile(
