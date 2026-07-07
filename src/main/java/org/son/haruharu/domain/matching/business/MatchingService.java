@@ -29,19 +29,22 @@ public class MatchingService {
     private final IdentityService identityService;
     private final CoinService coinService;
     private final RoomService roomService;
+    private final MatchingProperties matchingProperties;
 
     public MatchingService(
         MatchingQueueReader matchingQueueReader,
         MatchingQueueWriter matchingQueueWriter,
         IdentityService identityService,
         CoinService coinService,
-        RoomService roomService
+        RoomService roomService,
+        MatchingProperties matchingProperties
     ) {
         this.matchingQueueReader = matchingQueueReader;
         this.matchingQueueWriter = matchingQueueWriter;
         this.identityService = identityService;
         this.coinService = coinService;
         this.roomService = roomService;
+        this.matchingProperties = matchingProperties;
     }
 
     public QueueStatusResponse getQueueStatus(Long userId) {
@@ -65,7 +68,7 @@ public class MatchingService {
             MatchingQueue.join(userId, verified.gender(), verified.birthday(), LocalDateTime.now()));
         // 차감 실패(잔액 부족) 시 예외로 트랜잭션 전체 롤백 → 큐 등록도 함께 취소된다.
         coinService.spend(CoinSpendCommand.matchEnter(
-            userId, MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, saved.id().toString()));
+            userId, matchingProperties.enterCost(), MatchingQueue.COIN_REF_TYPE, saved.id().toString()));
         return QueueResponse.from(saved);
     }
 
@@ -77,6 +80,6 @@ public class MatchingService {
             throw new MatchingQueueNotFoundException();
         }
         coinService.credit(CoinCreditCommand.matchRefund(
-            userId, MatchingQueue.ENTER_COST, MatchingQueue.COIN_REF_TYPE, queued.id().toString()));
+            userId, matchingProperties.enterCost(), MatchingQueue.COIN_REF_TYPE, queued.id().toString()));
     }
 }

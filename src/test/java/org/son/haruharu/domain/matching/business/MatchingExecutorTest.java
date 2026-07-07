@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
 import org.son.haruharu.domain.coin.implement.CoinLedgerReason;
+import org.son.haruharu.domain.matching.business.event.MatchRefundedEvent;
 import org.son.haruharu.domain.matching.business.event.RoomMatchedEvent;
 import org.son.haruharu.domain.matching.implement.FifoMatchingStrategy;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
@@ -45,12 +46,13 @@ class MatchingExecutorTest {
     @Mock ApplicationEventPublisher eventPublisher;
 
     MatchingExecutor executor;
+    final MatchingProperties matchingProperties = new MatchingProperties(5L);
 
     @BeforeEach
     void setUp() {
         executor = new MatchingExecutor(
             matchingQueueReader, matchingQueueWriter,
-            new FifoMatchingStrategy(), roomWriter, roomMemberWriter, coinService, eventPublisher);
+            new FifoMatchingStrategy(), roomWriter, roomMemberWriter, coinService, eventPublisher, matchingProperties);
     }
 
     private List<MatchingQueue> queues(String gender, int count) {
@@ -117,7 +119,7 @@ class MatchingExecutorTest {
         ArgumentCaptor<CoinCreditCommand> creditCaptor = ArgumentCaptor.forClass(CoinCreditCommand.class);
         then(coinService).should(times(5)).credit(creditCaptor.capture());
         assertThat(creditCaptor.getAllValues()).allSatisfy(c -> {
-            assertThat(c.amount()).isEqualTo(MatchingQueue.ENTER_COST);
+            assertThat(c.amount()).isEqualTo(matchingProperties.enterCost());
             assertThat(c.reason()).isEqualTo(CoinLedgerReason.MATCH_REFUND);
         });
         // 환불 대상 userId가 잔류 큐 유저와 일치
@@ -188,5 +190,33 @@ class MatchingExecutorTest {
         executor.execute(LocalDate.now(), LocalDateTime.now());
 
         then(coinService).should(never()).credit(any());
+    }
+
+    @Test
+    @DisplayName("잔류 큐를 환불하면 환불된 userId를 담은 MatchRefundedEvent를 발행한다")
+    void givenLeftoverRefunded_whenExecute_thenPublishesMatchRefundedEvent() {
+        List<MatchingQueue> all = Stream.concat(queues("MALE", 2).stream(), queues("FEMALE", 3).stream()).toList();
+        given(matchingQueueReader.findAllQueued()).willReturn(all);
+        given(matchingQueueWriter.expireIfQueued(any(), any())).willReturn(true);
+
+        executor.execute(LocalDate.now(), LocalDateTime.now());
+
+        ArgumentCaptor<MatchRefundedEvent> eventCaptor = ArgumentCaptor.forClass(MatchRefundedEvent.class);
+        then(eventPublisher).should(times(1)).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().userIds())
+            .containsExactlyInAnyOrderElementsOf(all.stream().map(MatchingQueue::userId).toList());
+        assertThat(eventCaptor.getValue().refundAmount()).isEqualTo(matchingProperties.enterCost());
+    }
+
+    @Test
+    @DisplayName("환불 대상이 없으면(전이 실패) MatchRefundedEvent를 발행하지 않는다")
+    void givenNoRefund_whenExecute_thenNoMatchRefundedEvent() {
+        List<MatchingQueue> all = Stream.concat(queues("MALE", 2).stream(), queues("FEMALE", 3).stream()).toList();
+        given(matchingQueueReader.findAllQueued()).willReturn(all);
+        given(matchingQueueWriter.expireIfQueued(any(), any())).willReturn(false);
+
+        executor.execute(LocalDate.now(), LocalDateTime.now());
+
+        then(eventPublisher).should(never()).publishEvent(any(MatchRefundedEvent.class));
     }
 }

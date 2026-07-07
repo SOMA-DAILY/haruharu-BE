@@ -6,7 +6,6 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
-import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -15,7 +14,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 슬롯이 새로 열리는 정시, ACTIVE 방의 해당 슬롯 미업로드 멤버에게 SLOT_START 푸시.
+ * 슬롯이 새로 열리는 정시, ACTIVE 방의 전 멤버에게 SLOT_START 푸시.
+ * 업로드 여부와 무관하게 발송한다(서로의 하루 확인 + 다음 하루 남기기 유도).
  * SlotDeadlineNotifier와 동일하게 @Transactional 없음(발송 IO를 트랜잭션에 묶지 않기 위함).
  */
 @Service
@@ -23,14 +23,12 @@ public class SlotStartNotifier {
 
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
-    private final VideoPostReader videoPostReader;
     private final PushSendService pushSendService;
 
     public SlotStartNotifier(RoomReader roomReader, RoomMemberReader roomMemberReader,
-                             VideoPostReader videoPostReader, PushSendService pushSendService) {
+                             PushSendService pushSendService) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
-        this.videoPostReader = videoPostReader;
         this.pushSendService = pushSendService;
     }
 
@@ -48,13 +46,10 @@ public class SlotStartNotifier {
             return 0;
         }
         int currentDay = room.currentDayAt(now, UploadSlot.dayStartHour());
-        Optional<UploadSlot> openingSlot = findOpeningSlot(currentDay, now.getHour());
-        if (openingSlot.isEmpty()) {
+        if (findOpeningSlot(currentDay, now.getHour()).isEmpty()) {
             return 0;
         }
-        UploadSlot slot = openingSlot.get();
         List<Long> targetUserIds = roomMemberReader.getByRoomId(room.id()).stream()
-                .filter(member -> !videoPostReader.hasActiveUpload(member.id(), slot.dayNumber(), slot.slotIndex()))
                 .map(RoomMember::userId)
                 .toList();
         if (targetUserIds.isEmpty()) {

@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.auth.implement;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface RefreshTokenRepository {
@@ -11,4 +13,6 @@ public interface RefreshTokenRepository {
     void revokeAllByUserId(Long userId);
 
     void revokeByTokenHash(String tokenHash);
+
+    List<Long> findUserIdsLastActiveBetween(LocalDateTime from, LocalDateTime to);
 }
