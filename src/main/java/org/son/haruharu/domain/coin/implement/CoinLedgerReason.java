@@ -15,5 +15,7 @@ public enum CoinLedgerReason {
     /** 채팅(방) 열기 소모 */
     CHAT_OPEN,
     /** 환불 회수(PAID 차감) */
-    REFUND_REVOKE
+    REFUND_REVOKE,
+    /** 첫 가입 보너스 적립 */
+    SIGNUP_BONUS
 }

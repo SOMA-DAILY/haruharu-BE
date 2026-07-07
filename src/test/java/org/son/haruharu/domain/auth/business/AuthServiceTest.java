@@ -21,6 +21,7 @@ import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
+import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserReader;
@@ -53,6 +54,7 @@ class AuthServiceTest {
     @Mock UserCredentialReader userCredentialReader;
     @Mock UserCredentialWriter userCredentialWriter;
     @Mock IdentityService identityService;
+    @Mock CoinService coinService;
     @Mock RefreshTokenReader refreshTokenReader;
     @Mock RefreshTokenWriter refreshTokenWriter;
     @Mock JwtProvider jwtProvider;
@@ -64,7 +66,7 @@ class AuthServiceTest {
         authService = new AuthService(
             oAuthProviderRegistry, userReader, userWriter,
             userCredentialReader, userCredentialWriter,
-            identityService,
+            identityService, coinService,
             refreshTokenReader, refreshTokenWriter, jwtProvider
         );
     }
@@ -98,6 +100,7 @@ class AuthServiceTest {
         then(userWriter).should().save(savedCaptor.capture());
         assertThat(savedCaptor.getValue().status()).isEqualTo(UserStatus.ONBOARDING);
         then(userCredentialWriter).should().save(any());
+        then(coinService).should().grantSignupBonus(userId);
     }
 
     @Test

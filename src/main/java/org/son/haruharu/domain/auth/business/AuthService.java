@@ -14,6 +14,7 @@ import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
+import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.implement.VerificationStatus;
 import org.son.haruharu.domain.user.implement.User;
@@ -41,6 +42,7 @@ public class AuthService {
     private final UserCredentialReader userCredentialReader;
     private final UserCredentialWriter userCredentialWriter;
     private final IdentityService identityService;
+    private final CoinService coinService;
     private final RefreshTokenReader refreshTokenReader;
     private final RefreshTokenWriter refreshTokenWriter;
     private final JwtProvider jwtProvider;
@@ -61,6 +63,7 @@ public class AuthService {
             .orElseGet(() -> {
                 User created = userWriter.save(new User(null, UserStatus.ONBOARDING, null));
                 userCredentialWriter.save(new UserCredential(null, created.id(), command.providerType().name(), userInfo.providerId()));
+                coinService.grantSignupBonus(created.id());
                 return created;
             });
 

@@ -29,17 +29,31 @@ public class CoinService {
     private final CoinWalletWriter coinWalletWriter;
     private final CoinLedgerReader coinLedgerReader;
     private final CoinLedgerWriter coinLedgerWriter;
+    private final CoinProperties coinProperties;
 
     public CoinService(
             CoinWalletReader coinWalletReader,
             CoinWalletWriter coinWalletWriter,
             CoinLedgerReader coinLedgerReader,
-            CoinLedgerWriter coinLedgerWriter
+            CoinLedgerWriter coinLedgerWriter,
+            CoinProperties coinProperties
     ) {
         this.coinWalletReader = coinWalletReader;
         this.coinWalletWriter = coinWalletWriter;
         this.coinLedgerReader = coinLedgerReader;
         this.coinLedgerWriter = coinLedgerWriter;
+        this.coinProperties = coinProperties;
+    }
+
+    /**
+     * 첫 가입 보너스 지급. 유저당 1회만 지급되며(원장에 SIGNUP_BONUS 존재 시 skip), 재호출·재로그인에도 중복 지급되지 않는다.
+     */
+    @Transactional
+    public void grantSignupBonus(Long userId) {
+        if (coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.SIGNUP_BONUS)) {
+            return;
+        }
+        credit(CoinCreditCommand.signupBonus(userId, coinProperties.signupBonus()));
     }
 
     /** 코인 잔액 조회. 지갑이 아직 없으면 0 잔액으로 응답한다. */
