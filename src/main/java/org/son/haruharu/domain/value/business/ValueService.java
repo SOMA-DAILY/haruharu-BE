@@ -56,6 +56,12 @@ public class ValueService {
         return !userValueAnswerReader.getAllByUserId(userId).isEmpty();
     }
 
+    /** 회원 탈퇴 시 가치관 답변 삭제(soft). */
+    @Transactional
+    public void deleteAnswers(Long userId) {
+        userValueAnswerWriter.deleteByUserId(userId);
+    }
+
     @Transactional
     public SavedAnswersResponse saveAnswers(Long userId, SaveValueAnswersCommand command) {
         // 질문은 참조 데이터(소량, enum 성격)이므로 활성 질문 전체와 기존 답변을 각 1회만 로드한다(N+1 제거).

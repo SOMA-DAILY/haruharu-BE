@@ -6,6 +6,7 @@ import org.son.haruharu.domain.identity.implement.UserIdentity;
 import org.son.haruharu.domain.identity.implement.UserIdentityRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Repository
@@ -39,5 +40,20 @@ public class UserIdentityRepositoryImpl implements UserIdentityRepository {
     @Override
     public void deleteByUserId(Long userId) {
         jpaRepository.deleteByUserId(userId);
+    }
+
+    @Override
+    public boolean existsWithdrawnByCiWithin(String ci, LocalDateTime threshold) {
+        return jpaRepository.countWithdrawnByCiHashAfter(crypto.blindIndex(ci), threshold) > 0;
+    }
+
+    @Override
+    public void purgeWithdrawnByCiBefore(String ci, LocalDateTime threshold) {
+        jpaRepository.purgeWithdrawnByCiHashBefore(crypto.blindIndex(ci), threshold);
+    }
+
+    @Override
+    public int purgeWithdrawnBefore(LocalDateTime threshold) {
+        return jpaRepository.purgeWithdrawnBefore(threshold);
     }
 }

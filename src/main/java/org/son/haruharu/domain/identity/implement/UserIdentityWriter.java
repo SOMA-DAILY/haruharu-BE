@@ -3,6 +3,8 @@ package org.son.haruharu.domain.identity.implement;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+
 @Component
 @RequiredArgsConstructor
 public class UserIdentityWriter {
@@ -15,5 +17,15 @@ public class UserIdentityWriter {
 
     public void deleteByUserId(Long userId) {
         userIdentityRepository.deleteByUserId(userId);
+    }
+
+    /** 차단 기간이 지난 탈퇴 identity 물리 파기(재삽입 유니크 충돌 방지). */
+    public void purgeWithdrawnByCiBefore(String ci, LocalDateTime threshold) {
+        userIdentityRepository.purgeWithdrawnByCiBefore(ci, threshold);
+    }
+
+    /** 보관 기간이 지난 탈퇴 identity를 전수 물리 파기한다(개인정보 보관정책). 파기 건수 반환. */
+    public int purgeWithdrawnBefore(LocalDateTime threshold) {
+        return userIdentityRepository.purgeWithdrawnBefore(threshold);
     }
 }

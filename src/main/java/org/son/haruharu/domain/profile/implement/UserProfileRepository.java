@@ -11,4 +11,6 @@ public interface UserProfileRepository {
     List<UserProfile> findByUserIdIn(Collection<Long> userIds);
 
     UserProfile save(UserProfile userProfile);
+
+    void deleteByUserId(Long userId);
 }

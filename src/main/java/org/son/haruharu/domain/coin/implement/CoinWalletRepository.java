@@ -7,4 +7,6 @@ public interface CoinWalletRepository {
     Optional<CoinWallet> findByUserId(Long userId);
 
     CoinWallet save(CoinWallet wallet);
+
+    void deleteByUserId(Long userId);
 }

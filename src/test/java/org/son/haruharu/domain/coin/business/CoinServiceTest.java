@@ -143,4 +143,12 @@ class CoinServiceTest {
                 userId, 10, CoinLedgerReason.CHAT_OPEN, null, null)))
                 .isInstanceOf(CoinWalletNotFoundException.class);
     }
+
+    @Test
+    @DisplayName("회원 탈퇴 시 구름 지갑을 soft-delete 위임한다")
+    void givenUserId_whenDeleteWallet_thenDelegatesSoftDelete() {
+        coinService.deleteWallet(userId);
+
+        verify(coinWalletWriter).deleteByUserId(userId);
+    }
 }

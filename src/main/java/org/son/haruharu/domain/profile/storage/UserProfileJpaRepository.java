@@ -11,4 +11,6 @@ public interface UserProfileJpaRepository extends JpaRepository<UserProfileEntit
     Optional<UserProfileEntity> findByUserId(Long userId);
 
     List<UserProfileEntity> findByUserIdIn(Collection<Long> userIds);
+
+    void deleteByUserId(Long userId);
 }

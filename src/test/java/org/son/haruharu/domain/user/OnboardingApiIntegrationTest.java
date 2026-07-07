@@ -26,6 +26,7 @@ import org.son.haruharu.domain.value.storage.ValueQuestionJpaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -47,14 +48,17 @@ class OnboardingApiIntegrationTest {
     @Autowired UserImageJpaRepository userImageJpaRepository;
     @Autowired ValueQuestionJpaRepository valueQuestionJpaRepository;
     @Autowired UserValueAnswerJpaRepository userValueAnswerJpaRepository;
+    @Autowired JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void clean() {
-        userValueAnswerJpaRepository.deleteAll();
-        valueQuestionJpaRepository.deleteAll();
-        userImageJpaRepository.deleteAll();
-        userProfileJpaRepository.deleteAll();
-        userJpaRepository.deleteAll();
+        // BaseEntity @SoftDelete 전역 필터로 deleteAll()이 soft-delete가 되어 물리 행이 남는다.
+        // 비트랜잭션 테스트의 격리는 native 물리삭제로 복원한다.
+        jdbcTemplate.update("DELETE FROM user_value_answers");
+        jdbcTemplate.update("DELETE FROM value_questions");
+        jdbcTemplate.update("DELETE FROM user_images");
+        jdbcTemplate.update("DELETE FROM user_profiles");
+        jdbcTemplate.update("DELETE FROM users");
     }
 
     private static UsernamePasswordAuthenticationToken auth(Long userId) {
