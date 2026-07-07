@@ -8,6 +8,7 @@ import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.matching.business.dto.QueueResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
 import org.son.haruharu.domain.matching.business.exception.MatchingAlreadyQueuedException;
+import org.son.haruharu.domain.matching.business.exception.MatchingClosedException;
 import org.son.haruharu.domain.matching.business.exception.MatchingNotVerifiedException;
 import org.son.haruharu.domain.matching.business.exception.MatchingRoomInProgressException;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
@@ -18,6 +19,7 @@ import org.son.haruharu.domain.room.business.RoomService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 @Service
@@ -30,6 +32,7 @@ public class MatchingService {
     private final CoinService coinService;
     private final RoomService roomService;
     private final MatchingProperties matchingProperties;
+    private final Clock clock;
 
     public MatchingService(
         MatchingQueueReader matchingQueueReader,
@@ -37,7 +40,8 @@ public class MatchingService {
         IdentityService identityService,
         CoinService coinService,
         RoomService roomService,
-        MatchingProperties matchingProperties
+        MatchingProperties matchingProperties,
+        Clock clock
     ) {
         this.matchingQueueReader = matchingQueueReader;
         this.matchingQueueWriter = matchingQueueWriter;
@@ -45,6 +49,7 @@ public class MatchingService {
         this.coinService = coinService;
         this.roomService = roomService;
         this.matchingProperties = matchingProperties;
+        this.clock = clock;
     }
 
     public QueueStatusResponse getQueueStatus(Long userId) {
@@ -55,6 +60,11 @@ public class MatchingService {
 
     @Transactional
     public QueueResponse joinQueue(Long userId) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        // 신청 마감 시간대(21:00~23:59:59)면 참가 차단. 00:00에 자동 재개.
+        if (!MatchingQueue.isApplyOpen(now.toLocalTime())) {
+            throw new MatchingClosedException();
+        }
         // 성별·생년월일은 본인인증(identity)에서만 온다. 미인증이면 참가 차단.
         VerifiedIdentity verified = identityService.findVerified(userId)
             .orElseThrow(MatchingNotVerifiedException::new);
@@ -65,7 +75,7 @@ public class MatchingService {
             throw new MatchingAlreadyQueuedException();
         }
         MatchingQueue saved = matchingQueueWriter.save(
-            MatchingQueue.join(userId, verified.gender(), verified.birthday(), LocalDateTime.now()));
+            MatchingQueue.join(userId, verified.gender(), verified.birthday(), now));
         // 차감 실패(잔액 부족) 시 예외로 트랜잭션 전체 롤백 → 큐 등록도 함께 취소된다.
         coinService.spend(CoinSpendCommand.matchEnter(
             userId, matchingProperties.enterCost(), MatchingQueue.COIN_REF_TYPE, saved.id().toString()));
@@ -76,7 +86,7 @@ public class MatchingService {
     public void leaveQueue(Long userId) {
         MatchingQueue queued = matchingQueueReader.getQueued(userId);
         // 조건부 전이(QUEUED일 때만)로 동시 취소·배치 만료와의 경합 시 이중 환불을 차단한다.
-        if (!matchingQueueWriter.cancelIfQueued(queued.id(), LocalDateTime.now())) {
+        if (!matchingQueueWriter.cancelIfQueued(queued.id(), LocalDateTime.now(clock))) {
             throw new MatchingQueueNotFoundException();
         }
         coinService.credit(CoinCreditCommand.matchRefund(
