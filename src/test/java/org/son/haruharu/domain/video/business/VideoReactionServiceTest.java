@@ -16,6 +16,7 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
 import org.son.haruharu.domain.video.business.event.VideoReactedEvent;
+import org.son.haruharu.domain.video.business.exception.CannotReactToOwnVideoException;
 import org.son.haruharu.domain.video.business.exception.InvalidReactionTypeException;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
@@ -124,15 +125,21 @@ class VideoReactionServiceTest {
     }
 
     @Test
-    @DisplayName("자기 영상에 자기가 반응하면 이벤트를 발행하지 않는다")
-    void givenSelfReaction_whenToggle_thenNoEvent() {
+    @DisplayName("자기 자신의 영상에 반응하면 CannotReactToOwnVideoException이 발생하고 저장·이벤트가 없다")
+    void givenOwnVideo_whenToggle_thenThrowsCannotReactToOwnVideo() {
         Long userId = 2L; // 작성자 본인
         Long postId = 100L;
-        stubPostAndMembership(postId, userId);
-        given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
+        Long authorMemberId = 40L;
+        Long roomId = 50L;
+        VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
+                "url", null, false, null, null, LocalDateTime.now());
+        given(videoPostReader.getById(postId)).willReturn(post);
+        given(roomMemberReader.getById(authorMemberId))
+                .willReturn(new RoomMember(authorMemberId, roomId, userId, "FEMALE", null, LocalDateTime.now()));
 
-        service().toggle(userId, postId, "LIKE");
-
+        assertThatThrownBy(() -> service().toggle(userId, postId, "LIKE"))
+                .isInstanceOf(CannotReactToOwnVideoException.class);
+        then(videoReactionWriter).should(never()).save(any());
         then(eventPublisher).should(never()).publishEvent(any());
     }
 
