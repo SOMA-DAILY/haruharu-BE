@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.domain.notification.implement.DeviceToken;
 import org.son.haruharu.domain.notification.implement.DeviceTokenReader;
 import org.son.haruharu.domain.notification.implement.DeviceTokenWriter;
+import org.son.haruharu.domain.notification.implement.NotificationHistoryWriter;
 import org.son.haruharu.domain.notification.implement.NotificationSettingReader;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.infrastructure.fcm.PushMessage;
@@ -17,6 +18,7 @@ import java.util.Map;
 /**
  * 발송 실패를 절대 호출자에게 전파하지 않는다 — 푸시는 부수효과이며 매칭 배치·업로드 흐름을
  * 깨뜨리면 안 된다. 트랜잭션도 열지 않는다(발송 IO를 트랜잭션에 묶지 않기 위함).
+ * 알림함(inboxVisible) 저장은 푸시 수신 설정과 무관하게 대상 유저 전원에게 남긴다.
  */
 @Slf4j
 @Service
@@ -25,21 +27,47 @@ public class PushSendService {
     private final DeviceTokenReader deviceTokenReader;
     private final DeviceTokenWriter deviceTokenWriter;
     private final NotificationSettingReader notificationSettingReader;
+    private final NotificationHistoryWriter notificationHistoryWriter;
     private final PushPort pushPort;
 
     public PushSendService(DeviceTokenReader deviceTokenReader, DeviceTokenWriter deviceTokenWriter,
-                           NotificationSettingReader notificationSettingReader, PushPort pushPort) {
+                           NotificationSettingReader notificationSettingReader,
+                           NotificationHistoryWriter notificationHistoryWriter, PushPort pushPort) {
         this.deviceTokenReader = deviceTokenReader;
         this.deviceTokenWriter = deviceTokenWriter;
         this.notificationSettingReader = notificationSettingReader;
+        this.notificationHistoryWriter = notificationHistoryWriter;
         this.pushPort = pushPort;
     }
 
     /**
      * bodyArgs는 type의 title/body에 있는 %d 등 포맷 지정자를 치환한다(환불·충전 개수 등 가변값).
-     * 지정자가 없는 타입은 bodyArgs를 넘기지 않으면 되고, 넘겨도 무시된다.
+     * inboxVisible 타입은 알림함에 저장(푸시 설정 무관), 푸시는 수신 허용 유저에게만 발송한다.
      */
     public void sendToUsers(List<Long> userIds, NotificationType type, Map<String, String> data, Object... bodyArgs) {
+        if (userIds.isEmpty()) {
+            return;
+        }
+        String title = format(type.title(), bodyArgs);
+        String body = format(type.body(), bodyArgs);
+        saveToInbox(userIds, type, title, body, data);
+        dispatchPush(userIds, type, title, body, data);
+    }
+
+    private void saveToInbox(List<Long> userIds, NotificationType type,
+                             String title, String body, Map<String, String> data) {
+        if (!type.inboxVisible()) {
+            return;
+        }
+        try {
+            notificationHistoryWriter.saveAll(userIds, type, title, body, data);
+        } catch (Exception e) {
+            log.error("알림함 저장 실패: type={} userIds={}", type, userIds, e);
+        }
+    }
+
+    private void dispatchPush(List<Long> userIds, NotificationType type,
+                              String title, String body, Map<String, String> data) {
         try {
             List<Long> enabledUserIds = excludePushDisabled(userIds);
             if (enabledUserIds.isEmpty()) {
@@ -53,8 +81,6 @@ public class PushSendService {
             }
             Map<String, String> payload = new HashMap<>(data);
             payload.put("type", type.name());
-            String title = format(type.title(), bodyArgs);
-            String body = format(type.body(), bodyArgs);
             List<String> invalidTokens = pushPort.send(new PushMessage(tokens, title, body, payload));
             if (!invalidTokens.isEmpty()) {
                 deviceTokenWriter.deleteAllByTokens(invalidTokens);

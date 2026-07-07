@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.notification.implement.DeviceToken;
 import org.son.haruharu.domain.notification.implement.DeviceTokenReader;
 import org.son.haruharu.domain.notification.implement.DeviceTokenWriter;
+import org.son.haruharu.domain.notification.implement.NotificationHistoryWriter;
 import org.son.haruharu.domain.notification.implement.NotificationSettingReader;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.infrastructure.fcm.PushMessage;
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.lenient;
@@ -34,13 +36,15 @@ class PushSendServiceTest {
     @Mock DeviceTokenReader deviceTokenReader;
     @Mock DeviceTokenWriter deviceTokenWriter;
     @Mock NotificationSettingReader notificationSettingReader;
+    @Mock NotificationHistoryWriter notificationHistoryWriter;
     @Mock PushPort pushPort;
 
     PushSendService service;
 
     @BeforeEach
     void setUp() {
-        service = new PushSendService(deviceTokenReader, deviceTokenWriter, notificationSettingReader, pushPort);
+        service = new PushSendService(deviceTokenReader, deviceTokenWriter,
+                notificationSettingReader, notificationHistoryWriter, pushPort);
         lenient().when(notificationSettingReader.findPushDisabledUserIds(anyList())).thenReturn(List.of());
     }
 
@@ -142,5 +146,37 @@ class PushSendServiceTest {
 
         assertThatCode(() -> service.sendToUsers(List.of(1L), NotificationType.ROOM_MATCHED, Map.of()))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("inboxVisible 타입은 대상 유저 전원의 알림함에 저장한다")
+    void givenInboxVisibleType_whenSend_thenSavesHistory() {
+        given(deviceTokenReader.findAllByUserIds(any())).willReturn(List.of());
+
+        service.sendToUsers(List.of(1L, 2L), NotificationType.ROOM_MATCHED, Map.of("roomId", "7"));
+
+        then(notificationHistoryWriter).should().saveAll(
+                eq(List.of(1L, 2L)), eq(NotificationType.ROOM_MATCHED), any(), any(), eq(Map.of("roomId", "7")));
+    }
+
+    @Test
+    @DisplayName("inboxVisible=false 타입은 알림함에 저장하지 않는다")
+    void givenNonInboxType_whenSend_thenNoHistory() {
+        given(deviceTokenReader.findAllByUserIds(any())).willReturn(List.of());
+
+        service.sendToUsers(List.of(1L), NotificationType.SLOT_START, Map.of());
+
+        then(notificationHistoryWriter).should(never()).saveAll(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("푸시 수신을 껐어도 알림함에는 저장한다(설정 무관)")
+    void givenPushDisabled_whenSend_thenStillSavesHistory() {
+        given(notificationSettingReader.findPushDisabledUserIds(List.of(1L))).willReturn(List.of(1L));
+
+        service.sendToUsers(List.of(1L), NotificationType.ROOM_MATCHED, Map.of());
+
+        then(notificationHistoryWriter).should().saveAll(eq(List.of(1L)), any(), any(), any(), any());
+        then(pushPort).should(never()).send(any());
     }
 }
