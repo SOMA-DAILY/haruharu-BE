@@ -3,6 +3,7 @@ package org.son.haruharu.domain.video.business;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
+import org.son.haruharu.domain.video.business.exception.CannotReactToOwnVideoException;
 import org.son.haruharu.domain.video.business.exception.InvalidReactionTypeException;
 import org.son.haruharu.domain.video.implement.ReactionType;
 import org.son.haruharu.domain.video.implement.VideoPost;
@@ -52,8 +53,12 @@ public class VideoReactionService {
         if (post.deletedAt() != null) {
             throw new VideoPostNotFoundException();
         }
-        // 인가 게이트: 반응하는 유저가 그 영상이 속한 방의 멤버여야 한다.
+        // 자기 자신의 영상에는 반응할 수 없다(설계 4-5: 타인 영상만 반응). 클라 mine 플래그에 의존하지 않고 서버가 차단.
         RoomMember author = roomMemberReader.getById(post.roomMemberId());
+        if (author.userId().equals(userId)) {
+            throw new CannotReactToOwnVideoException();
+        }
+        // 인가 게이트: 반응하는 유저가 그 영상이 속한 방의 멤버여야 한다.
         roomMemberReader.getByRoomIdAndUserId(author.roomId(), userId);
 
         Optional<VideoReaction> existing = videoReactionReader.findMine(videoPostId, userId);
