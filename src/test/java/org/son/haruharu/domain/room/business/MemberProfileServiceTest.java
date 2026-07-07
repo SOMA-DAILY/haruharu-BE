@@ -16,10 +16,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
+import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse.ProfileFieldView;
+import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -31,7 +33,10 @@ import org.son.haruharu.domain.value.implement.ValueQuestionReader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class MemberProfileServiceTest {
@@ -41,8 +46,10 @@ class MemberProfileServiceTest {
     @Mock org.son.haruharu.domain.room.implement.RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
     @Mock UserProfileReader userProfileReader;
+    @Mock UserImageReader userImageReader;
     @Mock ValueQuestionReader valueQuestionReader;
     @Mock UserValueAnswerReader userValueAnswerReader;
+    @Mock MatchResultReader matchResultReader;
 
     MemberProfileService service;
 
@@ -51,8 +58,8 @@ class MemberProfileServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new MemberProfileService(roomReader, roomMemberReader, userProfileReader,
-                valueQuestionReader, userValueAnswerReader, clock);
+        service = new MemberProfileService(roomReader, roomMemberReader, userProfileReader, userImageReader,
+                valueQuestionReader, userValueAnswerReader, matchResultReader, clock);
     }
 
     private RoomMember member(Long id, Long roomId, Long userId) {
@@ -152,6 +159,9 @@ class MemberProfileServiceTest {
         assertThat(field(result, "affiliation").value()).isEqualTo("카카오");
         assertThat(field(result, "age").value()).isEqualTo("26");
         assertThat(result.fields()).allMatch(ProfileFieldView::visible);
+        // 본인 프로필은 매칭 조회 없이 사진도 공개된다(단락평가로 isMatched 미호출)
+        assertThat(result.imageRevealed()).isTrue();
+        then(matchResultReader).should(never()).isMatched(any(), any());
     }
 
     @Test
@@ -180,6 +190,44 @@ class MemberProfileServiceTest {
         assertThat(field(result, "affiliation").value()).isNull();
         assertThat(field(result, "age").visible()).isTrue();
         assertThat(field(result, "age").value()).isNull();
+    }
+
+    @Test
+    @DisplayName("최종매칭 전에는 대표사진 원본 URL을 반환하되 imageRevealed=false다(클라 블러)")
+    void givenNotMatched_whenGetProfile_thenImageUrlButNotRevealed() {
+        Long userId = 1L;
+        Long targetUserId = 2L;
+        Long roomId = 10L;
+        Long meId = 20L;
+        Long targetId = 30L;
+
+        stubBasics(roomId, userId, meId, targetId, targetUserId, 2);
+        given(userImageReader.getRepresentativeImageUrl(targetUserId)).willReturn("https://cdn/rep.jpg");
+        given(matchResultReader.isMatched(meId, targetId)).willReturn(false);
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        assertThat(result.profileImageUrl()).isEqualTo("https://cdn/rep.jpg");
+        assertThat(result.imageRevealed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("최종 상호매칭 성립 후에는 imageRevealed=true다")
+    void givenMatched_whenGetProfile_thenImageRevealed() {
+        Long userId = 1L;
+        Long targetUserId = 2L;
+        Long roomId = 10L;
+        Long meId = 20L;
+        Long targetId = 30L;
+
+        stubBasics(roomId, userId, meId, targetId, targetUserId, 3);
+        given(userImageReader.getRepresentativeImageUrl(targetUserId)).willReturn("https://cdn/rep.jpg");
+        given(matchResultReader.isMatched(meId, targetId)).willReturn(true);
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        assertThat(result.imageRevealed()).isTrue();
+        assertThat(result.profileImageUrl()).isEqualTo("https://cdn/rep.jpg");
     }
 
     @Test

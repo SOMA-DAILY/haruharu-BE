@@ -12,12 +12,14 @@ import java.util.stream.Collectors;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.profile.implement.ProfileField;
+import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse.ProfileFieldView;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse.ValueAnswerView;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
+import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -45,23 +47,29 @@ public class MemberProfileService {
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
     private final UserProfileReader userProfileReader;
+    private final UserImageReader userImageReader;
     private final ValueQuestionReader valueQuestionReader;
     private final UserValueAnswerReader userValueAnswerReader;
+    private final MatchResultReader matchResultReader;
     private final Clock clock;
 
     public MemberProfileService(RoomReader roomReader, RoomMemberReader roomMemberReader,
-                                UserProfileReader userProfileReader, ValueQuestionReader valueQuestionReader,
-                                UserValueAnswerReader userValueAnswerReader, Clock clock) {
+                                UserProfileReader userProfileReader, UserImageReader userImageReader,
+                                ValueQuestionReader valueQuestionReader,
+                                UserValueAnswerReader userValueAnswerReader,
+                                MatchResultReader matchResultReader, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.userProfileReader = userProfileReader;
+        this.userImageReader = userImageReader;
         this.valueQuestionReader = valueQuestionReader;
         this.userValueAnswerReader = userValueAnswerReader;
+        this.matchResultReader = matchResultReader;
         this.clock = clock;
     }
 
     public MemberProfileResponse getMemberProfile(Long roomId, Long memberId, Long userId) {
-        roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
+        RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         RoomMember target = roomMemberReader.getById(memberId);
         if (!target.roomId().equals(roomId)) {
             throw new RoomMemberNotFoundException();
@@ -73,10 +81,17 @@ public class MemberProfileService {
         int currentDay = room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour());
         UserProfile profile = userProfileReader.findByUserId(target.userId()).orElse(null);
 
+        // 대표사진 원본 URL은 항상 반환하고(MVP B 방식), 최종 상호매칭(또는 본인) 전까지는 imageRevealed=false로 두어
+        // 클라이언트가 블러 처리하게 한다.
+        String profileImageUrl = userImageReader.getRepresentativeImageUrl(target.userId());
+        boolean imageRevealed = self || matchResultReader.isMatched(me.id(), target.id());
+
         return new MemberProfileResponse(
                 target.id(),
                 profile == null ? null : profile.nickname(),
                 target.gender(),
+                profileImageUrl,
+                imageRevealed,
                 toFields(profile, target, currentDay, self),
                 toValueAnswers(target.userId(), currentDay, self));
     }

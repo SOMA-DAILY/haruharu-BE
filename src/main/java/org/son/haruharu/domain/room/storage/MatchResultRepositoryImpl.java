@@ -21,6 +21,14 @@ public class MatchResultRepositoryImpl implements MatchResultRepository {
     }
 
     @Override
+    public boolean existsBetween(Long memberId1, Long memberId2) {
+        // 저장은 memberA < memberB canonical이라 조회도 동일하게 정렬해 대조한다.
+        long a = Math.min(memberId1, memberId2);
+        long b = Math.max(memberId1, memberId2);
+        return matchResultJpaRepository.existsByMemberAIdAndMemberBId(a, b);
+    }
+
+    @Override
     public MatchResult save(MatchResult matchResult) {
         return matchResultJpaRepository.save(MatchResultEntity.from(matchResult)).toDomain();
     }

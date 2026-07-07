@@ -18,6 +18,7 @@ import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.matching.business.dto.QueueResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
 import org.son.haruharu.domain.matching.business.exception.MatchingAlreadyQueuedException;
+import org.son.haruharu.domain.matching.business.exception.MatchingClosedException;
 import org.son.haruharu.domain.matching.business.exception.MatchingNotVerifiedException;
 import org.son.haruharu.domain.matching.business.exception.MatchingRoomInProgressException;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
@@ -27,8 +28,11 @@ import org.son.haruharu.domain.matching.implement.MatchingQueueWriter;
 import org.son.haruharu.domain.matching.storage.exception.MatchingQueueNotFoundException;
 import org.son.haruharu.domain.room.business.RoomService;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,13 +52,22 @@ class MatchingServiceTest {
     @Mock CoinService coinService;
     @Mock RoomService roomService;
 
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     MatchingService matchingService;
     final MatchingProperties matchingProperties = new MatchingProperties(5L);
 
+    /** 지정 시각(Asia/Seoul)에 고정된 Clock으로 서비스를 만든다. 마감(21:00) 판정 테스트용. */
+    private MatchingService serviceAt(int hour, int minute) {
+        Clock clock = Clock.fixed(ZonedDateTime.of(2026, 7, 8, hour, minute, 0, 0, SEOUL).toInstant(), SEOUL);
+        return new MatchingService(matchingQueueReader, matchingQueueWriter, identityService,
+            coinService, roomService, matchingProperties, clock);
+    }
+
     @BeforeEach
     void setUp() {
-        matchingService = new MatchingService(
-            matchingQueueReader, matchingQueueWriter, identityService, coinService, roomService, matchingProperties);
+        // 기존 시나리오는 신청 개장 시간대(12:00) 기준으로 검증한다.
+        matchingService = serviceAt(12, 0);
     }
 
     private void givenVerified(Long userId) {
@@ -149,6 +162,48 @@ class MatchingServiceTest {
 
         assertThatThrownBy(() -> matchingService.joinQueue(userId))
             .isInstanceOf(InsufficientCoinException.class);
+    }
+
+    @Test
+    @DisplayName("신청 마감 시간대(21:00)에 큐 참가 시 MatchingClosedException이 발생하고 저장·차감하지 않는다")
+    void givenDeadline_whenJoinQueue_thenThrowsClosed() {
+        Long userId = 1L;
+
+        assertThatThrownBy(() -> serviceAt(21, 0).joinQueue(userId))
+            .isInstanceOf(MatchingClosedException.class);
+
+        then(identityService).should(never()).findVerified(any());
+        then(matchingQueueWriter).should(never()).save(any());
+        then(coinService).should(never()).spend(any());
+    }
+
+    @Test
+    @DisplayName("마감 직전(20:59)에는 큐 참가가 허용된다")
+    void givenJustBeforeDeadline_whenJoinQueue_thenAllowed() {
+        Long userId = 1L;
+        givenVerified(userId);
+        given(roomService.hasCurrentRoom(userId)).willReturn(false);
+        given(matchingQueueReader.isQueued(userId)).willReturn(false);
+        givenSaveEcho();
+
+        QueueResponse result = serviceAt(20, 59).joinQueue(userId);
+
+        assertThat(result.status()).isEqualTo("QUEUED");
+        then(coinService).should().spend(any());
+    }
+
+    @Test
+    @DisplayName("자정(00:00)에는 신청이 재개되어 큐 참가가 허용된다")
+    void givenMidnightReopen_whenJoinQueue_thenAllowed() {
+        Long userId = 1L;
+        givenVerified(userId);
+        given(roomService.hasCurrentRoom(userId)).willReturn(false);
+        given(matchingQueueReader.isQueued(userId)).willReturn(false);
+        givenSaveEcho();
+
+        QueueResponse result = serviceAt(0, 0).joinQueue(userId);
+
+        assertThat(result.status()).isEqualTo("QUEUED");
     }
 
     @Test
