@@ -147,4 +147,25 @@ class ValueApiIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.isSuccess").value(false));
     }
+
+    @Test
+    @DisplayName("내 가치관 답변 조회 시 활성 질문 전체와 내 답변(미응답은 매핑 안 됨)을 반환한다")
+    void givenAnswered_whenGetMyAnswers_thenReturnsQuestionsWithMyAnswer() throws Exception {
+        Long userId = 1L;
+        Long q1 = saveQuestion("질문1", "LIFESTYLE", 1, true);
+        Long q2 = saveQuestion("질문2", "LIFESTYLE", 2, true);
+        // q1만 답변
+        mockMvc.perform(post("/api/v1/value-answers")
+                        .with(authentication(auth(userId)))
+                        .contentType(APPLICATION_JSON)
+                        .content("{ \"answers\": [ { \"question_id\": %s, \"answer\": \"등산\" } ] }".formatted(q1)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/value-answers").with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.answers.length()").value(2))
+                .andExpect(jsonPath("$.data.answers[0].question_id").value(q1.intValue()))
+                .andExpect(jsonPath("$.data.answers[0].answer").value("등산"))
+                .andExpect(jsonPath("$.data.answers[1].question_id").value(q2.intValue()));
+    }
 }

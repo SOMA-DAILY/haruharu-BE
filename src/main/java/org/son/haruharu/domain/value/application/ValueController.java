@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.value.application.dto.SaveValueAnswersRequest;
 import org.son.haruharu.domain.value.business.ValueService;
+import org.son.haruharu.domain.value.business.dto.MyValueAnswersResponse;
 import org.son.haruharu.domain.value.business.dto.SavedAnswersResponse;
 import org.son.haruharu.domain.value.business.dto.ValueQuestionsResponse;
 import org.springframework.security.core.Authentication;
@@ -26,6 +27,12 @@ public class ValueController {
     @GetMapping("/value-questions")
     public ApiResponse<ValueQuestionsResponse> getQuestions() {
         return ApiResponse.ok(valueService.getActiveQuestions());
+    }
+
+    @GetMapping("/value-answers")
+    public ApiResponse<MyValueAnswersResponse> getMyAnswers(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(valueService.getMyAnswers(userId));
     }
 
     @PostMapping("/value-answers")
