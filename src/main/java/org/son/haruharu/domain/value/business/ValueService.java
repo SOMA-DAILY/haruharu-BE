@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.value.business;
 
 import org.son.haruharu.domain.value.business.command.SaveValueAnswersCommand;
+import org.son.haruharu.domain.value.business.dto.MyValueAnswersResponse;
 import org.son.haruharu.domain.value.business.dto.SavedAnswersResponse;
 import org.son.haruharu.domain.value.business.dto.ValueQuestionsResponse;
 import org.son.haruharu.domain.value.implement.UserValueAnswer;
@@ -41,6 +42,13 @@ public class ValueService {
 
     public ValueQuestionsResponse getActiveQuestions() {
         return ValueQuestionsResponse.from(valueQuestionReader.getAllActive());
+    }
+
+    /** 마이페이지 '가치관 수정' 프리필용: 활성 질문 전체 + 내 답변(미응답은 null). */
+    public MyValueAnswersResponse getMyAnswers(Long userId) {
+        Map<Long, String> answerByQuestion = userValueAnswerReader.getAllByUserId(userId).stream()
+                .collect(Collectors.toMap(UserValueAnswer::questionId, UserValueAnswer::answer, (a, b) -> b));
+        return MyValueAnswersResponse.of(valueQuestionReader.getAllActive(), answerByQuestion);
     }
 
     /** 온보딩 완료 판정용: 가치관 답변이 하나라도 저장되어 있는지 여부. */
