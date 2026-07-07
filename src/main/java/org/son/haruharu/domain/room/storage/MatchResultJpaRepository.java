@@ -7,4 +7,6 @@ import java.util.Optional;
 public interface MatchResultJpaRepository extends JpaRepository<MatchResultEntity, Long> {
 
     Optional<MatchResultEntity> findByMemberAIdOrMemberBId(Long memberAId, Long memberBId);
+
+    boolean existsByMemberAIdAndMemberBId(Long memberAId, Long memberBId);
 }
