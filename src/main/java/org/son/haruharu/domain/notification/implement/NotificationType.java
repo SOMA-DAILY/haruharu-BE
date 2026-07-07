@@ -22,7 +22,10 @@ public enum NotificationType {
 
     // ── C. 시스템 / 거래 ──
     COIN_REFUNDED("☁️ 구름 %d개를 돌려드렸어요", "이번엔 인연이 닿지 않았지만, 다음 기회에 다시 만나요"),
-    PAYMENT_COMPLETED("☁️ 충전 완료!", "구름 %d개가 충전됐어요. 새로운 인연에 한 걸음 더 가까워졌어요");
+    PAYMENT_COMPLETED("☁️ 충전 완료!", "구름 %d개가 충전됐어요. 새로운 인연에 한 걸음 더 가까워졌어요"),
+
+    // ── D. 재참여 (잠수 유저 복귀 유도) ──
+    WINBACK("💫 새로운 인연이 도착했어요", "오늘 밤 매칭에 당신의 자리를 남겨뒀어요. 지금 신청해보세요");
 
     private final String title;
     private final String body;
