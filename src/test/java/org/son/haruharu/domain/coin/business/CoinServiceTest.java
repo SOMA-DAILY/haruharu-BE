@@ -24,7 +24,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -42,7 +44,35 @@ class CoinServiceTest {
 
     @BeforeEach
     void setUp() {
-        coinService = new CoinService(coinWalletReader, coinWalletWriter, coinLedgerReader, coinLedgerWriter);
+        coinService = new CoinService(coinWalletReader, coinWalletWriter, coinLedgerReader, coinLedgerWriter,
+                new CoinProperties(5L));
+    }
+
+    @Test
+    @DisplayName("첫 가입 보너스 미지급 상태면 REWARD 버킷에 SIGNUP_BONUS로 설정값만큼 적립한다")
+    void givenNoSignupBonus_whenGrant_thenCreditsReward() {
+        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.SIGNUP_BONUS)).willReturn(false);
+        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.empty());
+
+        coinService.grantSignupBonus(userId);
+
+        ArgumentCaptor<CoinLedger> captor = ArgumentCaptor.forClass(CoinLedger.class);
+        verify(coinLedgerWriter).append(captor.capture());
+        assertThat(captor.getValue().reason()).isEqualTo(CoinLedgerReason.SIGNUP_BONUS);
+        assertThat(captor.getValue().bucket()).isEqualTo(CoinBucket.REWARD);
+        assertThat(captor.getValue().delta()).isEqualTo(5L);
+        verify(coinWalletWriter).save(any());
+    }
+
+    @Test
+    @DisplayName("이미 첫 가입 보너스를 받은 유저면 재지급하지 않는다(멱등)")
+    void givenAlreadyGranted_whenGrant_thenSkips() {
+        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.SIGNUP_BONUS)).willReturn(true);
+
+        coinService.grantSignupBonus(userId);
+
+        verify(coinWalletWriter, never()).save(any());
+        verify(coinLedgerWriter, never()).append(any());
     }
 
     @Test

@@ -66,6 +66,15 @@ public class ProfileService {
         return ProfileResponse.from(profile, images);
     }
 
+    /** 온보딩 완료 판정용: 프로필(nickname)과 이미지가 모두 갖춰졌는지 여부. */
+    public boolean hasCompletedProfile(Long userId) {
+        boolean profileFilled = userProfileReader.findByUserId(userId)
+            .map(profile -> profile.nickname() != null && !profile.nickname().isBlank())
+            .orElse(false);
+        boolean hasImage = !userImageReader.getAllByUserId(userId).isEmpty();
+        return profileFilled && hasImage;
+    }
+
     @Transactional
     public void deleteAllImages(Long userId) {
         List<UserImage> images = userImageReader.getAllByUserId(userId);
