@@ -5,6 +5,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserImage;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.storage.UserImageEntity;
@@ -65,7 +67,8 @@ class OnboardingApiIntegrationTest {
 
     private void saveProfileWithNickname(Long userId) {
         userProfileJpaRepository.save(UserProfileEntity.from(
-                new UserProfile(null, userId, "서울", "직장인", 175, "INFP", "테스터", "가끔", "비흡연")));
+                new UserProfile(null, userId, "서울", "직장인", 175, "INFP", "테스터",
+                        DrinkingStatus.SOMETIMES, SmokingStatus.NONE)));
     }
 
     private void saveImage(Long userId) {

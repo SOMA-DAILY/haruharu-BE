@@ -1,6 +1,8 @@
 package org.son.haruharu.domain.profile.business.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserImage;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 
@@ -12,8 +14,8 @@ public record ProfileResponse(
         String affiliation,
         Integer height,
         String mbti,
-        String drinkingStatus,
-        String smokingStatus,
+        DrinkingStatus drinkingStatus,
+        SmokingStatus smokingStatus,
         List<ImageInfo> images
 ) {
     public record ImageInfo(
