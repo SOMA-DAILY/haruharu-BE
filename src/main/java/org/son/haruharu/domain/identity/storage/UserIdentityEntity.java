@@ -3,6 +3,7 @@ package org.son.haruharu.domain.identity.storage;
 import org.son.haruharu.common.entity.BaseEntity;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -24,12 +25,17 @@ public class UserIdentityEntity extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private Long userId;
 
-    @Column(nullable = false, unique = true)
+    @Convert(converter = CiDiCryptoConverter.class)
+    @Column(nullable = false)
     private String ci;
 
+    @Column(nullable = false, unique = true)
+    private String ciHash;
+
+    @Convert(converter = CiDiCryptoConverter.class)
     @Column(nullable = false)
     private String di;
 
@@ -54,11 +60,12 @@ public class UserIdentityEntity extends BaseEntity {
     @Column(nullable = false)
     private LocalDateTime verifiedAt;
 
-    public static UserIdentityEntity from(UserIdentity userIdentity) {
+    public static UserIdentityEntity from(UserIdentity userIdentity, String ciHash) {
         UserIdentityEntity entity = new UserIdentityEntity();
         entity.id = userIdentity.id();
         entity.userId = userIdentity.userId();
         entity.ci = userIdentity.ci();
+        entity.ciHash = ciHash;
         entity.di = userIdentity.di();
         entity.phoneNumber = userIdentity.phoneNumber();
         entity.birthday = userIdentity.birthday();

@@ -31,3 +31,7 @@ oauth:
 aws:
   s3:
     bucket: ${AWS_S3_BUCKET:test-bucket}
+
+identity:
+  encryption:
+    key: ${IDENTITY_ENCRYPTION_KEY:test-only-identity-encryption-master-key}

@@ -2,6 +2,7 @@ package org.son.haruharu.domain.identity.business;
 
 import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
+import org.son.haruharu.domain.identity.business.exception.DuplicateCiException;
 import org.son.haruharu.domain.identity.business.exception.UserAlreadyVerifiedException;
 import org.son.haruharu.domain.identity.implement.UserIdentity;
 import org.son.haruharu.domain.identity.implement.UserIdentityReader;
@@ -52,7 +53,10 @@ public class IdentityService {
         if (userIdentityReader.existsByUserId(userId)) {
             throw new UserAlreadyVerifiedException();
         }
-        PassVerificationResult result = passVerificationPort.verify(command.passToken());
+        PassVerificationResult result = passVerificationPort.verify(command.identityVerificationId());
+        if (userIdentityReader.existsByCi(result.ci())) {
+            throw new DuplicateCiException();
+        }
         UserIdentity identity = new UserIdentity(
             null, userId,
             result.ci(), result.di(),

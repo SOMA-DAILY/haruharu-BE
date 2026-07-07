@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.identity.storage;
 
 import lombok.RequiredArgsConstructor;
+import org.son.haruharu.common.crypto.IdentityCrypto;
 import org.son.haruharu.domain.identity.implement.UserIdentity;
 import org.son.haruharu.domain.identity.implement.UserIdentityRepository;
 import org.springframework.stereotype.Repository;
@@ -12,6 +13,7 @@ import java.util.Optional;
 public class UserIdentityRepositoryImpl implements UserIdentityRepository {
 
     private final UserIdentityJpaRepository jpaRepository;
+    private final IdentityCrypto crypto;
 
     @Override
     public Optional<UserIdentity> findByUserId(Long userId) {
@@ -25,12 +27,13 @@ public class UserIdentityRepositoryImpl implements UserIdentityRepository {
 
     @Override
     public boolean existsByCi(String ci) {
-        return jpaRepository.existsByCi(ci);
+        return jpaRepository.existsByCiHash(crypto.blindIndex(ci));
     }
 
     @Override
     public UserIdentity save(UserIdentity userIdentity) {
-        return jpaRepository.save(UserIdentityEntity.from(userIdentity)).toDomain();
+        String ciHash = crypto.blindIndex(userIdentity.ci());
+        return jpaRepository.save(UserIdentityEntity.from(userIdentity, ciHash)).toDomain();
     }
 
     @Override
