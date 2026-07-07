@@ -12,8 +12,4 @@ public record AuthTokenResponse(
     public static AuthTokenResponse withStatus(String accessToken, String refreshToken, String userStatus) {
         return new AuthTokenResponse(accessToken, refreshToken, userStatus);
     }
-
-    public static AuthTokenResponse tokenOnly(String accessToken, String refreshToken) {
-        return new AuthTokenResponse(accessToken, refreshToken, null);
-    }
 }

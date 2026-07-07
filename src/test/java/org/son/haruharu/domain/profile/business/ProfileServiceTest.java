@@ -9,6 +9,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.profile.business.command.UpdateImagesCommand;
 import org.son.haruharu.domain.profile.business.command.UpdateProfileCommand;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.business.dto.ImageUploadUrlResponse;
 import org.son.haruharu.domain.profile.business.dto.ImagesResponse;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
@@ -64,11 +66,11 @@ class ProfileServiceTest {
         Long userId = 1L;
         UpdateProfileCommand command = new UpdateProfileCommand(
             "서울", "직장인",
-            175, "INFP", "새닉네임", "가끔", "비흡연"
+            175, "INFP", "새닉네임", DrinkingStatus.SOMETIMES, SmokingStatus.NONE
         );
         UserProfile existing = new UserProfile(1L, userId,
             "부산", "학생",
-            175, "INFP", "기존닉", "안함", "비흡연");
+            175, "INFP", "기존닉", DrinkingStatus.NONE, SmokingStatus.NONE);
         UserProfile updated = command.applyTo(existing);
 
         given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(existing));
@@ -87,7 +89,7 @@ class ProfileServiceTest {
         Long userId = 1L;
         UpdateProfileCommand command = new UpdateProfileCommand(
             "서울", "회사원",
-            178, "ENFP", "하루", "가끔", "비흡연"
+            178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE
         );
 
         given(userProfileReader.findByUserId(userId)).willReturn(Optional.empty());

@@ -9,8 +9,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.utils.JwtProvider;
 import org.springframework.security.core.context.SecurityContextHolder;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -24,6 +26,10 @@ class JwtAuthenticationFilterTest {
 
     @Mock
     JwtProvider jwtProvider;
+    @Mock
+    UserReader userReader;
+    @Mock
+    JsonMapper jsonMapper;
 
     @AfterEach
     void clearContext() {
@@ -33,7 +39,7 @@ class JwtAuthenticationFilterTest {
     @Test
     @DisplayName("서명은 유효하나 subject가 숫자가 아닌 토큰(구 UUID subject)이면 인증을 설정하지 않고 예외 없이 통과한다")
     void givenNonNumericSubjectToken_whenFilter_thenNoAuthenticationAndChainContinues() throws Exception {
-        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtProvider);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtProvider, userReader, jsonMapper);
         HttpServletRequest request = mock(HttpServletRequest.class);
         HttpServletResponse response = mock(HttpServletResponse.class);
         FilterChain chain = mock(FilterChain.class);

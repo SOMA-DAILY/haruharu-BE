@@ -24,6 +24,8 @@ import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.chat.storage.exception.ChatRoomNotFoundException;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -70,7 +72,7 @@ class ChatServiceTest {
     }
 
     private ProfileResponse profile(String nickname) {
-        return new ProfileResponse(nickname, "서울", "직장인", 175, "INFP", "가끔", "비흡연", List.of());
+        return new ProfileResponse(nickname, "서울", "직장인", 175, "INFP", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, List.of());
     }
 
     private ChatMessage message(Long id, Long chatRoomId, Long senderId, String content, LocalDateTime at) {

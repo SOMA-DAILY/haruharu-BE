@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MembersResponse;
@@ -45,7 +47,7 @@ class RoomMembersServiceTest {
 
     private UserProfile profile(Long userId, String nickname, String location) {
         return new UserProfile(1L, userId,
-                location, "ABC대학교", 180, "INTJ", nickname, "SOMETIMES", "NONE");
+                location, "ABC대학교", 180, "INTJ", nickname, DrinkingStatus.SOMETIMES, SmokingStatus.NONE);
     }
 
     private RoomMember member(Long roomId, Long userId) {

@@ -14,7 +14,8 @@ import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
-import org.son.haruharu.domain.identity.implement.UserIdentityReader;
+import org.son.haruharu.domain.coin.business.CoinService;
+import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.implement.VerificationStatus;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserReader;
@@ -40,7 +41,8 @@ public class AuthService {
     private final UserWriter userWriter;
     private final UserCredentialReader userCredentialReader;
     private final UserCredentialWriter userCredentialWriter;
-    private final UserIdentityReader userIdentityReader;
+    private final IdentityService identityService;
+    private final CoinService coinService;
     private final RefreshTokenReader refreshTokenReader;
     private final RefreshTokenWriter refreshTokenWriter;
     private final JwtProvider jwtProvider;
@@ -49,23 +51,23 @@ public class AuthService {
     public AuthTokenResponse authenticate(SocialAuthCommand command) {
         OAuthUserInfo userInfo = oAuthProviderRegistry.get(command.providerType()).verify(command.idToken());
 
-        Long userId = userCredentialReader
+        User user = userCredentialReader
             .findByProviderTypeAndProviderId(command.providerType().name(), userInfo.providerId())
             .map(credential -> {
-                User user = userReader.getById(credential.userId());
-                if (user.status() != UserStatus.ACTIVE) {
+                User existing = userReader.getById(credential.userId());
+                if (!existing.status().canAuthenticate()) {
                     throw new InactiveMemberException();
                 }
-                return credential.userId();
+                return existing;
             })
             .orElseGet(() -> {
-                User user = userWriter.save(new User(null, UserStatus.ACTIVE, null));
-                userCredentialWriter.save(new UserCredential(null, user.id(), command.providerType().name(), userInfo.providerId()));
-                return user.id();
+                User created = userWriter.save(new User(null, UserStatus.ONBOARDING, null));
+                userCredentialWriter.save(new UserCredential(null, created.id(), command.providerType().name(), userInfo.providerId()));
+                coinService.grantSignupBonus(created.id());
+                return created;
             });
 
-        String userStatus = VerificationStatus.of(userIdentityReader.existsByUserId(userId)).name();
-        return issueNewTokenPair(userId, userStatus);
+        return issueNewTokenPair(user.id(), routingStatus(user));
     }
 
     @Transactional
@@ -88,12 +90,25 @@ public class AuthService {
         }
 
         User user = userReader.getById(refreshToken.userId());
-        if (user.status() != UserStatus.ACTIVE) {
+        if (!user.status().canAuthenticate()) {
             throw new InactiveMemberException();
         }
 
         refreshTokenWriter.revokeByTokenHash(tokenHash);
-        return issueNewTokenPairOnly(refreshToken.userId());
+        return issueNewTokenPair(user.id(), routingStatus(user));
+    }
+
+    /**
+     * 프론트 라우팅용 상태를 파생한다. 저장된 UserStatus(온보딩 여부)와 본인인증 존재 여부를 하나의 값으로 합친다.
+     * ONBOARDING → "ONBOARDING", 온보딩 완료 후 본인인증됨 → "VERIFIED", 완료됐지만 미인증 → "ACTIVE".
+     */
+    private String routingStatus(User user) {
+        if (user.status() == UserStatus.ONBOARDING) {
+            return UserStatus.ONBOARDING.name();
+        }
+        return identityService.isVerified(user.id())
+            ? VerificationStatus.VERIFIED.name()
+            : UserStatus.ACTIVE.name();
     }
 
     @Transactional
@@ -118,13 +133,6 @@ public class AuthService {
         String refreshToken = jwtProvider.generateRefreshToken(userId);
         saveRefreshToken(userId, refreshToken);
         return AuthTokenResponse.withStatus(accessToken, refreshToken, userStatus);
-    }
-
-    private AuthTokenResponse issueNewTokenPairOnly(Long userId) {
-        String accessToken = jwtProvider.generateAccessToken(userId);
-        String refreshToken = jwtProvider.generateRefreshToken(userId);
-        saveRefreshToken(userId, refreshToken);
-        return AuthTokenResponse.tokenOnly(accessToken, refreshToken);
     }
 
     private void saveRefreshToken(Long userId, String refreshToken) {
