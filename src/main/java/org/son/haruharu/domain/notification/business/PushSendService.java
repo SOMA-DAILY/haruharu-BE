@@ -69,7 +69,7 @@ public class PushSendService {
     private void dispatchPush(List<Long> userIds, NotificationType type,
                               String title, String body, Map<String, String> data) {
         try {
-            List<Long> enabledUserIds = excludePushDisabled(userIds);
+            List<Long> enabledUserIds = filterByCategory(userIds, type);
             if (enabledUserIds.isEmpty()) {
                 return;
             }
@@ -94,11 +94,25 @@ public class PushSendService {
         return args.length == 0 ? template : String.format(template, args);
     }
 
-    private List<Long> excludePushDisabled(List<Long> userIds) {
-        List<Long> disabled = notificationSettingReader.findPushDisabledUserIds(userIds);
-        if (disabled.isEmpty()) {
-            return userIds;
-        }
-        return userIds.stream().filter(id -> !disabled.contains(id)).toList();
+    /**
+     * 타입의 카테고리별로 발송 대상을 거른다.
+     * - TRANSACTIONAL: 설정 무시, 전원 발송
+     * - ACTIVITY(기본 on, opt-out): 명시적으로 끈 유저만 제외
+     * - MARKETING(기본 off, opt-in): 명시적으로 켠 유저만 포함
+     */
+    private List<Long> filterByCategory(List<Long> userIds, NotificationType type) {
+        return switch (type.category()) {
+            case TRANSACTIONAL -> userIds;
+            case ACTIVITY -> {
+                List<Long> disabled = notificationSettingReader.findActivityDisabledUserIds(userIds);
+                yield disabled.isEmpty()
+                        ? userIds
+                        : userIds.stream().filter(id -> !disabled.contains(id)).toList();
+            }
+            case MARKETING -> {
+                List<Long> enabled = notificationSettingReader.findMarketingEnabledUserIds(userIds);
+                yield userIds.stream().filter(enabled::contains).toList();
+            }
+        };
     }
 }

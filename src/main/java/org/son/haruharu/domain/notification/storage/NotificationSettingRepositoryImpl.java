@@ -27,10 +27,18 @@ public class NotificationSettingRepositoryImpl implements NotificationSettingRep
     }
 
     @Override
-    public List<Long> findPushDisabledUserIds(List<Long> userIds) {
+    public List<Long> findActivityDisabledUserIds(List<Long> userIds) {
         if (userIds.isEmpty()) {
             return List.of();
         }
-        return jpaRepository.findPushDisabledUserIds(userIds);
+        return jpaRepository.findActivityDisabledUserIds(userIds);
+    }
+
+    @Override
+    public List<Long> findMarketingEnabledUserIds(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findMarketingEnabledUserIds(userIds);
     }
 }
