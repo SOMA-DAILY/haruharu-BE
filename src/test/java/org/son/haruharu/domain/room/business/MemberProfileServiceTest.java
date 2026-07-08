@@ -28,7 +28,9 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
+import org.son.haruharu.domain.value.implement.UserValueAnswer;
 import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
+import org.son.haruharu.domain.value.implement.ValueQuestion;
 import org.son.haruharu.domain.value.implement.ValueQuestionReader;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -228,6 +230,40 @@ class MemberProfileServiceTest {
 
         assertThat(result.imageRevealed()).isTrue();
         assertThat(result.profileImageUrl()).isEqualTo("https://cdn/rep.jpg");
+    }
+
+    @Test
+    @DisplayName("상호매칭 성립 후에는 룸이 만료(ENDED, currentDay=0)돼도 프로필 항목·가치관·나이가 계속 공개된다")
+    void givenMatchedAndRoomEnded_whenGetProfile_thenStaysRevealed() {
+        Long userId = 1L;
+        Long targetUserId = 2L;
+        Long roomId = 10L;
+        Long meId = 20L;
+        Long targetId = 30L;
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
+        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
+        // ENDED 방 → currentDayAt=0 (Day 기준이라면 전부 숨김 대상)
+        given(roomReader.findById(roomId)).willReturn(Optional.of(
+                new Room(roomId, RoomStatus.ENDED, LocalDate.of(2026, 6, 24), 3,
+                        LocalDateTime.of(2026, 6, 24, 9, 0), LocalDateTime.of(2026, 6, 27, 9, 0))));
+        given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
+        given(matchResultReader.isMatched(meId, targetId)).willReturn(true);
+        ValueQuestion question = new ValueQuestion(100L, "데이트는?", "A선택지", "B선택지", "DATING", 1, true);
+        given(valueQuestionReader.getAllActive()).willReturn(List.of(question));
+        given(userValueAnswerReader.getAllByUserId(targetUserId))
+                .willReturn(List.of(new UserValueAnswer(500L, targetUserId, 100L, "A")));
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        // 매칭이면 currentDay=0이어도 전 항목 공개
+        assertThat(result.fields()).allMatch(ProfileFieldView::visible);
+        assertThat(field(result, "location").value()).isEqualTo("서울");
+        assertThat(field(result, "age").value()).isEqualTo("26");
+        assertThat(result.valueAnswers()).hasSize(1);
+        assertThat(result.valueAnswers().get(0).visible()).isTrue();
+        assertThat(result.valueAnswers().get(0).answer()).isEqualTo("A");
+        assertThat(result.imageRevealed()).isTrue();
     }
 
     @Test
