@@ -8,6 +8,7 @@ import org.son.haruharu.domain.auth.business.dto.AuthTokenResponse;
 import org.son.haruharu.domain.auth.business.exception.InactiveMemberException;
 import org.son.haruharu.domain.auth.business.exception.InvalidRefreshTokenException;
 import org.son.haruharu.domain.auth.business.exception.InvalidTokenException;
+import org.son.haruharu.domain.auth.business.exception.ReRegistrationBlockedException;
 import org.son.haruharu.domain.auth.implement.RefreshToken;
 import org.son.haruharu.domain.auth.implement.RefreshTokenReader;
 import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
@@ -28,6 +29,7 @@ import org.son.haruharu.utils.TokenHashUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -35,6 +37,9 @@ import java.time.temporal.ChronoUnit;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class AuthService {
+
+    /** 탈퇴 후 같은 OAuth 계정 재가입 차단 기간. identity CI 차단과 동일. */
+    private static final int REJOIN_BLOCK_DAYS = 30;
 
     private final OAuthProviderRegistry oAuthProviderRegistry;
     private final UserReader userReader;
@@ -46,13 +51,16 @@ public class AuthService {
     private final RefreshTokenReader refreshTokenReader;
     private final RefreshTokenWriter refreshTokenWriter;
     private final JwtProvider jwtProvider;
+    private final Clock clock;
 
     @Transactional
     public AuthTokenResponse authenticate(SocialAuthCommand command) {
         OAuthUserInfo userInfo = oAuthProviderRegistry.get(command.providerType()).verify(command.idToken());
+        String providerType = command.providerType().name();
+        String providerId = userInfo.providerId();
 
         User user = userCredentialReader
-            .findByProviderTypeAndProviderId(command.providerType().name(), userInfo.providerId())
+            .findByProviderTypeAndProviderId(providerType, providerId)
             .map(credential -> {
                 User existing = userReader.getById(credential.userId());
                 if (!existing.status().canAuthenticate()) {
@@ -60,14 +68,35 @@ public class AuthService {
                 }
                 return existing;
             })
-            .orElseGet(() -> {
-                User created = userWriter.save(new User(null, UserStatus.ONBOARDING, null));
-                userCredentialWriter.save(new UserCredential(null, created.id(), command.providerType().name(), userInfo.providerId()));
-                coinService.grantSignupBonus(created.id());
-                return created;
-            });
+            .orElseGet(() -> signup(providerType, providerId));
 
         return issueNewTokenPair(user.id(), routingStatus(user));
+    }
+
+    /**
+     * 활성 연동이 없는 소셜 계정 가입 처리. 탈퇴 이력이 차단 기간(30일) 내면 재가입을 막고,
+     * 경과한 탈퇴 잔존 행은 물리 파기(unique 슬롯 해제)한 뒤 신규 User를 생성한다.
+     * 탈퇴 이력이 있는 복귀 유저에게는 signup 보너스를 재지급하지 않는다(credential 단위 1회성).
+     */
+    private User signup(String providerType, String providerId) {
+        LocalDateTime blockThreshold = LocalDateTime.now(clock).minusDays(REJOIN_BLOCK_DAYS);
+        if (userCredentialReader.existsWithdrawnWithin(providerType, providerId, blockThreshold)) {
+            throw new ReRegistrationBlockedException();
+        }
+        boolean returning = userCredentialWriter.purgeWithdrawnBefore(providerType, providerId, blockThreshold) > 0;
+
+        User created = userWriter.save(new User(null, UserStatus.ONBOARDING, null));
+        userCredentialWriter.save(new UserCredential(null, created.id(), providerType, providerId));
+        if (!returning) {
+            coinService.grantSignupBonus(created.id());
+        }
+        return created;
+    }
+
+    /** 탈퇴 시 소셜 연동을 soft-delete한다. 같은 OAuth 재가입 쿨다운의 기준 시각을 남긴다. */
+    @Transactional
+    public void deleteCredentials(Long userId) {
+        userCredentialWriter.deleteByUserId(userId);
     }
 
     @Transactional

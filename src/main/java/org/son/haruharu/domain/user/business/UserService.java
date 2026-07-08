@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.user.business;
 
+import org.son.haruharu.domain.auth.business.AuthService;
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
@@ -33,6 +34,7 @@ public class UserService {
     private final IdentityService identityService;
     private final ValueService valueService;
     private final CoinService coinService;
+    private final AuthService authService;
     private final Clock clock;
 
     public UserService(
@@ -42,6 +44,7 @@ public class UserService {
         IdentityService identityService,
         ValueService valueService,
         CoinService coinService,
+        AuthService authService,
         Clock clock
     ) {
         this.userReader = userReader;
@@ -50,6 +53,7 @@ public class UserService {
         this.identityService = identityService;
         this.valueService = valueService;
         this.coinService = coinService;
+        this.authService = authService;
         this.clock = clock;
     }
 
@@ -89,6 +93,7 @@ public class UserService {
      * 회원 탈퇴. 프로필·가치관·구름 지갑 등 유저 관련 데이터를 soft-delete 캐스케이드한 뒤 상태를 DELETED로 전이한다.
      * soft-delete라 데이터는 물리적으로 남아 결제 보관·환불 대응이 가능하다.
      * identity는 물리삭제하지 않고 soft로 남겨 재가입 차단 근거(CI)를 30일간 보존한다(#122).
+     * user_credentials도 soft-delete해 같은 OAuth 재가입 쿨다운(30일)의 기준 시각을 남긴다(#129).
      */
     @Transactional
     public void withdraw(Long userId) {
@@ -97,6 +102,7 @@ public class UserService {
         valueService.deleteAnswers(userId);
         coinService.deleteWallet(userId);
         identityService.deleteIdentity(userId);
+        authService.deleteCredentials(userId);
         userWriter.save(new User(userId, UserStatus.DELETED, user.createdAt()));
     }
 }
