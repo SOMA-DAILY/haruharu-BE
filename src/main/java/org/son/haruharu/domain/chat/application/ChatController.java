@@ -3,6 +3,7 @@ package org.son.haruharu.domain.chat.application;
 import jakarta.validation.Valid;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.chat.application.dto.MarkReadRequest;
+import org.son.haruharu.domain.chat.business.ChatPartnerService;
 import org.son.haruharu.domain.chat.business.ChatService;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
@@ -24,9 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ChatController {
 
     private final ChatService chatService;
+    private final ChatPartnerService chatPartnerService;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(ChatService chatService, ChatPartnerService chatPartnerService) {
         this.chatService = chatService;
+        this.chatPartnerService = chatPartnerService;
     }
 
     @GetMapping
@@ -46,7 +49,7 @@ public class ChatController {
     public ApiResponse<PartnerProfileResponse> getPartner(@PathVariable Long chatRoomId,
                                                           Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
-        return ApiResponse.ok(chatService.getPartner(chatRoomId, userId));
+        return ApiResponse.ok(chatPartnerService.getPartner(chatRoomId, userId));
     }
 
     @GetMapping("/{chatRoomId}/messages")

@@ -3,6 +3,7 @@ package org.son.haruharu.domain.video.business;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -61,6 +62,11 @@ public class VideoService {
         this.videoPostWriter = videoPostWriter;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
+    }
+
+    /** 한 방 멤버의 활성 영상 전체(Day·슬롯 오름차순). 매칭 상대 프로필 카드의 1~3일차 영상용. */
+    public List<VideoPost> getMemberVideos(Long roomMemberId) {
+        return videoPostReader.findActiveByRoomMember(roomMemberId);
     }
 
     /** 영상 업로드용 presigned PUT URL 발급. 영상은 비공개 prefix(users/{id}/videos/). */
