@@ -40,6 +40,7 @@ public class SecurityConfig {
                 // RevenueCat webhook은 JWT가 아닌 공유 시크릿(Authorization 헤더)으로 인증한다.
                 .requestMatchers(HttpMethod.POST, "/api/v1/iap/webhook").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/value-questions").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/meta/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 // WebSocket 핸드셰이크는 HTTP 레벨에서 열고, 실제 인증은 STOMP CONNECT(StompAuthChannelInterceptor)에서 한다.
