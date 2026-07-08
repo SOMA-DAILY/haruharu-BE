@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.auth.business.AuthService;
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
@@ -48,6 +49,7 @@ class UserServiceTest {
     @Mock IdentityService identityService;
     @Mock ValueService valueService;
     @Mock CoinService coinService;
+    @Mock AuthService authService;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     // 2026-06-26 고정 → 1999-06-26생은 27세
@@ -58,7 +60,7 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userReader, userWriter, profileService, identityService, valueService, coinService, clock);
+        userService = new UserService(userReader, userWriter, profileService, identityService, valueService, coinService, authService, clock);
     }
 
     @Test
@@ -202,6 +204,7 @@ class UserServiceTest {
         then(valueService).should().deleteAnswers(userId);
         then(coinService).should().deleteWallet(userId);
         then(identityService).should().deleteIdentity(userId);
+        then(authService).should().deleteCredentials(userId);
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         then(userWriter).should().save(captor.capture());
