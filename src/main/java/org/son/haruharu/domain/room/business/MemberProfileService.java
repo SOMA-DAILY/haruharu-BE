@@ -81,29 +81,33 @@ public class MemberProfileService {
         int currentDay = room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour());
         UserProfile profile = userProfileReader.findByUserId(target.userId()).orElse(null);
 
+        // 상호매칭은 영구 사실이라 룸 만료(currentDay=0) 이후에도 항목 공개가 유지된다. self는 단락평가로 isMatched 미호출.
+        boolean matched = !self && matchResultReader.isMatched(me.id(), target.id());
+        // 본인이거나 매칭 성립 시 모든 항목을 Day와 무관하게 공개한다(이미지 공개 기준과 동일).
+        boolean fullyRevealed = self || matched;
+
         // 대표사진 원본 URL은 항상 반환하고(MVP B 방식), 최종 상호매칭(또는 본인) 전까지는 imageRevealed=false로 두어
         // 클라이언트가 블러 처리하게 한다.
         String profileImageUrl = userImageReader.getRepresentativeImageUrl(target.userId());
-        boolean imageRevealed = self || matchResultReader.isMatched(me.id(), target.id());
 
         return new MemberProfileResponse(
                 target.id(),
                 profile == null ? null : profile.nickname(),
                 target.gender(),
                 profileImageUrl,
-                imageRevealed,
-                toFields(profile, target, currentDay, self),
-                toValueAnswers(target.userId(), currentDay, self));
+                fullyRevealed,
+                toFields(profile, target, currentDay, fullyRevealed),
+                toValueAnswers(target.userId(), currentDay, fullyRevealed));
     }
 
-    private List<ProfileFieldView> toFields(UserProfile profile, RoomMember target, int currentDay, boolean self) {
+    private List<ProfileFieldView> toFields(UserProfile profile, RoomMember target, int currentDay, boolean fullyRevealed) {
         List<ProfileFieldView> views = new ArrayList<>();
         for (ProfileField field : ProfileField.values()) {
-            boolean visible = self || currentDay >= field.availableFromDay();
+            boolean visible = fullyRevealed || currentDay >= field.availableFromDay();
             views.add(new ProfileFieldView(field.key(), field.label(), field.availableFromDay(),
                     visible, visible ? field.extract(profile) : null));
         }
-        boolean ageVisible = self || currentDay >= AGE_REVEAL_DAY;
+        boolean ageVisible = fullyRevealed || currentDay >= AGE_REVEAL_DAY;
         String age = ageVisible && target.birthday() != null
                 ? String.valueOf(Period.between(target.birthday(), LocalDate.now(clock)).getYears())
                 : null;
@@ -111,8 +115,8 @@ public class MemberProfileService {
         return views;
     }
 
-    private List<ValueAnswerView> toValueAnswers(Long targetUserId, int currentDay, boolean self) {
-        boolean visible = self || currentDay >= VALUE_REVEAL_DAY;
+    private List<ValueAnswerView> toValueAnswers(Long targetUserId, int currentDay, boolean fullyRevealed) {
+        boolean visible = fullyRevealed || currentDay >= VALUE_REVEAL_DAY;
         Map<Long, ValueQuestion> questions = valueQuestionReader.getAllActive().stream()
                 .collect(Collectors.toMap(ValueQuestion::id, Function.identity()));
 
