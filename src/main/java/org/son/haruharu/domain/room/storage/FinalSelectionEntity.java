@@ -27,7 +27,10 @@ public class FinalSelectionEntity extends BaseEntity {
     @Column(nullable = false)
     private Long roomMemberId;
 
-    @Column(nullable = false)
+    // null = 기권("아무도 선택 안 하기"). 최종선택 확정 행은 남기되 대상이 없음을 표현한다.
+    // prod/dev(ddl-auto=validate/update)는 기존 NOT NULL을 자동 해제하지 않으므로 배포 시 수동 DDL 필요:
+    //   ALTER TABLE final_selections ALTER COLUMN selected_member_id DROP NOT NULL;
+    @Column
     private Long selectedMemberId;
 
     @Column(nullable = false)

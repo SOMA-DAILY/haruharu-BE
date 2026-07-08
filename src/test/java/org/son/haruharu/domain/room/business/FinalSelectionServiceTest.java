@@ -219,4 +219,49 @@ class FinalSelectionServiceTest {
         assertThatThrownBy(() -> service.select(roomId, selectedId, userId))
                 .isInstanceOf(RoomMemberNotFoundException.class);
     }
+
+    @Test
+    @DisplayName("기권(selectedMemberId=null)하면 아무도 선택하지 않고 저장하며 matched=false·매칭·이벤트 없음")
+    void givenAbstain_whenSelect_thenSavedWithNullAndNotMatched() {
+        stubMeAndRoom(3);
+        given(finalSelectionReader.hasSelected(meId)).willReturn(false);
+
+        FinalSelectionResponse result = service.select(roomId, null, userId);
+
+        assertThat(result.selectedMemberId()).isNull();
+        assertThat(result.matched()).isFalse();
+
+        ArgumentCaptor<FinalSelection> captor = ArgumentCaptor.forClass(FinalSelection.class);
+        then(finalSelectionWriter).should().save(captor.capture());
+        assertThat(captor.getValue().selectedMemberId()).isNull();
+        then(matchResultWriter).should(never()).save(any());
+        then(eventPublisher).should(never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("이미 최종선택(또는 기권)했으면 기권 요청도 AlreadySelectedException이 발생한다")
+    void givenAlreadySelected_whenAbstain_thenThrows() {
+        stubMeAndRoom(3);
+        given(finalSelectionReader.hasSelected(meId)).willReturn(true);
+
+        assertThatThrownBy(() -> service.select(roomId, null, userId))
+                .isInstanceOf(AlreadySelectedException.class);
+        then(finalSelectionWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("상대가 기권(selectedMemberId=null)했으면 내가 상대를 선택해도 NPE 없이 matched=false")
+    void givenTargetAbstained_whenSelect_thenNotMatchedNoNpe() {
+        stubMeAndRoom(3);
+        given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, roomId));
+        given(finalSelectionReader.hasSelected(meId)).willReturn(false);
+        // 상대는 기권(selectedMemberId=null)한 최종선택 행을 가짐
+        given(finalSelectionReader.findByRoomMemberId(selectedId))
+                .willReturn(Optional.of(new FinalSelection(40L, selectedId, null, LocalDateTime.now())));
+
+        FinalSelectionResponse result = service.select(roomId, selectedId, userId);
+
+        assertThat(result.matched()).isFalse();
+        then(matchResultWriter).should(never()).save(any());
+    }
 }
