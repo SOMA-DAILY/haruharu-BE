@@ -22,6 +22,7 @@ public class ChatMessageSentEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(ChatMessageSentEvent event) {
         pushSendService.sendToUsers(List.of(event.recipientUserId()),
-                NotificationType.CHAT, Map.of("chatRoomId", event.chatRoomId().toString()));
+                NotificationType.CHAT, Map.of("chatRoomId", event.chatRoomId().toString()),
+                event.senderNickname());
     }
 }

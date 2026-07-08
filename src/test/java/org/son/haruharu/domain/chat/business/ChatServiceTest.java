@@ -213,13 +213,14 @@ class ChatServiceTest {
         // 상대(2L) 계산용
         given(chatRoomMemberReader.findByChatRoomId(ROOM))
                 .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
+        given(profileService.getNickname(ME)).willReturn("하루");
 
         ChatMessageBroadcast result = chatService.sendMessage(ROOM, ME, "안녕");
 
         assertThat(result.messageId()).isEqualTo(42L);
         assertThat(result.senderId()).isEqualTo(ME);
         assertThat(result.content()).isEqualTo("안녕");
-        then(eventPublisher).should().publishEvent(new ChatMessageSentEvent(ROOM, 2L));
+        then(eventPublisher).should().publishEvent(new ChatMessageSentEvent(ROOM, 2L, "하루"));
     }
 
     @Test

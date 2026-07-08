@@ -93,7 +93,8 @@ public class ChatService {
         requireMember(chatRoomId, senderId);
         ChatMessage saved = chatMessageWriter.save(ChatMessage.create(chatRoomId, senderId, content));
         Long recipientId = partnerUserId(chatRoomId, senderId);
-        eventPublisher.publishEvent(new ChatMessageSentEvent(chatRoomId, recipientId));
+        String senderNickname = profileService.getNickname(senderId);
+        eventPublisher.publishEvent(new ChatMessageSentEvent(chatRoomId, recipientId, senderNickname));
         return ChatMessageBroadcast.from(saved);
     }
 

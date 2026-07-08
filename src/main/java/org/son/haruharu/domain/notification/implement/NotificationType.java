@@ -20,8 +20,8 @@ public enum NotificationType {
     REACTION_RECEIVED("👀 누군가 내 영상에 반응했어요", "누가 관심을 보였을까요?", true, NotificationCategory.ACTIVITY),
     MUTUAL_MATCH("💞 서로의 마음이 닿았어요", "두 분 다 서로를 선택했어요! 지금 대화를 시작해보세요", true, NotificationCategory.ACTIVITY),
     SELECTED_BY_SOMEONE("💕 설레는 소식이 있어요", "누군가 당신을 마음에 담았어요. 누굴까요?", true, NotificationCategory.ACTIVITY),
-    // TODO(#117): 채팅 알림 title/body 카피 기획 확정 필요 — 발송 트리거(채팅 기능)는 후속 이슈
-    CHAT("[TODO 카피 확정] 채팅 알림", "[TODO 카피 확정] 새 메시지가 도착했어요", true, NotificationCategory.ACTIVITY),
+    // body의 %s는 발신자 닉네임(bodyArgs)으로 치환. 대화 내용은 잠금화면 노출 방지를 위해 미포함.
+    CHAT("💬 새 메시지", "%s님이 메시지를 보냈어요", true, NotificationCategory.ACTIVITY),
 
     // ── C. 시스템 / 거래 ──
     COIN_REFUNDED("☁️ 구름 %d개를 돌려드렸어요", "이번엔 인연이 닿지 않았지만, 다음 기회에 다시 만나요", true, NotificationCategory.TRANSACTIONAL),
