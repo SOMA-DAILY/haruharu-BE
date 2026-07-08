@@ -45,7 +45,9 @@ class PushSendServiceTest {
     void setUp() {
         service = new PushSendService(deviceTokenReader, deviceTokenWriter,
                 notificationSettingReader, notificationHistoryWriter, pushPort);
-        lenient().when(notificationSettingReader.findPushDisabledUserIds(anyList())).thenReturn(List.of());
+        // 기본: 활동 알림을 끈 유저 없음(전원 수신), 혜택 알림을 켠 유저 없음(전원 미수신)
+        lenient().when(notificationSettingReader.findActivityDisabledUserIds(anyList())).thenReturn(List.of());
+        lenient().when(notificationSettingReader.findMarketingEnabledUserIds(anyList())).thenReturn(List.of());
     }
 
     @Test
@@ -111,9 +113,9 @@ class PushSendServiceTest {
     }
 
     @Test
-    @DisplayName("푸시 수신을 끈 유저는 발송 대상에서 제외된다")
-    void givenDisabledUser_whenSend_thenExcluded() {
-        given(notificationSettingReader.findPushDisabledUserIds(List.of(1L, 2L))).willReturn(List.of(2L));
+    @DisplayName("활동 알림을 끈 유저는 발송 대상에서 제외된다(opt-out)")
+    void givenActivityDisabledUser_whenSendActivity_thenExcluded() {
+        given(notificationSettingReader.findActivityDisabledUserIds(List.of(1L, 2L))).willReturn(List.of(2L));
         given(deviceTokenReader.findAllByUserIds(List.of(1L)))
                 .willReturn(List.of(new DeviceToken(10L, 1L, "token-1")));
         given(pushPort.send(any())).willReturn(List.of());
@@ -127,14 +129,53 @@ class PushSendServiceTest {
     }
 
     @Test
-    @DisplayName("전원이 푸시 수신을 껐으면 토큰 조회·발송을 하지 않는다")
-    void givenAllDisabled_whenSend_thenSkips() {
-        given(notificationSettingReader.findPushDisabledUserIds(List.of(1L))).willReturn(List.of(1L));
+    @DisplayName("전원이 활동 알림을 껐으면 토큰 조회·발송을 하지 않는다")
+    void givenAllActivityDisabled_whenSendActivity_thenSkips() {
+        given(notificationSettingReader.findActivityDisabledUserIds(List.of(1L))).willReturn(List.of(1L));
 
         service.sendToUsers(List.of(1L), NotificationType.ROOM_MATCHED, Map.of());
 
         then(deviceTokenReader).should(never()).findAllByUserIds(anyList());
         then(pushPort).should(never()).send(any());
+    }
+
+    @Test
+    @DisplayName("혜택 알림은 명시적으로 켠 유저에게만 발송한다(opt-in, 기본 미수신)")
+    void givenMarketingType_whenSend_thenOnlyOptedInUsersReceive() {
+        given(notificationSettingReader.findMarketingEnabledUserIds(List.of(1L, 2L))).willReturn(List.of(2L));
+        given(deviceTokenReader.findAllByUserIds(List.of(2L)))
+                .willReturn(List.of(new DeviceToken(20L, 2L, "token-2")));
+        given(pushPort.send(any())).willReturn(List.of());
+
+        service.sendToUsers(List.of(1L, 2L), NotificationType.WINBACK, Map.of());
+
+        then(deviceTokenReader).should().findAllByUserIds(List.of(2L));
+        ArgumentCaptor<PushMessage> captor = ArgumentCaptor.forClass(PushMessage.class);
+        then(pushPort).should().send(captor.capture());
+        assertThat(captor.getValue().tokens()).containsExactly("token-2");
+    }
+
+    @Test
+    @DisplayName("혜택 알림을 켠 유저가 없으면 발송하지 않는다(기본 off)")
+    void givenNoMarketingOptIn_whenSend_thenSkips() {
+        service.sendToUsers(List.of(1L, 2L), NotificationType.WINBACK, Map.of());
+
+        then(deviceTokenReader).should(never()).findAllByUserIds(anyList());
+        then(pushPort).should(never()).send(any());
+    }
+
+    @Test
+    @DisplayName("거래 알림(TRANSACTIONAL)은 수신 설정과 무관하게 항상 발송한다")
+    void givenTransactionalType_whenSend_thenAlwaysSent() {
+        given(deviceTokenReader.findAllByUserIds(List.of(1L)))
+                .willReturn(List.of(new DeviceToken(10L, 1L, "token-1")));
+        given(pushPort.send(any())).willReturn(List.of());
+
+        service.sendToUsers(List.of(1L), NotificationType.PAYMENT_COMPLETED, Map.of(), 3L);
+
+        then(notificationSettingReader).should(never()).findActivityDisabledUserIds(anyList());
+        then(notificationSettingReader).should(never()).findMarketingEnabledUserIds(anyList());
+        then(pushPort).should().send(any());
     }
 
     @Test
@@ -170,9 +211,9 @@ class PushSendServiceTest {
     }
 
     @Test
-    @DisplayName("푸시 수신을 껐어도 알림함에는 저장한다(설정 무관)")
-    void givenPushDisabled_whenSend_thenStillSavesHistory() {
-        given(notificationSettingReader.findPushDisabledUserIds(List.of(1L))).willReturn(List.of(1L));
+    @DisplayName("활동 알림을 껐어도 알림함에는 저장한다(설정 무관)")
+    void givenActivityDisabled_whenSend_thenStillSavesHistory() {
+        given(notificationSettingReader.findActivityDisabledUserIds(List.of(1L))).willReturn(List.of(1L));
 
         service.sendToUsers(List.of(1L), NotificationType.ROOM_MATCHED, Map.of());
 

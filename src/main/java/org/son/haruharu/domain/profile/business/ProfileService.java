@@ -66,6 +66,11 @@ public class ProfileService {
         return ProfileResponse.from(profile, images);
     }
 
+    /** 푸시·표시용 닉네임만 경량 조회(이미지 미로드). */
+    public String getNickname(Long userId) {
+        return userProfileReader.getByUserId(userId).nickname();
+    }
+
     /** 온보딩 완료 판정용: 프로필(nickname)과 이미지가 모두 갖춰졌는지 여부. */
     public boolean hasCompletedProfile(Long userId) {
         boolean profileFilled = userProfileReader.findByUserId(userId)

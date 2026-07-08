@@ -18,7 +18,11 @@ public class NotificationSettingReader {
         return notificationSettingRepository.findByUserId(userId);
     }
 
-    public List<Long> findPushDisabledUserIds(List<Long> userIds) {
-        return notificationSettingRepository.findPushDisabledUserIds(userIds);
+    public List<Long> findActivityDisabledUserIds(List<Long> userIds) {
+        return notificationSettingRepository.findActivityDisabledUserIds(userIds);
+    }
+
+    public List<Long> findMarketingEnabledUserIds(List<Long> userIds) {
+        return notificationSettingRepository.findMarketingEnabledUserIds(userIds);
     }
 }

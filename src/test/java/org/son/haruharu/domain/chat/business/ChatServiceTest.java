@@ -24,8 +24,10 @@ import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.chat.storage.exception.ChatRoomNotFoundException;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
+import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -53,6 +55,7 @@ class ChatServiceTest {
     @Mock ChatMessageReader chatMessageReader;
     @Mock ChatMessageWriter chatMessageWriter;
     @Mock ProfileService profileService;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-03T03:00:00Z"), ZoneOffset.UTC);
 
@@ -64,7 +67,7 @@ class ChatServiceTest {
     @BeforeEach
     void setUp() {
         chatService = new ChatService(chatRoomReader, chatRoomWriter, chatRoomMemberReader,
-                chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, clock);
+                chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, eventPublisher, clock);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -201,29 +204,35 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("참여자가 메시지 전송 시 저장 후 브로드캐스트 payload를 반환한다")
-    void sendMessage_whenMember_savesAndReturnsBroadcast() {
+    @DisplayName("참여자가 메시지 전송 시 저장 후 브로드캐스트 payload를 반환하고 수신자에게 CHAT 이벤트를 발행한다")
+    void sendMessage_whenMember_savesReturnsBroadcastAndPublishesEvent() {
         given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, 99L, LocalDateTime.now(clock)));
         given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
         given(chatMessageWriter.save(any()))
                 .willReturn(new ChatMessage(42L, ROOM, ME, "안녕", LocalDateTime.now(clock)));
+        // 상대(2L) 계산용
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
+        given(profileService.getNickname(ME)).willReturn("하루");
 
         ChatMessageBroadcast result = chatService.sendMessage(ROOM, ME, "안녕");
 
         assertThat(result.messageId()).isEqualTo(42L);
         assertThat(result.senderId()).isEqualTo(ME);
         assertThat(result.content()).isEqualTo("안녕");
+        then(eventPublisher).should().publishEvent(new ChatMessageSentEvent(ROOM, 2L, "하루"));
     }
 
     @Test
-    @DisplayName("참여자가 아닌 유저가 메시지 전송 시 ChatNotMemberException이 발생하고 저장하지 않는다")
-    void sendMessage_whenNotMember_throwsAndDoesNotSave() {
+    @DisplayName("참여자가 아닌 유저가 메시지 전송 시 ChatNotMemberException이 발생하고 저장·이벤트 발행을 하지 않는다")
+    void sendMessage_whenNotMember_throwsAndDoesNotSaveOrPublish() {
         given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, 99L, LocalDateTime.now(clock)));
         given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> chatService.sendMessage(ROOM, ME, "안녕"))
                 .isInstanceOf(ChatNotMemberException.class);
         then(chatMessageWriter).should(never()).save(any());
+        then(eventPublisher).should(never()).publishEvent(any());
     }
 
     @Test
