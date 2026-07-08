@@ -4,10 +4,6 @@ package org.son.haruharu.domain.video.implement;
 public enum ReactionType {
     LIKE, CURIOUS, EMPATHY;
 
-    public static boolean isValid(String name) {
-        return parse(name) != null;
-    }
-
     public static ReactionType parse(String name) {
         for (ReactionType type : values()) {
             if (type.name().equals(name)) {
