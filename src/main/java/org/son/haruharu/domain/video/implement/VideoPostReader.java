@@ -37,4 +37,9 @@ public class VideoPostReader {
     public List<VideoPost> getFeed(List<Long> roomMemberIds, int dayNumber) {
         return videoPostRepository.findFeed(roomMemberIds, dayNumber);
     }
+
+    /** 한 멤버의 활성 영상 전체(Day·슬롯 오름차순). 매칭 상대 카드용. */
+    public List<VideoPost> findActiveByRoomMember(Long roomMemberId) {
+        return videoPostRepository.findActiveByRoomMember(roomMemberId);
+    }
 }

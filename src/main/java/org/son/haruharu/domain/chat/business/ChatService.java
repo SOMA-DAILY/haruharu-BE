@@ -5,7 +5,6 @@ import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
-import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
 import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
@@ -113,13 +112,6 @@ public class ChatService {
         requireMember(chatRoomId, userId);
         ChatRoom room = chatRoomReader.getById(chatRoomId);
         return new ChatRoomDetailResponse(chatRoomId, partnerBrief(chatRoomId, userId), room.createdAt());
-    }
-
-    /** 매칭 상대의 공개 프로필. */
-    public PartnerProfileResponse getPartner(Long chatRoomId, Long userId) {
-        requireMember(chatRoomId, userId);
-        Long partnerUserId = partnerUserId(chatRoomId, userId);
-        return new PartnerProfileResponse(partnerUserId, profileService.getProfile(partnerUserId));
     }
 
     /** 과거 메시지(최신순 커서 페이지). 삭제된 메시지는 제외. */

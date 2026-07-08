@@ -23,4 +23,8 @@ public interface VideoPostJpaRepository extends JpaRepository<VideoPostEntity, L
 
     List<VideoPostEntity> findByRoomMemberIdInAndDayNumberAndDeletedAtIsNullAndIsHiddenFalse(
             List<Long> roomMemberIds, int dayNumber);
+
+    /** 한 멤버의 활성(비삭제·비숨김) 영상 전체를 Day·슬롯 오름차순으로. 매칭 상대 프로필 카드용. */
+    List<VideoPostEntity> findByRoomMemberIdAndDeletedAtIsNullAndIsHiddenFalseOrderByDayNumberAscSlotIndexAsc(
+            Long roomMemberId);
 }

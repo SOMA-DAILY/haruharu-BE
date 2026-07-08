@@ -21,6 +21,11 @@ public class MatchResultRepositoryImpl implements MatchResultRepository {
     }
 
     @Override
+    public Optional<MatchResult> findById(Long id) {
+        return matchResultJpaRepository.findById(id).map(MatchResultEntity::toDomain);
+    }
+
+    @Override
     public boolean existsBetween(Long memberId1, Long memberId2) {
         // 저장은 memberA < memberB canonical이라 조회도 동일하게 정렬해 대조한다.
         long a = Math.min(memberId1, memberId2);

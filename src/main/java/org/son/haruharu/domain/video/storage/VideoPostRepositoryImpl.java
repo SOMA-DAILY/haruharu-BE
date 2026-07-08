@@ -56,4 +56,12 @@ public class VideoPostRepositoryImpl implements VideoPostRepository {
                 .map(VideoPostEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    public List<VideoPost> findActiveByRoomMember(Long roomMemberId) {
+        return jpaRepository.findByRoomMemberIdAndDeletedAtIsNullAndIsHiddenFalseOrderByDayNumberAscSlotIndexAsc(
+                        roomMemberId).stream()
+                .map(VideoPostEntity::toDomain)
+                .toList();
+    }
 }
