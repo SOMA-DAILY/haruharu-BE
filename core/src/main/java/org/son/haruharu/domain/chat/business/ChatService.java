@@ -144,20 +144,29 @@ public class ChatService {
 
     private ChatRoomsResponse.ChatRoomSummary toSummary(ChatRoomMember me, Long userId) {
         Long partnerUserId = partnerUserId(me.chatRoomId(), userId);
-        String nickname = profileService.getProfile(partnerUserId).nickname();
+        PartnerBrief partner = toPartnerBrief(partnerUserId);
         Optional<ChatMessage> last = chatMessageReader.findLast(me.chatRoomId());
         long unread = chatMessageReader.countUnread(me.chatRoomId(), me.lastReadMessageId(), userId);
         return new ChatRoomsResponse.ChatRoomSummary(
                 me.chatRoomId(),
-                new PartnerBrief(partnerUserId, nickname),
+                partner,
                 last.map(ChatMessage::content).orElse(null),
                 last.map(ChatMessage::createdAt).orElse(null),
                 unread);
     }
 
     private PartnerBrief partnerBrief(Long chatRoomId, Long userId) {
-        Long partnerUserId = partnerUserId(chatRoomId, userId);
-        return new PartnerBrief(partnerUserId, profileService.getProfile(partnerUserId).nickname());
+        return toPartnerBrief(partnerUserId(chatRoomId, userId));
+    }
+
+    /** 상대 프로필에서 목록·헤더용 경량 정보를 뽑는다. 대표사진 = sorted_order 최소 이미지(없으면 null). */
+    private PartnerBrief toPartnerBrief(Long partnerUserId) {
+        var profile = profileService.getProfile(partnerUserId);
+        String profileImageUrl = profile.images().stream()
+                .min(Comparator.comparingInt(img -> img.sortedOrder()))
+                .map(img -> img.imageUrl())
+                .orElse(null);
+        return new PartnerBrief(partnerUserId, profile.nickname(), profileImageUrl);
     }
 
     /** 방 존재(404) 확인 후 요청자가 참여자(403)인지 검증하고 멤버십을 반환한다. */

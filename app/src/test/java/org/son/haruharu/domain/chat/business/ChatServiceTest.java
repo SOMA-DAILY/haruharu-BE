@@ -8,8 +8,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
+import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
+import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
@@ -78,6 +80,10 @@ class ChatServiceTest {
         return new ProfileResponse(nickname, "서울", "직장인", 175, "INFP", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, List.of());
     }
 
+    private ProfileResponse profileWithImages(String nickname, ProfileResponse.ImageInfo... images) {
+        return new ProfileResponse(nickname, "서울", "직장인", 175, "INFP", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, List.of(images));
+    }
+
     private ChatMessage message(Long id, Long chatRoomId, Long senderId, String content, LocalDateTime at) {
         return new ChatMessage(id, chatRoomId, senderId, content, at);
     }
@@ -111,6 +117,59 @@ class ChatServiceTest {
         assertThat(first.lastMessageAt()).isEqualTo(newer);
         assertThat(first.unreadCount()).isEqualTo(2L);
         assertThat(result.chatRooms().get(1).chatRoomId()).isEqualTo(20L);
+    }
+
+    @Test
+    @DisplayName("채팅방 목록의 상대 정보에 대표사진(sorted_order 최소) URL이 담긴다")
+    void getMyRooms_includesPartnerRepresentativeImage() {
+        given(chatRoomMemberReader.findActiveByUserId(ME))
+                .willReturn(List.of(membership(10L, ME, null)));
+        given(chatRoomMemberReader.findByChatRoomId(10L))
+                .willReturn(List.of(membership(10L, ME, null), membership(10L, 2L, null)));
+        // sorted_order가 뒤섞여 있어도 최소값(0)인 이미지가 대표로 선택된다
+        given(profileService.getProfile(2L)).willReturn(profileWithImages("하늘",
+                new ProfileResponse.ImageInfo(31L, "https://cdn/second.jpg", 2),
+                new ProfileResponse.ImageInfo(30L, "https://cdn/rep.jpg", 0),
+                new ProfileResponse.ImageInfo(32L, "https://cdn/third.jpg", 1)));
+        given(chatMessageReader.findLast(10L)).willReturn(Optional.empty());
+        given(chatMessageReader.countUnread(10L, null, ME)).willReturn(0L);
+
+        ChatRoomsResponse result = chatService.getMyRooms(ME);
+
+        PartnerBrief partner = result.chatRooms().get(0).partner();
+        assertThat(partner.nickname()).isEqualTo("하늘");
+        assertThat(partner.profileImageUrl()).isEqualTo("https://cdn/rep.jpg");
+    }
+
+    @Test
+    @DisplayName("방 상세(헤더) 조회 시 상대 대표사진 URL이 담긴다")
+    void getRoom_includesPartnerRepresentativeImage() {
+        given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, 99L, LocalDateTime.now(clock)));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
+        given(profileService.getProfile(2L)).willReturn(profileWithImages("하늘",
+                new ProfileResponse.ImageInfo(30L, "https://cdn/rep.jpg", 0),
+                new ProfileResponse.ImageInfo(31L, "https://cdn/second.jpg", 1)));
+
+        ChatRoomDetailResponse result = chatService.getRoom(ROOM, ME);
+
+        assertThat(result.partner().nickname()).isEqualTo("하늘");
+        assertThat(result.partner().profileImageUrl()).isEqualTo("https://cdn/rep.jpg");
+    }
+
+    @Test
+    @DisplayName("상대가 프로필 이미지가 없으면 대표사진 URL은 null이다")
+    void partnerBrief_whenNoImages_profileImageUrlIsNull() {
+        given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, 99L, LocalDateTime.now(clock)));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
+        given(profileService.getProfile(2L)).willReturn(profile("하늘"));
+
+        ChatRoomDetailResponse result = chatService.getRoom(ROOM, ME);
+
+        assertThat(result.partner().profileImageUrl()).isNull();
     }
 
     @Test
