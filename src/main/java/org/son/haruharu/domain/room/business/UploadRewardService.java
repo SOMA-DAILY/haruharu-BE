@@ -10,6 +10,7 @@ import org.son.haruharu.domain.room.implement.DailyUploadRewardWriter;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -32,7 +33,9 @@ public class UploadRewardService {
     private final UploadRewardProperties uploadRewardProperties;
     private final Clock clock;
 
-    @Transactional
+    // AFTER_COMMIT 리스너(UploadCompletedRewardListener)에서 호출되므로 REQUIRES_NEW로 새 트랜잭션을 연다(#158).
+    // REQUIRED면 이미 커밋된 업로드 트랜잭션에 join되어 보상 지급 INSERT가 유실된다.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void grantIfDayCompleted(Long roomMemberId, int dayNumber) {
         int slotCount = UploadSlot.ofDay(dayNumber).size();
         if (slotCount == 0) {

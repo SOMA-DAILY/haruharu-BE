@@ -20,6 +20,7 @@ import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -71,8 +72,11 @@ public class ChatService {
     /**
      * 상호매칭 성사 시 두 유저의 1:1 채팅방을 생성한다(#61, MutualMatchEvent 커밋 후 호출).
      * match_result_id 당 1방 멱등 — 이벤트 재발행·재시도에도 중복 생성하지 않는다(unique + 사전 검사).
+     *
+     * AFTER_COMMIT 리스너에서 호출되므로 REQUIRES_NEW로 새 트랜잭션을 연다(#158).
+     * 원본(최종선택) 트랜잭션은 이미 커밋된 상태라, REQUIRED면 커밋된 트랜잭션에 join되어 INSERT가 유실된다.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createRoomFromMatch(Long matchResultId, Long userIdA, Long userIdB) {
         if (chatRoomReader.existsByMatchResultId(matchResultId)) {
             return;

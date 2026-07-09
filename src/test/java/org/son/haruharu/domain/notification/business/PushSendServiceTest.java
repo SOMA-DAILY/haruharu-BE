@@ -13,7 +13,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.notification.implement.DeviceToken;
 import org.son.haruharu.domain.notification.implement.DeviceTokenReader;
 import org.son.haruharu.domain.notification.implement.DeviceTokenWriter;
-import org.son.haruharu.domain.notification.implement.NotificationHistoryWriter;
 import org.son.haruharu.domain.notification.implement.NotificationSettingReader;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.infrastructure.fcm.PushMessage;
@@ -36,7 +35,7 @@ class PushSendServiceTest {
     @Mock DeviceTokenReader deviceTokenReader;
     @Mock DeviceTokenWriter deviceTokenWriter;
     @Mock NotificationSettingReader notificationSettingReader;
-    @Mock NotificationHistoryWriter notificationHistoryWriter;
+    @Mock NotificationHistoryService notificationHistoryService;
     @Mock PushPort pushPort;
 
     PushSendService service;
@@ -44,7 +43,7 @@ class PushSendServiceTest {
     @BeforeEach
     void setUp() {
         service = new PushSendService(deviceTokenReader, deviceTokenWriter,
-                notificationSettingReader, notificationHistoryWriter, pushPort);
+                notificationSettingReader, notificationHistoryService, pushPort);
         // 기본: 활동 알림을 끈 유저 없음(전원 수신), 혜택 알림을 켠 유저 없음(전원 미수신)
         lenient().when(notificationSettingReader.findActivityDisabledUserIds(anyList())).thenReturn(List.of());
         lenient().when(notificationSettingReader.findMarketingEnabledUserIds(anyList())).thenReturn(List.of());
@@ -196,7 +195,7 @@ class PushSendServiceTest {
 
         service.sendToUsers(List.of(1L, 2L), NotificationType.ROOM_MATCHED, Map.of("roomId", "7"));
 
-        then(notificationHistoryWriter).should().saveAll(
+        then(notificationHistoryService).should().saveAll(
                 eq(List.of(1L, 2L)), eq(NotificationType.ROOM_MATCHED), any(), any(), eq(Map.of("roomId", "7")));
     }
 
@@ -207,7 +206,7 @@ class PushSendServiceTest {
 
         service.sendToUsers(List.of(1L), NotificationType.SLOT_START, Map.of());
 
-        then(notificationHistoryWriter).should(never()).saveAll(any(), any(), any(), any(), any());
+        then(notificationHistoryService).should(never()).saveAll(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -217,7 +216,7 @@ class PushSendServiceTest {
 
         service.sendToUsers(List.of(1L), NotificationType.ROOM_MATCHED, Map.of());
 
-        then(notificationHistoryWriter).should().saveAll(eq(List.of(1L)), any(), any(), any(), any());
+        then(notificationHistoryService).should().saveAll(eq(List.of(1L)), any(), any(), any(), any());
         then(pushPort).should(never()).send(any());
     }
 }

@@ -4,7 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.domain.notification.implement.DeviceToken;
 import org.son.haruharu.domain.notification.implement.DeviceTokenReader;
 import org.son.haruharu.domain.notification.implement.DeviceTokenWriter;
-import org.son.haruharu.domain.notification.implement.NotificationHistoryWriter;
 import org.son.haruharu.domain.notification.implement.NotificationSettingReader;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.infrastructure.fcm.PushMessage;
@@ -27,16 +26,16 @@ public class PushSendService {
     private final DeviceTokenReader deviceTokenReader;
     private final DeviceTokenWriter deviceTokenWriter;
     private final NotificationSettingReader notificationSettingReader;
-    private final NotificationHistoryWriter notificationHistoryWriter;
+    private final NotificationHistoryService notificationHistoryService;
     private final PushPort pushPort;
 
     public PushSendService(DeviceTokenReader deviceTokenReader, DeviceTokenWriter deviceTokenWriter,
                            NotificationSettingReader notificationSettingReader,
-                           NotificationHistoryWriter notificationHistoryWriter, PushPort pushPort) {
+                           NotificationHistoryService notificationHistoryService, PushPort pushPort) {
         this.deviceTokenReader = deviceTokenReader;
         this.deviceTokenWriter = deviceTokenWriter;
         this.notificationSettingReader = notificationSettingReader;
-        this.notificationHistoryWriter = notificationHistoryWriter;
+        this.notificationHistoryService = notificationHistoryService;
         this.pushPort = pushPort;
     }
 
@@ -60,7 +59,7 @@ public class PushSendService {
             return;
         }
         try {
-            notificationHistoryWriter.saveAll(userIds, type, title, body, data);
+            notificationHistoryService.saveAll(userIds, type, title, body, data);
         } catch (Exception e) {
             log.error("알림함 저장 실패: type={} userIds={}", type, userIds, e);
         }
