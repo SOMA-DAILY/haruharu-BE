@@ -17,6 +17,7 @@ import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.business.dto.PartnerMemberRef;
 import org.son.haruharu.domain.video.business.VideoService;
 import org.son.haruharu.domain.video.implement.VideoPost;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,15 +35,17 @@ public class ChatPartnerService {
     private final MatchResultService matchResultService;
     private final MemberProfileService memberProfileService;
     private final VideoService videoService;
+    private final S3StoragePort s3StoragePort;
 
     public ChatPartnerService(ChatRoomReader chatRoomReader, ChatRoomMemberReader chatRoomMemberReader,
                               MatchResultService matchResultService, MemberProfileService memberProfileService,
-                              VideoService videoService) {
+                              VideoService videoService, S3StoragePort s3StoragePort) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomMemberReader = chatRoomMemberReader;
         this.matchResultService = matchResultService;
         this.memberProfileService = memberProfileService;
         this.videoService = videoService;
+        this.s3StoragePort = s3StoragePort;
     }
 
     public PartnerProfileResponse getPartner(Long chatRoomId, Long userId) {
@@ -59,13 +62,19 @@ public class ChatPartnerService {
         return new PartnerProfileResponse(partner.partnerUserId(), profile, videosByDay);
     }
 
-    /** 상대 영상을 dayNumber 오름차순 맵으로 그룹핑(각 day 내 슬롯 순서는 조회 정렬 유지). */
+    /**
+     * 상대 영상을 dayNumber 오름차순 맵으로 그룹핑(각 day 내 슬롯 순서는 조회 정렬 유지).
+     * 비공개 영상은 재생 가능한 presigned GET URL로 변환한다(#162).
+     */
     private Map<Integer, List<PartnerVideo>> groupByDay(List<VideoPost> videos) {
         return videos.stream().collect(Collectors.groupingBy(
                 VideoPost::dayNumber,
                 TreeMap::new,
                 Collectors.mapping(v -> new PartnerVideo(
-                        v.id(), v.slotIndex(), v.videoUrl(), v.thumbnailUrl(), v.caption(), v.createdAt()),
+                        v.id(), v.slotIndex(),
+                        s3StoragePort.createPresignedGetUrl(v.videoUrl()),
+                        s3StoragePort.createPresignedGetUrl(v.thumbnailUrl()),
+                        v.caption(), v.createdAt()),
                         Collectors.toList())));
     }
 }

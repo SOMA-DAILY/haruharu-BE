@@ -27,7 +27,10 @@ aws:
   region: ${AWS_REGION:ap-northeast-2}
   s3:
     bucket: ${AWS_S3_BUCKET}
+    # 업로드(PUT) presign 만료. 발급 직후 업로드하므로 짧게(5분).
     presign-expiry-seconds: ${AWS_S3_PRESIGN_EXPIRY:300}
+    # 비공개 영상 재생(GET) presign 만료. 시청 세션을 고려해 넉넉히(1시간).
+    video-get-expiry-seconds: ${AWS_S3_VIDEO_GET_EXPIRY:3600}
 
 # FCM 서비스 계정 JSON(base64 한 줄). 미설정 시 no-op 발송 어댑터로 동작.
 fcm:

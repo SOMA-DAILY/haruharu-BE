@@ -111,12 +111,15 @@ class VideoServiceTest {
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(false);
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+        // 비공개 원본 대신 재생 가능한 presigned GET URL을 응답에 담는다(#162)
+        given(s3StoragePort.createPresignedGetUrl(url)).willReturn("https://signed-get-url");
 
         VideoPostResponse result = serviceAt(12).upload(userId, roomId, command);
 
         assertThat(result.dayNumber()).isEqualTo(1);
         assertThat(result.slotIndex()).isEqualTo(SLOT_INDEX);
         assertThat(result.missionId()).isNull();
+        assertThat(result.videoUrl()).isEqualTo("https://signed-get-url"); // 원본(url)이 아니라 서명 URL
         // 완주 보상 트리거용 업로드 이벤트가 발행된다
         then(eventPublisher).should().publishEvent(new VideoUploadedEvent(memberId, 1));
     }

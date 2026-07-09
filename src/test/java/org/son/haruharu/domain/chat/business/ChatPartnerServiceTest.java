@@ -22,6 +22,7 @@ import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.business.dto.PartnerMemberRef;
 import org.son.haruharu.domain.video.business.VideoService;
 import org.son.haruharu.domain.video.implement.VideoPost;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +41,7 @@ class ChatPartnerServiceTest {
     @Mock MatchResultService matchResultService;
     @Mock MemberProfileService memberProfileService;
     @Mock VideoService videoService;
+    @Mock S3StoragePort s3StoragePort;
 
     ChatPartnerService service;
 
@@ -52,7 +55,10 @@ class ChatPartnerServiceTest {
     @BeforeEach
     void setUp() {
         service = new ChatPartnerService(chatRoomReader, chatRoomMemberReader,
-                matchResultService, memberProfileService, videoService);
+                matchResultService, memberProfileService, videoService, s3StoragePort);
+        // 비공개 영상 URL은 presigned GET URL로 서명해 응답한다(#162). 서명 적용 관찰용 접두사.
+        lenient().when(s3StoragePort.createPresignedGetUrl(any()))
+                .thenAnswer(inv -> inv.getArgument(0) == null ? null : "signed:" + inv.getArgument(0));
     }
 
     private ChatRoomMember membership(Long userId, LocalDateTime leftAt) {
@@ -86,7 +92,7 @@ class ChatPartnerServiceTest {
         assertThat(result.videosByDay().keySet()).containsExactly(1, 2, 3); // TreeMap: day 오름차순
         assertThat(result.videosByDay().get(1)).extracting(PartnerProfileResponse.PartnerVideo::videoPostId)
                 .containsExactly(11L, 12L);
-        assertThat(result.videosByDay().get(1).get(0).videoUrl()).isEqualTo("https://cdn/v11.mp4");
+        assertThat(result.videosByDay().get(1).get(0).videoUrl()).isEqualTo("signed:https://cdn/v11.mp4");
         assertThat(result.videosByDay().get(3).get(0).slotIndex()).isEqualTo(3);
     }
 

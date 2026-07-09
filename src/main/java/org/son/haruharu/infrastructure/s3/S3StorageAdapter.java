@@ -4,9 +4,11 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
@@ -43,6 +45,28 @@ public class S3StorageAdapter implements S3StoragePort {
         PresignedPutObjectRequest presigned = s3Presigner.presignPutObject(presignRequest);
 
         return new PresignedUpload(presigned.url().toString(), publicBaseUrl() + key);
+    }
+
+    @Override
+    public String createPresignedGetUrl(String objectUrl) {
+        if (objectUrl == null) {
+            return null;
+        }
+        String base = publicBaseUrl();
+        // 우리 버킷 객체(publicBaseUrl prefix)만 서명한다. 그 외(외부·이미 서명된 URL 등)는 그대로 둔다.
+        if (!objectUrl.startsWith(base)) {
+            return objectUrl;
+        }
+        String key = objectUrl.substring(base.length());
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(properties.s3().bucket())
+                .key(key)
+                .build();
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofSeconds(properties.s3().videoGetExpirySeconds()))
+                .getObjectRequest(getObjectRequest)
+                .build();
+        return s3Presigner.presignGetObject(presignRequest).url().toString();
     }
 
     @Override

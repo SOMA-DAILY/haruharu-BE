@@ -20,14 +20,17 @@ import org.son.haruharu.domain.video.implement.ReactionCount;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoReactionReader;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -37,12 +40,16 @@ class RoomFeedServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock VideoPostReader videoPostReader;
     @Mock VideoReactionReader videoReactionReader;
+    @Mock S3StoragePort s3StoragePort;
 
     RoomFeedService service;
 
     @BeforeEach
     void setUp() {
-        service = new RoomFeedService(roomMemberReader, videoPostReader, videoReactionReader);
+        service = new RoomFeedService(roomMemberReader, videoPostReader, videoReactionReader, s3StoragePort);
+        // 비공개 영상 URL은 presigned GET URL로 서명해 응답한다(#162). 서명 적용 여부를 관찰하려고 접두사를 붙인다.
+        lenient().when(s3StoragePort.createPresignedGetUrl(any()))
+                .thenAnswer(inv -> inv.getArgument(0) == null ? null : "signed:" + inv.getArgument(0));
     }
 
     private RoomMember member(Long id, Long userId) {
@@ -112,6 +119,8 @@ class RoomFeedServiceTest {
                 .containsExactly(100L, 101L, 102L);
         assertThat(result.posts()).extracting(FeedItem::slotIndex).containsExactly(1, 1, 2);
         assertThat(result.posts()).extracting(FeedItem::mine).containsExactly(true, false, false);
+        // 비공개 원본이 아니라 서명된 재생 URL이 내려간다(#162)
+        assertThat(itemOf(result, 101L).videoUrl()).isEqualTo("signed:other-s1");
 
         // post 101: 집계 + 내 반응
         FeedItem p101 = itemOf(result, 101L);
