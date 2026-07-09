@@ -1,5 +1,9 @@
 package org.son.haruharu.domain.room.business;
 
+import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.profile.implement.UserImageReader;
+import org.son.haruharu.domain.profile.implement.UserProfile;
+import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MatchResultResponse;
 import org.son.haruharu.domain.room.business.dto.PartnerMemberRef;
 import org.son.haruharu.domain.room.implement.MatchResult;
@@ -17,10 +21,18 @@ public class MatchResultService {
 
     private final RoomMemberReader roomMemberReader;
     private final MatchResultReader matchResultReader;
+    private final ChatRoomReader chatRoomReader;
+    private final UserProfileReader userProfileReader;
+    private final UserImageReader userImageReader;
 
-    public MatchResultService(RoomMemberReader roomMemberReader, MatchResultReader matchResultReader) {
+    public MatchResultService(RoomMemberReader roomMemberReader, MatchResultReader matchResultReader,
+                              ChatRoomReader chatRoomReader, UserProfileReader userProfileReader,
+                              UserImageReader userImageReader) {
         this.roomMemberReader = roomMemberReader;
         this.matchResultReader = matchResultReader;
+        this.chatRoomReader = chatRoomReader;
+        this.userProfileReader = userProfileReader;
+        this.userImageReader = userImageReader;
     }
 
     public MatchResultResponse getMatchResult(Long roomId, Long userId) {
@@ -28,7 +40,16 @@ public class MatchResultService {
         MatchResult match = matchResultReader.getByMember(me.id());
 
         Long partnerMemberId = match.memberAId().equals(me.id()) ? match.memberBId() : match.memberAId();
-        return new MatchResultResponse(partnerMemberId, match.matchedAt());
+        RoomMember partner = roomMemberReader.getById(partnerMemberId);
+
+        // 결과 화면 "채팅 시작하기" 직행: 자동 생성된 채팅방 id(아직 없으면 null).
+        Long chatRoomId = chatRoomReader.findChatRoomIdByMatchResultId(match.id()).orElse(null);
+        // 상대 프로필 요약(닉네임·대표사진). 이미지가 없으면 null.
+        String nickname = userProfileReader.findByUserId(partner.userId()).map(UserProfile::nickname).orElse(null);
+        String profileImageUrl = userImageReader.getRepresentativeImageUrl(partner.userId());
+
+        return new MatchResultResponse(partnerMemberId, match.matchedAt(), chatRoomId,
+                new MatchResultResponse.PartnerSummary(nickname, profileImageUrl));
     }
 
     /**
