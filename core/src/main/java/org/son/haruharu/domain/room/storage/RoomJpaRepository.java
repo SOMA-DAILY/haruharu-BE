@@ -10,7 +10,7 @@ public interface RoomJpaRepository extends JpaRepository<RoomEntity, Long> {
 
     List<RoomEntity> findByIdInAndStatusNot(List<Long> ids, RoomStatus status);
 
-    List<RoomEntity> findAllByScheduledDateAndStatus(LocalDate scheduledDate, RoomStatus status);
+    List<RoomEntity> findAllByScheduledDateLessThanEqualAndStatus(LocalDate scheduledDate, RoomStatus status);
 
     List<RoomEntity> findAllByStatus(RoomStatus status);
 }

@@ -23,8 +23,9 @@ public class RoomReader {
                 .findFirst();
     }
 
-    public List<Room> getScheduledPending(LocalDate scheduledDate) {
-        return roomRepository.findAllByScheduledDateAndStatus(scheduledDate, RoomStatus.PENDING);
+    /** 기준일 이전(포함) 시작 예정인 PENDING 방. 정확 일치가 아니라 <= 조회라서 놓친 활성화 실행을 회수할 수 있다(#170). */
+    public List<Room> getPendingScheduledOnOrBefore(LocalDate date) {
+        return roomRepository.findAllByScheduledDateLessThanEqualAndStatus(date, RoomStatus.PENDING);
     }
 
     public List<Room> getActive() {
