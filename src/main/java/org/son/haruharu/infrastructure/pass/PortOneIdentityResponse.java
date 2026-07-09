@@ -21,7 +21,8 @@ public record PortOneIdentityResponse(String status, VerifiedCustomer verifiedCu
             String gender,
             String phoneNumber,
             String operator,
-            boolean isForeigner
+            // 다날 등 일부 채널은 이 키를 응답에 담지 않는다. primitive면 null 매핑 시 역직렬화가 실패하므로 래퍼로 둔다.
+            Boolean isForeigner
     ) {
         @Override
         public String toString() {

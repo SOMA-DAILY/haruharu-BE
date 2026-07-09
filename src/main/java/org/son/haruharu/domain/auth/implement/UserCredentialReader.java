@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.auth.implement;
 
 import lombok.RequiredArgsConstructor;
-import org.son.haruharu.domain.auth.storage.exception.UserCredentialNotFoundException;
 import org.springframework.stereotype.Component;
 
 @Component

@@ -39,7 +39,8 @@ public class UserIdentityEntity extends BaseEntity {
     @Column(nullable = false)
     private String di;
 
-    @Column(nullable = false, length = 20)
+    // 통신사 사전승인을 받은 채널에서만 제공된다(다날 미승인 시 null).
+    @Column(length = 20)
     private String phoneNumber;
 
     @Column(nullable = false)
@@ -51,7 +52,8 @@ public class UserIdentityEntity extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String userName;
 
-    @Column(nullable = false, length = 10)
+    // 통신사 사전승인을 받은 채널에서만 제공된다(다날 미승인 시 null).
+    @Column(length = 10)
     private String operator;
 
     @Column(nullable = false)
