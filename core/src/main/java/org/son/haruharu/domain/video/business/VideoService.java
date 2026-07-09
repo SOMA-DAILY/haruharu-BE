@@ -2,7 +2,6 @@ package org.son.haruharu.domain.video.business;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -89,11 +88,13 @@ public class VideoService {
             throw new RoomNotActiveException();
         }
 
+        // 단일 now에서 currentDay·hour를 함께 파생한다 — 따로 뽑으면 09:00 경계에서
+        // "어제 Day + 오늘 hour"로 판정되어 영상이 전날 슬롯에 기록될 수 있다(#170).
+        LocalDateTime now = LocalDateTime.now(clock);
         UploadSlot slot = UploadSlot.of(
-                        room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour()), command.slotIndex())
+                        room.currentDayAt(now, UploadSlot.dayStartHour()), command.slotIndex())
                 .orElseThrow(SlotNotInCurrentDayException::new);
-        int nowHour = LocalTime.now(clock).getHour();
-        if (!slot.isOpenAt(nowHour)) {
+        if (!slot.isOpenAt(now.getHour())) {
             throw new SlotWindowClosedException();
         }
         validateOwnUrl(userId, command.videoUrl());
@@ -105,7 +106,7 @@ public class VideoService {
         // MVP: 미션 비활성화 — mission_id는 항상 null. 세션 재화(열쇠) 제거됨.
         VideoPost saved = videoPostWriter.save(VideoPost.create(
                 member.id(), slot.dayNumber(), slot.slotIndex(), null,
-                command.caption(), command.videoUrl(), command.thumbnailUrl(), LocalDateTime.now(clock)));
+                command.caption(), command.videoUrl(), command.thumbnailUrl(), now));
 
         // 완주(그 Day 슬롯 전부 채움) 시 구름 보상 지급 트리거. video↔coin 직접 결합을 피해 이벤트로 위임.
         eventPublisher.publishEvent(new VideoUploadedEvent(member.id(), slot.dayNumber()));

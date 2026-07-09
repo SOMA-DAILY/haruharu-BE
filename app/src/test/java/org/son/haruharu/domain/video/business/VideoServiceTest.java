@@ -125,6 +125,33 @@ class VideoServiceTest {
     }
 
     @Test
+    @DisplayName("Day 경계(09:00 정각)에 업로드하면 단일 now 파생으로 새 Day·slot1에 정확히 기록된다(#170)")
+    void givenExactDayBoundary_whenUpload_thenRecordedOnNewDay() {
+        Long userId = 1L;
+        Long roomId = 13L;
+        Long memberId = 22L;
+        String url = BASE + "users/" + userId + "/videos/v.mp4";
+        var command = new VideoUploadCommand(1, url, null, null); // slot1 (9-12)
+
+        // startedAt 어제 09:00 → 클럭 09:00:00 정각에 currentDay=2로 전환되는 순간
+        Room day2Room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 25), 3,
+                LocalDateTime.of(2026, 6, 25, 9, 0), null);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(day2Room));
+        given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
+        given(videoPostReader.hasActiveUpload(memberId, 2, 1)).willReturn(false);
+        given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(s3StoragePort.createPresignedGetUrl(url)).willReturn("https://signed-get-url");
+
+        VideoPostResponse result = serviceAt(9).upload(userId, roomId, command);
+
+        // currentDay와 hour가 같은 now에서 파생되므로 "어제 Day + 오늘 hour" 불일치가 불가능하다
+        assertThat(result.dayNumber()).isEqualTo(2);
+        assertThat(result.slotIndex()).isEqualTo(1);
+        then(eventPublisher).should().publishEvent(new VideoUploadedEvent(memberId, 2));
+    }
+
+    @Test
     @DisplayName("슬롯 시간창 밖(09시, 슬롯 12-15)에서 업로드 시 SlotWindowClosedException")
     void givenOutsideWindow_whenUpload_thenThrows() {
         Long userId = 1L;

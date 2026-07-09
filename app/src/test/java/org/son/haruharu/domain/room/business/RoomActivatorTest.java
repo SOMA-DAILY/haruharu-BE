@@ -44,7 +44,7 @@ class RoomActivatorTest {
     void givenPendingRooms_whenActivate_thenStartsAll() {
         LocalDate date = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
-        given(roomReader.getScheduledPending(date)).willReturn(List.of(
+        given(roomReader.getPendingScheduledOnOrBefore(date)).willReturn(List.of(
             new Room(1L, RoomStatus.PENDING, date, 3, null, null),
             new Room(2L, RoomStatus.PENDING, date, 3, null, null)
         ));
@@ -67,12 +67,31 @@ class RoomActivatorTest {
     @DisplayName("시작 예정 방이 없으면 아무 방도 전환하지 않는다")
     void givenNoPendingRooms_whenActivate_thenDoesNothing() {
         LocalDate date = LocalDate.now();
-        given(roomReader.getScheduledPending(date)).willReturn(List.of());
+        given(roomReader.getPendingScheduledOnOrBefore(date)).willReturn(List.of());
 
         int activated = roomActivator.activate(date, LocalDateTime.now());
 
         assertThat(activated).isZero();
         then(roomWriter).should(never()).save(any());
         then(eventPublisher).should(never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("어제 시작 예정이었으나 활성화가 누락된(PENDING) 방도 회수해 시작시킨다(#170)")
+    void givenMissedPendingRoom_whenActivate_thenRecovered() {
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
+        // <= 조회 계약: 어제 scheduledDate 방이 함께 조회되어 오늘 startedAt으로 시작된다
+        given(roomReader.getPendingScheduledOnOrBefore(today)).willReturn(List.of(
+            new Room(3L, RoomStatus.PENDING, today.minusDays(1), 3, null, null)
+        ));
+
+        int activated = roomActivator.activate(today, now);
+
+        assertThat(activated).isEqualTo(1);
+        ArgumentCaptor<Room> captor = ArgumentCaptor.forClass(Room.class);
+        then(roomWriter).should().save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(RoomStatus.ACTIVE);
+        assertThat(captor.getValue().startedAt()).isEqualTo(now); // 놓친 방도 실제 시작 시각 앵커 → 3일 세션 보장
     }
 }

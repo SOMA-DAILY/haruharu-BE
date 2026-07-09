@@ -37,8 +37,8 @@ public class RoomRepositoryImpl implements RoomRepository {
     }
 
     @Override
-    public List<Room> findAllByScheduledDateAndStatus(LocalDate scheduledDate, RoomStatus status) {
-        return jpaRepository.findAllByScheduledDateAndStatus(scheduledDate, status).stream()
+    public List<Room> findAllByScheduledDateLessThanEqualAndStatus(LocalDate scheduledDate, RoomStatus status) {
+        return jpaRepository.findAllByScheduledDateLessThanEqualAndStatus(scheduledDate, status).stream()
                 .map(RoomEntity::toDomain)
                 .toList();
     }
