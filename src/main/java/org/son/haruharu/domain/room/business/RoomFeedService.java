@@ -12,6 +12,7 @@ import org.son.haruharu.domain.video.implement.ReactionType;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoReactionReader;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,12 +29,14 @@ public class RoomFeedService {
     private final RoomMemberReader roomMemberReader;
     private final VideoPostReader videoPostReader;
     private final VideoReactionReader videoReactionReader;
+    private final S3StoragePort s3StoragePort;
 
     public RoomFeedService(RoomMemberReader roomMemberReader, VideoPostReader videoPostReader,
-                           VideoReactionReader videoReactionReader) {
+                           VideoReactionReader videoReactionReader, S3StoragePort s3StoragePort) {
         this.roomMemberReader = roomMemberReader;
         this.videoPostReader = videoPostReader;
         this.videoReactionReader = videoReactionReader;
+        this.s3StoragePort = s3StoragePort;
     }
 
     public FeedResponse getFeed(Long roomId, Long userId, int day) {
@@ -63,10 +66,14 @@ public class RoomFeedService {
         Map<Long, ReactionCounts> countsByPost = aggregateCounts(videoReactionReader.getReactionCounts(postIds));
         Map<Long, String> myReactionByPost = videoReactionReader.getMyReactions(postIds, userId);
 
+        // 비공개 영상은 재생 가능한 presigned GET URL로 변환해 내려준다(#162).
         List<FeedItem> posts = visible.stream()
                 .map(p -> new FeedItem(
                         p.id(), p.roomMemberId(), p.roomMemberId().equals(me.id()),
-                        p.slotIndex(), p.videoUrl(), p.thumbnailUrl(), p.caption(), p.createdAt(),
+                        p.slotIndex(),
+                        s3StoragePort.createPresignedGetUrl(p.videoUrl()),
+                        s3StoragePort.createPresignedGetUrl(p.thumbnailUrl()),
+                        p.caption(), p.createdAt(),
                         countsByPost.getOrDefault(p.id(), ReactionCounts.zero()),
                         myReactionByPost.get(p.id())))
                 .toList();

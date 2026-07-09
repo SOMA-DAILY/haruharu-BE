@@ -110,7 +110,10 @@ public class VideoService {
         // 완주(그 Day 슬롯 전부 채움) 시 구름 보상 지급 트리거. video↔coin 직접 결합을 피해 이벤트로 위임.
         eventPublisher.publishEvent(new VideoUploadedEvent(member.id(), slot.dayNumber()));
 
-        return VideoPostResponse.of(saved);
+        // 비공개 영상은 서명 없이 접근 불가(403). 재생 가능한 presigned GET URL로 변환해 응답한다(#162).
+        return VideoPostResponse.of(saved,
+                s3StoragePort.createPresignedGetUrl(saved.videoUrl()),
+                s3StoragePort.createPresignedGetUrl(saved.thumbnailUrl()));
     }
 
     @Transactional
