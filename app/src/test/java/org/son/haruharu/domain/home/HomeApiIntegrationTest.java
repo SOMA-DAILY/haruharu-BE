@@ -2,8 +2,11 @@ package org.son.haruharu.domain.home;
 
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.son.haruharu.domain.room.storage.RoomJpaRepository;
+import org.son.haruharu.domain.room.storage.RoomMemberJpaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -23,6 +26,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class HomeApiIntegrationTest {
 
     @Autowired MockMvc mockMvc;
+    @Autowired RoomMemberJpaRepository roomMemberJpaRepository;
+    @Autowired RoomJpaRepository roomJpaRepository;
+
+    // "user 900은 어느 방에도 없다"는 전제를 스스로 보장한다(#166) — 같은 900을 쓰는
+    // RoomToday/FinalSelection 통합 테스트가 실행 후 ACTIVE room을 남겨 active_room 단언이 깨졌다.
+    @BeforeEach
+    void clean() {
+        roomMemberJpaRepository.deleteAll();
+        roomJpaRepository.deleteAll();
+    }
 
     private static UsernamePasswordAuthenticationToken auth(Long userId) {
         return new UsernamePasswordAuthenticationToken(userId, null, List.of());
