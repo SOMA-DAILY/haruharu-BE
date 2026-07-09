@@ -10,7 +10,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 /**
  * STOMP over WebSocket 설정.
  * - 핸드셰이크 엔드포인트: /ws-chat (JWT 인증은 StompAuthChannelInterceptor의 CONNECT 처리에서)
- * - 구독: /sub/**, 발행: /pub/**
+ * - 구독: /sub/**(토픽), /user/queue/**(개인 큐 — 에러 프레임), 발행: /pub/**
  * - SimpleBroker(인메모리) 사용 — 단일 인스턴스 전제. 스케일아웃 시 브로커 릴레이 필요(#89).
  */
 @Configuration
@@ -30,7 +30,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/sub");
+        // "/queue" 미등록 시 @SendToUser("/queue/errors")가 변환한 /queue/errors-user{session}을
+        // SimpleBroker가 처리하지 않고 조용히 드랍한다(#168) — 에러 프레임이 클라이언트에 도달하지 못함.
+        registry.enableSimpleBroker("/sub", "/queue");
         registry.setApplicationDestinationPrefixes("/pub");
     }
 
