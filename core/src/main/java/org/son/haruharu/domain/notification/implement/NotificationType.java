@@ -25,6 +25,8 @@ public enum NotificationType {
 
     // ── C. 시스템 / 거래 ──
     COIN_REFUNDED("☁️ 구름 %d개를 돌려드렸어요", "이번엔 인연이 닿지 않았지만, 다음 기회에 다시 만나요", true, NotificationCategory.TRANSACTIONAL),
+    // Figma 5-5 매칭 미성사 화면 카피("위로의 구름을 선물로 드렸어요") 대응(#143)
+    MATCH_CONSOLATION("☁️ 위로의 구름이 도착했어요", "이번엔 인연이 닿지 않았지만, 위로의 구름 %d개를 선물로 드렸어요", true, NotificationCategory.TRANSACTIONAL),
     PAYMENT_COMPLETED("☁️ 충전 완료!", "구름 %d개가 충전됐어요. 새로운 인연에 한 걸음 더 가까워졌어요", false, NotificationCategory.TRANSACTIONAL),
 
     // ── D. 재참여 (잠수 유저 복귀 유도) ──

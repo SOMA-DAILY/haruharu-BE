@@ -52,7 +52,7 @@ class UploadRewardIntegrationTest {
     }
 
     @Test
-    @DisplayName("Day1 5슬롯을 모두 채운 멤버에게 완주 보상(구름 2)이 지급되고, 재호출해도 중복 지급되지 않는다")
+    @DisplayName("Day1 5슬롯을 모두 채운 멤버에게 완주 보상(구름 5, #143)이 지급되고, 재호출해도 중복 지급되지 않는다")
     void givenDay1AllSlots_whenGrant_thenCreditsOnceIdempotent() {
         Long userId = 700L;
         Long memberId = seedMember(userId);
@@ -62,12 +62,12 @@ class UploadRewardIntegrationTest {
 
         uploadRewardService.grantIfDayCompleted(memberId, 1);
 
-        assertThat(coinWalletReader.getByUserId(userId).rewardBalance()).isEqualTo(2);
+        assertThat(coinWalletReader.getByUserId(userId).rewardBalance()).isEqualTo(5);
         assertThat(dailyUploadRewardJpaRepository.existsByRoomMemberIdAndDayNumber(memberId, 1)).isTrue();
 
         // 멱등: 재호출해도 잔액 그대로
         uploadRewardService.grantIfDayCompleted(memberId, 1);
-        assertThat(coinWalletReader.getByUserId(userId).rewardBalance()).isEqualTo(2);
+        assertThat(coinWalletReader.getByUserId(userId).rewardBalance()).isEqualTo(5);
     }
 
     @Test

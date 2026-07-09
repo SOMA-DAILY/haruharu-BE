@@ -21,6 +21,10 @@ public class CoinLedgerReader {
         return coinLedgerRepository.existsByUserIdAndReason(userId, reason);
     }
 
+    public boolean existsByUserIdAndReasonAndRefId(Long userId, CoinLedgerReason reason, String refId) {
+        return coinLedgerRepository.existsByUserIdAndReasonAndRefId(userId, reason, refId);
+    }
+
     public List<CoinLedger> findPage(Long userId, LocalDateTime before, int limit) {
         return coinLedgerRepository.findPage(userId, before, limit);
     }

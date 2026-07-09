@@ -18,6 +18,7 @@ import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
 import org.son.haruharu.domain.room.business.exception.AlreadySelectedException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSelfException;
 import org.son.haruharu.domain.room.business.exception.NotFinalSelectionDayException;
+import org.son.haruharu.domain.room.business.exception.SelectionClosedException;
 import org.son.haruharu.domain.room.implement.FinalSelection;
 import org.son.haruharu.domain.room.implement.FinalSelectionReader;
 import org.son.haruharu.domain.room.implement.FinalSelectionWriter;
@@ -173,20 +174,58 @@ class FinalSelectionServiceTest {
     }
 
     @Test
-    @DisplayName("Day3 심야(익일 02:00, 하루 경계 09:00 이전)에도 최종선택이 가능하다")
-    void givenDay3LateNight_whenSelect_thenAllowed() {
-        // 2026-06-27 02:00 KST — 하루 경계(09:00) 전이므로 여전히 Day3, 18:00 오픈 이후
+    @DisplayName("Day3 심야(익일 02:00)는 22:00 마감 이후이므로 SelectionClosedException이 발생한다")
+    void givenDay3LateNight_whenSelect_thenClosed() {
+        // 2026-06-27 02:00 KST — 하루 경계(09:00) 전이라 Day3이지만 22:00 마감을 지남
         FinalSelectionService lateNight = serviceWith(
                 Clock.fixed(Instant.parse("2026-06-26T17:00:00Z"), ZoneId.of("Asia/Seoul")));
+        stubMeAndRoom(3);
+
+        assertThatThrownBy(() -> lateNight.select(roomId, selectedId, userId))
+                .isInstanceOf(SelectionClosedException.class);
+        then(finalSelectionWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Day3 21:59(마감 직전)까지는 최종선택이 가능하다")
+    void givenDay3JustBeforeClose_whenSelect_thenAllowed() {
+        // 2026-06-26 21:59 KST
+        FinalSelectionService beforeClose = serviceWith(
+                Clock.fixed(Instant.parse("2026-06-26T12:59:00Z"), ZoneId.of("Asia/Seoul")));
         stubMeAndRoom(3);
         given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
         given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
 
-        FinalSelectionResponse result = lateNight.select(roomId, selectedId, userId);
+        FinalSelectionResponse result = beforeClose.select(roomId, selectedId, userId);
 
         assertThat(result.matched()).isFalse();
         then(finalSelectionWriter).should().save(any(FinalSelection.class));
+    }
+
+    @Test
+    @DisplayName("Day3 22:00 정각부터는 SelectionClosedException이 발생한다")
+    void givenDay3AtClose_whenSelect_thenClosed() {
+        // 2026-06-26 22:00 KST — 결과 발표 시각(CONFIRM_HOUR)
+        FinalSelectionService atClose = serviceWith(
+                Clock.fixed(Instant.parse("2026-06-26T13:00:00Z"), ZoneId.of("Asia/Seoul")));
+        stubMeAndRoom(3);
+
+        assertThatThrownBy(() -> atClose.select(roomId, selectedId, userId))
+                .isInstanceOf(SelectionClosedException.class);
+        then(finalSelectionWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("22:00 마감 이후에는 기권도 SelectionClosedException이 발생한다")
+    void givenAfterClose_whenAbstain_thenClosed() {
+        FinalSelectionService atClose = serviceWith(
+                Clock.fixed(Instant.parse("2026-06-26T13:00:00Z"), ZoneId.of("Asia/Seoul")));
+        stubMeAndRoom(3);
+
+        assertThatThrownBy(() -> atClose.select(roomId, null, userId))
+                .isInstanceOf(SelectionClosedException.class);
+        then(finalSelectionWriter).should(never()).save(any());
     }
 
     @Test

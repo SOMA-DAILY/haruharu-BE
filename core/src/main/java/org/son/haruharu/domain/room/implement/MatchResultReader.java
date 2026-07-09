@@ -17,6 +17,11 @@ public class MatchResultReader {
                 .orElseThrow(MatchResultNotFoundException::new);
     }
 
+    /** 해당 멤버의 상호매칭 성사 여부(예외 없이 boolean, 위로 구름 대상 판정용). */
+    public boolean hasMatch(Long memberId) {
+        return matchResultRepository.findByMember(memberId).isPresent();
+    }
+
     public MatchResult getById(Long matchResultId) {
         return matchResultRepository.findById(matchResultId)
                 .orElseThrow(MatchResultNotFoundException::new);
