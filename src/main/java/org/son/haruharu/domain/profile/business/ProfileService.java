@@ -66,11 +66,32 @@ public class ProfileService {
         return ProfileResponse.from(profile, images);
     }
 
+    /** 푸시·표시용 닉네임만 경량 조회(이미지 미로드). */
+    public String getNickname(Long userId) {
+        return userProfileReader.getByUserId(userId).nickname();
+    }
+
+    /** 온보딩 완료 판정용: 프로필(nickname)과 이미지가 모두 갖춰졌는지 여부. */
+    public boolean hasCompletedProfile(Long userId) {
+        boolean profileFilled = userProfileReader.findByUserId(userId)
+            .map(profile -> profile.nickname() != null && !profile.nickname().isBlank())
+            .orElse(false);
+        boolean hasImage = !userImageReader.getAllByUserId(userId).isEmpty();
+        return profileFilled && hasImage;
+    }
+
     @Transactional
     public void deleteAllImages(Long userId) {
         List<UserImage> images = userImageReader.getAllByUserId(userId);
         s3StoragePort.deleteObjects(toKeys(images.stream().map(UserImage::imageUrl).toList()));
         userImageWriter.deleteAllByUserId(userId);
+    }
+
+    /** 회원 탈퇴 시 프로필·이미지 삭제(soft). 이미지 원본은 S3에서 함께 제거한다. */
+    @Transactional
+    public void deleteProfileAndImages(Long userId) {
+        deleteAllImages(userId);
+        userProfileWriter.deleteByUserId(userId);
     }
 
     @Transactional

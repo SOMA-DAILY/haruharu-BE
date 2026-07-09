@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
+import org.son.haruharu.domain.room.business.dto.TodayResponse.RewardStatus;
+import org.son.haruharu.domain.room.implement.DailyUploadRewardReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -35,11 +38,16 @@ class RoomTodayServiceTest {
     @Mock RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
     @Mock VideoPostReader videoPostReader;
+    @Mock DailyUploadRewardReader dailyUploadRewardReader;
+
+    private final UploadRewardProperties rewardProps =
+            new UploadRewardProperties(Map.of(1, 2L, 2, 2L, 3, 1L));
 
     private RoomTodayService serviceAt(int hour) {
         ZonedDateTime fixed = ZonedDateTime.of(2026, 6, 26, hour, 0, 0, 0, SEOUL);
         Clock clock = Clock.fixed(fixed.toInstant(), SEOUL);
-        return new RoomTodayService(roomReader, roomMemberReader, videoPostReader, clock);
+        return new RoomTodayService(roomReader, roomMemberReader, videoPostReader,
+                dailyUploadRewardReader, rewardProps, clock);
     }
 
     @Test
@@ -87,6 +95,46 @@ class RoomTodayServiceTest {
     }
 
     @Test
+    @DisplayName("완주 보상 미지급 상태면 Day1 rewardAmount=2·rewardStatus=LOCKED을 반환한다")
+    void givenNotRewarded_whenGetToday_thenRewardLocked() {
+        Long userId = 1L;
+        Long roomId = 100L;
+        Long memberId = 200L;
+        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
+            LocalDateTime.of(2026, 6, 26, 9, 0), null);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
+            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room));
+        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(2L);
+        given(dailyUploadRewardReader.isRewarded(memberId, 1)).willReturn(false);
+
+        TodayResponse result = serviceAt(12).getToday(roomId, userId);
+
+        assertThat(result.rewardAmount()).isEqualTo(2);
+        assertThat(result.rewardStatus()).isEqualTo(RewardStatus.LOCKED);
+    }
+
+    @Test
+    @DisplayName("완주 보상이 이미 지급됐으면 rewardStatus=EARNED을 반환한다")
+    void givenRewarded_whenGetToday_thenRewardEarned() {
+        Long userId = 1L;
+        Long roomId = 100L;
+        Long memberId = 200L;
+        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
+            LocalDateTime.of(2026, 6, 26, 9, 0), null);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
+            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room));
+        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(5L);
+        given(dailyUploadRewardReader.isRewarded(memberId, 1)).willReturn(true);
+
+        TodayResponse result = serviceAt(12).getToday(roomId, userId);
+
+        assertThat(result.rewardStatus()).isEqualTo(RewardStatus.EARNED);
+        assertThat(result.rewardAmount()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("방 멤버가 아니면 NotRoomMemberException이 발생한다")
     void givenNonMember_whenGetToday_thenThrows() {
         Long userId = 1L;
@@ -96,5 +144,109 @@ class RoomTodayServiceTest {
 
         assertThatThrownBy(() -> serviceAt(12).getToday(roomId, userId))
             .isInstanceOf(NotRoomMemberException.class);
+    }
+
+    /** 타이머 대상 계산을 위한 공통 준비: startedAt 앵커로 currentDay를 파생시키는 ACTIVE 방. */
+    private void givenActiveRoom(Long roomId, Long userId, Long memberId, LocalDate startedDate) {
+        Room room = new Room(roomId, RoomStatus.ACTIVE, startedDate, 3,
+            startedDate.atTime(9, 0), null);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
+            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room));
+        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
+    }
+
+    @Test
+    @DisplayName("Day1 슬롯 진행 중이면 다음 슬롯 시작 절대시각을 NEXT_SLOT 타입으로 반환한다")
+    void givenDay1MidSlot_whenGetToday_thenNextSlotStart() {
+        // startedAt 2026-06-26 09:00 → 당일 currentDay=1, 13시엔 다음 슬롯 시작 = 15:00
+        givenActiveRoom(100L, 1L, 200L, LocalDate.of(2026, 6, 26));
+
+        TodayResponse result = serviceAt(13).getToday(100L, 1L);
+
+        assertThat(result.timerType()).isEqualTo(TodayResponse.TimerType.NEXT_SLOT);
+        assertThat(result.timerTargetAt()).isEqualTo(LocalDateTime.of(2026, 6, 26, 15, 0));
+    }
+
+    @Test
+    @DisplayName("Day1 마지막 슬롯(21-24) 중이면 다음 날 첫 슬롯(익일 09:00)을 NEXT_SLOT으로 반환한다")
+    void givenDay1LastSlot_whenGetToday_thenNextDayFirstSlot() {
+        givenActiveRoom(100L, 1L, 200L, LocalDate.of(2026, 6, 26));
+
+        TodayResponse result = serviceAt(22).getToday(100L, 1L);
+
+        assertThat(result.timerType()).isEqualTo(TodayResponse.TimerType.NEXT_SLOT);
+        assertThat(result.timerTargetAt()).isEqualTo(LocalDateTime.of(2026, 6, 27, 9, 0));
+    }
+
+    @Test
+    @DisplayName("Day3 마지막 슬롯(15-18) 중이면 최종선택 오픈(18:00)을 DEADLINE으로 반환한다")
+    void givenDay3LastSlot_whenGetToday_thenSelectionOpenDeadline() {
+        // startedAt 2026-06-24 09:00 → 2026-06-26엔 currentDay=3, 16시는 Day3 마지막 슬롯 중
+        givenActiveRoom(100L, 1L, 200L, LocalDate.of(2026, 6, 24));
+
+        TodayResponse result = serviceAt(16).getToday(100L, 1L);
+
+        assertThat(result.timerType()).isEqualTo(TodayResponse.TimerType.DEADLINE);
+        assertThat(result.timerTargetAt()).isEqualTo(LocalDateTime.of(2026, 6, 26, 18, 0));
+    }
+
+    @Test
+    @DisplayName("Day3 18:00~22:00(최종선택 진행 중)이면 결과 발표(22:00)를 DEADLINE으로 반환한다")
+    void givenDay3SelectionWindow_whenGetToday_thenResultDeadline() {
+        givenActiveRoom(100L, 1L, 200L, LocalDate.of(2026, 6, 24));
+
+        TodayResponse result = serviceAt(19).getToday(100L, 1L);
+
+        assertThat(result.timerType()).isEqualTo(TodayResponse.TimerType.DEADLINE);
+        assertThat(result.timerTargetAt()).isEqualTo(LocalDateTime.of(2026, 6, 26, 22, 0));
+    }
+
+    @Test
+    @DisplayName("Day3 결과 발표(22:00) 이후면 타이머 대상이 없어 null을 반환한다")
+    void givenDay3AfterResult_whenGetToday_thenNoTimer() {
+        givenActiveRoom(100L, 1L, 200L, LocalDate.of(2026, 6, 24));
+
+        TodayResponse result = serviceAt(23).getToday(100L, 1L);
+
+        assertThat(result.timerTargetAt()).isNull();
+        assertThat(result.timerType()).isNull();
+    }
+
+    @Test
+    @DisplayName("Day3 정확히 18:00(경계)이면 최종선택이 열린 상태로 보아 결과 발표(22:00) DEADLINE을 반환한다")
+    void givenDay3ExactlySelectionOpen_whenGetToday_thenResultDeadline() {
+        givenActiveRoom(100L, 1L, 200L, LocalDate.of(2026, 6, 24));
+
+        TodayResponse result = serviceAt(18).getToday(100L, 1L);
+
+        assertThat(result.timerType()).isEqualTo(TodayResponse.TimerType.DEADLINE);
+        assertThat(result.timerTargetAt()).isEqualTo(LocalDateTime.of(2026, 6, 26, 22, 0));
+    }
+
+    @Test
+    @DisplayName("정확히 슬롯 시작 시각(Day1 15:00)이면 그 슬롯은 '다음'이 아니므로 다음 슬롯(18:00)을 반환한다")
+    void givenExactSlotStart_whenGetToday_thenPointsToFollowingSlot() {
+        givenActiveRoom(100L, 1L, 200L, LocalDate.of(2026, 6, 26));
+
+        TodayResponse result = serviceAt(15).getToday(100L, 1L);
+
+        assertThat(result.timerType()).isEqualTo(TodayResponse.TimerType.NEXT_SLOT);
+        assertThat(result.timerTargetAt()).isEqualTo(LocalDateTime.of(2026, 6, 26, 18, 0));
+    }
+
+    @Test
+    @DisplayName("PENDING 방은 타이머 대상이 없어 null을 반환한다")
+    void givenPending_whenGetToday_thenNoTimer() {
+        Room room = new Room(103L, RoomStatus.PENDING, LocalDate.now(), 3, null, null);
+        given(roomMemberReader.getByRoomIdAndUserId(103L, 1L))
+            .willReturn(new RoomMember(203L, 103L, 1L, "MALE", null, LocalDateTime.now()));
+        given(roomReader.findById(103L)).willReturn(Optional.of(room));
+        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
+
+        TodayResponse result = serviceAt(12).getToday(103L, 1L);
+
+        assertThat(result.timerTargetAt()).isNull();
+        assertThat(result.timerType()).isNull();
     }
 }

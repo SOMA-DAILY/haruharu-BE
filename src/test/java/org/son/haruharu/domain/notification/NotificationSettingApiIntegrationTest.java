@@ -30,38 +30,41 @@ class NotificationSettingApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("설정이 없으면 기본값 push_enabled=true로 응답한다")
-    void givenNoSetting_whenGet_thenDefaultOn() throws Exception {
+    @DisplayName("설정이 없으면 기본값(활동 on, 혜택 off)으로 응답한다")
+    void givenNoSetting_whenGet_thenDefault() throws Exception {
         mockMvc.perform(get("/api/v1/users/me/notification-settings")
                         .with(authentication(auth(910L))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
-                .andExpect(jsonPath("$.data.push_enabled").value(true));
+                .andExpect(jsonPath("$.data.activity_enabled").value(true))
+                .andExpect(jsonPath("$.data.marketing_enabled").value(false));
     }
 
     @Test
-    @DisplayName("off로 변경하면 이후 조회에서 push_enabled=false가 유지된다")
-    void givenPutOff_whenGet_thenOffPersisted() throws Exception {
+    @DisplayName("변경하면 이후 조회에서 값이 유지된다")
+    void givenPut_whenGet_thenPersisted() throws Exception {
         mockMvc.perform(put("/api/v1/users/me/notification-settings")
                         .with(authentication(auth(911L)))
                         .contentType(APPLICATION_JSON)
-                        .content("{\"push_enabled\":false}"))
+                        .content("{\"activity_enabled\":false,\"marketing_enabled\":true}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.push_enabled").value(false));
+                .andExpect(jsonPath("$.data.activity_enabled").value(false))
+                .andExpect(jsonPath("$.data.marketing_enabled").value(true));
 
         mockMvc.perform(get("/api/v1/users/me/notification-settings")
                         .with(authentication(auth(911L))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.push_enabled").value(false));
+                .andExpect(jsonPath("$.data.activity_enabled").value(false))
+                .andExpect(jsonPath("$.data.marketing_enabled").value(true));
     }
 
     @Test
-    @DisplayName("push_enabled 누락 시 400을 반환한다")
+    @DisplayName("필드 누락 시 400을 반환한다")
     void givenMissingField_whenPut_thenBadRequest() throws Exception {
         mockMvc.perform(put("/api/v1/users/me/notification-settings")
                         .with(authentication(auth(912L)))
                         .contentType(APPLICATION_JSON)
-                        .content("{}"))
+                        .content("{\"activity_enabled\":true}"))
                 .andExpect(status().isBadRequest());
     }
 

@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.video.application.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import org.son.haruharu.domain.video.implement.ReactionType;
 
-public record ReactionRequest(@NotBlank String reactionType) {}
+public record ReactionRequest(@NotNull ReactionType reactionType) {}

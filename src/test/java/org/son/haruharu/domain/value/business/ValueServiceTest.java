@@ -70,8 +70,8 @@ class ValueServiceTest {
         Long q1 = 1L;
         Long q2 = 2L;
         var command = new SaveValueAnswersCommand(List.of(
-                new SaveValueAnswersCommand.AnswerItem(q1, "등산"),
-                new SaveValueAnswersCommand.AnswerItem(q2, "독서")
+                new SaveValueAnswersCommand.AnswerItem(q1, "A"),
+                new SaveValueAnswersCommand.AnswerItem(q2, "B")
         ));
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
                 new ValueQuestion(q1, "질문1", "A", "B", "LIFESTYLE", 1, true),
@@ -104,7 +104,7 @@ class ValueServiceTest {
         Long questionId = 1L;
         Long existingAnswerId = 100L;
         var command = new SaveValueAnswersCommand(List.of(
-                new SaveValueAnswersCommand.AnswerItem(questionId, "수정된 답변")
+                new SaveValueAnswersCommand.AnswerItem(questionId, "B")
         ));
         given(valueQuestionReader.getAllActive()).willReturn(List.of(
                 new ValueQuestion(questionId, "질문", "A", "B", "LIFESTYLE", 1, true)
@@ -120,7 +120,7 @@ class ValueServiceTest {
         ArgumentCaptor<UserValueAnswer> captor = ArgumentCaptor.forClass(UserValueAnswer.class);
         then(userValueAnswerWriter).should(times(1)).save(captor.capture());
         assertThat(captor.getValue().id()).isEqualTo(existingAnswerId);
-        assertThat(captor.getValue().answer()).isEqualTo("수정된 답변");
+        assertThat(captor.getValue().answer()).isEqualTo("B");
     }
 
     @Test
@@ -130,7 +130,7 @@ class ValueServiceTest {
         Long userId = 1L;
         Long unknown = 999L;
         var command = new SaveValueAnswersCommand(List.of(
-                new SaveValueAnswersCommand.AnswerItem(unknown, "등산")
+                new SaveValueAnswersCommand.AnswerItem(unknown, "A")
         ));
         given(valueQuestionReader.getAllActive()).willReturn(List.of());
         given(userValueAnswerReader.getAllByUserId(userId)).willReturn(List.of());

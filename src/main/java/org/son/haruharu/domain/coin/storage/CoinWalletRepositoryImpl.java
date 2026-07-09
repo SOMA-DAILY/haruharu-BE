@@ -22,4 +22,9 @@ public class CoinWalletRepositoryImpl implements CoinWalletRepository {
     public CoinWallet save(CoinWallet wallet) {
         return jpaRepository.save(CoinWalletEntity.from(wallet)).toDomain();
     }
+
+    @Override
+    public void deleteByUserId(Long userId) {
+        jpaRepository.deleteByUserId(userId);
+    }
 }

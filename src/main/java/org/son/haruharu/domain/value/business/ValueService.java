@@ -1,11 +1,13 @@
 package org.son.haruharu.domain.value.business;
 
 import org.son.haruharu.domain.value.business.command.SaveValueAnswersCommand;
+import org.son.haruharu.domain.value.business.dto.MyValueAnswersResponse;
 import org.son.haruharu.domain.value.business.dto.SavedAnswersResponse;
 import org.son.haruharu.domain.value.business.dto.ValueQuestionsResponse;
 import org.son.haruharu.domain.value.implement.UserValueAnswer;
 import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
 import org.son.haruharu.domain.value.implement.UserValueAnswerWriter;
+import org.son.haruharu.domain.value.business.exception.InvalidValueAnswerException;
 import org.son.haruharu.domain.value.implement.ValueQuestion;
 import org.son.haruharu.domain.value.implement.ValueQuestionReader;
 import org.son.haruharu.domain.value.storage.exception.ValueQuestionNotFoundException;
@@ -20,6 +22,9 @@ import java.util.stream.Collectors;
 @Service
 @Transactional(readOnly = true)
 public class ValueService {
+
+    // answer는 선택지 텍스트가 아니라 A/B 키만 저장한다(닫힌 집합). 텍스트는 질문의 option_a/option_b로 조합한다.
+    private static final Set<String> ALLOWED_ANSWERS = Set.of("A", "B");
 
     private final ValueQuestionReader valueQuestionReader;
     private final UserValueAnswerReader userValueAnswerReader;
@@ -39,6 +44,24 @@ public class ValueService {
         return ValueQuestionsResponse.from(valueQuestionReader.getAllActive());
     }
 
+    /** 마이페이지 '가치관 수정' 프리필용: 활성 질문 전체 + 내 답변(미응답은 null). */
+    public MyValueAnswersResponse getMyAnswers(Long userId) {
+        Map<Long, String> answerByQuestion = userValueAnswerReader.getAllByUserId(userId).stream()
+                .collect(Collectors.toMap(UserValueAnswer::questionId, UserValueAnswer::answer, (a, b) -> b));
+        return MyValueAnswersResponse.of(valueQuestionReader.getAllActive(), answerByQuestion);
+    }
+
+    /** 온보딩 완료 판정용: 가치관 답변이 하나라도 저장되어 있는지 여부. */
+    public boolean hasAnswered(Long userId) {
+        return !userValueAnswerReader.getAllByUserId(userId).isEmpty();
+    }
+
+    /** 회원 탈퇴 시 가치관 답변 삭제(soft). */
+    @Transactional
+    public void deleteAnswers(Long userId) {
+        userValueAnswerWriter.deleteByUserId(userId);
+    }
+
     @Transactional
     public SavedAnswersResponse saveAnswers(Long userId, SaveValueAnswersCommand command) {
         // 질문은 참조 데이터(소량, enum 성격)이므로 활성 질문 전체와 기존 답변을 각 1회만 로드한다(N+1 제거).
@@ -55,6 +78,10 @@ public class ValueService {
         }
 
         answerByQuestion.forEach((questionId, answer) -> {
+            // answer는 A/B만 허용한다(오타·미정의 값 저장 차단).
+            if (!ALLOWED_ANSWERS.contains(answer)) {
+                throw new InvalidValueAnswerException();
+            }
             // 온보딩은 활성 질문에만 답할 수 있다. 비활성/존재하지 않는 질문이면 404.
             if (!activeQuestionIds.contains(questionId)) {
                 throw new ValueQuestionNotFoundException();

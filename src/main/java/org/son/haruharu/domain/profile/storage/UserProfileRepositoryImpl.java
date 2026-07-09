@@ -34,4 +34,9 @@ public class UserProfileRepositoryImpl implements UserProfileRepository {
     public UserProfile save(UserProfile userProfile) {
         return userProfileJpaRepository.save(UserProfileEntity.from(userProfile)).toDomain();
     }
+
+    @Override
+    public void deleteByUserId(Long userId) {
+        userProfileJpaRepository.deleteByUserId(userId);
+    }
 }

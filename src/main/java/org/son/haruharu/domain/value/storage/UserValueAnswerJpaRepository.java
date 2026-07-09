@@ -7,4 +7,6 @@ import java.util.List;
 public interface UserValueAnswerJpaRepository extends JpaRepository<UserValueAnswerEntity, Long> {
 
     List<UserValueAnswerEntity> findAllByUserId(Long userId);
+
+    void deleteByUserId(Long userId);
 }

@@ -48,10 +48,17 @@ jobs:
           APPLE_CLIENT_ID: ${{ secrets.APPLE_CLIENT_ID }}
           REVENUECAT_WEBHOOK_SECRET: ${{ secrets.REVENUECAT_WEBHOOK_SECRET }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          # PortOne PASS 본인인증. 실명인증 CI/DI 암호화 마스터 키.
+          PORTONE_STORE_ID: ${{ secrets.PORTONE_STORE_ID }}
+          PORTONE_V2_API_SECRET: ${{ secrets.PORTONE_V2_API_SECRET }}
+          PORTONE_CHANNEL_KEY: ${{ secrets.PORTONE_CHANNEL_KEY }}
+          IDENTITY_ENCRYPTION_KEY: ${{ secrets.IDENTITY_ENCRYPTION_KEY }}
           # AWS S3: dev는 IAM 사용자 액세스 키(시크릿)를 컨테이너 env로 주입.
           # (prod는 EC2 IAM 역할 부착 후 키 미주입 방식으로 격상 예정 — #47)
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ vars.AWS_REGION }}
           AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          # 매칭 신청비(비밀 아님). GitHub Variables 로 관리 — 값 변경 시 재배포만.
+          MATCHING_ENTER_COST: ${{ vars.MATCHING_ENTER_COST }}
         run: bash scripts/deploy.sh

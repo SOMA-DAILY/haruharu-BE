@@ -10,4 +10,6 @@ public interface UserValueAnswerRepository {
     Optional<UserValueAnswer> findById(Long id);
 
     UserValueAnswer save(UserValueAnswer userValueAnswer);
+
+    void deleteByUserId(Long userId);
 }

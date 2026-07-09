@@ -5,8 +5,8 @@ import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
-import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
+import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
@@ -18,6 +18,7 @@ import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.profile.business.ProfileService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,7 @@ public class ChatService {
     private final ChatMessageReader chatMessageReader;
     private final ChatMessageWriter chatMessageWriter;
     private final ProfileService profileService;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public ChatService(ChatRoomReader chatRoomReader,
@@ -53,6 +55,7 @@ public class ChatService {
                        ChatMessageReader chatMessageReader,
                        ChatMessageWriter chatMessageWriter,
                        ProfileService profileService,
+                       ApplicationEventPublisher eventPublisher,
                        Clock clock) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomWriter = chatRoomWriter;
@@ -61,6 +64,7 @@ public class ChatService {
         this.chatMessageReader = chatMessageReader;
         this.chatMessageWriter = chatMessageWriter;
         this.profileService = profileService;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -87,6 +91,9 @@ public class ChatService {
     public ChatMessageBroadcast sendMessage(Long chatRoomId, Long senderId, String content) {
         requireMember(chatRoomId, senderId);
         ChatMessage saved = chatMessageWriter.save(ChatMessage.create(chatRoomId, senderId, content));
+        Long recipientId = partnerUserId(chatRoomId, senderId);
+        String senderNickname = profileService.getNickname(senderId);
+        eventPublisher.publishEvent(new ChatMessageSentEvent(chatRoomId, recipientId, senderNickname));
         return ChatMessageBroadcast.from(saved);
     }
 
@@ -105,13 +112,6 @@ public class ChatService {
         requireMember(chatRoomId, userId);
         ChatRoom room = chatRoomReader.getById(chatRoomId);
         return new ChatRoomDetailResponse(chatRoomId, partnerBrief(chatRoomId, userId), room.createdAt());
-    }
-
-    /** 매칭 상대의 공개 프로필. */
-    public PartnerProfileResponse getPartner(Long chatRoomId, Long userId) {
-        requireMember(chatRoomId, userId);
-        Long partnerUserId = partnerUserId(chatRoomId, userId);
-        return new PartnerProfileResponse(partnerUserId, profileService.getProfile(partnerUserId));
     }
 
     /** 과거 메시지(최신순 커서 페이지). 삭제된 메시지는 제외. */

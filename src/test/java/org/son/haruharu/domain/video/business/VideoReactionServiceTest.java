@@ -16,7 +16,8 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
 import org.son.haruharu.domain.video.business.event.VideoReactedEvent;
-import org.son.haruharu.domain.video.business.exception.InvalidReactionTypeException;
+import org.son.haruharu.domain.video.business.exception.CannotReactToOwnVideoException;
+import org.son.haruharu.domain.video.implement.ReactionType;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoReaction;
@@ -67,10 +68,10 @@ class VideoReactionServiceTest {
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
 
-        ReactionResponse result = service().toggle(userId, postId, "LIKE");
+        ReactionResponse result = service().toggle(userId, postId, ReactionType.LIKE);
 
         assertThat(result.reacted()).isTrue();
-        assertThat(result.reactionType()).isEqualTo("LIKE");
+        assertThat(result.reactionType()).isEqualTo(ReactionType.LIKE);
         then(videoReactionWriter).should().save(any());
         then(videoReactionWriter).should(never()).delete(any());
     }
@@ -85,7 +86,7 @@ class VideoReactionServiceTest {
         given(videoReactionReader.findMine(postId, userId))
                 .willReturn(Optional.of(new VideoReaction(reactionId, postId, userId, "LIKE", LocalDateTime.now())));
 
-        ReactionResponse result = service().toggle(userId, postId, "LIKE");
+        ReactionResponse result = service().toggle(userId, postId, ReactionType.LIKE);
 
         assertThat(result.reacted()).isFalse();
         then(videoReactionWriter).should().delete(reactionId);
@@ -102,10 +103,10 @@ class VideoReactionServiceTest {
         given(videoReactionReader.findMine(postId, userId))
                 .willReturn(Optional.of(new VideoReaction(reactionId, postId, userId, "LIKE", LocalDateTime.now())));
 
-        ReactionResponse result = service().toggle(userId, postId, "CURIOUS");
+        ReactionResponse result = service().toggle(userId, postId, ReactionType.CURIOUS);
 
         assertThat(result.reacted()).isTrue();
-        assertThat(result.reactionType()).isEqualTo("CURIOUS");
+        assertThat(result.reactionType()).isEqualTo(ReactionType.CURIOUS);
         then(videoReactionWriter).should().save(any());
         then(videoReactionWriter).should(never()).delete(any());
     }
@@ -118,21 +119,27 @@ class VideoReactionServiceTest {
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
 
-        service().toggle(userId, postId, "LIKE");
+        service().toggle(userId, postId, ReactionType.LIKE);
 
         then(eventPublisher).should().publishEvent(new VideoReactedEvent(2L, postId));
     }
 
     @Test
-    @DisplayName("자기 영상에 자기가 반응하면 이벤트를 발행하지 않는다")
-    void givenSelfReaction_whenToggle_thenNoEvent() {
+    @DisplayName("자기 자신의 영상에 반응하면 CannotReactToOwnVideoException이 발생하고 저장·이벤트가 없다")
+    void givenOwnVideo_whenToggle_thenThrowsCannotReactToOwnVideo() {
         Long userId = 2L; // 작성자 본인
         Long postId = 100L;
-        stubPostAndMembership(postId, userId);
-        given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
+        Long authorMemberId = 40L;
+        Long roomId = 50L;
+        VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
+                "url", null, false, null, null, LocalDateTime.now());
+        given(videoPostReader.getById(postId)).willReturn(post);
+        given(roomMemberReader.getById(authorMemberId))
+                .willReturn(new RoomMember(authorMemberId, roomId, userId, "FEMALE", null, LocalDateTime.now()));
 
-        service().toggle(userId, postId, "LIKE");
-
+        assertThatThrownBy(() -> service().toggle(userId, postId, ReactionType.LIKE))
+                .isInstanceOf(CannotReactToOwnVideoException.class);
+        then(videoReactionWriter).should(never()).save(any());
         then(eventPublisher).should(never()).publishEvent(any());
     }
 
@@ -145,16 +152,9 @@ class VideoReactionServiceTest {
         given(videoReactionReader.findMine(postId, userId))
                 .willReturn(Optional.of(new VideoReaction(3L, postId, userId, "LIKE", LocalDateTime.now())));
 
-        service().toggle(userId, postId, "LIKE");
+        service().toggle(userId, postId, ReactionType.LIKE);
 
         then(eventPublisher).should(never()).publishEvent(any());
-    }
-
-    @Test
-    @DisplayName("허용하지 않는 반응 타입이면 InvalidReactionTypeException")
-    void givenInvalidType_whenToggle_thenThrows() {
-        assertThatThrownBy(() -> service().toggle(1L, 1L, "ANGRY"))
-            .isInstanceOf(InvalidReactionTypeException.class);
     }
 
     @Test
@@ -171,7 +171,7 @@ class VideoReactionServiceTest {
                 .willReturn(new RoomMember(authorMemberId, roomId, 2L, "FEMALE", null, LocalDateTime.now()));
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willThrow(new NotRoomMemberException());
 
-        assertThatThrownBy(() -> service().toggle(userId, postId, "LIKE"))
+        assertThatThrownBy(() -> service().toggle(userId, postId, ReactionType.LIKE))
             .isInstanceOf(NotRoomMemberException.class);
     }
 }

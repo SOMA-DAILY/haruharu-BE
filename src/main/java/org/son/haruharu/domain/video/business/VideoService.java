@@ -3,6 +3,7 @@ package org.son.haruharu.domain.video.business;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -15,6 +16,7 @@ import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
 import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
+import org.son.haruharu.domain.video.business.event.VideoUploadedEvent;
 import org.son.haruharu.domain.video.business.dto.VideoUploadUrlResponse;
 import org.son.haruharu.domain.video.business.exception.DuplicateSlotUploadException;
 import org.son.haruharu.domain.video.business.exception.InvalidVideoExtensionException;
@@ -27,11 +29,13 @@ import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoPostWriter;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 영상 업로드 라이프사이클(presign 발급 → 업로드 제출 → 재촬영 삭제). */
 @Service
+@Transactional(readOnly = true)
 public class VideoService {
 
     private static final Map<String, String> ALLOWED_VIDEO_TYPES = Map.of(
@@ -44,17 +48,25 @@ public class VideoService {
     private final RoomMemberReader roomMemberReader;
     private final VideoPostReader videoPostReader;
     private final VideoPostWriter videoPostWriter;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public VideoService(S3StoragePort s3StoragePort, RoomReader roomReader,
                         RoomMemberReader roomMemberReader,
-                        VideoPostReader videoPostReader, VideoPostWriter videoPostWriter, Clock clock) {
+                        VideoPostReader videoPostReader, VideoPostWriter videoPostWriter,
+                        ApplicationEventPublisher eventPublisher, Clock clock) {
         this.s3StoragePort = s3StoragePort;
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.videoPostReader = videoPostReader;
         this.videoPostWriter = videoPostWriter;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
+    }
+
+    /** 한 방 멤버의 활성 영상 전체(Day·슬롯 오름차순). 매칭 상대 프로필 카드의 1~3일차 영상용. */
+    public List<VideoPost> getMemberVideos(Long roomMemberId) {
+        return videoPostReader.findActiveByRoomMember(roomMemberId);
     }
 
     /** 영상 업로드용 presigned PUT URL 발급. 영상은 비공개 prefix(users/{id}/videos/). */
@@ -94,6 +106,9 @@ public class VideoService {
         VideoPost saved = videoPostWriter.save(VideoPost.create(
                 member.id(), slot.dayNumber(), slot.slotIndex(), null,
                 command.caption(), command.videoUrl(), command.thumbnailUrl(), LocalDateTime.now(clock)));
+
+        // 완주(그 Day 슬롯 전부 채움) 시 구름 보상 지급 트리거. video↔coin 직접 결합을 피해 이벤트로 위임.
+        eventPublisher.publishEvent(new VideoUploadedEvent(member.id(), slot.dayNumber()));
 
         return VideoPostResponse.of(saved);
     }

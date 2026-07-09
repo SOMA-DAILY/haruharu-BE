@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.auth.business.command.LogoutCommand;
@@ -13,6 +14,7 @@ import org.son.haruharu.domain.auth.business.dto.AuthTokenResponse;
 import org.son.haruharu.domain.auth.business.exception.InactiveMemberException;
 import org.son.haruharu.domain.auth.business.exception.InvalidRefreshTokenException;
 import org.son.haruharu.domain.auth.business.exception.InvalidTokenException;
+import org.son.haruharu.domain.auth.business.exception.ReRegistrationBlockedException;
 import org.son.haruharu.domain.auth.implement.ProviderType;
 import org.son.haruharu.domain.auth.implement.RefreshToken;
 import org.son.haruharu.domain.auth.implement.RefreshTokenReader;
@@ -20,7 +22,8 @@ import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
-import org.son.haruharu.domain.identity.implement.UserIdentityReader;
+import org.son.haruharu.domain.coin.business.CoinService;
+import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.domain.user.implement.UserStatus;
@@ -31,13 +34,17 @@ import org.son.haruharu.infrastructure.oauth.OAuthUserInfo;
 import org.son.haruharu.utils.JwtProvider;
 import org.son.haruharu.utils.TokenHashUtils;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -51,10 +58,15 @@ class AuthServiceTest {
     @Mock UserWriter userWriter;
     @Mock UserCredentialReader userCredentialReader;
     @Mock UserCredentialWriter userCredentialWriter;
-    @Mock UserIdentityReader userIdentityReader;
+    @Mock IdentityService identityService;
+    @Mock CoinService coinService;
     @Mock RefreshTokenReader refreshTokenReader;
     @Mock RefreshTokenWriter refreshTokenWriter;
     @Mock JwtProvider jwtProvider;
+
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    private final Clock clock = Clock.fixed(
+        ZonedDateTime.of(2026, 7, 8, 12, 0, 0, 0, SEOUL).toInstant(), SEOUL);
 
     AuthService authService;
 
@@ -63,27 +75,26 @@ class AuthServiceTest {
         authService = new AuthService(
             oAuthProviderRegistry, userReader, userWriter,
             userCredentialReader, userCredentialWriter,
-            userIdentityReader,
-            refreshTokenReader, refreshTokenWriter, jwtProvider
+            identityService, coinService,
+            refreshTokenReader, refreshTokenWriter, jwtProvider, clock
         );
     }
 
     // ===================== authenticate =====================
 
     @Test
-    @DisplayName("신규 소셜 계정으로 인증 시 User+Credential을 생성하고 UNVERIFIED 상태를 반환한다")
-    void givenNewSocialAccount_whenAuthenticate_thenCreatesUserAndReturnsUnverified() {
+    @DisplayName("신규 소셜 계정으로 인증 시 User를 ONBOARDING으로 생성하고 ONBOARDING 상태를 반환한다")
+    void givenNewSocialAccount_whenAuthenticate_thenCreatesOnboardingUserAndReturnsOnboarding() {
         Long userId = 1L;
         SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
         OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-123", "KAKAO");
-        User savedUser = new User(userId, UserStatus.ACTIVE, LocalDateTime.now());
+        User savedUser = new User(userId, UserStatus.ONBOARDING, LocalDateTime.now());
 
         given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(oAuthProvider);
         given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
         given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(Optional.empty());
         given(userWriter.save(any())).willReturn(savedUser);
         given(userCredentialWriter.save(any())).willReturn(new UserCredential(10L, userId, "KAKAO", "kakao-sub-123"));
-        given(userIdentityReader.existsByUserId(userId)).willReturn(false);
         given(jwtProvider.generateAccessToken(userId)).willReturn("access-token");
         given(jwtProvider.generateRefreshToken(userId)).willReturn("refresh-token");
         given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
@@ -92,14 +103,41 @@ class AuthServiceTest {
 
         assertThat(result.accessToken()).isEqualTo("access-token");
         assertThat(result.refreshToken()).isEqualTo("refresh-token");
-        assertThat(result.userStatus()).isEqualTo("UNVERIFIED");
-        then(userWriter).should().save(any());
+        assertThat(result.userStatus()).isEqualTo("ONBOARDING");
+
+        ArgumentCaptor<User> savedCaptor = ArgumentCaptor.forClass(User.class);
+        then(userWriter).should().save(savedCaptor.capture());
+        assertThat(savedCaptor.getValue().status()).isEqualTo(UserStatus.ONBOARDING);
         then(userCredentialWriter).should().save(any());
+        then(coinService).should().grantSignupBonus(userId);
     }
 
     @Test
-    @DisplayName("기존 계정 + identity 없음: 로그인 성공 후 UNVERIFIED 반환")
-    void givenExistingAccountWithoutIdentity_whenAuthenticate_thenReturnsUnverified() {
+    @DisplayName("기존 온보딩 미완 계정(ONBOARDING) 로그인 시 ONBOARDING을 반환한다")
+    void givenOnboardingUser_whenAuthenticate_thenReturnsOnboarding() {
+        Long userId = 1L;
+        SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
+        OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-123", "KAKAO");
+        UserCredential credential = new UserCredential(10L, userId, "KAKAO", "kakao-sub-123");
+        User user = new User(userId, UserStatus.ONBOARDING, LocalDateTime.now());
+
+        given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(oAuthProvider);
+        given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
+        given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(Optional.of(credential));
+        given(userReader.getById(userId)).willReturn(user);
+        given(jwtProvider.generateAccessToken(userId)).willReturn("access-token");
+        given(jwtProvider.generateRefreshToken(userId)).willReturn("refresh-token");
+        given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
+
+        AuthTokenResponse result = authService.authenticate(command);
+
+        assertThat(result.userStatus()).isEqualTo("ONBOARDING");
+        then(userWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("온보딩 완료(ACTIVE) + identity 없음: 로그인 성공 후 ACTIVE 반환")
+    void givenActiveAccountWithoutIdentity_whenAuthenticate_thenReturnsActive() {
         Long userId = 1L;
         SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
         OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-123", "KAKAO");
@@ -110,14 +148,14 @@ class AuthServiceTest {
         given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
         given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(Optional.of(credential));
         given(userReader.getById(userId)).willReturn(user);
-        given(userIdentityReader.existsByUserId(userId)).willReturn(false);
+        given(identityService.isVerified(userId)).willReturn(false);
         given(jwtProvider.generateAccessToken(userId)).willReturn("access-token");
         given(jwtProvider.generateRefreshToken(userId)).willReturn("refresh-token");
         given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
 
         AuthTokenResponse result = authService.authenticate(command);
 
-        assertThat(result.userStatus()).isEqualTo("UNVERIFIED");
+        assertThat(result.userStatus()).isEqualTo("ACTIVE");
         then(userWriter).should(never()).save(any());
     }
 
@@ -134,7 +172,7 @@ class AuthServiceTest {
         given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
         given(userCredentialReader.findByProviderTypeAndProviderId("APPLE", "apple-sub-456")).willReturn(Optional.of(credential));
         given(userReader.getById(userId)).willReturn(user);
-        given(userIdentityReader.existsByUserId(userId)).willReturn(true);
+        given(identityService.isVerified(userId)).willReturn(true);
         given(jwtProvider.generateAccessToken(userId)).willReturn("access-token");
         given(jwtProvider.generateRefreshToken(userId)).willReturn("refresh-token");
         given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
@@ -164,11 +202,55 @@ class AuthServiceTest {
         then(jwtProvider).should(never()).generateAccessToken(any());
     }
 
+    @Test
+    @DisplayName("탈퇴 후 30일 이내 같은 OAuth로 재로그인 시 ReRegistrationBlockedException이 발생하고 신규 가입되지 않는다")
+    void givenWithdrawnCredentialWithin30Days_whenAuthenticate_thenThrowsReRegistrationBlocked() {
+        SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
+        OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-123", "KAKAO");
+
+        given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(oAuthProvider);
+        given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
+        given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(Optional.empty());
+        given(userCredentialReader.existsWithdrawnWithin(eq("KAKAO"), eq("kakao-sub-123"), any())).willReturn(true);
+
+        assertThatThrownBy(() -> authService.authenticate(command))
+            .isInstanceOf(ReRegistrationBlockedException.class);
+
+        then(userWriter).should(never()).save(any());
+        then(coinService).should(never()).grantSignupBonus(any());
+    }
+
+    @Test
+    @DisplayName("탈퇴 후 30일 경과한 같은 OAuth로 재로그인 시 재가입되지만 signup 보너스는 지급되지 않는다")
+    void givenWithdrawnCredentialAfter30Days_whenAuthenticate_thenReSignupWithoutBonus() {
+        Long newUserId = 2L;
+        SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
+        OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-123", "KAKAO");
+        User created = new User(newUserId, UserStatus.ONBOARDING, LocalDateTime.now());
+
+        given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(oAuthProvider);
+        given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
+        given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(Optional.empty());
+        given(userCredentialReader.existsWithdrawnWithin(eq("KAKAO"), eq("kakao-sub-123"), any())).willReturn(false);
+        given(userCredentialWriter.purgeWithdrawnBefore(eq("KAKAO"), eq("kakao-sub-123"), any())).willReturn(1);
+        given(userWriter.save(any())).willReturn(created);
+        given(userCredentialWriter.save(any())).willReturn(new UserCredential(20L, newUserId, "KAKAO", "kakao-sub-123"));
+        given(jwtProvider.generateAccessToken(newUserId)).willReturn("access-token");
+        given(jwtProvider.generateRefreshToken(newUserId)).willReturn("refresh-token");
+        given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
+
+        AuthTokenResponse result = authService.authenticate(command);
+
+        assertThat(result.userStatus()).isEqualTo("ONBOARDING");
+        then(userCredentialWriter).should().save(any());
+        then(coinService).should(never()).grantSignupBonus(any());
+    }
+
     // ===================== refresh =====================
 
     @Test
-    @DisplayName("유효한 리프레시 토큰으로 갱신 시 새 토큰 쌍이 반환된다")
-    void givenValidRefreshToken_whenRefresh_thenReturnsNewTokenPair() {
+    @DisplayName("유효한 리프레시 토큰으로 갱신 시 새 토큰 쌍과 user_status(ACTIVE)가 반환된다")
+    void givenValidRefreshToken_whenRefresh_thenReturnsNewTokenPairWithStatus() {
         Long userId = 1L;
         String rawToken = "valid-refresh-token";
         String tokenHash = TokenHashUtils.sha256Hex(rawToken);
@@ -178,6 +260,7 @@ class AuthServiceTest {
         given(jwtProvider.isValid(rawToken)).willReturn(true);
         given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(refreshToken));
         given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.now()));
+        given(identityService.isVerified(userId)).willReturn(false);
         given(jwtProvider.generateAccessToken(userId)).willReturn("new-access-token");
         given(jwtProvider.generateRefreshToken(userId)).willReturn("new-refresh-token");
         given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
@@ -186,8 +269,29 @@ class AuthServiceTest {
 
         assertThat(result.accessToken()).isEqualTo("new-access-token");
         assertThat(result.refreshToken()).isEqualTo("new-refresh-token");
-        assertThat(result.userStatus()).isNull();
+        assertThat(result.userStatus()).isEqualTo("ACTIVE");
         then(refreshTokenWriter).should().revokeByTokenHash(tokenHash);
+    }
+
+    @Test
+    @DisplayName("온보딩 미완 유저가 갱신 시 user_status가 ONBOARDING으로 반환된다")
+    void givenOnboardingUser_whenRefresh_thenReturnsOnboardingStatus() {
+        Long userId = 1L;
+        String rawToken = "valid-refresh-token";
+        String tokenHash = TokenHashUtils.sha256Hex(rawToken);
+        RefreshToken refreshToken = new RefreshToken(10L, userId, tokenHash,
+            LocalDateTime.now().plusDays(30), null);
+
+        given(jwtProvider.isValid(rawToken)).willReturn(true);
+        given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(refreshToken));
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ONBOARDING, LocalDateTime.now()));
+        given(jwtProvider.generateAccessToken(userId)).willReturn("new-access-token");
+        given(jwtProvider.generateRefreshToken(userId)).willReturn("new-refresh-token");
+        given(jwtProvider.getRefreshTokenExpiryMs()).willReturn(2592000000L);
+
+        AuthTokenResponse result = authService.refresh(new TokenRefreshCommand(rawToken));
+
+        assertThat(result.userStatus()).isEqualTo("ONBOARDING");
     }
 
     @Test

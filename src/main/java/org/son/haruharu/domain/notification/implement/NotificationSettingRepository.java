@@ -9,6 +9,9 @@ public interface NotificationSettingRepository {
 
     NotificationSetting save(NotificationSetting setting);
 
-    /** 발송 대상 필터용: 주어진 유저 중 푸시를 끈 유저 id만 반환. */
-    List<Long> findPushDisabledUserIds(List<Long> userIds);
+    /** 발송 필터용: 주어진 유저 중 활동 알림을 끈 유저 id(opt-out 대상). */
+    List<Long> findActivityDisabledUserIds(List<Long> userIds);
+
+    /** 발송 필터용: 주어진 유저 중 혜택 알림을 켠 유저 id(opt-in 대상). */
+    List<Long> findMarketingEnabledUserIds(List<Long> userIds);
 }

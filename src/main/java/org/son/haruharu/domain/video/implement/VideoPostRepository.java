@@ -23,4 +23,7 @@ public interface VideoPostRepository {
 
     /** day N 피드: 그 방 멤버들이 그 Day에 올린 활성·비숨김 영상. */
     List<VideoPost> findFeed(List<Long> roomMemberIds, int dayNumber);
+
+    /** 한 멤버의 활성 영상 전체(Day·슬롯 오름차순). 매칭 상대 카드의 1~3일차 영상용. */
+    List<VideoPost> findActiveByRoomMember(Long roomMemberId);
 }

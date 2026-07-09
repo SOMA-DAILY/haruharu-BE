@@ -2,6 +2,7 @@ package org.son.haruharu.domain.matching.implement;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 public record MatchingQueue(
         Long id,
@@ -12,14 +13,19 @@ public record MatchingQueue(
         LocalDateTime queuedAt,
         LocalDateTime matchedAt
 ) {
-    /** 참가 비용(구름). 취소·미성사 환불액과 동일해야 한다. */
-    public static final long ENTER_COST = 5L;
-
     /** 코인 원장 참조 타입. 차감·환불 ledger의 ref_type으로 기록된다. */
     public static final String COIN_REF_TYPE = "MATCHING_QUEUE";
 
-    /** 매칭 확정 시각(시). MatchingScheduler의 확정 cron과 홈 카운트다운(신청 마감·결과 발표)의 공통 기준. */
+    /** 매칭 확정(결과 발표) 시각(시). MatchingScheduler의 확정 cron과 홈 결과 발표 카운트다운의 기준. */
     public static final int CONFIRM_HOUR = 22;
+
+    /** 신청 마감 시각(시). 매일 00:00~21:00만 신청 가능하고, 21:00부터 마감된다(다음날 00:00 자동 재개). */
+    public static final int APPLY_DEADLINE_HOUR = 21;
+
+    /** 지금 신청 가능 시간대인가. 00:00~20:59:59.…까지 허용, 21:00부터 마감. 00:00에 hour<21이 되어 자동 재개된다. */
+    public static boolean isApplyOpen(LocalTime now) {
+        return now.isBefore(LocalTime.of(APPLY_DEADLINE_HOUR, 0));
+    }
 
     /** 큐 참가: 신규 대기 항목 생성. id는 영속화 시점에 부여, matchedAt은 매칭 확정 전까지 null. */
     public static MatchingQueue join(Long userId, String gender, LocalDate birthday, LocalDateTime queuedAt) {

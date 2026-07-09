@@ -36,12 +36,15 @@ public class HomeService {
         long pointBalance = coinService.getWallet(userId).totalBalance();
         QueueStatusResponse queue = matchingService.getQueueStatus(userId);
         RoomResponse room = roomService.findMyRoom(userId).orElse(null);
+        LocalDateTime now = LocalDateTime.now(clock);
         return HomeResponse.of(pointBalance, queue, room,
-                nextConfirmAt(LocalDateTime.now(clock)), UploadSlot.dayStartHour());
+                nextAtHour(now, MatchingQueue.APPLY_DEADLINE_HOUR),
+                nextAtHour(now, MatchingQueue.CONFIRM_HOUR), UploadSlot.dayStartHour());
     }
 
-    private LocalDateTime nextConfirmAt(LocalDateTime now) {
-        LocalDateTime todayConfirmAt = now.toLocalDate().atTime(MatchingQueue.CONFIRM_HOUR, 0);
-        return now.isBefore(todayConfirmAt) ? todayConfirmAt : todayConfirmAt.plusDays(1);
+    /** now 이후 가장 가까운 해당 시각(오늘 그 시각 전이면 오늘, 아니면 내일). 홈 카운트다운 기준. */
+    private LocalDateTime nextAtHour(LocalDateTime now, int hour) {
+        LocalDateTime todayAt = now.toLocalDate().atTime(hour, 0);
+        return now.isBefore(todayAt) ? todayAt : todayAt.plusDays(1);
     }
 }

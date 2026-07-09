@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 
 @Entity
@@ -33,11 +35,13 @@ public class UserProfileEntity extends BaseEntity {
     @Column(length = 20)
     private String nickname;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 20)
-    private String drinkingStatus;
+    private DrinkingStatus drinkingStatus;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 20)
-    private String smokingStatus;
+    private SmokingStatus smokingStatus;
 
     public static UserProfileEntity from(UserProfile userProfile) {
         var entity = new UserProfileEntity();

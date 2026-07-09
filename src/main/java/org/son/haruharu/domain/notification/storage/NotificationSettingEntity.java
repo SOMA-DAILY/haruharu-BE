@@ -26,17 +26,21 @@ public class NotificationSettingEntity extends BaseEntity {
     private Long userId;
 
     @Column(nullable = false)
-    private boolean pushEnabled;
+    private boolean activityEnabled;
+
+    @Column(nullable = false)
+    private boolean marketingEnabled;
 
     public static NotificationSettingEntity from(NotificationSetting setting) {
         NotificationSettingEntity entity = new NotificationSettingEntity();
         entity.id = setting.id();
         entity.userId = setting.userId();
-        entity.pushEnabled = setting.pushEnabled();
+        entity.activityEnabled = setting.activityEnabled();
+        entity.marketingEnabled = setting.marketingEnabled();
         return entity;
     }
 
     public NotificationSetting toDomain() {
-        return new NotificationSetting(id, userId, pushEnabled);
+        return new NotificationSetting(id, userId, activityEnabled, marketingEnabled);
     }
 }

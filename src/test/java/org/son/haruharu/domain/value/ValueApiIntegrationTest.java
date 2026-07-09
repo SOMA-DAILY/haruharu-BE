@@ -92,8 +92,8 @@ class ValueApiIntegrationTest {
         Long q2 = saveQuestion("질문2", "LIFESTYLE", 2, true);
         String body = """
                 { "answers": [
-                  { "question_id": %s, "answer": "등산" },
-                  { "question_id": %s, "answer": "독서" }
+                  { "question_id": %s, "answer": "A" },
+                  { "question_id": %s, "answer": "B" }
                 ] }
                 """.formatted(q1, q2);
 
@@ -121,20 +121,20 @@ class ValueApiIntegrationTest {
         mockMvc.perform(post("/api/v1/value-answers")
                         .with(authentication(auth(userId)))
                         .contentType(APPLICATION_JSON)
-                        .content("{ \"answers\": [ { \"question_id\": %s, \"answer\": \"등산\" } ] }".formatted(questionId)))
+                        .content("{ \"answers\": [ { \"question_id\": %s, \"answer\": \"A\" } ] }".formatted(questionId)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/value-answers")
                         .with(authentication(auth(userId)))
                         .contentType(APPLICATION_JSON)
-                        .content("{ \"answers\": [ { \"question_id\": %s, \"answer\": \"독서\" } ] }".formatted(questionId)))
+                        .content("{ \"answers\": [ { \"question_id\": %s, \"answer\": \"B\" } ] }".formatted(questionId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.saved_count").value(1));
 
         List<UserValueAnswer> saved = userValueAnswerJpaRepository.findAllByUserId(userId)
                 .stream().map(UserValueAnswerEntity::toDomain).toList();
         assertThat(saved).hasSize(1);
-        assertThat(saved.get(0).answer()).isEqualTo("독서");
+        assertThat(saved.get(0).answer()).isEqualTo("B");
     }
 
     @Test
@@ -146,5 +146,39 @@ class ValueApiIntegrationTest {
                         .content("{ \"answers\": [] }"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.isSuccess").value(false));
+    }
+
+    @Test
+    @DisplayName("내 가치관 답변 조회 시 활성 질문 전체와 내 답변(미응답은 매핑 안 됨)을 반환한다")
+    void givenAnswered_whenGetMyAnswers_thenReturnsQuestionsWithMyAnswer() throws Exception {
+        Long userId = 1L;
+        Long q1 = saveQuestion("질문1", "LIFESTYLE", 1, true);
+        Long q2 = saveQuestion("질문2", "LIFESTYLE", 2, true);
+        // q1만 답변
+        mockMvc.perform(post("/api/v1/value-answers")
+                        .with(authentication(auth(userId)))
+                        .contentType(APPLICATION_JSON)
+                        .content("{ \"answers\": [ { \"question_id\": %s, \"answer\": \"A\" } ] }".formatted(q1)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/value-answers").with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.answers.length()").value(2))
+                .andExpect(jsonPath("$.data.answers[0].question_id").value(q1.intValue()))
+                .andExpect(jsonPath("$.data.answers[0].answer").value("A"))
+                .andExpect(jsonPath("$.data.answers[1].question_id").value(q2.intValue()));
+    }
+
+    @Test
+    @DisplayName("answer가 A/B가 아니면 400 INVALID_VALUE_ANSWER를 반환한다")
+    void givenNonAbAnswer_whenPostAnswers_thenReturns400() throws Exception {
+        Long questionId = saveQuestion("질문", "LIFESTYLE", 1, true);
+
+        mockMvc.perform(post("/api/v1/value-answers")
+                        .with(authentication(auth(1L)))
+                        .contentType(APPLICATION_JSON)
+                        .content("{ \"answers\": [ { \"question_id\": %s, \"answer\": \"등산\" } ] }".formatted(questionId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_VALUE_ANSWER"));
     }
 }

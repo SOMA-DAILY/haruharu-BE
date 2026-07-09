@@ -27,4 +27,21 @@ public record CoinCreditCommand(
     public static CoinCreditCommand matchRefund(Long userId, long amount, String refType, String refId) {
         return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.MATCH_REFUND, refType, refId);
     }
+
+    /**
+     * 첫 가입 보너스 적립. 리워드 버킷(환불 회수 무관)으로 적립하고, refType/refId로 유저당 1회 멱등을 보장한다.
+     */
+    public static CoinCreditCommand signupBonus(Long userId, long amount) {
+        return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.SIGNUP_BONUS,
+                "SIGNUP_BONUS", String.valueOf(userId));
+    }
+
+    /**
+     * 일일 업로드 완주 보상 적립. 리워드 버킷으로 적립한다. 멱등은 호출측(daily_upload_reward 테이블)이 보장한다.
+     * refId는 (roomMemberId, dayNumber) 조합.
+     */
+    public static CoinCreditCommand uploadCompletion(Long userId, long amount, Long roomMemberId, int dayNumber) {
+        return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.UPLOAD_COMPLETION_REWARD,
+                "UPLOAD_COMPLETION", roomMemberId + ":" + dayNumber);
+    }
 }

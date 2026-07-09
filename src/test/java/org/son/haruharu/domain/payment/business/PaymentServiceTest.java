@@ -20,8 +20,10 @@ import org.son.haruharu.domain.payment.implement.IapPurchase;
 import org.son.haruharu.domain.payment.implement.IapPurchaseReader;
 import org.son.haruharu.domain.payment.implement.IapPurchaseWriter;
 import org.son.haruharu.domain.payment.implement.IapStore;
+import org.son.haruharu.domain.payment.business.event.PaymentCompletedEvent;
 import org.son.haruharu.domain.payment.implement.IapWebhookEventReader;
 import org.son.haruharu.domain.payment.implement.IapWebhookEventWriter;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -42,6 +44,7 @@ class PaymentServiceTest {
     @Mock private IapWebhookEventReader iapWebhookEventReader;
     @Mock private IapWebhookEventWriter iapWebhookEventWriter;
     @Mock private CoinService coinService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     private PaymentService paymentService;
 
@@ -53,7 +56,7 @@ class PaymentServiceTest {
     void setUp() {
         paymentService = new PaymentService(
                 iapProductReader, iapPurchaseReader, iapPurchaseWriter,
-                iapWebhookEventReader, iapWebhookEventWriter, coinService);
+                iapWebhookEventReader, iapWebhookEventWriter, coinService, eventPublisher);
     }
 
     private IapWebhookCommand command(String type) {
@@ -91,6 +94,54 @@ class PaymentServiceTest {
         assertThat(captor.getValue().reason()).isEqualTo(CoinLedgerReason.PURCHASE);
         assertThat(captor.getValue().amount()).isEqualTo(100);
         verify(iapWebhookEventWriter).append(any());
+    }
+
+    @Test
+    @DisplayName("신규 구매 이벤트 처리 시 PaymentCompletedEvent를 발행한다")
+    void givenPurchaseEvent_whenHandle_thenPublishesPaymentCompletedEvent() {
+        // given
+        given(iapWebhookEventReader.isProcessed("EVT-1")).willReturn(false);
+        given(iapPurchaseReader.findByStoreTransactionId(txId)).willReturn(Optional.empty());
+        given(iapProductReader.getByStoreProductId(storeProductId)).willReturn(product());
+        given(iapPurchaseWriter.save(any())).willReturn(ownedPurchase(1L));
+
+        // when
+        paymentService.handleWebhook(command("NON_RENEWING_PURCHASE"));
+
+        // then
+        ArgumentCaptor<PaymentCompletedEvent> captor = ArgumentCaptor.forClass(PaymentCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().userId()).isEqualTo(Long.parseLong(userId));
+        assertThat(captor.getValue().coinAmount()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("동일 거래 중복 구매 이벤트는 PaymentCompletedEvent를 발행하지 않는다")
+    void givenDuplicateTransaction_whenHandlePurchase_thenNoPaymentCompletedEvent() {
+        // given
+        given(iapWebhookEventReader.isProcessed("EVT-1")).willReturn(false);
+        given(iapPurchaseReader.findByStoreTransactionId(txId)).willReturn(Optional.of(ownedPurchase(1L)));
+
+        // when
+        paymentService.handleWebhook(command("NON_RENEWING_PURCHASE"));
+
+        // then
+        verify(eventPublisher, never()).publishEvent(any(PaymentCompletedEvent.class));
+    }
+
+    @Test
+    @DisplayName("환불(CANCELLATION) 이벤트는 PaymentCompletedEvent를 발행하지 않는다")
+    void givenCancellationEvent_whenHandle_thenNoPaymentCompletedEvent() {
+        // given
+        given(iapWebhookEventReader.isProcessed("EVT-1")).willReturn(false);
+        given(iapPurchaseReader.findByStoreTransactionId(txId)).willReturn(Optional.of(ownedPurchase(1L)));
+        given(iapPurchaseWriter.save(any())).willReturn(ownedPurchase(1L));
+
+        // when
+        paymentService.handleWebhook(command("CANCELLATION"));
+
+        // then
+        verify(eventPublisher, never()).publishEvent(any(PaymentCompletedEvent.class));
     }
 
     @Test

@@ -31,7 +31,7 @@ public class NotificationSettingService {
     public NotificationSettingResponse updateSetting(Long userId, UpdateNotificationSettingCommand command) {
         NotificationSetting setting = notificationSettingReader.findByUserId(userId)
                 .orElseGet(() -> NotificationSetting.defaultOf(userId))
-                .withPushEnabled(command.pushEnabled());
+                .withPreferences(command.activityEnabled(), command.marketingEnabled());
         return NotificationSettingResponse.from(notificationSettingWriter.save(setting));
     }
 }

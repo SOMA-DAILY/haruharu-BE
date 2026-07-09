@@ -55,6 +55,8 @@ class HomeServiceTest {
 
         assertThat(result.pointBalance()).isEqualTo(12L);
         assertThat(result.matching().status()).isEqualTo("NONE");
+        assertThat(result.matching().applyDeadlineAt())
+                .isEqualTo(LocalDateTime.of(2026, 7, 5, 21, 0));
         assertThat(result.matching().confirmAt())
                 .isEqualTo(LocalDateTime.of(2026, 7, 5, 22, 0));
         assertThat(result.activeRoom()).isNull();
@@ -69,6 +71,9 @@ class HomeServiceTest {
 
         HomeResponse result = service.getHome(userId);
 
+        // 23:00은 21:00 마감을 지났으므로 신청 마감은 다음날 21:00
+        assertThat(result.matching().applyDeadlineAt())
+                .isEqualTo(LocalDateTime.of(2026, 7, 6, 21, 0));
         assertThat(result.matching().confirmAt())
                 .isEqualTo(LocalDateTime.of(2026, 7, 6, 22, 0));
     }

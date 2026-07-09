@@ -14,4 +14,8 @@ public class UserProfileWriter {
     public UserProfile save(UserProfile userProfile) {
         return userProfileRepository.save(userProfile);
     }
+
+    public void deleteByUserId(Long userId) {
+        userProfileRepository.deleteByUserId(userId);
+    }
 }

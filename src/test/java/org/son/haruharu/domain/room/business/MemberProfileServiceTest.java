@@ -14,22 +14,31 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
+import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse.ProfileFieldView;
+import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
+import org.son.haruharu.domain.value.implement.UserValueAnswer;
 import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
+import org.son.haruharu.domain.value.implement.ValueQuestion;
 import org.son.haruharu.domain.value.implement.ValueQuestionReader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class MemberProfileServiceTest {
@@ -39,8 +48,10 @@ class MemberProfileServiceTest {
     @Mock org.son.haruharu.domain.room.implement.RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
     @Mock UserProfileReader userProfileReader;
+    @Mock UserImageReader userImageReader;
     @Mock ValueQuestionReader valueQuestionReader;
     @Mock UserValueAnswerReader userValueAnswerReader;
+    @Mock MatchResultReader matchResultReader;
 
     MemberProfileService service;
 
@@ -49,8 +60,8 @@ class MemberProfileServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new MemberProfileService(roomReader, roomMemberReader, userProfileReader,
-                valueQuestionReader, userValueAnswerReader, clock);
+        service = new MemberProfileService(roomReader, roomMemberReader, userProfileReader, userImageReader,
+                valueQuestionReader, userValueAnswerReader, matchResultReader, clock);
     }
 
     private RoomMember member(Long id, Long roomId, Long userId) {
@@ -65,7 +76,7 @@ class MemberProfileServiceTest {
 
     private UserProfile profile(Long userId) {
         return new UserProfile(1L, userId,
-                "서울", "카카오", 165, "INFP", "하루", "SOMETIMES", "NONE");
+                "서울", "카카오", 165, "INFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE);
     }
 
     private ProfileFieldView field(MemberProfileResponse res, String key) {
@@ -124,8 +135,8 @@ class MemberProfileServiceTest {
         assertThat(field(result, "affiliation").value()).isEqualTo("카카오");
         assertThat(field(result, "height").value()).isEqualTo("165");
         assertThat(field(result, "mbti").value()).isEqualTo("INFP");
-        assertThat(field(result, "drinking").value()).isEqualTo("SOMETIMES");
-        assertThat(field(result, "smoking").value()).isEqualTo("NONE");
+        assertThat(field(result, "drinking").value()).isEqualTo("가끔");
+        assertThat(field(result, "smoking").value()).isEqualTo("안 피움");
         assertThat(field(result, "age").value()).isEqualTo("26");
         assertThat(result.fields()).allMatch(ProfileFieldView::visible);
     }
@@ -150,6 +161,9 @@ class MemberProfileServiceTest {
         assertThat(field(result, "affiliation").value()).isEqualTo("카카오");
         assertThat(field(result, "age").value()).isEqualTo("26");
         assertThat(result.fields()).allMatch(ProfileFieldView::visible);
+        // 본인 프로필은 매칭 조회 없이 사진도 공개된다(단락평가로 isMatched 미호출)
+        assertThat(result.imageRevealed()).isTrue();
+        then(matchResultReader).should(never()).isMatched(any(), any());
     }
 
     @Test
@@ -178,6 +192,78 @@ class MemberProfileServiceTest {
         assertThat(field(result, "affiliation").value()).isNull();
         assertThat(field(result, "age").visible()).isTrue();
         assertThat(field(result, "age").value()).isNull();
+    }
+
+    @Test
+    @DisplayName("최종매칭 전에는 대표사진 원본 URL을 반환하되 imageRevealed=false다(클라 블러)")
+    void givenNotMatched_whenGetProfile_thenImageUrlButNotRevealed() {
+        Long userId = 1L;
+        Long targetUserId = 2L;
+        Long roomId = 10L;
+        Long meId = 20L;
+        Long targetId = 30L;
+
+        stubBasics(roomId, userId, meId, targetId, targetUserId, 2);
+        given(userImageReader.getRepresentativeImageUrl(targetUserId)).willReturn("https://cdn/rep.jpg");
+        given(matchResultReader.isMatched(meId, targetId)).willReturn(false);
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        assertThat(result.profileImageUrl()).isEqualTo("https://cdn/rep.jpg");
+        assertThat(result.imageRevealed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("최종 상호매칭 성립 후에는 imageRevealed=true다")
+    void givenMatched_whenGetProfile_thenImageRevealed() {
+        Long userId = 1L;
+        Long targetUserId = 2L;
+        Long roomId = 10L;
+        Long meId = 20L;
+        Long targetId = 30L;
+
+        stubBasics(roomId, userId, meId, targetId, targetUserId, 3);
+        given(userImageReader.getRepresentativeImageUrl(targetUserId)).willReturn("https://cdn/rep.jpg");
+        given(matchResultReader.isMatched(meId, targetId)).willReturn(true);
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        assertThat(result.imageRevealed()).isTrue();
+        assertThat(result.profileImageUrl()).isEqualTo("https://cdn/rep.jpg");
+    }
+
+    @Test
+    @DisplayName("상호매칭 성립 후에는 룸이 만료(ENDED, currentDay=0)돼도 프로필 항목·가치관·나이가 계속 공개된다")
+    void givenMatchedAndRoomEnded_whenGetProfile_thenStaysRevealed() {
+        Long userId = 1L;
+        Long targetUserId = 2L;
+        Long roomId = 10L;
+        Long meId = 20L;
+        Long targetId = 30L;
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
+        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
+        // ENDED 방 → currentDayAt=0 (Day 기준이라면 전부 숨김 대상)
+        given(roomReader.findById(roomId)).willReturn(Optional.of(
+                new Room(roomId, RoomStatus.ENDED, LocalDate.of(2026, 6, 24), 3,
+                        LocalDateTime.of(2026, 6, 24, 9, 0), LocalDateTime.of(2026, 6, 27, 9, 0))));
+        given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
+        given(matchResultReader.isMatched(meId, targetId)).willReturn(true);
+        ValueQuestion question = new ValueQuestion(100L, "데이트는?", "A선택지", "B선택지", "DATING", 1, true);
+        given(valueQuestionReader.getAllActive()).willReturn(List.of(question));
+        given(userValueAnswerReader.getAllByUserId(targetUserId))
+                .willReturn(List.of(new UserValueAnswer(500L, targetUserId, 100L, "A")));
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        // 매칭이면 currentDay=0이어도 전 항목 공개
+        assertThat(result.fields()).allMatch(ProfileFieldView::visible);
+        assertThat(field(result, "location").value()).isEqualTo("서울");
+        assertThat(field(result, "age").value()).isEqualTo("26");
+        assertThat(result.valueAnswers()).hasSize(1);
+        assertThat(result.valueAnswers().get(0).visible()).isTrue();
+        assertThat(result.valueAnswers().get(0).answer()).isEqualTo("A");
+        assertThat(result.imageRevealed()).isTrue();
     }
 
     @Test

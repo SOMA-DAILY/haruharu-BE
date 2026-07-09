@@ -69,6 +69,14 @@ public class FinalSelectionService {
         if (now.isBefore(selectionOpensAt(room))) {
             throw new NotFinalSelectionDayException();
         }
+        // 기권: 아무도 선택하지 않고 최종선택을 확정한다. 상호매칭 판정·이벤트 없이 selectedMemberId=null 행만 남긴다.
+        if (selectedMemberId == null) {
+            if (finalSelectionReader.hasSelected(me.id())) {
+                throw new AlreadySelectedException(); // 1회 확정
+            }
+            finalSelectionWriter.save(FinalSelection.of(me.id(), null, now));
+            return new FinalSelectionResponse(null, false);
+        }
         if (selectedMemberId.equals(me.id())) {
             throw new CannotSelectSelfException();
         }
@@ -105,10 +113,11 @@ public class FinalSelectionService {
                 .atStartOfDay().plusHours(opensHour);
     }
 
-    /** 상대(selectedMemberId)도 나(meId)를 최종선택했는지. */
+    /** 상대(selectedMemberId)도 나(meId)를 최종선택했는지. 상대가 기권(selectedMemberId=null)했으면 미성립. */
     private boolean isMutual(Long selectedMemberId, Long meId) {
         return finalSelectionReader.findByRoomMemberId(selectedMemberId)
-                .map(theirSelection -> theirSelection.selectedMemberId().equals(meId))
+                .map(theirSelection -> theirSelection.selectedMemberId() != null
+                        && theirSelection.selectedMemberId().equals(meId))
                 .orElse(false);
     }
 }

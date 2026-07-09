@@ -8,6 +8,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
+import org.son.haruharu.domain.coin.business.command.CoinRevokeCommand;
 import org.son.haruharu.domain.coin.business.command.CoinSpendCommand;
 import org.son.haruharu.domain.coin.business.dto.WalletResponse;
 import org.son.haruharu.domain.coin.implement.CoinBucket;
@@ -24,7 +25,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -42,7 +45,35 @@ class CoinServiceTest {
 
     @BeforeEach
     void setUp() {
-        coinService = new CoinService(coinWalletReader, coinWalletWriter, coinLedgerReader, coinLedgerWriter);
+        coinService = new CoinService(coinWalletReader, coinWalletWriter, coinLedgerReader, coinLedgerWriter,
+                new CoinProperties(5L));
+    }
+
+    @Test
+    @DisplayName("첫 가입 보너스 미지급 상태면 REWARD 버킷에 SIGNUP_BONUS로 설정값만큼 적립한다")
+    void givenNoSignupBonus_whenGrant_thenCreditsReward() {
+        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.SIGNUP_BONUS)).willReturn(false);
+        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.empty());
+
+        coinService.grantSignupBonus(userId);
+
+        ArgumentCaptor<CoinLedger> captor = ArgumentCaptor.forClass(CoinLedger.class);
+        verify(coinLedgerWriter).append(captor.capture());
+        assertThat(captor.getValue().reason()).isEqualTo(CoinLedgerReason.SIGNUP_BONUS);
+        assertThat(captor.getValue().bucket()).isEqualTo(CoinBucket.REWARD);
+        assertThat(captor.getValue().delta()).isEqualTo(5L);
+        verify(coinWalletWriter).save(any());
+    }
+
+    @Test
+    @DisplayName("이미 첫 가입 보너스를 받은 유저면 재지급하지 않는다(멱등)")
+    void givenAlreadyGranted_whenGrant_thenSkips() {
+        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.SIGNUP_BONUS)).willReturn(true);
+
+        coinService.grantSignupBonus(userId);
+
+        verify(coinWalletWriter, never()).save(any());
+        verify(coinLedgerWriter, never()).append(any());
     }
 
     @Test
@@ -75,7 +106,11 @@ class CoinServiceTest {
         ArgumentCaptor<CoinWallet> walletCaptor = ArgumentCaptor.forClass(CoinWallet.class);
         verify(coinWalletWriter).save(walletCaptor.capture());
         assertThat(walletCaptor.getValue().paidBalance()).isEqualTo(100);
-        verify(coinLedgerWriter, times(1)).append(org.mockito.ArgumentMatchers.any(CoinLedger.class));
+
+        // 원장에 거래 후 총 잔액(balance_after) 스냅샷이 기록된다
+        ArgumentCaptor<CoinLedger> ledgerCaptor = ArgumentCaptor.forClass(CoinLedger.class);
+        verify(coinLedgerWriter, times(1)).append(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue().balanceAfter()).isEqualTo(100);
     }
 
     @Test
@@ -97,9 +132,25 @@ class CoinServiceTest {
 
         ArgumentCaptor<CoinLedger> ledgerCaptor = ArgumentCaptor.forClass(CoinLedger.class);
         verify(coinLedgerWriter, times(2)).append(ledgerCaptor.capture());
+        // 총 150에서 80 소모: 리워드 -50 → 잔액 100, 유료 -30 → 잔액 70 (순차 balance_after)
         assertThat(ledgerCaptor.getAllValues())
-                .anyMatch(l -> l.bucket() == CoinBucket.REWARD && l.delta() == -50)
-                .anyMatch(l -> l.bucket() == CoinBucket.PAID && l.delta() == -30);
+                .anyMatch(l -> l.bucket() == CoinBucket.REWARD && l.delta() == -50 && l.balanceAfter() == 100)
+                .anyMatch(l -> l.bucket() == CoinBucket.PAID && l.delta() == -30 && l.balanceAfter() == 70);
+    }
+
+    @Test
+    @DisplayName("환불 회수 시 PAID를 차감하고 차감 후 총 잔액을 balance_after로 원장에 기록한다")
+    void givenWallet_whenRevoke_thenAppendsLedgerWithSnapshot() {
+        // paid=100, reward=20 (총 120) → 30 회수 → paid 70, 총 잔액 90
+        given(coinWalletReader.getByUserId(userId)).willReturn(new CoinWallet(1L, userId, 100, 20, null));
+
+        coinService.revoke(new CoinRevokeCommand(userId, 30, "REFUND", "ref-x"));
+
+        ArgumentCaptor<CoinLedger> captor = ArgumentCaptor.forClass(CoinLedger.class);
+        verify(coinLedgerWriter).append(captor.capture());
+        assertThat(captor.getValue().delta()).isEqualTo(-30);
+        assertThat(captor.getValue().bucket()).isEqualTo(CoinBucket.PAID);
+        assertThat(captor.getValue().balanceAfter()).isEqualTo(90);
     }
 
     @Test
@@ -112,5 +163,13 @@ class CoinServiceTest {
         assertThatThrownBy(() -> coinService.spend(new CoinSpendCommand(
                 userId, 10, CoinLedgerReason.CHAT_OPEN, null, null)))
                 .isInstanceOf(CoinWalletNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 시 구름 지갑을 soft-delete 위임한다")
+    void givenUserId_whenDeleteWallet_thenDelegatesSoftDelete() {
+        coinService.deleteWallet(userId);
+
+        verify(coinWalletWriter).deleteByUserId(userId);
     }
 }

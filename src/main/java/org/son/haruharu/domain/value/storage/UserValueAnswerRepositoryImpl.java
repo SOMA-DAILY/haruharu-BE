@@ -33,4 +33,9 @@ public class UserValueAnswerRepositoryImpl implements UserValueAnswerRepository 
     public UserValueAnswer save(UserValueAnswer userValueAnswer) {
         return userValueAnswerJpaRepository.save(UserValueAnswerEntity.from(userValueAnswer)).toDomain();
     }
+
+    @Override
+    public void deleteByUserId(Long userId) {
+        userValueAnswerJpaRepository.deleteByUserId(userId);
+    }
 }

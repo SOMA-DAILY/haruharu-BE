@@ -4,6 +4,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.command.UpdateProfileCommand;
+import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.infrastructure.s3.PresignedUpload;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -93,7 +95,7 @@ class ImageApiIntegrationTest {
         Long userId = 4L;
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",
-            178, "ENFP", "하루", "가끔", "비흡연"));
+            178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE));
 
         mockMvc.perform(get("/api/v1/users/me").with(authentication(auth(userId))))
             .andExpect(status().isOk())
@@ -102,7 +104,7 @@ class ImageApiIntegrationTest {
             .andExpect(jsonPath("$.data.profile.nickname").value("하루"))
             // 미인증 유저는 나이(본인인증 값)가 없으므로 null
             .andExpect(jsonPath("$.data.profile.age").value(nullValue()))
-            .andExpect(jsonPath("$.data.profile.drinking_status").value("가끔"))
+            .andExpect(jsonPath("$.data.profile.drinking_status").value("SOMETIMES"))
             .andExpect(jsonPath("$.data.images").isArray())
             .andExpect(jsonPath("$.data.profile.birthday").doesNotExist());
     }

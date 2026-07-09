@@ -3,7 +3,7 @@ package org.son.haruharu.domain.video.business;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
-import org.son.haruharu.domain.video.business.exception.InvalidReactionTypeException;
+import org.son.haruharu.domain.video.business.exception.CannotReactToOwnVideoException;
 import org.son.haruharu.domain.video.implement.ReactionType;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
@@ -44,32 +44,33 @@ public class VideoReactionService {
         this.clock = clock;
     }
 
-    public ReactionResponse toggle(Long userId, Long videoPostId, String reactionType) {
-        if (!ReactionType.isValid(reactionType)) {
-            throw new InvalidReactionTypeException();
-        }
+    public ReactionResponse toggle(Long userId, Long videoPostId, ReactionType reactionType) {
         VideoPost post = videoPostReader.getById(videoPostId);
         if (post.deletedAt() != null) {
             throw new VideoPostNotFoundException();
         }
-        // 인가 게이트: 반응하는 유저가 그 영상이 속한 방의 멤버여야 한다.
+        // 자기 자신의 영상에는 반응할 수 없다(설계 4-5: 타인 영상만 반응). 클라 mine 플래그에 의존하지 않고 서버가 차단.
         RoomMember author = roomMemberReader.getById(post.roomMemberId());
+        if (author.userId().equals(userId)) {
+            throw new CannotReactToOwnVideoException();
+        }
+        // 인가 게이트: 반응하는 유저가 그 영상이 속한 방의 멤버여야 한다.
         roomMemberReader.getByRoomIdAndUserId(author.roomId(), userId);
 
         Optional<VideoReaction> existing = videoReactionReader.findMine(videoPostId, userId);
         if (existing.isEmpty()) {
-            videoReactionWriter.save(VideoReaction.create(videoPostId, userId, reactionType, LocalDateTime.now(clock)));
+            videoReactionWriter.save(VideoReaction.create(videoPostId, userId, reactionType.name(), LocalDateTime.now(clock)));
             if (!author.userId().equals(userId)) {
                 eventPublisher.publishEvent(new VideoReactedEvent(author.userId(), videoPostId));
             }
             return new ReactionResponse(true, reactionType);
         }
         VideoReaction current = existing.get();
-        if (current.reactionType().equals(reactionType)) {
+        if (current.reactionType().equals(reactionType.name())) {
             videoReactionWriter.delete(current.id()); // 같은 타입 재탭 → 해제
             return new ReactionResponse(false, null);
         }
-        videoReactionWriter.save(current.withType(reactionType)); // 다른 타입 → 교체
+        videoReactionWriter.save(current.withType(reactionType.name())); // 다른 타입 → 교체
         return new ReactionResponse(true, reactionType);
     }
 }

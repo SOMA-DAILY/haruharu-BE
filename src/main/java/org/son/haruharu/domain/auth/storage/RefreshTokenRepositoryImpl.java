@@ -5,6 +5,8 @@ import org.son.haruharu.domain.auth.implement.RefreshToken;
 import org.son.haruharu.domain.auth.implement.RefreshTokenRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -36,5 +38,10 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
                 entity.revoke();
                 refreshTokenJpaRepository.save(entity);
             });
+    }
+
+    @Override
+    public List<Long> findUserIdsLastActiveBetween(LocalDateTime from, LocalDateTime to) {
+        return refreshTokenJpaRepository.findUserIdsLastIssuedBetween(from, to);
     }
 }

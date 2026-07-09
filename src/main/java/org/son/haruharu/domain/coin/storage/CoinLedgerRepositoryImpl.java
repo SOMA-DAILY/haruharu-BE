@@ -2,6 +2,7 @@ package org.son.haruharu.domain.coin.storage;
 
 import lombok.RequiredArgsConstructor;
 import org.son.haruharu.domain.coin.implement.CoinLedger;
+import org.son.haruharu.domain.coin.implement.CoinLedgerReason;
 import org.son.haruharu.domain.coin.implement.CoinLedgerRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
@@ -24,6 +25,11 @@ public class CoinLedgerRepositoryImpl implements CoinLedgerRepository {
     @Override
     public Optional<CoinLedger> findById(Long id) {
         return jpaRepository.findById(id).map(CoinLedgerEntity::toDomain);
+    }
+
+    @Override
+    public boolean existsByUserIdAndReason(Long userId, CoinLedgerReason reason) {
+        return jpaRepository.existsByUserIdAndReason(userId, reason);
     }
 
     @Override

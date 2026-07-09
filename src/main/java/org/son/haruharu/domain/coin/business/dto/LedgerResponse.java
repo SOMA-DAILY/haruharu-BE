@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public record LedgerResponse(
         @Schema(description = "원장 항목 id(커서로 사용)", example = "1024") Long id,
         @Schema(description = "코인 증감량(+적립 / -소모)", example = "100") long delta,
+        @Schema(description = "코인 증감량 이후 잔액", example = "20") long balanceAfter,
         @Schema(description = "이동한 버킷") CoinBucket bucket,
         @Schema(description = "이동 사유") CoinLedgerReason reason,
         @Schema(description = "출처 유형(예: IAP_PURCHASE, MATCHING_QUEUE)", example = "IAP_PURCHASE") String refType,
@@ -20,6 +21,7 @@ public record LedgerResponse(
         return new LedgerResponse(
                 ledger.id(),
                 ledger.delta(),
+                ledger.balanceAfter(),
                 ledger.bucket(),
                 ledger.reason(),
                 ledger.refType(),

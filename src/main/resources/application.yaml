@@ -18,6 +18,9 @@ spring:
   jackson:
     property-naming-strategy: SNAKE_CASE
     time-zone: Asia/Seoul
+    # 요청 바디의 선택지형 enum을 대소문자 무시로 역직렬화 ("kakao" == "KAKAO"). 클라 계약의 관대함 유지.
+    mapper:
+      accept-case-insensitive-enums: true
 
 # AWS S3 (프로필 이미지·영상 업로드). 자격증명 키는 미기재 — DefaultCredentialsProvider 사용.
 aws:
@@ -34,6 +37,17 @@ jwt:
   access-token-expiry-ms: 1800000
   refresh-token-expiry-ms: 2592000000
 
+# 매칭 정책. enter-cost: 신청 차감 = 미성사 환불 = 불발 통지 개수(구름). 값 변경은 이 설정만 수정.
+haruharu:
+  matching:
+    enter-cost: ${MATCHING_ENTER_COST:5}
+  room:
+    upload-reward:
+      daily-completion:
+        1: 2
+        2: 2
+        3: 1
+
 oauth:
   providers:
     kakao:
@@ -42,6 +56,15 @@ oauth:
     apple:
       issuer: https://appleid.apple.com
       public-key-uri: https://appleid.apple.com/auth/keys
+
+portone:
+  store-id: ${PORTONE_STORE_ID:}
+  api-secret: ${PORTONE_V2_API_SECRET:}
+  channel-key: ${PORTONE_CHANNEL_KEY:}
+
+identity:
+  encryption:
+    key: ${IDENTITY_ENCRYPTION_KEY:}
 
 management:
   endpoints:
