@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+# 운영에서는 어드민 API 문서를 노출하지 않는다(무인증 열람 방지).
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
