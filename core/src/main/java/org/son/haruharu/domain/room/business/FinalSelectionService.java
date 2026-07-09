@@ -3,7 +3,6 @@ package org.son.haruharu.domain.room.business;
 import java.time.Clock;
 import java.time.LocalDateTime;
 
-import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
 import org.son.haruharu.domain.room.business.event.MemberSelectedEvent;
@@ -122,7 +121,7 @@ public class FinalSelectionService {
     /** 최종선택 마감 = 결과 발표 시각(Day3 22:00). 오픈과 같은 앵커(dateOfDay)에서 파생한다. */
     private LocalDateTime selectionClosesAt(Room room) {
         return room.dateOfDay(FINAL_SELECTION_DAY, UploadSlot.dayStartHour())
-                .atStartOfDay().plusHours(MatchingQueue.CONFIRM_HOUR);
+                .atStartOfDay().plusHours(Room.RESULT_ANNOUNCE_HOUR);
     }
 
     /** 상대(selectedMemberId)도 나(meId)를 최종선택했는지. 상대가 기권(selectedMemberId=null)했으면 미성립. */

@@ -7,7 +7,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
 import org.son.haruharu.domain.room.business.dto.TodayResponse.RewardStatus;
@@ -77,7 +76,7 @@ public class RoomTodayService {
      * - 오늘 남은 슬롯이 있으면 그 시작시각(NEXT_SLOT)
      * - 오늘 슬롯이 끝났고 마지막 Day가 아니면 다음 날 첫 슬롯(익일 dayStartHour, NEXT_SLOT)
      * - 마지막 Day 꼬리: 마지막 슬롯 종료(=최종선택 오픈) 전이면 그 시각(DEADLINE),
-     *   최종선택 진행 중이면 결과 발표(CONFIRM_HOUR, DEADLINE), 발표 후면 대상 없음
+     *   최종선택 진행 중이면 결과 발표(RESULT_ANNOUNCE_HOUR, DEADLINE), 발표 후면 대상 없음
      * PENDING(currentDay=0) 등 슬롯이 없는 상태면 대상 없음.
      */
     private TimerTarget computeTimer(Room room, int currentDay, List<UploadSlot> slots, LocalDateTime now) {
@@ -103,7 +102,7 @@ public class RoomTodayService {
 
         // 마지막 Day 꼬리: 최종선택 오픈(마지막 슬롯 종료) → 결과 발표 순으로 마감을 가리킨다.
         LocalDateTime selectionOpensAt = dayDate.atTime(slots.getLast().endHour(), 0);
-        LocalDateTime resultAt = dayDate.atTime(MatchingQueue.CONFIRM_HOUR, 0);
+        LocalDateTime resultAt = dayDate.atTime(Room.RESULT_ANNOUNCE_HOUR, 0);
         if (now.isBefore(selectionOpensAt)) {
             return new TimerTarget(selectionOpensAt, TimerType.DEADLINE);
         }

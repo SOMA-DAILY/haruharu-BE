@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.son.haruharu.domain.coin.business.CoinService;
-import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.event.MatchConsolationEvent;
 import org.son.haruharu.domain.room.implement.MatchResultReader;
@@ -20,7 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 세션 미매칭 위로 구름 지급 유스케이스(#143). 결과 발표(Day3 22:00) 이후의 ACTIVE 방에서
  * MatchResult가 없는 멤버 전원에게 지급한다(완주 여부 무관, 완주 보상과 중복 허용).
  * "정확 시각"이 아닌 상태 기반 판정이므로 22:00 실행을 놓쳐도 방 종료(익일 09:00) 전 재실행으로 회수된다(#170 원칙).
- * 멱등은 코인 원장(MATCH_CONSOLATION + refId=roomId)이 보장한다.
+ * 멱등: 단일 인스턴스는 원장 exists 검사(MATCH_CONSOLATION + refId=roomId)로, 다중 인스턴스 동시 실행은
+ * DB 부분 유니크 인덱스(uq_coin_ledger_match_consolation)가 이중 지급을 차단한다.
  */
 @Service
 @Transactional(readOnly = true)
@@ -74,7 +74,7 @@ public class ConsolationRewardService {
             return false;
         }
         LocalDateTime resultAt = room.dateOfDay(room.totalDays(), UploadSlot.dayStartHour())
-                .atStartOfDay().plusHours(MatchingQueue.CONFIRM_HOUR);
+                .atStartOfDay().plusHours(Room.RESULT_ANNOUNCE_HOUR);
         return !now.isBefore(resultAt);
     }
 }
