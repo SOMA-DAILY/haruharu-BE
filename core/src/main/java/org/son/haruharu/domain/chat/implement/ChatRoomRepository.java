@@ -6,4 +6,5 @@ public interface ChatRoomRepository {
     ChatRoom save(ChatRoom chatRoom);
     Optional<ChatRoom> findById(Long id);
     boolean existsByMatchResultId(Long matchResultId);
+    Optional<Long> findIdByMatchResultId(Long matchResultId);
 }

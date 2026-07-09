@@ -27,4 +27,9 @@ public class ChatRoomRepositoryImpl implements ChatRoomRepository {
     public boolean existsByMatchResultId(Long matchResultId) {
         return chatRoomJpaRepository.existsByMatchResultId(matchResultId);
     }
+
+    @Override
+    public Optional<Long> findIdByMatchResultId(Long matchResultId) {
+        return chatRoomJpaRepository.findByMatchResultId(matchResultId).map(entity -> entity.toDomain().id());
+    }
 }
