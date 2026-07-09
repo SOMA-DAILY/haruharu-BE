@@ -41,15 +41,19 @@ jwt:
   refresh-token-expiry-ms: 2592000000
 
 # 매칭 정책. enter-cost: 신청 차감 = 미성사 환불 = 불발 통지 개수(구름). 값 변경은 이 설정만 수정.
+# 구름 경제(#143): 신청 20 / 완주 5+5+5 / 미매칭 위로 5 → 완주+미매칭 = 전액 환급(±0).
+# 아래 4개 값은 하나의 불변식(전액 환급)이라 env 오버라이드 없이 yaml 리터럴로만 관리한다 — 변경은 PR로.
 haruharu:
   matching:
-    enter-cost: ${MATCHING_ENTER_COST:5}
+    enter-cost: 20
   room:
     upload-reward:
       daily-completion:
-        1: 2
-        2: 2
-        3: 1
+        1: 5
+        2: 5
+        3: 5
+    consolation-reward:
+      amount: 5
 
 oauth:
   providers:

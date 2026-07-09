@@ -11,6 +11,7 @@ import org.son.haruharu.domain.room.business.exception.AlreadySelectedException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSelfException;
 import org.son.haruharu.domain.room.business.exception.NotFinalSelectionDayException;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
+import org.son.haruharu.domain.room.business.exception.SelectionClosedException;
 import org.son.haruharu.domain.room.implement.FinalSelection;
 import org.son.haruharu.domain.room.implement.FinalSelectionReader;
 import org.son.haruharu.domain.room.implement.FinalSelectionWriter;
@@ -69,6 +70,10 @@ public class FinalSelectionService {
         if (now.isBefore(selectionOpensAt(room))) {
             throw new NotFinalSelectionDayException();
         }
+        // 결과 발표(22:00) 이후 선택 불가 — 발표 시점의 미매칭 확정(위로 구름 지급, #143)이 뒤집히지 않게 한다.
+        if (!now.isBefore(selectionClosesAt(room))) {
+            throw new SelectionClosedException();
+        }
         // 기권: 아무도 선택하지 않고 최종선택을 확정한다. 상호매칭 판정·이벤트 없이 selectedMemberId=null 행만 남긴다.
         if (selectedMemberId == null) {
             if (finalSelectionReader.hasSelected(me.id())) {
@@ -111,6 +116,12 @@ public class FinalSelectionService {
         int opensHour = UploadSlot.ofDay(FINAL_SELECTION_DAY).getLast().endHour();
         return room.dateOfDay(FINAL_SELECTION_DAY, UploadSlot.dayStartHour())
                 .atStartOfDay().plusHours(opensHour);
+    }
+
+    /** 최종선택 마감 = 결과 발표 시각(Day3 22:00). 오픈과 같은 앵커(dateOfDay)에서 파생한다. */
+    private LocalDateTime selectionClosesAt(Room room) {
+        return room.dateOfDay(FINAL_SELECTION_DAY, UploadSlot.dayStartHour())
+                .atStartOfDay().plusHours(Room.RESULT_ANNOUNCE_HOUR);
     }
 
     /** 상대(selectedMemberId)도 나(meId)를 최종선택했는지. 상대가 기권(selectedMemberId=null)했으면 미성립. */

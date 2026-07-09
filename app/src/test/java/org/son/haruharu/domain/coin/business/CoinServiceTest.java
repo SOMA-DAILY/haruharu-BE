@@ -77,6 +77,39 @@ class CoinServiceTest {
     }
 
     @Test
+    @DisplayName("위로 구름 미지급 상태면 REWARD 버킷에 MATCH_CONSOLATION으로 적립하고 true를 반환한다")
+    void givenNoConsolation_whenGrant_thenCreditsAndReturnsTrue() {
+        Long roomId = 10L;
+        given(coinLedgerReader.existsByUserIdAndReasonAndRefId(
+                userId, CoinLedgerReason.MATCH_CONSOLATION, roomId.toString())).willReturn(false);
+        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.empty());
+
+        boolean granted = coinService.grantMatchConsolation(userId, roomId, 5L);
+
+        assertThat(granted).isTrue();
+        ArgumentCaptor<CoinLedger> captor = ArgumentCaptor.forClass(CoinLedger.class);
+        verify(coinLedgerWriter).append(captor.capture());
+        assertThat(captor.getValue().reason()).isEqualTo(CoinLedgerReason.MATCH_CONSOLATION);
+        assertThat(captor.getValue().bucket()).isEqualTo(CoinBucket.REWARD);
+        assertThat(captor.getValue().delta()).isEqualTo(5L);
+        assertThat(captor.getValue().refId()).isEqualTo(roomId.toString());
+    }
+
+    @Test
+    @DisplayName("같은 방으로 이미 위로 구름을 받았으면 재지급하지 않고 false를 반환한다(멱등)")
+    void givenAlreadyConsoled_whenGrant_thenSkipsAndReturnsFalse() {
+        Long roomId = 10L;
+        given(coinLedgerReader.existsByUserIdAndReasonAndRefId(
+                userId, CoinLedgerReason.MATCH_CONSOLATION, roomId.toString())).willReturn(true);
+
+        boolean granted = coinService.grantMatchConsolation(userId, roomId, 5L);
+
+        assertThat(granted).isFalse();
+        verify(coinWalletWriter, never()).save(any());
+        verify(coinLedgerWriter, never()).append(any());
+    }
+
+    @Test
     @DisplayName("지갑이 없는 사용자의 잔액 조회는 0을 반환한다")
     void givenNoWallet_whenGetWallet_thenZeroBalance() {
         // given

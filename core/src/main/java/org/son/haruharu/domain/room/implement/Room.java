@@ -12,6 +12,13 @@ public record Room(
         LocalDateTime startedAt,
         LocalDateTime endedAt
 ) {
+    /**
+     * 세션 결과 발표(최종선택 마감·미매칭 확정) 시각. room 세션의 고유 개념으로,
+     * 매칭 큐 확정 시각(MatchingQueue.CONFIRM_HOUR)과 우연히 같은 22시일 뿐 별개다 —
+     * 타 도메인 implement 결합을 피하기 위해 room이 소유한다(#143 리뷰 반영).
+     */
+    public static final int RESULT_ANNOUNCE_HOUR = 22;
+
     /** 매칭 확정으로 방 생성: scheduledDate(확정일) 당일 시작 예정. 시작 전이므로 PENDING. */
     public static Room create(LocalDate scheduledDate, int totalDays) {
         return new Room(null, RoomStatus.PENDING, scheduledDate, totalDays, null, null);

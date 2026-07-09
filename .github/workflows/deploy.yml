@@ -59,6 +59,4 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ vars.AWS_REGION }}
           AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
-          # 매칭 신청비(비밀 아님). GitHub Variables 로 관리 — 값 변경 시 재배포만.
-          MATCHING_ENTER_COST: ${{ vars.MATCHING_ENTER_COST }}
         run: bash scripts/deploy.sh

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.domain.matching.business.MatchingExecutor;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
+import org.son.haruharu.domain.room.business.ConsolationRewardService;
 import org.son.haruharu.domain.room.business.RoomActivator;
 import org.son.haruharu.domain.room.business.RoomTerminator;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -29,6 +30,7 @@ public class MatchingScheduler {
     private final MatchingExecutor matchingExecutor;
     private final RoomActivator roomActivator;
     private final RoomTerminator roomTerminator;
+    private final ConsolationRewardService consolationRewardService;
 
     @Scheduled(cron = "0 0 22 * * *", zone = "Asia/Seoul")
     public void runMatching() {
@@ -42,6 +44,16 @@ public class MatchingScheduler {
 
     @Scheduled(cron = "0 0 9 * * *", zone = "Asia/Seoul")
     public void terminateSessions() {
+        // 종료(ENDED) 전에 위로 구름 미지급분을 회수 지급한다(#143) — 22:00 발표 배치를 놓친 방의 마지막 기회.
+        // 지급은 원장 멱등이라 정상 지급된 방에는 아무 일도 일어나지 않는다.
+        try {
+            int recovered = consolationRewardService.grantForAnnouncedRooms(LocalDateTime.now(SEOUL));
+            if (recovered > 0) {
+                log.warn("위로 구름 회수 지급: {}명 (22:00 발표 배치 누락분)", recovered);
+            }
+        } catch (Exception e) {
+            log.error("위로 구름 회수 지급 실패", e);
+        }
         try {
             int ended = roomTerminator.terminate(LocalDateTime.now(SEOUL), UploadSlot.dayStartHour());
             log.info("세션 종료 배치 완료: {}개 방 종료", ended);

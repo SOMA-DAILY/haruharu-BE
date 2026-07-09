@@ -56,6 +56,20 @@ public class CoinService {
         credit(CoinCreditCommand.signupBonus(userId, coinProperties.signupBonus()));
     }
 
+    /**
+     * 세션 미매칭 위로 구름 지급(#143). 유저·방당 1회만 지급하며(원장 MATCH_CONSOLATION + refId=roomId 존재 시 skip),
+     * 새로 지급했으면 true를 반환한다(호출측이 알림 대상 선별에 사용).
+     */
+    @Transactional
+    public boolean grantMatchConsolation(Long userId, Long roomId, long amount) {
+        if (coinLedgerReader.existsByUserIdAndReasonAndRefId(
+                userId, CoinLedgerReason.MATCH_CONSOLATION, roomId.toString())) {
+            return false;
+        }
+        credit(CoinCreditCommand.matchConsolation(userId, amount, roomId));
+        return true;
+    }
+
     /** 코인 잔액 조회. 지갑이 아직 없으면 0 잔액으로 응답한다. */
     public WalletResponse getWallet(Long userId) {
         CoinWallet wallet = coinWalletReader.findByUserId(userId)
