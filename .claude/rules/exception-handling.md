@@ -73,6 +73,7 @@ throw new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니
 | `MethodArgumentNotValidException` | 400 | 없음 |
 | `ConstraintViolationException` | 400 | `warn` |
 | `MethodArgumentTypeMismatchException` | 400 | `warn` |
+| `MissingServletRequestParameterException` | 400 | 없음 |
 | `HttpMessageNotReadableException` | 400 | `warn` |
 | `HttpRequestMethodNotSupportedException` | 405 | `warn` |
 | `NoResourceFoundException` | 404 | `warn` |
