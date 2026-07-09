@@ -1,94 +1,56 @@
 plugins {
-    id 'java'
-    id 'jacoco'
-    id 'org.springframework.boot' version '4.1.0'
-    id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.springframework.boot' version '4.1.0' apply false
+    id 'io.spring.dependency-management' version '1.1.7' apply false
 }
 
-group = 'org.son'
-version = '0.0.1-SNAPSHOT'
-description = 'haruharu'
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'jacoco'
+    apply plugin: 'io.spring.dependency-management'
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+    group = 'org.son'
+    version = '0.0.1-SNAPSHOT'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
     }
-}
 
-repositories {
-    mavenCentral()
-}
-
-dependencyManagement {
-    imports {
-        mavenBom 'org.testcontainers:testcontainers-bom:1.21.0'
-        mavenBom 'software.amazon.awssdk:bom:2.31.18'
+    repositories {
+        mavenCentral()
     }
-}
 
-dependencies {
-    // Web
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    dependencyManagement {
+        imports {
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:4.1.0'
+            mavenBom 'org.testcontainers:testcontainers-bom:1.21.0'
+            mavenBom 'software.amazon.awssdk:bom:2.31.18'
+        }
+    }
 
-    // WebSocket (STOMP 실시간 채팅 — #60)
-    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    dependencies {
+        // Lombok (전 모듈 공통)
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
+        testCompileOnly 'org.projectlombok:lombok'
+        testAnnotationProcessor 'org.projectlombok:lombok'
 
-    // Actuator (헬스체크 — 배포 검증용)
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+        // Test (전 모듈 공통)
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
 
-    // Data
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    runtimeOnly 'org.postgresql:postgresql'
+    tasks.named('test') {
+        useJUnitPlatform()
+        finalizedBy 'jacocoTestReport'
+    }
 
-    implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
-    annotationProcessor 'com.querydsl:querydsl-apt:5.0.0:jakarta'
-    annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
-
-    // Security
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-
-    // JWT
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
-
-    // API Documentation
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
-
-    // AWS S3 (presigned URL 업로드 — 프로필 이미지·영상)
-    implementation 'software.amazon.awssdk:s3'
-    implementation 'software.amazon.awssdk:url-connection-client'
-
-    // FCM (푸시 알림 발송 — Firebase Admin SDK)
-    implementation 'com.google.firebase:firebase-admin:9.9.0'
-
-    // Lombok
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
-    testCompileOnly 'org.projectlombok:lombok'
-    testAnnotationProcessor 'org.projectlombok:lombok'
-
-    // Test
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
-    testImplementation 'org.springframework.security:spring-security-test'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:postgresql'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    testRuntimeOnly 'com.h2database:h2'
-}
-
-tasks.named('test') {
-    useJUnitPlatform()
-    finalizedBy 'jacocoTestReport'
-}
-
-jacocoTestReport {
-    dependsOn 'test'
-    reports {
-        xml.required = true
-        html.required = true   // build/reports/jacoco/test/html
+    jacocoTestReport {
+        dependsOn 'test'
+        reports {
+            xml.required = true
+            html.required = true
+        }
     }
 }

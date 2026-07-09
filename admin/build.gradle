@@ -1,0 +1,21 @@
+plugins {
+    id 'org.springframework.boot'
+}
+
+// 실행형 boot jar만 산출물로 둔다(plain jar 비활성) — Docker COPY 시 *.jar 모호성 제거.
+tasks.named('jar') {
+    enabled = false
+}
+
+// admin = 운영 어드민 서버(ECS Admin). core를 공유하되 유저용 웹소켓/스케줄러는 포함하지 않는다.
+// staff 계정 인증(RBAC)은 후속 이슈에서 구현. 현재는 기동 골격 + 잠금 시큐리티만.
+dependencies {
+    implementation project(':core')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // API 문서
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+}

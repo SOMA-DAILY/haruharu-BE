@@ -1,0 +1,30 @@
+plugins {
+    id 'org.springframework.boot'
+}
+
+// 실행형 boot jar만 산출물로 둔다(plain jar 비활성) — Docker COPY 시 *.jar 모호성 제거.
+tasks.named('jar') {
+    enabled = false
+}
+
+// app = 유저용 서버(ECS APP). HTTP·WebSocket(STOMP)·스케줄러·유저 시큐리티 담당.
+dependencies {
+    implementation project(':core')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // API 문서
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testRuntimeOnly 'com.h2database:h2'
+}

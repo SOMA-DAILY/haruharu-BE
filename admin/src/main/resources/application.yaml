@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: haruharu-admin
+
+  profiles:
+    default: local
+
+  datasource:
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    # 어드민은 스키마를 소유하지 않는다(app이 소유). 스키마 변경/검증을 하지 않음.
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+
+  # 유저 서버와 동일한 JSON 계약(snake_case).
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    time-zone: Asia/Seoul
+    mapper:
+      accept-case-insensitive-enums: true
+
+# 유저 서버(8080)와 포트 분리.
+server:
+  port: ${ADMIN_SERVER_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

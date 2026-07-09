@@ -1,0 +1,35 @@
+plugins {
+    id 'java-library'
+}
+
+// core는 공유 라이브러리(도메인·영속성·인프라 어댑터)다.
+// @SpringBootApplication·스케줄러·웹/시큐리티 필터 빈은 두지 않는다 → admin에 cron/STOMP가 딸려오지 않게.
+dependencies {
+    api 'org.springframework.boot:spring-boot-starter'
+    api 'org.springframework.boot:spring-boot-starter-data-jpa'
+    api 'org.springframework.boot:spring-boot-starter-validation'
+    api 'org.springframework.boot:spring-boot-starter-security'
+    api 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // QueryDSL (엔티티가 core에 있으므로 Q클래스 생성도 core에서)
+    api 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
+    annotationProcessor 'com.querydsl:querydsl-apt:5.0.0:jakarta'
+    annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
+
+    // JWT (utils/JwtProvider)
+    api 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    // AWS S3 (presign 업로드)
+    api 'software.amazon.awssdk:s3'
+    api 'software.amazon.awssdk:url-connection-client'
+
+    // FCM (Firebase Admin SDK)
+    api 'com.google.firebase:firebase-admin:9.9.0'
+
+    // Swagger 애노테이션(@Schema) — business/dto Response에 API 문서 메타가 붙어 있음.
+    // UI(webmvc)는 app/admin 각자, core는 애노테이션만.
+    api 'org.springdoc:springdoc-openapi-starter-common:3.0.3'
+}
