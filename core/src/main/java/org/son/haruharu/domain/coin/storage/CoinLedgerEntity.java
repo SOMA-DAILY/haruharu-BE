@@ -42,11 +42,13 @@ public class CoinLedgerEntity {
     @Column(nullable = false, length = 10)
     private CoinBucket bucket;
 
+    // length 40: UPLOAD_COMPLETION_REWARD(24자)가 기존 20을 초과해 지급 INSERT 전면 실패(#169).
+    // enum 추가 시 회귀는 EnumColumnLengthIntegrationTest가 전수 검증한다. 기존 DB는 수동 ALTER 필요.
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 40)
     private CoinLedgerReason reason;
 
-    @Column(length = 20)
+    @Column(length = 40)
     private String refType;
 
     @Column(length = 40)

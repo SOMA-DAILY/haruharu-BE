@@ -130,7 +130,7 @@ class StompAuthChannelInterceptorTest {
         StompHeaderAccessor accessor = subscribeAccessor("/sub/chat-rooms/999", 7L);
 
         assertThatThrownBy(() -> interceptor().preSend(message(accessor), channel))
-                .isInstanceOf(StompAuthenticationException.class);
+                .isInstanceOf(StompAuthorizationException.class);
     }
 
     @Test
@@ -147,7 +147,7 @@ class StompAuthChannelInterceptorTest {
         StompHeaderAccessor accessor = subscribeAccessor("/sub/chat-rooms/*", 7L);
 
         assertThatThrownBy(() -> interceptor().preSend(message(accessor), channel))
-                .isInstanceOf(StompAuthenticationException.class);
+                .isInstanceOf(StompAuthorizationException.class);
     }
 
     @Test
@@ -156,6 +156,24 @@ class StompAuthChannelInterceptorTest {
         StompHeaderAccessor accessor = subscribeAccessor("/sub/**", 7L);
 
         assertThatThrownBy(() -> interceptor().preSend(message(accessor), channel))
+                .isInstanceOf(StompAuthorizationException.class);
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 세션(Principal 없음)의 방 토픽 구독은 인증 예외로 거부된다")
+    void subscribe_withoutPrincipal_throwsAuthentication() {
+        StompHeaderAccessor accessor = subscribeAccessor("/sub/chat-rooms/10", null);
+
+        assertThatThrownBy(() -> interceptor().preSend(message(accessor), channel))
                 .isInstanceOf(StompAuthenticationException.class);
+    }
+
+    @Test
+    @DisplayName("/queue 원본 목적지 직접 구독은 거부된다 — 브로커 /queue 등록(#168) 후에도 타인 개인 큐 도청 불가")
+    void subscribe_toRawQueueDestination_throws() {
+        StompHeaderAccessor accessor = subscribeAccessor("/queue/errors-userabc123", 7L);
+
+        assertThatThrownBy(() -> interceptor().preSend(message(accessor), channel))
+                .isInstanceOf(StompAuthorizationException.class);
     }
 }

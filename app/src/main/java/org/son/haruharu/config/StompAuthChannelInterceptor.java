@@ -18,7 +18,8 @@ import java.util.regex.Pattern;
  * - CONNECT: JWT를 검증해 세션 주체(StompPrincipal)를 설정한다. WebSocket 메시지는 서블릿 필터 체인을
  *   타지 않으므로 HTTP용 JwtAuthenticationFilter와 별개로 여기서 인증한다.
  * - SUBSCRIBE: 채팅방 토픽(/sub/chat-rooms/{id}) 구독 시 요청자가 그 방의 참여자인지 검증한다(엿듣기 차단).
- * 인증·인가 실패 시 예외를 던져 프레임을 거부한다.
+ * 인증 실패는 StompAuthenticationException, 구독 인가 실패는 StompAuthorizationException으로 구분해
+ * 프레임을 거부한다(#168 — 클라이언트가 토큰 문제와 권한 문제를 구별할 수 있게).
  */
 @Component
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
@@ -69,14 +70,14 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
     private void authorizeSubscription(StompHeaderAccessor accessor) {
         String destination = accessor.getDestination();
         if (destination == null) {
-            throw new StompAuthenticationException();
+            throw new StompAuthorizationException();
         }
         if (destination.startsWith("/user/")) {
             return;
         }
         Matcher matcher = CHAT_ROOM_TOPIC.matcher(destination);
         if (!matcher.matches()) {
-            throw new StompAuthenticationException();
+            throw new StompAuthorizationException();
         }
         Long chatRoomId = parseChatRoomId(matcher.group(1));
         Long userId = currentUserId(accessor);
@@ -84,7 +85,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                 .filter(member2 -> !member2.hasLeft())
                 .isPresent();
         if (!member) {
-            throw new StompAuthenticationException();
+            throw new StompAuthorizationException();
         }
     }
 
@@ -93,7 +94,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             return Long.parseLong(raw);
         } catch (NumberFormatException e) {
             // (\d+)가 Long 범위를 넘는 경우 등 → 거부.
-            throw new StompAuthenticationException();
+            throw new StompAuthorizationException();
         }
     }
 
