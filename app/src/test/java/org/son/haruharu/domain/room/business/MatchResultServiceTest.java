@@ -19,6 +19,7 @@ import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.storage.exception.MatchResultNotFoundException;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -32,6 +33,7 @@ class MatchResultServiceTest {
     @Mock ChatRoomReader chatRoomReader;
     @Mock UserProfileReader userProfileReader;
     @Mock UserImageReader userImageReader;
+    @Mock S3StoragePort s3StoragePort;
 
     MatchResultService service;
 
@@ -45,7 +47,7 @@ class MatchResultServiceTest {
     @BeforeEach
     void setUp() {
         service = new MatchResultService(roomMemberReader, matchResultReader, chatRoomReader,
-                userProfileReader, userImageReader);
+                userProfileReader, userImageReader, s3StoragePort);
     }
 
     private RoomMember me() {
@@ -71,13 +73,15 @@ class MatchResultServiceTest {
         given(chatRoomReader.findChatRoomIdByMatchResultId(matchResultId)).willReturn(Optional.of(77L));
         given(userProfileReader.findByUserId(partnerUserId)).willReturn(Optional.of(profileOf("하늘")));
         given(userImageReader.getRepresentativeImageUrl(partnerUserId)).willReturn("https://cdn/rep.jpg");
+        given(s3StoragePort.createPresignedImageGetUrl("https://cdn/rep.jpg"))
+                .willReturn("https://cdn/rep.jpg?sig");
 
         MatchResultResponse result = service.getMatchResult(roomId, userId);
 
         assertThat(result.partnerMemberId()).isEqualTo(partnerId);
         assertThat(result.chatRoomId()).isEqualTo(77L);
         assertThat(result.partner().nickname()).isEqualTo("하늘");
-        assertThat(result.partner().profileImageUrl()).isEqualTo("https://cdn/rep.jpg");
+        assertThat(result.partner().profileImageUrl()).isEqualTo("https://cdn/rep.jpg?sig");
     }
 
     @Test

@@ -63,7 +63,7 @@ public class ProfileService {
     public ProfileResponse getProfile(Long userId) {
         UserProfile profile = userProfileReader.getByUserId(userId);
         List<UserImage> images = userImageReader.getAllByUserId(userId);
-        return ProfileResponse.from(profile, images);
+        return ProfileResponse.from(profile, images, s3StoragePort::createPresignedImageGetUrl);
     }
 
     /** 푸시·표시용 닉네임만 경량 조회(이미지 미로드). */
@@ -101,7 +101,7 @@ public class ProfileService {
         UserProfile updated = command.applyTo(existing);
         UserProfile saved = userProfileWriter.save(updated);
         List<UserImage> images = userImageReader.getAllByUserId(userId);
-        return ProfileResponse.from(saved, images);
+        return ProfileResponse.from(saved, images, s3StoragePort::createPresignedImageGetUrl);
     }
 
     public ImageUploadUrlResponse createImageUploadUrl(Long userId, String filename) {
@@ -117,7 +117,8 @@ public class ProfileService {
 
     @Transactional
     public ImagesResponse updateImages(Long userId, UpdateImagesCommand command) {
-        List<String> urls = command.imageUrls();
+        // 조회 응답의 presigned URL(쿼리스트링 포함)이 그대로 되돌아와도 원본 objectUrl로 저장되도록 정규화한다.
+        List<String> urls = command.imageUrls().stream().map(ProfileService::stripQuery).toList();
         if (urls.size() < MIN_IMAGES) {
             throw new ImageMinLimitException();
         }
@@ -144,7 +145,9 @@ public class ProfileService {
             // id는 null로 두어 영속화 시 @GeneratedValue(IDENTITY)가 생성하게 한다(신규 INSERT 보장).
             userImageWriter.save(new UserImage(null, userId, urls.get(order), order));
         }
-        return ImagesResponse.from(urls);
+        return ImagesResponse.from(urls.stream()
+            .map(s3StoragePort::createPresignedImageGetUrl)
+            .toList());
     }
 
     private String extractExtension(String filename) {
@@ -153,6 +156,15 @@ public class ProfileService {
             throw new ImageInvalidExtensionException();
         }
         return filename.substring(dot + 1).toLowerCase();
+    }
+
+    /** presigned URL의 쿼리스트링을 제거해 원본 objectUrl로 정규화한다. */
+    private static String stripQuery(String url) {
+        if (url == null) {
+            return null;
+        }
+        int query = url.indexOf('?');
+        return query < 0 ? url : url.substring(0, query);
     }
 
     /** 공개 객체 URL 목록을 S3 객체 키 목록으로 변환한다(베이스 prefix와 불일치하는 URL은 제외). */

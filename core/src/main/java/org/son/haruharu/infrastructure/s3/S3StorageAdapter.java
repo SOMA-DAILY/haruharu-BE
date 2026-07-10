@@ -49,6 +49,15 @@ public class S3StorageAdapter implements S3StoragePort {
 
     @Override
     public String createPresignedGetUrl(String objectUrl) {
+        return presignGet(objectUrl, properties.s3().videoGetExpirySeconds());
+    }
+
+    @Override
+    public String createPresignedImageGetUrl(String objectUrl) {
+        return presignGet(objectUrl, properties.s3().imageGetExpirySeconds());
+    }
+
+    private String presignGet(String objectUrl, long expirySeconds) {
         if (objectUrl == null) {
             return null;
         }
@@ -63,7 +72,7 @@ public class S3StorageAdapter implements S3StoragePort {
                 .key(key)
                 .build();
         GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofSeconds(properties.s3().videoGetExpirySeconds()))
+                .signatureDuration(Duration.ofSeconds(expirySeconds))
                 .getObjectRequest(getObjectRequest)
                 .build();
         return s3Presigner.presignGetObject(presignRequest).url().toString();

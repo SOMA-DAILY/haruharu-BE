@@ -31,6 +31,8 @@ aws:
     presign-expiry-seconds: ${AWS_S3_PRESIGN_EXPIRY:300}
     # 비공개 영상 재생(GET) presign 만료. 시청 세션을 고려해 넉넉히(1시간).
     video-get-expiry-seconds: ${AWS_S3_VIDEO_GET_EXPIRY:3600}
+    # 비공개 프로필 이미지 조회(GET) presign 만료. 화면 세션 기준 1시간 — 클라이언트는 URL을 영구 캐시하지 않는다.
+    image-get-expiry-seconds: ${AWS_S3_IMAGE_GET_EXPIRY:3600}
 
 # FCM 서비스 계정 JSON(base64 한 줄). 미설정 시 no-op 발송 어댑터로 동작.
 fcm:

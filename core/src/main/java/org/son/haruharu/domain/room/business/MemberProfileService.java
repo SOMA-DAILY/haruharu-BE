@@ -28,6 +28,7 @@ import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundExceptio
 import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
 import org.son.haruharu.domain.value.implement.ValueQuestion;
 import org.son.haruharu.domain.value.implement.ValueQuestionReader;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,13 +52,15 @@ public class MemberProfileService {
     private final ValueQuestionReader valueQuestionReader;
     private final UserValueAnswerReader userValueAnswerReader;
     private final MatchResultReader matchResultReader;
+    private final S3StoragePort s3StoragePort;
     private final Clock clock;
 
     public MemberProfileService(RoomReader roomReader, RoomMemberReader roomMemberReader,
                                 UserProfileReader userProfileReader, UserImageReader userImageReader,
                                 ValueQuestionReader valueQuestionReader,
                                 UserValueAnswerReader userValueAnswerReader,
-                                MatchResultReader matchResultReader, Clock clock) {
+                                MatchResultReader matchResultReader, S3StoragePort s3StoragePort,
+                                Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.userProfileReader = userProfileReader;
@@ -65,6 +68,7 @@ public class MemberProfileService {
         this.valueQuestionReader = valueQuestionReader;
         this.userValueAnswerReader = userValueAnswerReader;
         this.matchResultReader = matchResultReader;
+        this.s3StoragePort = s3StoragePort;
         this.clock = clock;
     }
 
@@ -86,9 +90,10 @@ public class MemberProfileService {
         // 본인이거나 매칭 성립 시 모든 항목을 Day와 무관하게 공개한다(이미지 공개 기준과 동일).
         boolean fullyRevealed = self || matched;
 
-        // 대표사진 원본 URL은 항상 반환하고(MVP B 방식), 최종 상호매칭(또는 본인) 전까지는 imageRevealed=false로 두어
+        // 대표사진은 presigned GET URL로 항상 반환하고, 최종 상호매칭(또는 본인) 전까지는 imageRevealed=false로 두어
         // 클라이언트가 블러 처리하게 한다.
-        String profileImageUrl = userImageReader.getRepresentativeImageUrl(target.userId());
+        String profileImageUrl = s3StoragePort.createPresignedImageGetUrl(
+                userImageReader.getRepresentativeImageUrl(target.userId()));
 
         return new MemberProfileResponse(
                 target.id(),

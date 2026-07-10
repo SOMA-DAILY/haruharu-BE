@@ -7,6 +7,7 @@ import org.son.haruharu.domain.profile.implement.UserImage;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 public record ProfileResponse(
         String nickname,
@@ -24,12 +25,16 @@ public record ProfileResponse(
             @JsonProperty("sorted_order") int sortedOrder
     ) {}
 
-    public static ProfileResponse from(UserProfile profile, List<UserImage> images) {
+    /** imageUrlResolver: 저장된 objectUrl을 클라이언트가 접근 가능한 URL(presigned GET)로 변환한다. */
+    public static ProfileResponse from(UserProfile profile, List<UserImage> images,
+                                       UnaryOperator<String> imageUrlResolver) {
         return new ProfileResponse(
             profile.nickname(),
             profile.location(), profile.affiliation(), profile.height(), profile.mbti(),
             profile.drinkingStatus(), profile.smokingStatus(),
-            images.stream().map(i -> new ImageInfo(i.id(), i.imageUrl(), i.sortedOrder())).toList()
+            images.stream()
+                .map(i -> new ImageInfo(i.id(), imageUrlResolver.apply(i.imageUrl()), i.sortedOrder()))
+                .toList()
         );
     }
 }

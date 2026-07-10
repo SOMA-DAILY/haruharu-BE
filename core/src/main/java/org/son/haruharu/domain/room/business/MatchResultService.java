@@ -11,6 +11,7 @@ import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,15 +25,17 @@ public class MatchResultService {
     private final ChatRoomReader chatRoomReader;
     private final UserProfileReader userProfileReader;
     private final UserImageReader userImageReader;
+    private final S3StoragePort s3StoragePort;
 
     public MatchResultService(RoomMemberReader roomMemberReader, MatchResultReader matchResultReader,
                               ChatRoomReader chatRoomReader, UserProfileReader userProfileReader,
-                              UserImageReader userImageReader) {
+                              UserImageReader userImageReader, S3StoragePort s3StoragePort) {
         this.roomMemberReader = roomMemberReader;
         this.matchResultReader = matchResultReader;
         this.chatRoomReader = chatRoomReader;
         this.userProfileReader = userProfileReader;
         this.userImageReader = userImageReader;
+        this.s3StoragePort = s3StoragePort;
     }
 
     public MatchResultResponse getMatchResult(Long roomId, Long userId) {
@@ -44,9 +47,10 @@ public class MatchResultService {
 
         // 결과 화면 "채팅 시작하기" 직행: 자동 생성된 채팅방 id(아직 없으면 null).
         Long chatRoomId = chatRoomReader.findChatRoomIdByMatchResultId(match.id()).orElse(null);
-        // 상대 프로필 요약(닉네임·대표사진). 이미지가 없으면 null.
+        // 상대 프로필 요약(닉네임·대표사진 presigned GET URL). 이미지가 없으면 null.
         String nickname = userProfileReader.findByUserId(partner.userId()).map(UserProfile::nickname).orElse(null);
-        String profileImageUrl = userImageReader.getRepresentativeImageUrl(partner.userId());
+        String profileImageUrl = s3StoragePort.createPresignedImageGetUrl(
+                userImageReader.getRepresentativeImageUrl(partner.userId()));
 
         return new MatchResultResponse(partnerMemberId, match.matchedAt(), chatRoomId,
                 new MatchResultResponse.PartnerSummary(nickname, profileImageUrl));

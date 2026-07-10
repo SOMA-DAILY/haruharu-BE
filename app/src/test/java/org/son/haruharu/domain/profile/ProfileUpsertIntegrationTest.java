@@ -10,9 +10,11 @@ import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.profile.storage.UserProfileEntity;
 import org.son.haruharu.domain.profile.storage.UserProfileJpaRepository;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -26,6 +28,10 @@ class ProfileUpsertIntegrationTest {
     @Autowired ProfileService profileService;
     @Autowired UserProfileReader userProfileReader;
     @Autowired UserProfileJpaRepository jpaRepository;
+
+    // 응답 이미지 URL presign(#182)이 실제 AWS 자격증명을 요구하지 않도록 포트를 목으로 대체한다.
+    // (다른 테스트가 남긴 user_images 행이 있으면 updateProfile 응답 생성 시 presign을 타게 됨)
+    @MockitoBean S3StoragePort s3StoragePort;
 
     @Test
     @DisplayName("프로필이 없는 신규 유저가 PUT 시 새 프로필이 생성되고 id가 부여된다")
