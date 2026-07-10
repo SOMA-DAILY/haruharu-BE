@@ -13,6 +13,12 @@ public interface S3StoragePort {
      */
     String createPresignedGetUrl(String objectUrl);
 
+    /**
+     * 비공개 프로필 이미지를 조회할 수 있는 단기 presigned GET URL로 변환한다(만료는 이미지 전용 설정).
+     * null·타 호스트 URL 처리 규칙은 {@link #createPresignedGetUrl(String)}과 동일하다.
+     */
+    String createPresignedImageGetUrl(String objectUrl);
+
     /** 공개 객체 URL 베이스(끝 / 포함). URL 소유권 검증·키 변환에 사용. */
     String publicBaseUrl();
 

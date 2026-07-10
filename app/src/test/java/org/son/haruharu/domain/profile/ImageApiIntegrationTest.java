@@ -67,14 +67,16 @@ class ImageApiIntegrationTest {
         String base = "https://test-bucket.s3.ap-northeast-2.amazonaws.com/";
         String prefix = base + "users/" + userId + "/images/";
         given(s3StoragePort.publicBaseUrl()).willReturn(base);
+        given(s3StoragePort.createPresignedImageGetUrl(anyString()))
+            .willAnswer(invocation -> invocation.getArgument(0) + "?sig");
 
         mockMvc.perform(put("/api/v1/users/me/images")
                 .with(authentication(auth(userId)))
                 .contentType(APPLICATION_JSON)
                 .content("{\"image_urls\":[\"" + prefix + "a.jpg\",\"" + prefix + "b.jpg\"]}"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.image_urls[0]").value(prefix + "a.jpg"))
-            .andExpect(jsonPath("$.data.image_urls[1]").value(prefix + "b.jpg"));
+            .andExpect(jsonPath("$.data.image_urls[0]").value(prefix + "a.jpg?sig"))
+            .andExpect(jsonPath("$.data.image_urls[1]").value(prefix + "b.jpg?sig"));
     }
 
     @Test

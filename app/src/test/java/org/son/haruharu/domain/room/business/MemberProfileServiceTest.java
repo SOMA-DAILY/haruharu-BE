@@ -32,6 +32,7 @@ import org.son.haruharu.domain.value.implement.UserValueAnswer;
 import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
 import org.son.haruharu.domain.value.implement.ValueQuestion;
 import org.son.haruharu.domain.value.implement.ValueQuestionReader;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -52,6 +53,7 @@ class MemberProfileServiceTest {
     @Mock ValueQuestionReader valueQuestionReader;
     @Mock UserValueAnswerReader userValueAnswerReader;
     @Mock MatchResultReader matchResultReader;
+    @Mock S3StoragePort s3StoragePort;
 
     MemberProfileService service;
 
@@ -61,7 +63,7 @@ class MemberProfileServiceTest {
     @BeforeEach
     void setUp() {
         service = new MemberProfileService(roomReader, roomMemberReader, userProfileReader, userImageReader,
-                valueQuestionReader, userValueAnswerReader, matchResultReader, clock);
+                valueQuestionReader, userValueAnswerReader, matchResultReader, s3StoragePort, clock);
     }
 
     private RoomMember member(Long id, Long roomId, Long userId) {
@@ -90,6 +92,24 @@ class MemberProfileServiceTest {
         given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
         given(valueQuestionReader.getAllActive()).willReturn(List.of());
         given(userValueAnswerReader.getAllByUserId(targetUserId)).willReturn(List.of());
+    }
+
+    @Test
+    @DisplayName("대표사진이 있으면 presigned GET URL로 변환해 반환한다")
+    void givenRepresentativeImage_whenGetProfile_thenReturnsPresignedImageUrl() {
+        Long userId = 1L;
+        Long targetUserId = 2L;
+        Long roomId = 10L;
+        Long meId = 20L;
+        Long targetId = 30L;
+        stubBasics(roomId, userId, meId, targetId, targetUserId, 1);
+        String objectUrl = "https://bucket.s3.ap-northeast-2.amazonaws.com/users/2/images/rep.jpg";
+        given(userImageReader.getRepresentativeImageUrl(targetUserId)).willReturn(objectUrl);
+        given(s3StoragePort.createPresignedImageGetUrl(objectUrl)).willReturn(objectUrl + "?sig");
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        assertThat(result.profileImageUrl()).isEqualTo(objectUrl + "?sig");
     }
 
     @Test
@@ -195,7 +215,7 @@ class MemberProfileServiceTest {
     }
 
     @Test
-    @DisplayName("최종매칭 전에는 대표사진 원본 URL을 반환하되 imageRevealed=false다(클라 블러)")
+    @DisplayName("최종매칭 전에는 대표사진 presigned URL을 반환하되 imageRevealed=false다(클라 블러)")
     void givenNotMatched_whenGetProfile_thenImageUrlButNotRevealed() {
         Long userId = 1L;
         Long targetUserId = 2L;
@@ -205,11 +225,12 @@ class MemberProfileServiceTest {
 
         stubBasics(roomId, userId, meId, targetId, targetUserId, 2);
         given(userImageReader.getRepresentativeImageUrl(targetUserId)).willReturn("https://cdn/rep.jpg");
+        given(s3StoragePort.createPresignedImageGetUrl("https://cdn/rep.jpg")).willReturn("https://cdn/rep.jpg?sig");
         given(matchResultReader.isMatched(meId, targetId)).willReturn(false);
 
         MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
 
-        assertThat(result.profileImageUrl()).isEqualTo("https://cdn/rep.jpg");
+        assertThat(result.profileImageUrl()).isEqualTo("https://cdn/rep.jpg?sig");
         assertThat(result.imageRevealed()).isFalse();
     }
 
@@ -224,12 +245,13 @@ class MemberProfileServiceTest {
 
         stubBasics(roomId, userId, meId, targetId, targetUserId, 3);
         given(userImageReader.getRepresentativeImageUrl(targetUserId)).willReturn("https://cdn/rep.jpg");
+        given(s3StoragePort.createPresignedImageGetUrl("https://cdn/rep.jpg")).willReturn("https://cdn/rep.jpg?sig");
         given(matchResultReader.isMatched(meId, targetId)).willReturn(true);
 
         MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
 
         assertThat(result.imageRevealed()).isTrue();
-        assertThat(result.profileImageUrl()).isEqualTo("https://cdn/rep.jpg");
+        assertThat(result.profileImageUrl()).isEqualTo("https://cdn/rep.jpg?sig");
     }
 
     @Test
