@@ -24,6 +24,17 @@ spring:
     mapper:
       accept-case-insensitive-enums: true
 
+# 어드민 전용 JWT(유저 JWT와 분리된 시크릿) + 최초 SUPER 부트스트랩.
+admin:
+  jwt:
+    secret: ${ADMIN_JWT_SECRET}
+    access-token-expiry-ms: 1800000
+    refresh-token-expiry-ms: 2592000000
+  bootstrap:
+    # 계정 0건일 때만 최초 SUPER를 생성한다(둘 다 있어야 동작).
+    email: ${ADMIN_BOOTSTRAP_EMAIL:}
+    password: ${ADMIN_BOOTSTRAP_PASSWORD:}
+
 # 유저 서버(8080)와 포트 분리.
 server:
   port: ${ADMIN_SERVER_PORT:8081}
