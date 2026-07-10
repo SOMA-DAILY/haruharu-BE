@@ -3,3 +3,9 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+
+  # admin_accounts는 admin 전용 테이블이라 admin 모듈이 소유·생성한다.
+  # core 테이블은 app과 동일한 엔티티 매핑이라 additive update가 충돌을 만들지 않는다.
+  jpa:
+    hibernate:
+      ddl-auto: update

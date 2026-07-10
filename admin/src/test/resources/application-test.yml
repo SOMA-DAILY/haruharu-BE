@@ -1,0 +1,23 @@
+# 어드민 통합 테스트(@SpringBootTest) 전용 — @ActiveProfiles("test")로 활성화.
+# DB는 H2 인메모리(PostgreSQL 호환 모드). Docker 불필요.
+spring:
+  datasource:
+    url: jdbc:h2:mem:haruharu_admin_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+# test-only 더미. 부트스트랩은 비활성(테스트가 계정을 직접 시드).
+admin:
+  jwt:
+    secret: ${ADMIN_JWT_SECRET:test-only-admin-secret-not-for-prod-haruharu-min-32bytes}
+    access-token-expiry-ms: 1800000
+    refresh-token-expiry-ms: 2592000000
+  bootstrap:
+    email: ${ADMIN_BOOTSTRAP_EMAIL:}
+    password: ${ADMIN_BOOTSTRAP_PASSWORD:}
