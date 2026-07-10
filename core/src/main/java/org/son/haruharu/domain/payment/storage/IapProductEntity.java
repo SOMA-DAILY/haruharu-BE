@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 import org.son.haruharu.domain.payment.implement.IapProduct;
 import org.son.haruharu.domain.payment.implement.IapStore;
 
@@ -35,6 +36,11 @@ public class IapProductEntity extends BaseEntity {
     @Column(nullable = false)
     private long coinAmount;
 
+    /** 기본 외 보너스 코인 수량. 기존 행 마이그레이션 안전을 위해 DB 기본값 0. */
+    @Column(nullable = false)
+    @ColumnDefault("0")
+    private long bonusAmount;
+
     @Column(nullable = false)
     private int price;
 
@@ -50,6 +56,7 @@ public class IapProductEntity extends BaseEntity {
         entity.storeProductId = product.storeProductId();
         entity.store = product.store();
         entity.coinAmount = product.coinAmount();
+        entity.bonusAmount = product.bonusAmount();
         entity.price = product.price();
         entity.currency = product.currency();
         entity.active = product.active();
@@ -57,6 +64,6 @@ public class IapProductEntity extends BaseEntity {
     }
 
     public IapProduct toDomain() {
-        return new IapProduct(id, storeProductId, store, coinAmount, price, currency, active);
+        return new IapProduct(id, storeProductId, store, coinAmount, bonusAmount, price, currency, active);
     }
 }

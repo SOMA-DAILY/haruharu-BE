@@ -65,7 +65,7 @@ class PaymentServiceTest {
     }
 
     private IapProduct product() {
-        return new IapProduct(1L, storeProductId, IapStore.APP_STORE, 100, 1200, "KRW", true);
+        return new IapProduct(1L, storeProductId, IapStore.APP_STORE, 100, 20, 1200, "KRW", true);
     }
 
     private IapPurchase ownedPurchase(Long id) {
@@ -92,7 +92,8 @@ class PaymentServiceTest {
         verify(coinService).credit(captor.capture());
         assertThat(captor.getValue().bucket()).isEqualTo(CoinBucket.PAID);
         assertThat(captor.getValue().reason()).isEqualTo(CoinLedgerReason.PURCHASE);
-        assertThat(captor.getValue().amount()).isEqualTo(100);
+        // 지급 = 기본(100) + 보너스(20)
+        assertThat(captor.getValue().amount()).isEqualTo(120);
         verify(iapWebhookEventWriter).append(any());
     }
 
@@ -112,7 +113,8 @@ class PaymentServiceTest {
         ArgumentCaptor<PaymentCompletedEvent> captor = ArgumentCaptor.forClass(PaymentCompletedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().userId()).isEqualTo(Long.parseLong(userId));
-        assertThat(captor.getValue().coinAmount()).isEqualTo(100);
+        // 통지 문구 개수 = 기본(100) + 보너스(20)
+        assertThat(captor.getValue().coinAmount()).isEqualTo(120);
     }
 
     @Test

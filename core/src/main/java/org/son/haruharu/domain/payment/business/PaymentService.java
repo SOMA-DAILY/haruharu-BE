@@ -96,13 +96,15 @@ public class PaymentService {
 
         Long userId = parseUserId(command.appUserId());
         IapProduct product = iapProductReader.getByStoreProductId(command.storeProductId());
+        // 실제 지급 = 기본 + 보너스. 구매 기록에 총량을 남겨 환불 회수도 총량 기준이 되게 한다.
+        long totalCoins = product.totalCoinAmount();
         IapPurchase saved = iapPurchaseWriter.save(IapPurchase.owned(
                 userId, product.id(), command.storeProductId(), command.storeTransactionId(),
-                command.store(), product.coinAmount(), command.purchasedAt()));
+                command.store(), totalCoins, command.purchasedAt()));
 
-        coinService.credit(CoinCreditCommand.purchase(userId, product.coinAmount(), REF_TYPE, saved.id().toString()));
+        coinService.credit(CoinCreditCommand.purchase(userId, totalCoins, REF_TYPE, saved.id().toString()));
         // 커밋 후 발송 — 결제 완료 통지 푸시 실패가 충전 처리를 롤백시키지 않도록
-        eventPublisher.publishEvent(new PaymentCompletedEvent(userId, product.coinAmount()));
+        eventPublisher.publishEvent(new PaymentCompletedEvent(userId, totalCoins));
         return saved.id();
     }
 
