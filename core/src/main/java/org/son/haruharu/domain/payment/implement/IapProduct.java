@@ -7,8 +7,13 @@ public record IapProduct(
         String storeProductId,
         IapStore store,
         long coinAmount,
+        long bonusAmount,
         int price,
         String currency,
         boolean active
 ) {
+    /** 실제 지급 코인 = 기본 수량 + 보너스 수량. */
+    public long totalCoinAmount() {
+        return coinAmount + bonusAmount;
+    }
 }
