@@ -44,6 +44,11 @@ allowed-tools: Bash(gh issue create *) Bash(gh issue list *) Bash(gh label list 
 ## 📌 배경 및 목적
 {배경}
 
+## 🧪 BDD 시나리오
+Given: {전제 상태}
+When:  {행동}
+Then:  {기대 결과}
+
 ## 📝 작업 내용
 - [ ] 
 - [ ] 
@@ -52,6 +57,8 @@ allowed-tools: Bash(gh issue create *) Bash(gh issue list *) Bash(gh label list 
 
 ## 💬 특이사항 (선택)
 ```
+
+> feat 이슈에 BDD 시나리오는 필수 — `/bdd-implement` Step 1이 이 시나리오를 읽고 시작한다. 시나리오를 쓸 수 없을 만큼 모호하면 이슈를 만들지 말고 요구사항을 먼저 좁힌다.
 
 **fix 타입 본문:**
 ```

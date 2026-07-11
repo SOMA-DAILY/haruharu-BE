@@ -23,12 +23,10 @@ allowed-tools: Write Bash(mkdir *) Bash(./gradlew *) Read Agent
 
 `.claude/rules/architecture.md` 기준으로 아래 구조를 생성한다.
 
+**모듈 배치 (Gradle 멀티모듈)**: business·implement·storage는 `core`, application(Controller)은 `app`, 테스트는 `app/src/test`.
+
 ```
-src/main/java/org/son/haruharu/domain/{domain}/
-├── application/
-│   ├── {Domain}Controller.java
-│   └── dto/
-│       └── .gitkeep
+core/src/main/java/org/son/haruharu/domain/{domain}/
 ├── business/
 │   ├── {Domain}Service.java
 │   ├── command/
@@ -51,7 +49,13 @@ src/main/java/org/son/haruharu/domain/{domain}/
     └── exception/
         └── .gitkeep
 
-src/test/java/org/son/haruharu/domain/{domain}/
+app/src/main/java/org/son/haruharu/domain/{domain}/
+└── application/
+    ├── {Domain}Controller.java
+    └── dto/
+        └── .gitkeep
+
+app/src/test/java/org/son/haruharu/domain/{domain}/
 └── business/
     └── {Domain}ServiceTest.java
 ```
@@ -284,3 +288,9 @@ Agent: domain-reviewer
 
 생성된 파일 목록을 출력하고 다음 안내:
 - "이제 `/bdd-implement #{이슈번호}` 로 구현을 시작하세요."
+
+## Anti-Patterns (금지)
+
+- application 계층을 `core` 모듈에 생성 (Controller는 `app` 전용 — core는 웹 계층을 모른다)
+- 스텁 단계에서 비즈니스 로직 미리 구현 (스캐폴딩은 구조만, 로직은 /bdd-implement에서)
+- domain-reviewer PASS 없이 완료 보고

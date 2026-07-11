@@ -1,6 +1,6 @@
 ---
 name: domain-reviewer
-description: 생성된 도메인 코드가 아키텍처·코드 스타일 규칙을 준수하는지 검증한다. 새 도메인 스캐폴딩 완료 후, 또는 도메인 파일 수정 시 사용. PASS/FAIL 판정만 하고 코드를 직접 수정하지 않는다.
+description: 생성된 도메인 코드가 아키텍처·코드 스타일 규칙을 준수하는지 검증한다. 새 도메인 스캐폴딩(/new-domain) 완료 직후 반드시 사용(MUST BE USED). 4계층 구조·DIP·네이밍 위반이 의심될 때 선제적으로 호출. PASS/FAIL 판정만 하고 코드를 직접 수정하지 않는다.
 tools: Read, Grep, Glob
 model: sonnet
 ---

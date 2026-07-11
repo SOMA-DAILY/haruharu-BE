@@ -99,3 +99,11 @@ gh pr create \
 
 생성된 PR URL 출력.
 네이밍 컨벤션 위반 사항 있으면 함께 보고.
+
+## Anti-Patterns (금지)
+
+- `--force`, `--no-verify` 사용 (훅이 차단하지만 시도 자체 금지)
+- 테스트 미통과 상태로 PR 생성 — Step 1 전제조건 위반
+- secret-policy 체크리스트 건너뛰기 (`application-local`·`.env`가 staged에 없는지 확인)
+- 이슈와 무관한 변경사항 포함 (modification-policy — diff의 모든 라인이 이슈에 연결돼야 함)
+- PR 본문 "동작 확인" 체크박스를 실제 확인 없이 체크

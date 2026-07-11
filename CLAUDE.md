@@ -33,7 +33,9 @@ Base package: `org.son.haruharu`
 | 새 기능 / 버그 구현 | `/bdd-implement #이슈번호` | architecture · testing |
 | 이슈 없이 "만들어줘" 요청 | `/create-issue` → `/bdd-implement` | bdd-workflow |
 | 새 도메인 추가 | `/new-domain {도메인명}` → `/bdd-implement` | architecture |
+| PR 전 종합 검증 | `/verify-api` | testing · secret-policy |
 | PR 생성 | `/create-pr #이슈번호` | git-conventions |
+| 구현 후 코드 품질 검증 (3개 이상 .java 변경) | `java-reviewer` 에이전트 | architecture |
 | 빌드/컴파일 실패 | `java-build-resolver` 에이전트 | - |
 | OAuth2 · JWT · Security 코드 수정 | `security-reviewer` 에이전트 필수 | - |
 | 커밋·PR 생성 전 | `secret-policy` 체크리스트 확인 필수 | secret-policy |

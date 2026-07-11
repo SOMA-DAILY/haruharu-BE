@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/src/test/**"
+---
+
 # Testing Strategy
 
 ## Framework
@@ -65,7 +70,7 @@ class AuthFlowIntegrationTest {
 ## 테스트 파일 위치
 
 ```
-src/test/java/com/haruharu/{service}/
+{모듈}/src/test/java/org/son/haruharu/     # 모듈: core / app / admin
   domain/{domain}/
     business/     ← Service 단위 테스트
     implement/    ← 도메인 객체 단위 테스트
