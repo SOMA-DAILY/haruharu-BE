@@ -136,7 +136,10 @@ public class RoomController {
 
     @Operation(summary = "내 매칭 결과 조회",
             description = "상호선택으로 성사된 내 매칭 상대의 방 멤버 id(partner_member_id)와 성사 시각(matched_at)을 반환한다. "
-                    + "참여자가 아니면 403(ROOM_403_NOT_MEMBER), 성사된 매칭이 없으면 404(ROOM_MATCH_404_NOT_FOUND).")
+                    + "chat_room_id는 상호매칭 직후 채팅방 자동 생성 이벤트 처리 전까지 null일 수 있다(수 초 내 생성 — "
+                    + "null이면 채팅 탭 이동으로 대체하거나 재조회, docs/notification-payload.md 참조). "
+                    + "참여자가 아니면 403(ROOM_403_NOT_MEMBER), 성사된 매칭이 없으면 404(ROOM_MATCH_404_NOT_FOUND) — "
+                    + "이 404는 클라이언트가 '매칭 미성사' 정상 분기로 사용하는 계약이므로 코드 변경 금지.")
     @GetMapping("/{roomId}/match-result")
     public ApiResponse<MatchResultResponse> getMatchResult(@Parameter(description = "소개팅방 id", example = "1") @PathVariable Long roomId,
                                                            Authentication authentication) {
