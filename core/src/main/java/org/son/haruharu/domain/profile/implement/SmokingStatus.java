@@ -1,8 +1,6 @@
 package org.son.haruharu.domain.profile.implement;
 
-import org.son.haruharu.common.enums.LabeledEnum;
-
-public enum SmokingStatus implements LabeledEnum {
+public enum SmokingStatus {
     NONE("안 피움"),
     SOMETIMES("가끔"),
     OFTEN("자주"),
@@ -14,7 +12,6 @@ public enum SmokingStatus implements LabeledEnum {
         this.displayName = displayName;
     }
 
-    @Override
     public String displayName() {
         return displayName;
     }

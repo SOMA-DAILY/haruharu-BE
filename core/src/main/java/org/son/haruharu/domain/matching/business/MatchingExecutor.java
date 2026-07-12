@@ -35,7 +35,8 @@ public class MatchingExecutor {
 
     private static final String MALE = "MALE";
     private static final String FEMALE = "FEMALE";
-    private static final int ROOM_TOTAL_DAYS = 3;
+    /** 세션 일수. 방 생성의 원본 정책 상수 — 메타 API(session.total_days)도 이 값을 노출한다(#208). */
+    public static final int ROOM_TOTAL_DAYS = 3;
 
     private final MatchingQueueReader matchingQueueReader;
     private final MatchingQueueWriter matchingQueueWriter;

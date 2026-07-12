@@ -20,15 +20,10 @@ class MetaApiIntegrationTest {
     @Autowired MockMvc mockMvc;
 
     @Test
-    @DisplayName("인증 없이 GET /api/v1/meta/enums 호출 시 선택지형 enum이 code+label로 반환된다")
-    void givenNoAuth_whenGetEnums_thenReturnsCodeLabelOptions() throws Exception {
+    @DisplayName("/api/v1/meta/enums는 제거되어 404를 반환한다 — enum 코드·유효성은 Swagger 스키마가 커버(#210)")
+    void givenRemovedEndpoint_whenGetEnums_thenNotFound() throws Exception {
         mockMvc.perform(get("/api/v1/meta/enums"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.isSuccess").value(true))
-                .andExpect(jsonPath("$.data.drinkingStatus[0].code").value("NONE"))
-                .andExpect(jsonPath("$.data.drinkingStatus[0].label").value("안 마심"))
-                .andExpect(jsonPath("$.data.smokingStatus[3].code").value("E_CIGARETTE"))
-                .andExpect(jsonPath("$.data.smokingStatus[3].label").value("전자담배"));
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -38,5 +33,14 @@ class MetaApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.data.matching.enter_cost").value(20));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/meta 응답에 세션 정책 상수 session.day_start_hour(9)·total_days(3)가 포함된다")
+    void givenNoAuth_whenGetMeta_thenReturnsSessionConstants() throws Exception {
+        mockMvc.perform(get("/api/v1/meta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.session.day_start_hour").value(9))
+                .andExpect(jsonPath("$.data.session.total_days").value(3));
     }
 }
