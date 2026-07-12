@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -63,7 +64,7 @@ class RoomTodayServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
-        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
+        given(videoPostReader.getUploadedSlotIndexes(any(), anyInt())).willReturn(List.of());
 
         // 12시 → Day1 슬롯 중 12-15(slot2)만 열림
         TodayResponse result = serviceAt(12).getToday(roomId, userId);
@@ -73,6 +74,28 @@ class RoomTodayServiceTest {
         assertThat(result.uploadedCount()).isZero();
         assertThat(result.slots()).extracting(TodayResponse.SlotView::openNow)
             .containsExactly(false, true, false, false, false);
+    }
+
+    @Test
+    @DisplayName("슬롯별 uploaded는 요청 유저 본인의 업로드 여부로 채워지고 uploaded_count와 정합이 유지된다")
+    void givenUploadedSlots_whenGetToday_thenSlotUploadedFlagsPersonalized() {
+        Long userId = 1L;
+        Long roomId = 100L;
+        Long memberId = 200L;
+        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
+            LocalDateTime.of(2026, 6, 26, 9, 0), null);
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
+            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room));
+        // 내가 슬롯1만 업로드, 슬롯2는 지나감(놓침) — 요청 멤버 id 기준으로 조회된다
+        given(videoPostReader.getUploadedSlotIndexes(memberId, 1)).willReturn(List.of(1));
+
+        TodayResponse result = serviceAt(15).getToday(roomId, userId);
+
+        assertThat(result.slots()).extracting(TodayResponse.SlotView::uploaded)
+            .containsExactly(true, false, false, false, false);
+        assertThat(result.uploadedCount()).isEqualTo(1); // uploaded=true 개수와 정합
     }
 
     @Test
@@ -87,7 +110,7 @@ class RoomTodayServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
-        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
+        given(videoPostReader.getUploadedSlotIndexes(any(), anyInt())).willReturn(List.of());
 
         TodayResponse result = serviceAt(12).getToday(roomId, userId);
 
@@ -104,7 +127,7 @@ class RoomTodayServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willReturn(new RoomMember(201L, roomId, userId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
-        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
+        given(videoPostReader.getUploadedSlotIndexes(any(), anyInt())).willReturn(List.of());
 
         TodayResponse result = serviceAt(12).getToday(roomId, userId);
 
@@ -124,7 +147,7 @@ class RoomTodayServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
-        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(2L);
+        given(videoPostReader.getUploadedSlotIndexes(any(), anyInt())).willReturn(List.of(1, 2));
         given(dailyUploadRewardReader.isRewarded(memberId, 1)).willReturn(false);
 
         TodayResponse result = serviceAt(12).getToday(roomId, userId);
@@ -144,7 +167,7 @@ class RoomTodayServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
-        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(5L);
+        given(videoPostReader.getUploadedSlotIndexes(any(), anyInt())).willReturn(List.of(1, 2, 3, 4, 5));
         given(dailyUploadRewardReader.isRewarded(memberId, 1)).willReturn(true);
 
         TodayResponse result = serviceAt(12).getToday(roomId, userId);
@@ -172,7 +195,7 @@ class RoomTodayServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
             .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
-        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
+        given(videoPostReader.getUploadedSlotIndexes(any(), anyInt())).willReturn(List.of());
     }
 
     @Test
@@ -261,7 +284,7 @@ class RoomTodayServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(103L, 1L))
             .willReturn(new RoomMember(203L, 103L, 1L, "MALE", null, LocalDateTime.now()));
         given(roomReader.findById(103L)).willReturn(Optional.of(room));
-        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
+        given(videoPostReader.getUploadedSlotIndexes(any(), anyInt())).willReturn(List.of());
 
         TodayResponse result = serviceAt(12).getToday(103L, 1L);
 

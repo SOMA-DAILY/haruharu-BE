@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
@@ -53,7 +54,8 @@ public class RoomTodayService {
         LocalDateTime now = LocalDateTime.now(clock);
         int currentDay = room.currentDayAt(now, UploadSlot.dayStartHour());
         List<UploadSlot> slots = UploadSlot.ofDay(currentDay);
-        long uploadedCount = videoPostReader.countUploaded(member.id(), currentDay);
+        // 슬롯별 uploaded(개인화)와 uploaded_count를 같은 조회에서 파생해 정합을 보장한다(#209)
+        Set<Integer> uploadedSlots = Set.copyOf(videoPostReader.getUploadedSlotIndexes(member.id(), currentDay));
 
         long rewardAmount = uploadRewardProperties.amountFor(currentDay);
         RewardStatus rewardStatus = dailyUploadRewardReader.isRewarded(member.id(), currentDay)
@@ -61,7 +63,7 @@ public class RoomTodayService {
 
         TimerTarget timer = computeTimer(room, currentDay, slots, now);
 
-        return TodayResponse.of(room, now, currentDay, slots, uploadedCount, rewardAmount, rewardStatus,
+        return TodayResponse.of(room, now, currentDay, slots, uploadedSlots, rewardAmount, rewardStatus,
                 timer.at(), timer.type());
     }
 
