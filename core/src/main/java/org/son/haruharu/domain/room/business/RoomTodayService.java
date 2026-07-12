@@ -54,7 +54,6 @@ public class RoomTodayService {
         int currentDay = room.currentDayAt(now, UploadSlot.dayStartHour());
         List<UploadSlot> slots = UploadSlot.ofDay(currentDay);
         long uploadedCount = videoPostReader.countUploaded(member.id(), currentDay);
-        int nowHour = now.getHour();
 
         long rewardAmount = uploadRewardProperties.amountFor(currentDay);
         RewardStatus rewardStatus = dailyUploadRewardReader.isRewarded(member.id(), currentDay)
@@ -62,7 +61,7 @@ public class RoomTodayService {
 
         TimerTarget timer = computeTimer(room, currentDay, slots, now);
 
-        return TodayResponse.of(room, currentDay, slots, nowHour, uploadedCount, rewardAmount, rewardStatus,
+        return TodayResponse.of(room, now, currentDay, slots, uploadedCount, rewardAmount, rewardStatus,
                 timer.at(), timer.type());
     }
 

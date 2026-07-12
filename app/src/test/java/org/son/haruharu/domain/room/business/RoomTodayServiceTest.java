@@ -76,6 +76,25 @@ class RoomTodayServiceTest {
     }
 
     @Test
+    @DisplayName("응답 now는 주입된 Clock 기준 시각이다(dev 가상 시계 반영, 카운트다운 기준점)")
+    void givenFixedClock_whenGetToday_thenNowFromClock() {
+        Long userId = 1L;
+        Long roomId = 100L;
+        Long memberId = 200L;
+        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
+            LocalDateTime.of(2026, 6, 26, 9, 0), null);
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
+            .willReturn(new RoomMember(memberId, roomId, userId, "MALE", null, LocalDateTime.now()));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room));
+        given(videoPostReader.countUploaded(any(), anyInt())).willReturn(0L);
+
+        TodayResponse result = serviceAt(12).getToday(roomId, userId);
+
+        assertThat(result.now()).isEqualTo(LocalDateTime.of(2026, 6, 26, 12, 0));
+    }
+
+    @Test
     @DisplayName("PENDING(currentDay=0) 방은 슬롯이 없어 빈 목록을 반환한다")
     void givenPendingRoom_whenGetToday_thenEmptySlots() {
         Long userId = 1L;

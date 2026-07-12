@@ -17,7 +17,10 @@ import org.son.haruharu.domain.coin.business.dto.WalletResponse;
 import org.son.haruharu.domain.home.business.dto.HomeResponse;
 import org.son.haruharu.domain.matching.business.MatchingService;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
+import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.RoomService;
+import org.son.haruharu.domain.room.business.dto.PendingMatchResultResponse;
+import org.son.haruharu.domain.room.business.dto.PendingMatchResultResponse.Outcome;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,12 +32,13 @@ class HomeServiceTest {
     @Mock RoomService roomService;
     @Mock MatchingService matchingService;
     @Mock CoinService coinService;
+    @Mock MatchResultService matchResultService;
 
     private final Long userId = 1L;
 
     private HomeService serviceAt(String instant) {
         Clock clock = Clock.fixed(Instant.parse(instant), ZoneId.of("Asia/Seoul"));
-        return new HomeService(roomService, matchingService, coinService, clock);
+        return new HomeService(roomService, matchingService, coinService, matchResultService, clock);
     }
 
     private void stubDefaults(long balance, QueueStatusResponse queue, RoomResponse room) {
@@ -42,6 +46,7 @@ class HomeServiceTest {
                 .willReturn(new WalletResponse(balance, balance, 0, LocalDateTime.now()));
         given(matchingService.getQueueStatus(userId)).willReturn(queue);
         given(roomService.findMyRoom(userId)).willReturn(Optional.ofNullable(room));
+        given(matchResultService.findPendingResult(userId)).willReturn(Optional.empty());
     }
 
     @Test
@@ -123,5 +128,42 @@ class HomeServiceTest {
         assertThat(result.activeRoom().status()).isEqualTo("PENDING");
         assertThat(result.activeRoom().currentDay()).isZero();
         assertThat(result.activeRoom().startsAt()).isEqualTo(LocalDateTime.of(2026, 7, 6, 9, 0));
+    }
+
+    @Test
+    @DisplayName("응답 now는 주입된 Clock 기준 시각이다(dev 가상 시계 반영, 카운트다운 기준점)")
+    void givenFixedClock_whenGetHome_thenNowFromClock() {
+        // 2026-07-05 10:00 KST
+        HomeService service = serviceAt("2026-07-05T01:00:00Z");
+        stubDefaults(0L, QueueStatusResponse.none(), null);
+
+        HomeResponse result = service.getHome(userId);
+
+        assertThat(result.now()).isEqualTo(LocalDateTime.of(2026, 7, 5, 10, 0));
+    }
+
+    @Test
+    @DisplayName("확인 대기 중인 매칭 결과가 있으면 matching.pending_result로 그대로 내려간다")
+    void givenPendingResult_whenGetHome_thenExposedInMatching() {
+        HomeService service = serviceAt("2026-07-05T01:00:00Z");
+        stubDefaults(0L, QueueStatusResponse.none(), null);
+        PendingMatchResultResponse pending = new PendingMatchResultResponse(
+                12L, Outcome.MATCHED, 34L, "하루", LocalDateTime.of(2026, 7, 4, 22, 0));
+        given(matchResultService.findPendingResult(userId)).willReturn(Optional.of(pending));
+
+        HomeResponse result = service.getHome(userId);
+
+        assertThat(result.matching().pendingResult()).isEqualTo(pending);
+    }
+
+    @Test
+    @DisplayName("확인 대기 결과가 없으면 pending_result는 null이다")
+    void givenNoPendingResult_whenGetHome_thenNullPendingResult() {
+        HomeService service = serviceAt("2026-07-05T01:00:00Z");
+        stubDefaults(0L, QueueStatusResponse.none(), null);
+
+        HomeResponse result = service.getHome(userId);
+
+        assertThat(result.matching().pendingResult()).isNull();
     }
 }

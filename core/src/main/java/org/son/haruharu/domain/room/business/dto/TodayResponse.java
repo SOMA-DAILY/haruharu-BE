@@ -14,9 +14,11 @@ import org.son.haruharu.domain.room.implement.Room;
  *
  * 헤더 타이머는 '남은 시간'을 서버가 계산하지 않고, 다음 전환 절대시각(timerTargetAt)만 내려
  * 클라가 자체 시계로 카운트다운한다(홈의 applyDeadlineAt/confirmAt과 동일 철학).
+ * now는 응답 생성 시점 기준 시각(주입 Clock, dev 가상 시계 반영) — 클라 카운트다운의 기기 시계 오차 보정 기준.
  * timerType으로 라벨을 구분한다: NEXT_SLOT="다음 시간대", DEADLINE="마감".
  */
 public record TodayResponse(
+        LocalDateTime now,
         int currentDay,
         String status,
         int totalSlots,
@@ -35,15 +37,16 @@ public record TodayResponse(
     /** 헤더 타이머가 가리키는 대상 종류. NEXT_SLOT=다음 슬롯 시작, DEADLINE=최종선택/결과 마감. */
     public enum TimerType { NEXT_SLOT, DEADLINE }
 
-    public static TodayResponse of(Room room, int currentDay, List<UploadSlot> slots, int nowHour,
+    public static TodayResponse of(Room room, LocalDateTime now, int currentDay, List<UploadSlot> slots,
                                    long uploadedCount, long rewardAmount, RewardStatus rewardStatus,
                                    LocalDateTime timerTargetAt, TimerType timerType) {
+        int nowHour = now.getHour();
         List<SlotView> slotViews = slots.stream()
                 .map(s -> new SlotView(s.slotIndex(), s.startHour(), s.endHour(),
                         nowHour >= s.startHour() && nowHour < s.endHour()))
                 .toList();
         return new TodayResponse(
-                currentDay, room.status().name(), slots.size(), uploadedCount,
+                now, currentDay, room.status().name(), slots.size(), uploadedCount,
                 rewardAmount, rewardStatus, timerTargetAt, timerType, slotViews);
     }
 }

@@ -9,7 +9,9 @@ import org.son.haruharu.domain.matching.business.MatchingService;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
+import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.RoomService;
+import org.son.haruharu.domain.room.business.dto.PendingMatchResultResponse;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,13 +24,15 @@ public class HomeService {
     private final RoomService roomService;
     private final MatchingService matchingService;
     private final CoinService coinService;
+    private final MatchResultService matchResultService;
     private final Clock clock;
 
     public HomeService(RoomService roomService, MatchingService matchingService,
-                       CoinService coinService, Clock clock) {
+                       CoinService coinService, MatchResultService matchResultService, Clock clock) {
         this.roomService = roomService;
         this.matchingService = matchingService;
         this.coinService = coinService;
+        this.matchResultService = matchResultService;
         this.clock = clock;
     }
 
@@ -36,8 +40,9 @@ public class HomeService {
         long pointBalance = coinService.getWallet(userId).totalBalance();
         QueueStatusResponse queue = matchingService.getQueueStatus(userId);
         RoomResponse room = roomService.findMyRoom(userId).orElse(null);
+        PendingMatchResultResponse pendingResult = matchResultService.findPendingResult(userId).orElse(null);
         LocalDateTime now = LocalDateTime.now(clock);
-        return HomeResponse.of(pointBalance, queue, room,
+        return HomeResponse.of(now, pointBalance, queue, room, pendingResult,
                 nextAtHour(now, MatchingQueue.APPLY_DEADLINE_HOUR),
                 nextAtHour(now, MatchingQueue.CONFIRM_HOUR), UploadSlot.dayStartHour());
     }

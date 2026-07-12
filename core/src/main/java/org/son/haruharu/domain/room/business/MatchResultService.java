@@ -1,15 +1,25 @@
 package org.son.haruharu.domain.room.business;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MatchResultResponse;
 import org.son.haruharu.domain.room.business.dto.PartnerMemberRef;
+import org.son.haruharu.domain.room.business.dto.PendingMatchResultResponse;
 import org.son.haruharu.domain.room.implement.MatchResult;
 import org.son.haruharu.domain.room.implement.MatchResultReader;
+import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
+import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.stereotype.Service;
@@ -26,16 +36,21 @@ public class MatchResultService {
     private final UserProfileReader userProfileReader;
     private final UserImageReader userImageReader;
     private final S3StoragePort s3StoragePort;
+    private final RoomReader roomReader;
+    private final Clock clock;
 
     public MatchResultService(RoomMemberReader roomMemberReader, MatchResultReader matchResultReader,
                               ChatRoomReader chatRoomReader, UserProfileReader userProfileReader,
-                              UserImageReader userImageReader, S3StoragePort s3StoragePort) {
+                              UserImageReader userImageReader, S3StoragePort s3StoragePort,
+                              RoomReader roomReader, Clock clock) {
         this.roomMemberReader = roomMemberReader;
         this.matchResultReader = matchResultReader;
         this.chatRoomReader = chatRoomReader;
         this.userProfileReader = userProfileReader;
         this.userImageReader = userImageReader;
         this.s3StoragePort = s3StoragePort;
+        this.roomReader = roomReader;
+        this.clock = clock;
     }
 
     public MatchResultResponse getMatchResult(Long roomId, Long userId) {
@@ -54,6 +69,45 @@ public class MatchResultService {
 
         return new MatchResultResponse(partnerMemberId, match.matchedAt(), chatRoomId,
                 new MatchResultResponse.PartnerSummary(nickname, profileImageUrl));
+    }
+
+    /**
+     * 확인 대기 중인 최근 매칭 결과(홈 자동 노출용). 유저의 가장 최근 방(joinedAt 기준)이
+     * 결과 발표(Day3 22:00)를 지났으면 MATCHED/FAILED를 담아 반환하고, 발표 전·미시작(PENDING)·
+     * 방 이력 없음이면 empty. 새 방에 배정되면 최근 방이 바뀌므로 이전 결과는 자연히 노출이 끝난다.
+     * FAILED 판정(MatchResult 없음)은 위로 구름 지급(MATCH_CONSOLATION) 대상 기준과 동일하다.
+     */
+    public Optional<PendingMatchResultResponse> findPendingResult(Long userId) {
+        List<RoomMember> memberships = roomMemberReader.findByUserId(userId);
+        Optional<RoomMember> latest = memberships.stream()
+                .max(Comparator.comparing(RoomMember::joinedAt).thenComparing(RoomMember::id));
+        if (latest.isEmpty()) {
+            return Optional.empty();
+        }
+        RoomMember me = latest.get();
+        Room room = roomReader.findById(me.roomId()).orElse(null);
+        // 미시작(PENDING, startedAt 없음)은 발표될 결과가 없다 — 새 매칭 확정 직후가 여기 해당.
+        if (room == null || room.startedAt() == null) {
+            return Optional.empty();
+        }
+        LocalDateTime announcedAt = room.dateOfDay(room.totalDays(), UploadSlot.dayStartHour())
+                .atStartOfDay().plusHours(Room.RESULT_ANNOUNCE_HOUR);
+        if (LocalDateTime.now(clock).isBefore(announcedAt)) {
+            return Optional.empty();
+        }
+        return Optional.of(matchResultReader.findByMember(me.id())
+                .map(match -> matchedResult(room.id(), me, match, announcedAt))
+                .orElseGet(() -> PendingMatchResultResponse.failed(room.id(), announcedAt)));
+    }
+
+    private PendingMatchResultResponse matchedResult(Long roomId, RoomMember me, MatchResult match,
+                                                     LocalDateTime announcedAt) {
+        Long partnerMemberId = match.memberAId().equals(me.id()) ? match.memberBId() : match.memberAId();
+        RoomMember partner = roomMemberReader.getById(partnerMemberId);
+        String nickname = userProfileReader.findByUserId(partner.userId()).map(UserProfile::nickname).orElse(null);
+        Long chatRoomId = chatRoomReader.findChatRoomIdByMatchResultId(match.id()).orElse(null);
+        return new PendingMatchResultResponse(roomId, PendingMatchResultResponse.Outcome.MATCHED,
+                chatRoomId, nickname, announcedAt);
     }
 
     /**
