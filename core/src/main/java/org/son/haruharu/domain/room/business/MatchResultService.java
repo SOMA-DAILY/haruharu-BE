@@ -90,8 +90,7 @@ public class MatchResultService {
         if (room == null || room.startedAt() == null) {
             return Optional.empty();
         }
-        LocalDateTime announcedAt = room.dateOfDay(room.totalDays(), UploadSlot.dayStartHour())
-                .atStartOfDay().plusHours(Room.RESULT_ANNOUNCE_HOUR);
+        LocalDateTime announcedAt = room.announcedAt(UploadSlot.dayStartHour());
         if (LocalDateTime.now(clock).isBefore(announcedAt)) {
             return Optional.empty();
         }

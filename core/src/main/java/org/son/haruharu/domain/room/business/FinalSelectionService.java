@@ -118,10 +118,9 @@ public class FinalSelectionService {
                 .atStartOfDay().plusHours(opensHour);
     }
 
-    /** 최종선택 마감 = 결과 발표 시각(Day3 22:00). 오픈과 같은 앵커(dateOfDay)에서 파생한다. */
+    /** 최종선택 마감 = 결과 발표 시각(마지막 날 22:00). 계산은 Room.announcedAt 한 곳으로 통일한다. */
     private LocalDateTime selectionClosesAt(Room room) {
-        return room.dateOfDay(FINAL_SELECTION_DAY, UploadSlot.dayStartHour())
-                .atStartOfDay().plusHours(Room.RESULT_ANNOUNCE_HOUR);
+        return room.announcedAt(UploadSlot.dayStartHour());
     }
 
     /** 상대(selectedMemberId)도 나(meId)를 최종선택했는지. 상대가 기권(selectedMemberId=null)했으면 미성립. */
