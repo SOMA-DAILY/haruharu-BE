@@ -18,4 +18,15 @@ class MetaServiceTest {
 
         assertThat(result.matching().enterCost()).isEqualTo(20L);
     }
+
+    @Test
+    @DisplayName("메타 응답에 세션 정책 상수(day_start_hour=9, total_days=3)가 담긴다")
+    void givenSessionPolicy_whenGetMeta_thenReturnsSessionConstants() {
+        MetaService service = new MetaService(new MatchingProperties(20L));
+
+        MetaResponse result = service.getMeta();
+
+        assertThat(result.session().dayStartHour()).isEqualTo(9);
+        assertThat(result.session().totalDays()).isEqualTo(3);
+    }
 }
