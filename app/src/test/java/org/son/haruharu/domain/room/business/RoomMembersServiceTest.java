@@ -8,6 +8,7 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,12 +16,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
+import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MembersResponse;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,9 +44,19 @@ class RoomMembersServiceTest {
 
     @Mock RoomMemberReader roomMemberReader;
     @Mock UserProfileReader userProfileReader;
+    @Mock UserImageReader userImageReader;
+    @Mock S3StoragePort s3StoragePort;
+
+    @BeforeEach
+    void setUp() {
+        // 대표 이미지 presigned 변환은 관찰 가능하도록 "?sig" 접미사를 붙인다. 이미지 없는 멤버(null)는 null 유지.
+        lenient().when(userImageReader.getRepresentativeImageUrls(anyCollection())).thenReturn(Map.of());
+        lenient().when(s3StoragePort.createPresignedImageGetUrl(any()))
+                .thenAnswer(inv -> inv.getArgument(0) == null ? null : inv.getArgument(0) + "?sig");
+    }
 
     private RoomMembersService service() {
-        return new RoomMembersService(roomMemberReader, userProfileReader, clock);
+        return new RoomMembersService(roomMemberReader, userProfileReader, userImageReader, s3StoragePort, clock);
     }
 
     private UserProfile profile(Long userId, String nickname, String location) {
@@ -121,6 +135,63 @@ class RoomMembersServiceTest {
         assertThat(view.location()).isNull();
         assertThat(view.age()).isNull();
         assertThat(view.gender()).isEqualTo("MALE");
+    }
+
+    @Test
+    @DisplayName("멤버 목록에 신고용 user_id와 presigned 대표 이미지 URL이 포함된다")
+    void givenMembersWithImages_whenGetMembers_thenIncludesUserIdAndPresignedImageUrl() {
+        Long myUserId = 1L;
+        Long otherUserId = 2L;
+        Long roomId = 14L;
+        RoomMember me = member(roomId, myUserId);
+        RoomMember other = member(roomId, otherUserId);
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, myUserId)).willReturn(me);
+        given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me, other));
+        given(userProfileReader.findByUserIdIn(anyCollection())).willReturn(Map.of());
+        given(userImageReader.getRepresentativeImageUrls(anyCollection()))
+                .willReturn(Map.of(myUserId, "https://cdn/me.jpg", otherUserId, "https://cdn/other.jpg"));
+
+        MembersResponse result = service().getMembers(roomId, myUserId);
+
+        assertThat(result.members()).extracting(MembersResponse.MemberView::userId)
+                .containsExactly(myUserId, otherUserId);
+        assertThat(result.members()).extracting(MembersResponse.MemberView::profileImageUrl)
+                .containsExactly("https://cdn/me.jpg?sig", "https://cdn/other.jpg?sig");
+    }
+
+    @Test
+    @DisplayName("대표 이미지는 유저별 단건 조회 없이 배치 1회로 조회한다")
+    void givenMultipleMembers_whenGetMembers_thenLoadsImagesInSingleBatch() {
+        Long myUserId = 1L;
+        Long roomId = 15L;
+        RoomMember me = member(roomId, myUserId);
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, myUserId)).willReturn(me);
+        given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me, member(roomId, 2L)));
+        given(userProfileReader.findByUserIdIn(anyCollection())).willReturn(Map.of());
+
+        service().getMembers(roomId, myUserId);
+
+        then(userImageReader).should().getRepresentativeImageUrls(anyCollection());
+        then(userImageReader).should(never()).getRepresentativeImageUrl(any());
+    }
+
+    @Test
+    @DisplayName("대표 이미지가 없는 멤버는 profile_image_url이 null로 내려간다")
+    void givenMemberWithoutImage_whenGetMembers_thenNullImageUrl() {
+        Long userId = 1L;
+        Long roomId = 16L;
+        RoomMember me = member(roomId, userId);
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
+        given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me));
+        given(userProfileReader.findByUserIdIn(anyCollection())).willReturn(Map.of());
+        given(userImageReader.getRepresentativeImageUrls(anyCollection())).willReturn(Map.of());
+
+        MembersResponse result = service().getMembers(roomId, userId);
+
+        assertThat(result.members().get(0).profileImageUrl()).isNull();
     }
 
     @Test

@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** day N 영상 피드. 슬롯(시간대)별로 잠금: 내가 업로드한 슬롯의 타 멤버 영상만 열람 가능(참여 유도). */
 @Service
@@ -56,9 +57,10 @@ public class RoomFeedService {
             return new FeedResponse(slots, List.of()); // 전 슬롯 잠금 → 피드 조회 불필요
         }
 
-        List<Long> roomMemberIds = roomMemberReader.getByRoomId(roomId).stream()
-                .map(RoomMember::id).toList();
-        List<VideoPost> visible = videoPostReader.getFeed(roomMemberIds, day).stream()
+        // 작성자 userId(신고 연결용) 매핑을 위해 멤버 목록을 id→userId 맵으로 들고 간다
+        Map<Long, Long> userIdsByMemberId = roomMemberReader.getByRoomId(roomId).stream()
+                .collect(Collectors.toMap(RoomMember::id, RoomMember::userId));
+        List<VideoPost> visible = videoPostReader.getFeed(List.copyOf(userIdsByMemberId.keySet()), day).stream()
                 .filter(p -> mySlots.contains(p.slotIndex()))
                 .toList();
 
@@ -69,7 +71,8 @@ public class RoomFeedService {
         // 비공개 영상은 재생 가능한 presigned GET URL로 변환해 내려준다(#162).
         List<FeedItem> posts = visible.stream()
                 .map(p -> new FeedItem(
-                        p.id(), p.roomMemberId(), p.roomMemberId().equals(me.id()),
+                        p.id(), p.roomMemberId(), userIdsByMemberId.get(p.roomMemberId()),
+                        p.roomMemberId().equals(me.id()),
                         p.slotIndex(),
                         s3StoragePort.createPresignedGetUrl(p.videoUrl()),
                         s3StoragePort.createPresignedGetUrl(p.thumbnailUrl()),

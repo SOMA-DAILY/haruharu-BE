@@ -4,6 +4,7 @@ import org.son.haruharu.domain.profile.implement.UserImage;
 import org.son.haruharu.domain.profile.implement.UserImageRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -18,6 +19,14 @@ public class UserImageRepositoryImpl implements UserImageRepository {
     @Override
     public List<UserImage> findAllByUserId(Long userId) {
         return userImageJpaRepository.findAllByUserIdOrderBySortedOrderAsc(userId)
+                .stream()
+                .map(UserImageEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<UserImage> findAllByUserIdIn(Collection<Long> userIds) {
+        return userImageJpaRepository.findAllByUserIdInOrderByUserIdAscSortedOrderAsc(userIds)
                 .stream()
                 .map(UserImageEntity::toDomain)
                 .toList();

@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
+import org.son.haruharu.domain.room.business.dto.MyFinalSelectionResponse;
 import org.son.haruharu.domain.room.business.exception.AlreadySelectedException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSelfException;
 import org.son.haruharu.domain.room.business.exception.NotFinalSelectionDayException;
@@ -31,6 +32,7 @@ import org.son.haruharu.domain.room.business.event.MemberSelectedEvent;
 import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
+import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -302,5 +304,57 @@ class FinalSelectionServiceTest {
 
         assertThat(result.matched()).isFalse();
         then(matchResultWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("최종선택을 제출했으면 조회 시 submitted=true와 선택 대상·제출 시각이 반환된다")
+    void givenSubmitted_whenGetMySelection_thenSubmittedTrue() {
+        LocalDateTime submittedAt = LocalDateTime.of(2026, 6, 26, 18, 30);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, userId, roomId));
+        given(finalSelectionReader.findByRoomMemberId(meId))
+                .willReturn(Optional.of(new FinalSelection(1L, meId, selectedId, submittedAt)));
+
+        MyFinalSelectionResponse result = service.getMySelection(roomId, userId);
+
+        assertThat(result.submitted()).isTrue();
+        assertThat(result.selectedMemberId()).isEqualTo(selectedId);
+        assertThat(result.selectedAt()).isEqualTo(submittedAt);
+    }
+
+    @Test
+    @DisplayName("기권으로 제출했으면 조회 시 submitted=true·selected_member_id=null이 반환된다")
+    void givenAbstained_whenGetMySelection_thenSubmittedTrueWithNullTarget() {
+        LocalDateTime submittedAt = LocalDateTime.of(2026, 6, 26, 18, 30);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, userId, roomId));
+        given(finalSelectionReader.findByRoomMemberId(meId))
+                .willReturn(Optional.of(new FinalSelection(1L, meId, null, submittedAt)));
+
+        MyFinalSelectionResponse result = service.getMySelection(roomId, userId);
+
+        assertThat(result.submitted()).isTrue();
+        assertThat(result.selectedMemberId()).isNull();
+        assertThat(result.selectedAt()).isEqualTo(submittedAt);
+    }
+
+    @Test
+    @DisplayName("아직 제출하지 않았으면 조회 시 예외 없이 submitted=false·전부 null이 반환된다")
+    void givenNotSubmitted_whenGetMySelection_thenSubmittedFalse() {
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, userId, roomId));
+        given(finalSelectionReader.findByRoomMemberId(meId)).willReturn(Optional.empty());
+
+        MyFinalSelectionResponse result = service.getMySelection(roomId, userId);
+
+        assertThat(result.submitted()).isFalse();
+        assertThat(result.selectedMemberId()).isNull();
+        assertThat(result.selectedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("방 멤버가 아니면 최종선택 조회 시 NotRoomMemberException이 발생한다")
+    void givenNonMember_whenGetMySelection_thenThrows() {
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willThrow(new NotRoomMemberException());
+
+        assertThatThrownBy(() -> service.getMySelection(roomId, userId))
+                .isInstanceOf(NotRoomMemberException.class);
     }
 }

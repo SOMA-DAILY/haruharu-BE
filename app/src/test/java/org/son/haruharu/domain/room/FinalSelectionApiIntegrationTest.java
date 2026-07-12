@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -149,5 +150,51 @@ class FinalSelectionApiIntegrationTest {
 
         // 인앱 알림함에도 기록됨(버그 시 0행)
         assertThat(notificationHistoryJpaRepository.findAll()).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("최종선택 미제출 상태에서 조회하면 404가 아닌 200·submitted=false로 응답한다(상태 복원용)")
+    void givenNotSubmitted_whenGetFinalSelection_thenSubmittedFalse() throws Exception {
+        Long userId = 903L;
+        LocalDate started = LocalDate.of(2026, 6, 24);
+        Room room = new Room(null, RoomStatus.ACTIVE, started, 3, started.atTime(9, 0), null);
+        Long roomId = roomJpaRepository.save(RoomEntity.from(room)).toDomain().id();
+        roomMemberJpaRepository.save(RoomMemberEntity.from(
+                RoomMember.of(roomId, userId, "MALE", LocalDate.of(2000, 1, 1), started.atTime(9, 0))));
+
+        mockMvc.perform(get("/api/v1/rooms/{roomId}/final-selection", roomId)
+                        .with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.data.submitted").value(false))
+                .andExpect(jsonPath("$.data.selected_member_id").value(nullValue()))
+                .andExpect(jsonPath("$.data.selected_at").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("최종선택 제출 후 조회하면 submitted=true와 선택 대상·제출 시각이 복원된다")
+    void givenSubmitted_whenGetFinalSelection_thenReturnsSelection() throws Exception {
+        Long userA = 904L;
+        Long userB = 905L;
+        LocalDate started = LocalDate.of(2026, 6, 24);
+        Room room = new Room(null, RoomStatus.ACTIVE, started, 3, started.atTime(9, 0), null);
+        Long roomId = roomJpaRepository.save(RoomEntity.from(room)).toDomain().id();
+        roomMemberJpaRepository.save(RoomMemberEntity.from(
+                RoomMember.of(roomId, userA, "MALE", LocalDate.of(2000, 1, 1), started.atTime(9, 0))));
+        Long memberB = roomMemberJpaRepository.save(RoomMemberEntity.from(
+                RoomMember.of(roomId, userB, "FEMALE", LocalDate.of(2000, 1, 1), started.atTime(9, 0)))).toDomain().id();
+
+        mockMvc.perform(post("/api/v1/rooms/{roomId}/final-selection", roomId)
+                        .with(authentication(auth(userA)))
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"selected_member_id\": " + memberB + "}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/rooms/{roomId}/final-selection", roomId)
+                        .with(authentication(auth(userA))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.submitted").value(true))
+                .andExpect(jsonPath("$.data.selected_member_id").value(memberB.intValue()))
+                .andExpect(jsonPath("$.data.selected_at").isNotEmpty());
     }
 }

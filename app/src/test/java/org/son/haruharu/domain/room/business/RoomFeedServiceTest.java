@@ -119,6 +119,8 @@ class RoomFeedServiceTest {
                 .containsExactly(100L, 101L, 102L);
         assertThat(result.posts()).extracting(FeedItem::slotIndex).containsExactly(1, 1, 2);
         assertThat(result.posts()).extracting(FeedItem::mine).containsExactly(true, false, false);
+        // 신고 연결용 작성자 user_id: roomMemberId 20→userId 1, 30→userId 2
+        assertThat(result.posts()).extracting(FeedItem::userId).containsExactly(1L, 2L, 2L);
         // 비공개 원본이 아니라 서명된 재생 URL이 내려간다(#162)
         assertThat(itemOf(result, 101L).videoUrl()).isEqualTo("signed:other-s1");
 

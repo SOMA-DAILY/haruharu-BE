@@ -19,6 +19,7 @@ import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
 import org.son.haruharu.domain.room.business.dto.MatchResultResponse;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.business.dto.MembersResponse;
+import org.son.haruharu.domain.room.business.dto.MyFinalSelectionResponse;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
 import org.springframework.security.core.Authentication;
@@ -120,6 +121,17 @@ public class RoomController {
                                                            Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(finalSelectionService.select(roomId, request.selectedMemberId(), userId));
+    }
+
+    @Operation(summary = "내 최종선택 조회",
+            description = "내가 이 방에서 제출한 최종선택 상태를 반환한다(방 재진입 시 화면 복원용). 미제출이면 404가 아닌 "
+                    + "submitted=false로 응답하고, 기권 제출이면 submitted=true·selected_member_id=null이다. "
+                    + "발표 전 결과 유출 방지를 위해 상호매칭 여부(matched)는 포함하지 않는다. 참여자가 아니면 403(ROOM_403_NOT_MEMBER).")
+    @GetMapping("/{roomId}/final-selection")
+    public ApiResponse<MyFinalSelectionResponse> getMyFinalSelection(@Parameter(description = "소개팅방 id", example = "1") @PathVariable Long roomId,
+                                                                     Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(finalSelectionService.getMySelection(roomId, userId));
     }
 
     @Operation(summary = "내 매칭 결과 조회",
