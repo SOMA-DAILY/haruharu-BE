@@ -11,7 +11,7 @@
 ```
 Given: 회원가입한 유저가 있다
 When:  유효한 카카오 OAuth 코드로 로그인 요청 시
-Then:  AccessToken/RefreshToken이 HttpOnly 쿠키에 설정되고 200 반환
+Then:  AccessToken/RefreshToken이 Response Body로 반환되고 200
 ```
 
 ### 2. 테스트 작성 (RED)
@@ -19,8 +19,8 @@ Then:  AccessToken/RefreshToken이 HttpOnly 쿠키에 설정되고 200 반환
 
 ```java
 @Test
-@DisplayName("유효한 카카오 코드로 로그인 시 JWT 쿠키가 반환된다")
-void givenValidKakaoCode_whenLogin_thenReturnsJwtCookies() {
+@DisplayName("유효한 카카오 코드로 로그인 시 JWT 토큰이 반환된다")
+void givenValidKakaoCode_whenLogin_thenReturnsJwtTokens() {
     // given
     given(kakaoOAuthPort.getUserInfo("valid-code"))
         .willReturn(new KakaoUserInfo("12345", "user@test.com"));
@@ -37,7 +37,7 @@ void givenValidKakaoCode_whenLogin_thenReturnsJwtCookies() {
 ### 4. 실제 검증 (VERIFY)
 `./gradlew bootRun` 후 실제 API 호출로 시나리오 충족 확인.
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
-- WebFetch MCP로 직접 HTTP 호출
+- `curl`로 직접 HTTP 호출 (핵심 플로우는 `scripts/smoke.sh` 활용)
 - **이 단계 없이 완료 처리 금지.**
 
 ### 5. 리팩토링 (REFACTOR)
@@ -48,4 +48,3 @@ void givenValidKakaoCode_whenLogin_thenReturnsJwtCookies() {
 - [ ] `./gradlew test` 전체 통과
 - [ ] 서버 기동 성공 (`./gradlew bootRun`)
 - [ ] 실제 API 호출로 BDD 시나리오 충족 확인
-- [ ] `./gradlew lint` 경고 없음 (또는 인지된 경고만)

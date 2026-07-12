@@ -1,7 +1,7 @@
 ---
 description: BDD 기반 기능 구현 전체 루프. 이슈 시나리오 확인 → 테스트 작성(RED) → 구현(GREEN) → 실제 API 검증(VERIFY). 기능 구현 시작, 이슈 번호 또는 기능 설명을 받아 실행. "구현해줘", "만들어줘", "개발해줘" 요청 시 자동 적용.
 argument-hint: "[#이슈번호 또는 기능설명]"
-allowed-tools: Bash(./gradlew *) Bash(gh issue view *) Bash(gh issue list *) Bash(git status) Bash(git log *) Bash(git diff *) Read Grep Glob Write Edit WebFetch Agent
+allowed-tools: Bash(./gradlew *) Bash(gh issue view *) Bash(gh issue list *) Bash(git status) Bash(git log *) Bash(git diff *) Bash(curl *) Bash(bash scripts/smoke.sh) Read Grep Glob Write Edit Agent
 ---
 
 ## 언제 쓰나?
@@ -68,8 +68,8 @@ GREEN 확인 후 다음 단계 진행.
 ./gradlew bootRun
 ```
 
-서버 기동 후 WebFetch MCP로 실제 HTTP 요청 전송.
-응답이 이슈 시나리오의 기대 결과와 일치하는지 확인한다.
+서버 기동 후 `curl`로 실제 HTTP 요청 전송 (핵심 플로우는 `scripts/smoke.sh` 활용).
+응답이 이슈 시나리오의 기대 결과와 일치하는지 확인하고, **요청/응답 내용을 완료 보고에 첨부한다.**
 
 **실제 검증 없이 완료 처리 금지.**
 
@@ -105,16 +105,30 @@ FAIL/CRITICAL 항목은 즉시 수정 후 재검증.
 
 OAuth2·JWT·PASS 인증 관련 코드라면 `security-reviewer` 에이전트 추가 실행.
 
-### Step 8. 린트 확인
+### Step 8. 완료 보고 (고정 템플릿)
 
-```bash
-./gradlew lint
+아래 템플릿을 그대로 채워서 보고한다. **검증 증거(출력) 없는 항목은 빈칸이 아니라 "미실행"으로 표기.**
+
+```
+## 구현 완료 보고 — #{이슈번호}
+
+| 게이트 | 결과 | 증거 |
+|--------|------|------|
+| 테스트 (RED→GREEN) | PASS/FAIL | ./gradlew test 요약 |
+| 실제 API 검증 | PASS/FAIL/미실행 | curl 요청/응답 본문 |
+| 코드 리뷰 | PASS/FAIL/생략(단순수정) | java-reviewer 판정 |
+| 보안 리뷰 | PASS/FAIL/해당없음 | security-reviewer 판정 |
+| 시크릿 체크 | PASS | 확인 항목 |
+
+변경 파일: [목록]
+설정 필요 env: [신규 ${ENV_VAR} 있으면 키+용도, 없으면 "없음"]
+다음 단계: /create-pr #{이슈번호}
 ```
 
-### Step 9. 완료 보고
+## Anti-Patterns (금지)
 
-- 생성/수정된 파일 목록
-- 테스트 결과
-- 실제 API 검증 결과 (요청/응답)
-- 리뷰 결과 (실행했다면)
-- PR 준비 완료 여부 → `/create-pr` 실행 제안
+- 실제 API 검증 출력 없이 "완료" 선언 — VERIFY는 증거 첨부가 곧 완료 조건
+- 테스트를 구현에 맞춰 사후 수정해서 GREEN 만들기 (RED 단계를 건너뛴 증거)
+- 컴파일만 통과한 상태로 다음 Step 진행
+- 새 `${ENV_VAR}` 도입 후 `.env.example` 미갱신
+- 시나리오에 없는 기능 추가 (스코프 확장은 새 이슈로)

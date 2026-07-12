@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/*.java"
+---
+
 # Code Style
 
 ## 네이밍 규칙
@@ -7,7 +12,7 @@
 | 클래스/인터페이스/Enum | PascalCase | `UserService`, `AuthRepository` |
 | 메서드/필드/변수 | camelCase | `findByEmail`, `refreshToken` |
 | 상수 | SCREAMING_SNAKE_CASE | `MAX_LOGIN_ATTEMPTS` |
-| 패키지 | 소문자 | `com.haruharu.auth.business` |
+| 패키지 | 소문자 | `org.son.haruharu.domain.auth.business` |
 | 테스트 메서드 | `given{조건}_when{행동}_then{결과}` | `givenExpiredToken_whenRefresh_thenThrows` |
 
 ## 클래스 접미사 컨벤션

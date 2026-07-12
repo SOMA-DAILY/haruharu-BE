@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/src/main/java/**"
+---
+
 # Architecture: 도메인 기반 4계층
 
 ## 패키지 구조
@@ -161,6 +166,16 @@ public class UserEntity {
     public User toDomain() { ... }
 }
 ```
+
+## JPA 성능 패턴 (storage 계층 작성 시)
+
+- **연관관계 기본 LAZY.** 컬렉션 `FetchType.EAGER` 금지 — N+1의 주범.
+- **N+1 해소 순서**: ① 읽기 전용 조회는 DTO/인터페이스 프로젝션 ② 엔티티가 필요하면 `JOIN FETCH` 또는 `@EntityGraph`.
+- **목록 API는 `Pageable` 필수.** 무한 스크롤·대량 순회는 오프셋 대신 커서(`WHERE id > :lastId ORDER BY id LIMIT n`).
+- **변경 `@Query`에는 `@Modifying` + 트랜잭션 필수.**
+- **대량 저장**은 `saveAll` + `hibernate.jdbc.batch_size` 설정 확인.
+- **인덱스**: 자주 필터하는 컬럼·FK·복합 조건(`status, created_at`)은 `@Table(indexes=...)` 또는 마이그레이션 SQL로 명시.
+- SQL 효율 검증은 `hibernate.SQL=DEBUG` 로그로 실제 쿼리 수를 확인한다.
 
 ## 도메인 경계 (확정 2026-06-21)
 

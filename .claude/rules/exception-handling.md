@@ -1,3 +1,10 @@
+---
+paths:
+  - "**/exception/**"
+  - "**/handler/**"
+  - "**/common/exception/**"
+---
+
 # Exception Handling
 
 ## 계층 구조
