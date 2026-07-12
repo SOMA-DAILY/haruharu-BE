@@ -30,4 +30,13 @@ class MetaApiIntegrationTest {
                 .andExpect(jsonPath("$.data.smokingStatus[3].code").value("E_CIGARETTE"))
                 .andExpect(jsonPath("$.data.smokingStatus[3].label").value("전자담배"));
     }
+
+    @Test
+    @DisplayName("인증 없이 GET /api/v1/meta 호출 시 정책 상수 matching.enter_cost 설정값(20)이 반환된다")
+    void givenNoAuth_whenGetMeta_thenReturnsEnterCost() throws Exception {
+        mockMvc.perform(get("/api/v1/meta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.data.matching.enter_cost").value(20));
+    }
 }

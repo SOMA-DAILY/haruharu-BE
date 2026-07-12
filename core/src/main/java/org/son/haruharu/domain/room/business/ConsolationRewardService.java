@@ -68,13 +68,11 @@ public class ConsolationRewardService {
         return granted;
     }
 
-    /** 마지막 Day의 결과 발표 시각(CONFIRM_HOUR)이 지났는지. 최종선택 마감과 같은 앵커(dateOfDay)에서 파생한다. */
+    /** 마지막 Day의 결과 발표 시각이 지났는지. 발표 시각 계산은 Room.announcedAt 한 곳으로 통일한다. */
     private boolean isResultAnnounced(Room room, LocalDateTime now) {
         if (room.currentDayAt(now, UploadSlot.dayStartHour()) != room.totalDays()) {
             return false;
         }
-        LocalDateTime resultAt = room.dateOfDay(room.totalDays(), UploadSlot.dayStartHour())
-                .atStartOfDay().plusHours(Room.RESULT_ANNOUNCE_HOUR);
-        return !now.isBefore(resultAt);
+        return !now.isBefore(room.announcedAt(UploadSlot.dayStartHour()));
     }
 }

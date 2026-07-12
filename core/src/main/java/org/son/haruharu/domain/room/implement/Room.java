@@ -72,4 +72,13 @@ public record Room(
     public LocalDate dateOfDay(int dayNumber, int dayStartHour) {
         return startedAt.minusHours(dayStartHour).toLocalDate().plusDays(dayNumber - 1L);
     }
+
+    /**
+     * 결과 발표 시각 = 마지막 날(totalDays)의 RESULT_ANNOUNCE_HOUR. 최종선택 마감·미매칭 확정(위로 구름)·
+     * pending_result 노출이 모두 이 시각을 공유하므로 계산은 여기 한 곳에만 둔다.
+     * dateOfDay와 같은 앵커에서 파생하며 startedAt 존재를 전제한다(호출측이 보장).
+     */
+    public LocalDateTime announcedAt(int dayStartHour) {
+        return dateOfDay(totalDays, dayStartHour).atStartOfDay().plusHours(RESULT_ANNOUNCE_HOUR);
+    }
 }

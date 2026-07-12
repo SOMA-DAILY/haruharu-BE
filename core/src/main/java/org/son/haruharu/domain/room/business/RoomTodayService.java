@@ -54,7 +54,6 @@ public class RoomTodayService {
         int currentDay = room.currentDayAt(now, UploadSlot.dayStartHour());
         List<UploadSlot> slots = UploadSlot.ofDay(currentDay);
         long uploadedCount = videoPostReader.countUploaded(member.id(), currentDay);
-        int nowHour = now.getHour();
 
         long rewardAmount = uploadRewardProperties.amountFor(currentDay);
         RewardStatus rewardStatus = dailyUploadRewardReader.isRewarded(member.id(), currentDay)
@@ -62,7 +61,7 @@ public class RoomTodayService {
 
         TimerTarget timer = computeTimer(room, currentDay, slots, now);
 
-        return TodayResponse.of(room, currentDay, slots, nowHour, uploadedCount, rewardAmount, rewardStatus,
+        return TodayResponse.of(room, now, currentDay, slots, uploadedCount, rewardAmount, rewardStatus,
                 timer.at(), timer.type());
     }
 
@@ -102,7 +101,7 @@ public class RoomTodayService {
 
         // 마지막 Day 꼬리: 최종선택 오픈(마지막 슬롯 종료) → 결과 발표 순으로 마감을 가리킨다.
         LocalDateTime selectionOpensAt = dayDate.atTime(slots.getLast().endHour(), 0);
-        LocalDateTime resultAt = dayDate.atTime(Room.RESULT_ANNOUNCE_HOUR, 0);
+        LocalDateTime resultAt = room.announcedAt(dayStartHour);
         if (now.isBefore(selectionOpensAt)) {
             return new TimerTarget(selectionOpensAt, TimerType.DEADLINE);
         }
