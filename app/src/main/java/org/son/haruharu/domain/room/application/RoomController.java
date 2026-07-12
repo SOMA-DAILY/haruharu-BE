@@ -77,9 +77,10 @@ public class RoomController {
     }
 
     @Operation(summary = "오늘 화면 조회",
-            description = "현재 Day의 업로드 슬롯(시간창·현재 열림 여부)과 내 업로드 진행(uploaded_count)·완주 보상(reward_status)·"
-                    + "헤더 타이머(timer_target_at, timer_type)를 반환한다. 참여자가 아니면 403(ROOM_403_NOT_MEMBER), "
-                    + "방이 없으면 404(ROOM_404_NOT_FOUND).")
+            description = "현재 Day의 업로드 슬롯(시간창·현재 열림 여부·내 업로드 여부 uploaded)과 내 업로드 진행(uploaded_count)·"
+                    + "완주 보상(reward_status)·헤더 타이머(timer_target_at, timer_type)를 반환한다. "
+                    + "slots[].uploaded는 요청 유저 본인 기준이며, 지난 슬롯 + uploaded=false는 '놓침'으로 판정하면 된다. "
+                    + "참여자가 아니면 403(ROOM_403_NOT_MEMBER), 방이 없으면 404(ROOM_404_NOT_FOUND).")
     @GetMapping("/{roomId}/today")
     public ApiResponse<TodayResponse> getToday(@Parameter(description = "소개팅방 id", example = "1") @PathVariable Long roomId,
                                                Authentication authentication) {
@@ -113,6 +114,7 @@ public class RoomController {
             description = "마지막 날(Day3) 마지막 슬롯 종료 후 최종선택을 확정한다. 멤버당 1회만 가능(변경 불가)이며, "
                     + "상대도 나를 선택했으면 즉시 상호매칭이 성사된다. 요청 body의 selected_member_id가 null이면 기권 처리된다. "
                     + "최종선택 시간 전이면 409(ROOM_409_NOT_FINAL_DAY), 자기 자신 선택은 400(ROOM_400_CANNOT_SELECT_SELF), "
+                    + "동성 멤버 선택은 400(ROOM_400_CANNOT_SELECT_SAME_GENDER), "
                     + "이미 선택했으면 409(ROOM_409_ALREADY_SELECTED), 대상이 같은 방 멤버가 아니면 404(ROOM_MEMBER_404_NOT_FOUND), "
                     + "참여자가 아니면 403(ROOM_403_NOT_MEMBER).")
     @PostMapping("/{roomId}/final-selection")

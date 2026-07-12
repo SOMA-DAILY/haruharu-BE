@@ -9,6 +9,7 @@ import org.son.haruharu.domain.room.business.dto.MyFinalSelectionResponse;
 import org.son.haruharu.domain.room.business.event.MemberSelectedEvent;
 import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.business.exception.AlreadySelectedException;
+import org.son.haruharu.domain.room.business.exception.CannotSelectSameGenderException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSelfException;
 import org.son.haruharu.domain.room.business.exception.NotFinalSelectionDayException;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
@@ -89,6 +90,10 @@ public class FinalSelectionService {
         RoomMember selected = roomMemberReader.getById(selectedMemberId);
         if (!selected.roomId().equals(roomId)) {
             throw new RoomMemberNotFoundException(); // 같은 방 멤버만 선택 가능
+        }
+        // 동성 선택 차단(#206). gender가 null인 스냅샷(구시드 데이터)은 검증을 건너뛴다 — 실유저는 인증 시 항상 채워진다.
+        if (me.gender() != null && me.gender().equals(selected.gender())) {
+            throw new CannotSelectSameGenderException();
         }
         if (finalSelectionReader.hasSelected(me.id())) {
             throw new AlreadySelectedException(); // 1회 확정

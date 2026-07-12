@@ -4,6 +4,7 @@ import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.identity.business.exception.DuplicateCiException;
 import org.son.haruharu.domain.identity.business.exception.ReRegistrationBlockedException;
+import org.son.haruharu.domain.identity.business.exception.UnderageNotAllowedException;
 import org.son.haruharu.domain.identity.business.exception.UserAlreadyVerifiedException;
 import org.son.haruharu.domain.identity.implement.UserIdentity;
 import org.son.haruharu.domain.identity.implement.UserIdentityReader;
@@ -14,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.util.Optional;
 
 @Service
@@ -23,6 +26,8 @@ public class IdentityService {
 
     /** 탈퇴 후 재가입(본인인증) 차단 기간. */
     private static final int REJOIN_BLOCK_DAYS = 30;
+    /** 서비스 이용 최소 만 나이. AGE_19 약관 자기신고와 별개로 실명인증 생년월일로 서버가 강제한다(#207). */
+    private static final int MINIMUM_AGE = 19;
 
     private final UserIdentityReader userIdentityReader;
     private final UserIdentityWriter userIdentityWriter;
@@ -62,6 +67,10 @@ public class IdentityService {
             throw new UserAlreadyVerifiedException();
         }
         PassVerificationResult result = passVerificationPort.verify(command.identityVerificationId());
+        // 만 나이 기준 미성년 차단 — 오늘이 19번째 생일이면 통과(만 19세)
+        if (Period.between(result.birthday(), LocalDate.now(clock)).getYears() < MINIMUM_AGE) {
+            throw new UnderageNotAllowedException();
+        }
         if (userIdentityReader.existsByCi(result.ci())) {
             throw new DuplicateCiException();
         }

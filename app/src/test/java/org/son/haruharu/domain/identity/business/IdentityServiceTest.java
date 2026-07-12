@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
 import org.son.haruharu.domain.identity.business.exception.DuplicateCiException;
 import org.son.haruharu.domain.identity.business.exception.ReRegistrationBlockedException;
+import org.son.haruharu.domain.identity.business.exception.UnderageNotAllowedException;
 import org.son.haruharu.domain.identity.business.exception.UserAlreadyVerifiedException;
 import org.son.haruharu.domain.identity.implement.UserIdentityReader;
 import org.son.haruharu.domain.identity.implement.UserIdentityWriter;
@@ -95,6 +96,45 @@ class IdentityServiceTest {
         assertThatThrownBy(() -> identityService.verifyIdentity(userId, command))
             .isInstanceOf(DuplicateCiException.class);
         then(userIdentityWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("만 19세 미만이면 UnderageNotAllowedException(403)이 발생하고 인증 정보가 저장되지 않는다")
+    void givenUnderageBirthday_whenVerifyIdentity_thenThrowsAndNotSaved() {
+        Long userId = 5L;
+        VerifyIdentityCommand command = new VerifyIdentityCommand("iv-token");
+        // 고정 시각 2026-07-07 기준: 2007-07-08생은 내일이 19번째 생일 → 만 18세
+        PassVerificationResult passResult = new PassVerificationResult(
+            "ci-value", "di-value", "010-1234-5678",
+            LocalDate.of(2007, 7, 8), "MALE", "홍길동", "SKT", false
+        );
+
+        given(userIdentityReader.existsByUserId(userId)).willReturn(false);
+        given(passVerificationPort.verify("iv-token")).willReturn(passResult);
+
+        assertThatThrownBy(() -> identityService.verifyIdentity(userId, command))
+            .isInstanceOf(UnderageNotAllowedException.class);
+        then(userIdentityWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("오늘이 19번째 생일이면 만 19세로 판정되어 인증이 통과된다(경계)")
+    void givenNineteenthBirthdayToday_whenVerifyIdentity_thenSaves() {
+        Long userId = 6L;
+        VerifyIdentityCommand command = new VerifyIdentityCommand("iv-token");
+        // 고정 시각 2026-07-07 기준: 2007-07-07생은 오늘이 19번째 생일 → 만 19세
+        PassVerificationResult passResult = new PassVerificationResult(
+            "ci-value", "di-value", "010-1234-5678",
+            LocalDate.of(2007, 7, 7), "FEMALE", "홍길순", "KT", false
+        );
+
+        given(userIdentityReader.existsByUserId(userId)).willReturn(false);
+        given(passVerificationPort.verify("iv-token")).willReturn(passResult);
+        given(userIdentityReader.existsByCi("ci-value")).willReturn(false);
+
+        identityService.verifyIdentity(userId, command);
+
+        then(userIdentityWriter).should().save(any());
     }
 
     @Test

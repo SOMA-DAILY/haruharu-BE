@@ -2,6 +2,7 @@ package org.son.haruharu.domain.room.business.dto;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.implement.Room;
@@ -29,7 +30,8 @@ public record TodayResponse(
         TimerType timerType,
         List<SlotView> slots
 ) {
-    public record SlotView(int slotIndex, int startHour, int endHour, boolean openNow) {}
+    /** uploaded = 요청 유저 본인이 이 슬롯에 업로드했는지(개인화). 지난 슬롯 + uploaded=false → "놓침" 판정용(#209). */
+    public record SlotView(int slotIndex, int startHour, int endHour, boolean openNow, boolean uploaded) {}
 
     /** 완주 보상 상태. EARNED=이미 지급됨, LOCKED=아직 미지급. */
     public enum RewardStatus { LOCKED, EARNED }
@@ -38,15 +40,17 @@ public record TodayResponse(
     public enum TimerType { NEXT_SLOT, DEADLINE }
 
     public static TodayResponse of(Room room, LocalDateTime now, int currentDay, List<UploadSlot> slots,
-                                   long uploadedCount, long rewardAmount, RewardStatus rewardStatus,
+                                   Set<Integer> uploadedSlotIndexes, long rewardAmount, RewardStatus rewardStatus,
                                    LocalDateTime timerTargetAt, TimerType timerType) {
         int nowHour = now.getHour();
         List<SlotView> slotViews = slots.stream()
                 .map(s -> new SlotView(s.slotIndex(), s.startHour(), s.endHour(),
-                        nowHour >= s.startHour() && nowHour < s.endHour()))
+                        nowHour >= s.startHour() && nowHour < s.endHour(),
+                        uploadedSlotIndexes.contains(s.slotIndex())))
                 .toList();
+        // uploadedCount는 슬롯별 uploaded의 합계에서 파생 — 두 값이 어긋날 수 없다(슬롯당 활성 영상 1개 보장)
         return new TodayResponse(
-                now, currentDay, room.status().name(), slots.size(), uploadedCount,
+                now, currentDay, room.status().name(), slots.size(), uploadedSlotIndexes.size(),
                 rewardAmount, rewardStatus, timerTargetAt, timerType, slotViews);
     }
 }
