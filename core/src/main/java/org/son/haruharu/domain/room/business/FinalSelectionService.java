@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
+import org.son.haruharu.domain.room.business.dto.MyFinalSelectionResponse;
 import org.son.haruharu.domain.room.business.event.MemberSelectedEvent;
 import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.business.exception.AlreadySelectedException;
@@ -105,6 +106,14 @@ public class FinalSelectionService {
         }
 
         return new FinalSelectionResponse(selectedMemberId, matched);
+    }
+
+    /** 내 최종선택 제출 상태 조회(방 재진입 시 복원용). 미제출은 예외가 아니라 submitted=false로 응답한다. */
+    public MyFinalSelectionResponse getMySelection(Long roomId, Long userId) {
+        RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
+        return finalSelectionReader.findByRoomMemberId(me.id())
+                .map(selection -> new MyFinalSelectionResponse(true, selection.selectedMemberId(), selection.submittedAt()))
+                .orElseGet(MyFinalSelectionResponse::notSubmitted);
     }
 
     /**

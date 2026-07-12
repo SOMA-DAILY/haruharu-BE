@@ -27,11 +27,13 @@ public record MemberProfileResponse(
             String value
     ) {}
 
+    /** answerText는 answer(A/B)를 질문의 option_a/option_b 텍스트로 변환한 값(응답 시점 조인, visible=false면 null). */
     public record ValueAnswerView(
             Long answerId,
             Long questionId,
             String questionText,
             boolean visible,
-            String answer
+            String answer,
+            String answerText
     ) {}
 }

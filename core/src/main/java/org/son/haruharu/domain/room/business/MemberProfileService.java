@@ -127,12 +127,27 @@ public class MemberProfileService {
 
         return userValueAnswerReader.getAllByUserId(targetUserId).stream()
                 .filter(answer -> questions.containsKey(answer.questionId()))
-                .map(answer -> new ValueAnswerView(
-                        answer.id(),
-                        answer.questionId(),
-                        questions.get(answer.questionId()).questionText(),
-                        visible,
-                        visible ? answer.answer() : null))
+                .map(answer -> {
+                    ValueQuestion question = questions.get(answer.questionId());
+                    return new ValueAnswerView(
+                            answer.id(),
+                            answer.questionId(),
+                            question.questionText(),
+                            visible,
+                            visible ? answer.answer() : null,
+                            visible ? answerText(question, answer.answer()) : null);
+                })
                 .toList();
+    }
+
+    /** 저장값 A/B를 질문의 선택지 텍스트로 변환한다(응답 시점 조인 — 저장 스냅샷 아님). A/B 외 값은 null. */
+    private String answerText(ValueQuestion question, String answer) {
+        if ("A".equals(answer)) {
+            return question.optionA();
+        }
+        if ("B".equals(answer)) {
+            return question.optionB();
+        }
+        return null;
     }
 }

@@ -289,6 +289,79 @@ class MemberProfileServiceTest {
     }
 
     @Test
+    @DisplayName("가치관 답변 A는 질문의 option_a 텍스트가 answer_text로 내려간다")
+    void givenAnswerA_whenGetProfile_thenAnswerTextIsOptionA() {
+        Long userId = 1L;
+        Long targetUserId = 2L;
+        Long roomId = 10L;
+        Long meId = 20L;
+        Long targetId = 30L;
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
+        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, 2))); // Day2 = 가치관 공개
+        given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
+        given(valueQuestionReader.getAllActive()).willReturn(List.of(
+                new ValueQuestion(100L, "연인과 주말을 보낸다면?", "함께 여행 가기", "집에서 쉬기", "DATING", 1, true)));
+        given(userValueAnswerReader.getAllByUserId(targetUserId))
+                .willReturn(List.of(new UserValueAnswer(500L, targetUserId, 100L, "A")));
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        assertThat(result.valueAnswers()).hasSize(1);
+        assertThat(result.valueAnswers().get(0).answer()).isEqualTo("A");
+        assertThat(result.valueAnswers().get(0).answerText()).isEqualTo("함께 여행 가기");
+    }
+
+    @Test
+    @DisplayName("가치관 답변 B는 질문의 option_b 텍스트가 answer_text로 내려간다")
+    void givenAnswerB_whenGetProfile_thenAnswerTextIsOptionB() {
+        Long userId = 1L;
+        Long targetUserId = 2L;
+        Long roomId = 10L;
+        Long meId = 20L;
+        Long targetId = 30L;
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
+        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, 2)));
+        given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
+        given(valueQuestionReader.getAllActive()).willReturn(List.of(
+                new ValueQuestion(100L, "연인과 주말을 보낸다면?", "함께 여행 가기", "집에서 쉬기", "DATING", 1, true)));
+        given(userValueAnswerReader.getAllByUserId(targetUserId))
+                .willReturn(List.of(new UserValueAnswer(500L, targetUserId, 100L, "B")));
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        assertThat(result.valueAnswers().get(0).answerText()).isEqualTo("집에서 쉬기");
+    }
+
+    @Test
+    @DisplayName("Day1에는 가치관 답변이 비공개라 answer·answer_text 모두 null이다")
+    void givenDay1_whenGetProfile_thenAnswerAndTextHidden() {
+        Long userId = 1L;
+        Long targetUserId = 2L;
+        Long roomId = 10L;
+        Long meId = 20L;
+        Long targetId = 30L;
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
+        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, 1))); // Day1 = 가치관 비공개
+        given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
+        given(valueQuestionReader.getAllActive()).willReturn(List.of(
+                new ValueQuestion(100L, "연인과 주말을 보낸다면?", "함께 여행 가기", "집에서 쉬기", "DATING", 1, true)));
+        given(userValueAnswerReader.getAllByUserId(targetUserId))
+                .willReturn(List.of(new UserValueAnswer(500L, targetUserId, 100L, "A")));
+
+        MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
+
+        assertThat(result.valueAnswers().get(0).visible()).isFalse();
+        assertThat(result.valueAnswers().get(0).answer()).isNull();
+        assertThat(result.valueAnswers().get(0).answerText()).isNull();
+    }
+
+    @Test
     @DisplayName("방 멤버가 아니면 NotRoomMemberException이 발생한다")
     void givenNonMember_whenGetProfile_thenThrows() {
         Long userId = 1L;
