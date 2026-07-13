@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.video.business;
 
+import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
@@ -29,17 +30,19 @@ public class VideoReactionService {
     private final RoomMemberReader roomMemberReader;
     private final VideoReactionReader videoReactionReader;
     private final VideoReactionWriter videoReactionWriter;
+    private final ProfileService profileService;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public VideoReactionService(VideoPostReader videoPostReader, RoomMemberReader roomMemberReader,
                                 VideoReactionReader videoReactionReader,
-                                VideoReactionWriter videoReactionWriter,
+                                VideoReactionWriter videoReactionWriter, ProfileService profileService,
                                 ApplicationEventPublisher eventPublisher, Clock clock) {
         this.videoPostReader = videoPostReader;
         this.roomMemberReader = roomMemberReader;
         this.videoReactionReader = videoReactionReader;
         this.videoReactionWriter = videoReactionWriter;
+        this.profileService = profileService;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -61,7 +64,8 @@ public class VideoReactionService {
         if (existing.isEmpty()) {
             videoReactionWriter.save(VideoReaction.create(videoPostId, userId, reactionType.name(), LocalDateTime.now(clock)));
             if (!author.userId().equals(userId)) {
-                eventPublisher.publishEvent(new VideoReactedEvent(author.userId(), videoPostId));
+                eventPublisher.publishEvent(new VideoReactedEvent(
+                        author.userId(), videoPostId, profileService.getNickname(userId), reactionType.name()));
             }
             return new ReactionResponse(true, reactionType);
         }
