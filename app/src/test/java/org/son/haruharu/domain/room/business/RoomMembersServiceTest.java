@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,8 +21,11 @@ import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MembersResponse;
+import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
+import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 
@@ -42,6 +46,7 @@ class RoomMembersServiceTest {
     private final Clock clock = Clock.fixed(
             ZonedDateTime.of(2026, 6, 26, 12, 0, 0, 0, SEOUL).toInstant(), SEOUL);
 
+    @Mock RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
     @Mock UserProfileReader userProfileReader;
     @Mock UserImageReader userImageReader;
@@ -56,7 +61,15 @@ class RoomMembersServiceTest {
     }
 
     private RoomMembersService service() {
-        return new RoomMembersService(roomMemberReader, userProfileReader, userImageReader, s3StoragePort, clock);
+        return new RoomMembersService(roomReader, roomMemberReader, userProfileReader, userImageReader,
+                s3StoragePort, clock);
+    }
+
+    /** clock(2026-06-26 12:00) 기준 currentDay가 원하는 값이 되도록 startedAt을 역산해 ACTIVE 방을 스텁한다. */
+    private void stubRoomAtDay(Long roomId, int currentDay) {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 6, 26, 9, 0).minusDays(currentDay - 1);
+        given(roomReader.findById(roomId)).willReturn(Optional.of(
+                new Room(roomId, RoomStatus.ACTIVE, startedAt.toLocalDate(), 3, startedAt, null)));
     }
 
     private UserProfile profile(Long userId, String nickname, String location) {
@@ -70,12 +83,13 @@ class RoomMembersServiceTest {
     }
 
     @Test
-    @DisplayName("목록은 닉네임·성별·지역·나이만 담고 Day 게이트 항목은 포함하지 않는다")
-    void givenMember_whenGetMembers_thenBasicsOnly() {
+    @DisplayName("본인 항목은 Day1이어도 지역·나이가 그대로 노출된다(자기 정보는 게이트 제외)")
+    void givenDay1Room_whenGetMembers_thenSelfKeepsLocationAndAge() {
         Long userId = 1L;
         Long roomId = 10L;
         RoomMember me = member(roomId, userId);
 
+        stubRoomAtDay(roomId, 1);
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me));
         given(userProfileReader.findByUserIdIn(List.of(userId)))
@@ -91,6 +105,63 @@ class RoomMembersServiceTest {
     }
 
     @Test
+    @DisplayName("3일차 전에는 타 멤버의 지역·나이가 null로 내려가고 닉네임·성별·사진은 유지된다")
+    void givenDay1Room_whenGetMembers_thenHidesOthersLocationAndAge() {
+        Long myUserId = 1L;
+        Long otherUserId = 2L;
+        Long roomId = 20L;
+        RoomMember me = member(roomId, myUserId);
+        RoomMember other = member(roomId, otherUserId);
+
+        stubRoomAtDay(roomId, 1);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, myUserId)).willReturn(me);
+        given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me, other));
+        given(userProfileReader.findByUserIdIn(anyCollection()))
+                .willReturn(Map.of(
+                        myUserId, profile(myUserId, "철수", "서울"),
+                        otherUserId, profile(otherUserId, "영희", "부산")));
+        given(userImageReader.getRepresentativeImageUrls(anyCollection()))
+                .willReturn(Map.of(otherUserId, "https://cdn/other.jpg"));
+
+        MembersResponse result = service().getMembers(roomId, myUserId);
+
+        MembersResponse.MemberView otherView = result.members().get(1);
+        assertThat(otherView.me()).isFalse();
+        assertThat(otherView.location()).isNull();
+        assertThat(otherView.age()).isNull();
+        assertThat(otherView.nickname()).isEqualTo("영희");
+        assertThat(otherView.gender()).isEqualTo("MALE");
+        assertThat(otherView.profileImageUrl()).isEqualTo("https://cdn/other.jpg?sig");
+        // 본인은 게이트 제외
+        assertThat(result.members().get(0).location()).isEqualTo("서울");
+        assertThat(result.members().get(0).age()).isEqualTo(26);
+    }
+
+    @Test
+    @DisplayName("3일차부터는 타 멤버의 지역·나이가 공개된다")
+    void givenDay3Room_whenGetMembers_thenRevealsOthersLocationAndAge() {
+        Long myUserId = 1L;
+        Long otherUserId = 2L;
+        Long roomId = 21L;
+        RoomMember me = member(roomId, myUserId);
+        RoomMember other = member(roomId, otherUserId);
+
+        stubRoomAtDay(roomId, 3);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, myUserId)).willReturn(me);
+        given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me, other));
+        given(userProfileReader.findByUserIdIn(anyCollection()))
+                .willReturn(Map.of(
+                        myUserId, profile(myUserId, "철수", "서울"),
+                        otherUserId, profile(otherUserId, "영희", "부산")));
+
+        MembersResponse result = service().getMembers(roomId, myUserId);
+
+        MembersResponse.MemberView otherView = result.members().get(1);
+        assertThat(otherView.location()).isEqualTo("부산");
+        assertThat(otherView.age()).isEqualTo(26);
+    }
+
+    @Test
     @DisplayName("멤버가 여러 명이어도 프로필은 배치 조회 1회로 해결하고 건별 조회는 하지 않는다")
     void givenMultipleMembers_whenGetMembers_thenLoadsProfilesInSingleBatch() {
         Long myUserId = 1L;
@@ -99,6 +170,7 @@ class RoomMembersServiceTest {
         RoomMember me = member(roomId, myUserId);
         RoomMember other = member(roomId, otherUserId);
 
+        stubRoomAtDay(roomId, 3);
         given(roomMemberReader.getByRoomIdAndUserId(roomId, myUserId)).willReturn(me);
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me, other));
         given(userProfileReader.findByUserIdIn(anyCollection()))
@@ -124,6 +196,7 @@ class RoomMembersServiceTest {
         // 나이는 프로필이 아닌 RoomMember.birthday(본인인증 스냅샷)에서 온다 → birthday null이면 나이도 null
         RoomMember me = new RoomMember(910L, roomId, userId, "MALE", null, LocalDateTime.now(clock));
 
+        stubRoomAtDay(roomId, 3);
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me));
         given(userProfileReader.findByUserIdIn(List.of(userId))).willReturn(Map.of());
@@ -146,6 +219,7 @@ class RoomMembersServiceTest {
         RoomMember me = member(roomId, myUserId);
         RoomMember other = member(roomId, otherUserId);
 
+        stubRoomAtDay(roomId, 1);
         given(roomMemberReader.getByRoomIdAndUserId(roomId, myUserId)).willReturn(me);
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me, other));
         given(userProfileReader.findByUserIdIn(anyCollection())).willReturn(Map.of());
@@ -167,6 +241,7 @@ class RoomMembersServiceTest {
         Long roomId = 15L;
         RoomMember me = member(roomId, myUserId);
 
+        stubRoomAtDay(roomId, 1);
         given(roomMemberReader.getByRoomIdAndUserId(roomId, myUserId)).willReturn(me);
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me, member(roomId, 2L)));
         given(userProfileReader.findByUserIdIn(anyCollection())).willReturn(Map.of());
@@ -184,6 +259,7 @@ class RoomMembersServiceTest {
         Long roomId = 16L;
         RoomMember me = member(roomId, userId);
 
+        stubRoomAtDay(roomId, 1);
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me));
         given(userProfileReader.findByUserIdIn(anyCollection())).willReturn(Map.of());
