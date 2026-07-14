@@ -8,6 +8,7 @@ import org.son.haruharu.common.exception.ConflictException;
 import org.son.haruharu.common.exception.ForbiddenException;
 import org.son.haruharu.common.exception.NotFoundException;
 import org.son.haruharu.common.exception.UnauthorizedException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -64,6 +65,13 @@ public class AdminExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail("INVALID_REQUEST_BODY", "잘못된 요청 바디입니다.")));
+    }
+
+    // 유니크 제약 위반(예: 상품 storeProductId 동시 생성 레이스)을 500이 아닌 409로 매핑.
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(new ApiErrorDetail("DATA_INTEGRITY_VIOLATION", "중복되거나 제약을 위반한 데이터입니다.")));
     }
 
     @ExceptionHandler(Exception.class)
