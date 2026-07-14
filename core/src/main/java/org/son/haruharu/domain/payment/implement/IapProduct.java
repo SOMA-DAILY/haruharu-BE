@@ -12,6 +12,12 @@ public record IapProduct(
         String currency,
         boolean active
 ) {
+    /** 신규 상품(활성). id는 저장 시 생성. */
+    public static IapProduct create(String storeProductId, IapStore store,
+                                    long coinAmount, long bonusAmount, int price, String currency) {
+        return new IapProduct(null, storeProductId, store, coinAmount, bonusAmount, price, currency, true);
+    }
+
     /** 실제 지급 코인 = 기본 수량 + 보너스 수량. */
     public long totalCoinAmount() {
         return coinAmount + bonusAmount;

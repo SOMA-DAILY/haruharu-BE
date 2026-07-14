@@ -87,15 +87,25 @@ public class AdminSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/v1/admin/auth/login").permitAll()
                         .requestMatchers("/actuator/health", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        // 코인 상품 카탈로그 관리(생성·목록·수정)는 SUPER 전용.
+                        .requestMatchers("/api/v1/admin/iap/products", "/api/v1/admin/iap/products/**").hasRole("SUPER")
                         .anyRequest().authenticated())
-                .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, e) -> {
-                    response.setStatus(401);
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-                    ApiResponse<?> body = ApiResponse.error(new ApiErrorDetail("UNAUTHORIZED", "인증이 필요합니다."));
-                    response.getWriter().write(jsonMapper.writeValueAsString(body));
-                }))
+                .exceptionHandling(ex -> ex
+                        // 401·403 모두 ApiResponse 표준 포맷으로 응답(컨테이너 기본 에러 우회 방지).
+                        .authenticationEntryPoint((request, response, e) ->
+                                writeError(response, 401, "UNAUTHORIZED", "인증이 필요합니다."))
+                        .accessDeniedHandler((request, response, e) ->
+                                writeError(response, 403, "FORBIDDEN", "권한이 없습니다.")))
                 .addFilterBefore(adminJwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
+    }
+
+    private void writeError(jakarta.servlet.http.HttpServletResponse response, int status, String code, String message)
+            throws java.io.IOException {
+        response.setStatus(status);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        ApiResponse<?> body = ApiResponse.error(new ApiErrorDetail(code, message));
+        response.getWriter().write(jsonMapper.writeValueAsString(body));
     }
 }
