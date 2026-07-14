@@ -10,3 +10,9 @@ springdoc:
     enabled: false
   api-docs:
     enabled: false
+
+# 운영 CORS는 fail-closed: env(ADMIN_CORS_ALLOWED_ORIGINS) 미설정 시 빈 값 → 전 오리진 차단.
+# (base yaml의 dev 기본값 http://localhost:5173 이 운영에 새어들지 않게 명시적으로 재정의)
+admin:
+  cors:
+    allowed-origins: ${ADMIN_CORS_ALLOWED_ORIGINS:}
