@@ -1,18 +1,21 @@
 name: Build & Push Image
 
-# develop/main 으로 향한 PR이 "머지"될 때만 트리거 (직접 push 는 무시)
+# develop/main 으로 향한 PR "머지" 시 자동 트리거(직접 push 무시),
+# 또는 워크플로를 선택한 브랜치에서 수동 실행(workflow_dispatch).
 on:
   pull_request:
     types: [closed]
     branches: [develop, main]
+  workflow_dispatch:
 
 concurrency:
-  group: image-${{ github.event.pull_request.base.ref }}
+  group: image-${{ github.event.pull_request.base.ref || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   build-push:
-    if: github.event.pull_request.merged == true
+    # 수동 실행은 항상, PR 이벤트는 머지된 경우에만.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,8 +27,10 @@ jobs:
         id: meta
         run: |
           IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          # 머지 이벤트는 base.ref, 수동 실행은 실행 브랜치(ref_name).
+          BRANCH="${{ github.event.pull_request.base.ref || github.ref_name }}"
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
-          echo "branch=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
