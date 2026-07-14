@@ -37,14 +37,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push (app)
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          build-args: |
+            MODULE=app
           tags: |
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.branch }}
             ${{ steps.meta.outputs.image }}:${{ github.sha }}
           cache-from: type=gha
           # 캐시 export(reserve) 실패가 job 전체를 죽이지 않도록 무시. 이미지 빌드·푸시는 이미 성공 상태.
+          cache-to: type=gha,mode=max,ignore-error=true
+
+      - name: Build and push (admin)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: |
+            MODULE=admin
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.branch }}-admin
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}-admin
+          cache-from: type=gha
           cache-to: type=gha,mode=max,ignore-error=true

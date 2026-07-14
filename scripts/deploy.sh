@@ -23,13 +23,20 @@ if [ -z "$TAG" ]; then
   if [ "$ENVIRONMENT" = "prod" ]; then TAG="main"; else TAG="develop"; fi
 fi
 IMAGE="ghcr.io/$(echo "$REPO" | tr '[:upper:]' '[:lower:]'):${TAG}"
-echo "▶ 배포 이미지: ${IMAGE} (profile=${ENVIRONMENT})"
+ADMIN_IMAGE="ghcr.io/$(echo "$REPO" | tr '[:upper:]' '[:lower:]'):${TAG}-admin"
+ADMIN_PORT="${ADMIN_PORT:-8081}"
+echo "▶ 배포 이미지: ${IMAGE} / ${ADMIN_IMAGE} (profile=${ENVIRONMENT})"
 
 # ── 2. .env 작성 ──
 cat > .env <<EOF
 SPRING_PROFILES_ACTIVE=${ENVIRONMENT}
 APP_IMAGE=${IMAGE}
 APP_PORT=${APP_PORT}
+ADMIN_IMAGE=${ADMIN_IMAGE}
+ADMIN_PORT=${ADMIN_PORT}
+ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET:-}
+ADMIN_BOOTSTRAP_EMAIL=${ADMIN_BOOTSTRAP_EMAIL:-}
+ADMIN_BOOTSTRAP_PASSWORD=${ADMIN_BOOTSTRAP_PASSWORD:-}
 DB_URL=${DB_URL:-}
 DB_USERNAME=${DB_USERNAME:-}
 DB_PASSWORD=${DB_PASSWORD:-}
@@ -67,16 +74,23 @@ ssh_exec "cd '${DEPLOY_DIR}' \
   && docker logout ghcr.io \
   && docker image prune -f"
 
-# ── 5. 헬스체크 (/actuator/health 가 UP 될 때까지 최대 2분) ──
-for i in $(seq 1 12); do
-  if ssh_exec "wget -qO- http://localhost:${APP_PORT}/actuator/health" | grep -q '"status":"UP"'; then
-    echo "✅ 헬스체크 성공"
-    exit 0
-  fi
-  echo "헬스체크 대기 ${i}/12..."
-  sleep 10
-done
+# ── 5. 헬스체크 (app·admin 각각 /actuator/health 가 UP 될 때까지 최대 2분) ──
+wait_health() {
+  local port="$1" service="$2"
+  for i in $(seq 1 12); do
+    if ssh_exec "wget -qO- http://localhost:${port}/actuator/health" | grep -q '"status":"UP"'; then
+      echo "✅ ${service} 헬스체크 성공 (:${port})"
+      return 0
+    fi
+    echo "${service} 헬스체크 대기 ${i}/12..."
+    sleep 10
+  done
+  echo "❌ ${service} 헬스체크 실패 — 최근 로그:"
+  ssh_exec "cd '${DEPLOY_DIR}' && docker compose -f '${COMPOSE_FILE}' logs --tail=80 ${service}"
+  return 1
+}
 
-echo "❌ 헬스체크 실패 — 최근 로그:"
-ssh_exec "cd '${DEPLOY_DIR}' && docker compose -f '${COMPOSE_FILE}' logs --tail=80 app"
-exit 1
+wait_health "${APP_PORT}" "app" || exit 1
+wait_health "${ADMIN_PORT}" "admin" || exit 1
+echo "✅ 전체 배포 헬스체크 성공 (app :${APP_PORT} · admin :${ADMIN_PORT})"
+exit 0

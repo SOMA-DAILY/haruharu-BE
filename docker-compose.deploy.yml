@@ -17,3 +17,19 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
+
+  # 어드민 서버(별도 bootJar). 같은 RDS를 공유하고 호스트 8081로 노출한다.
+  # 컨테이너 내부·호스트 모두 8081(어드민 앱 기본 server.port). 공용 .env를 로드한다.
+  admin:
+    image: ${ADMIN_IMAGE}
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_PORT}:8081"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s

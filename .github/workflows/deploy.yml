@@ -34,6 +34,11 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
           IMAGE_TAG: ${{ inputs.image_tag }}
           APP_PORT: ${{ vars.APP_PORT }}
+          # 어드민 서버(별도 컨테이너, 호스트 8081). ADMIN_JWT_SECRET은 JWT_SECRET과 다른 값이어야 함.
+          ADMIN_PORT: ${{ vars.ADMIN_PORT }}
+          ADMIN_JWT_SECRET: ${{ secrets.ADMIN_JWT_SECRET }}
+          ADMIN_BOOTSTRAP_EMAIL: ${{ vars.ADMIN_BOOTSTRAP_EMAIL }}
+          ADMIN_BOOTSTRAP_PASSWORD: ${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
           REPO: ${{ github.repository }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
