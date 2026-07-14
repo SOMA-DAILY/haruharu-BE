@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
@@ -39,13 +40,14 @@ class VideoReactionServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock VideoReactionReader videoReactionReader;
     @Mock VideoReactionWriter videoReactionWriter;
+    @Mock ProfileService profileService;
     @Mock ApplicationEventPublisher eventPublisher;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-26T03:00:00Z"), ZoneId.of("Asia/Seoul"));
 
     private VideoReactionService service() {
         return new VideoReactionService(videoPostReader, roomMemberReader, videoReactionReader,
-                videoReactionWriter, eventPublisher, clock);
+                videoReactionWriter, profileService, eventPublisher, clock);
     }
 
     private void stubPostAndMembership(Long postId, Long userId) {
@@ -112,16 +114,17 @@ class VideoReactionServiceTest {
     }
 
     @Test
-    @DisplayName("다른 유저가 새 반응을 남기면 영상 작성자에게 VideoReactedEvent가 발행된다")
-    void givenNewReactionByOther_whenToggle_thenPublishesEvent() {
+    @DisplayName("다른 유저가 새 반응을 남기면 반응자 닉네임을 담은 VideoReactedEvent가 작성자에게 발행된다")
+    void givenNewReactionByOther_whenToggle_thenPublishesEventWithReactorNickname() {
         Long userId = 1L; // 작성자(2L)와 다른 유저
         Long postId = 100L;
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
+        given(profileService.getNickname(userId)).willReturn("노을");
 
         service().toggle(userId, postId, ReactionType.LIKE);
 
-        then(eventPublisher).should().publishEvent(new VideoReactedEvent(2L, postId));
+        then(eventPublisher).should().publishEvent(new VideoReactedEvent(2L, postId, "노을", "LIKE"));
     }
 
     @Test

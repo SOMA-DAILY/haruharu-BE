@@ -40,8 +40,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class MemberProfileService {
 
-    /** 나이 공개 Day. 나이는 UserProfile이 아닌 본인인증 스냅샷(RoomMember.birthday)에서 파생한다. */
-    private static final int AGE_REVEAL_DAY = 3;
+    /** 나이 공개 Day. 나이는 UserProfile이 아닌 본인인증 스냅샷(RoomMember.birthday)에서 파생한다. 목록(RoomMembersService)도 같은 기준을 참조한다(#214). */
+    static final int AGE_REVEAL_DAY = 3;
     /** 가치관 답변 공개 Day. */
     private static final int VALUE_REVEAL_DAY = 2;
 

@@ -17,7 +17,8 @@ public enum NotificationType {
     FINAL_SELECTION_OPEN("💘 마음을 전할 시간이에요", "3일간 지켜본 그 사람, 오늘 선택할 수 있어요", true, NotificationCategory.ACTIVITY),
 
     // ── B. 소셜 상호작용 ──
-    REACTION_RECEIVED("👀 누군가 내 영상에 반응했어요", "누가 관심을 보였을까요?", true, NotificationCategory.ACTIVITY),
+    // %1$s=반응자 닉네임, %2$s=반응 동사(좋아해요·궁금해해요·공감해요) — 피그마 3-1a 카피 정렬(#213)
+    REACTION_RECEIVED("👀 %1$s님이 반응을 남겼어요", "회원님의 영상을 %2$s", true, NotificationCategory.ACTIVITY),
     MUTUAL_MATCH("💞 서로의 마음이 닿았어요", "두 분 다 서로를 선택했어요! 지금 대화를 시작해보세요", true, NotificationCategory.ACTIVITY),
     SELECTED_BY_SOMEONE("💕 설레는 소식이 있어요", "누군가 당신을 마음에 담았어요. 누굴까요?", true, NotificationCategory.ACTIVITY),
     // body의 %s는 발신자 닉네임(bodyArgs)으로 치환. 대화 내용은 잠금화면 노출 방지를 위해 미포함.
