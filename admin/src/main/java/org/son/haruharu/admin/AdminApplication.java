@@ -25,7 +25,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.room.storage",
         "org.son.haruharu.domain.matching.storage",
         "org.son.haruharu.domain.user.storage",
-        "org.son.haruharu.domain.profile.storage"
+        "org.son.haruharu.domain.profile.storage",
+        "org.son.haruharu.domain.coin.storage",
+        "org.son.haruharu.domain.payment.storage"
 })
 @EnableJpaRepositories("org.son.haruharu.admin.domain")
 @Import({JpaConfig.class, ClockConfig.class})
