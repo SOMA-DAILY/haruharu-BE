@@ -21,3 +21,5 @@ admin:
   bootstrap:
     email: ${ADMIN_BOOTSTRAP_EMAIL:}
     password: ${ADMIN_BOOTSTRAP_PASSWORD:}
+  cors:
+    allowed-origins: http://localhost:5173
