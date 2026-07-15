@@ -61,7 +61,7 @@ public class MatchingService {
     @Transactional
     public QueueResponse joinQueue(Long userId) {
         LocalDateTime now = LocalDateTime.now(clock);
-        // 신청 마감 시간대(21:00~23:59:59)면 참가 차단. 00:00에 자동 재개.
+        // 발표 시간대(21:00~22:00)면 참가 차단. 22:00에 자동 재개(#229).
         if (!MatchingQueue.isApplyOpen(now.toLocalTime())) {
             throw new MatchingClosedException();
         }

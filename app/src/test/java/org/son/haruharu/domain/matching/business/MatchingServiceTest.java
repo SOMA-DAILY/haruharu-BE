@@ -165,7 +165,7 @@ class MatchingServiceTest {
     }
 
     @Test
-    @DisplayName("신청 마감 시간대(21:00)에 큐 참가 시 MatchingClosedException이 발생하고 저장·차감하지 않는다")
+    @DisplayName("발표 시간대 시작(21:00)에 큐 참가 시 MatchingClosedException이 발생하고 저장·차감하지 않는다")
     void givenDeadline_whenJoinQueue_thenThrowsClosed() {
         Long userId = 1L;
 
@@ -175,6 +175,49 @@ class MatchingServiceTest {
         then(identityService).should(never()).findVerified(any());
         then(matchingQueueWriter).should(never()).save(any());
         then(coinService).should(never()).spend(any());
+    }
+
+    @Test
+    @DisplayName("발표 시간대(21:30)에 큐 참가 시 MatchingClosedException이 발생하고 저장·차감하지 않는다")
+    void givenAnnouncementWindow_whenJoinQueue_thenThrowsClosed() {
+        Long userId = 1L;
+
+        assertThatThrownBy(() -> serviceAt(21, 30).joinQueue(userId))
+            .isInstanceOf(MatchingClosedException.class);
+
+        then(identityService).should(never()).findVerified(any());
+        then(matchingQueueWriter).should(never()).save(any());
+        then(coinService).should(never()).spend(any());
+    }
+
+    @Test
+    @DisplayName("발표 시각 정각(22:00)에는 신청이 재개되어 큐 참가가 허용된다")
+    void givenConfirmHour_whenJoinQueue_thenAllowed() {
+        Long userId = 1L;
+        givenVerified(userId);
+        given(roomService.hasCurrentRoom(userId)).willReturn(false);
+        given(matchingQueueReader.isQueued(userId)).willReturn(false);
+        givenSaveEcho();
+
+        QueueResponse result = serviceAt(22, 0).joinQueue(userId);
+
+        assertThat(result.status()).isEqualTo("QUEUED");
+        then(coinService).should().spend(any());
+    }
+
+    @Test
+    @DisplayName("발표 이후 야간(23:00)에는 큐 참가가 허용된다(신규 허용 시간대)")
+    void givenLateNight_whenJoinQueue_thenAllowed() {
+        Long userId = 1L;
+        givenVerified(userId);
+        given(roomService.hasCurrentRoom(userId)).willReturn(false);
+        given(matchingQueueReader.isQueued(userId)).willReturn(false);
+        givenSaveEcho();
+
+        QueueResponse result = serviceAt(23, 0).joinQueue(userId);
+
+        assertThat(result.status()).isEqualTo("QUEUED");
+        then(coinService).should().spend(any());
     }
 
     @Test
