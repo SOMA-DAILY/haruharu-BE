@@ -46,7 +46,7 @@ class CoinServiceTest {
     @BeforeEach
     void setUp() {
         coinService = new CoinService(coinWalletReader, coinWalletWriter, coinLedgerReader, coinLedgerWriter,
-                new CoinProperties(5L));
+                new CoinProperties(20L));
     }
 
     @Test
@@ -61,7 +61,7 @@ class CoinServiceTest {
         verify(coinLedgerWriter).append(captor.capture());
         assertThat(captor.getValue().reason()).isEqualTo(CoinLedgerReason.SIGNUP_BONUS);
         assertThat(captor.getValue().bucket()).isEqualTo(CoinBucket.REWARD);
-        assertThat(captor.getValue().delta()).isEqualTo(5L);
+        assertThat(captor.getValue().delta()).isEqualTo(20L);
         verify(coinWalletWriter).save(any());
     }
 
