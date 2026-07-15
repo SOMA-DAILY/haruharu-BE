@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.son.haruharu.domain.matching.implement.LastApplyOutcome;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
 
@@ -60,5 +61,10 @@ public class MatchingQueueEntity extends BaseEntity {
 
     public MatchingQueue toDomain() {
         return new MatchingQueue(id, userId, gender, birthday, status, queuedAt, matchedAt);
+    }
+
+    /** 홈 직전 신청 결과 판정용 요약. resolvedAt은 마지막 전이 시각(EXPIRED면 배치 만료 시각)인 updatedAt. */
+    public LastApplyOutcome toLastApplyOutcome() {
+        return new LastApplyOutcome(status, updatedAt);
     }
 }

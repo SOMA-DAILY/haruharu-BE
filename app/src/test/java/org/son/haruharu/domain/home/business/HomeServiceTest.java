@@ -16,6 +16,7 @@ import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.coin.business.dto.WalletResponse;
 import org.son.haruharu.domain.home.business.dto.HomeResponse;
 import org.son.haruharu.domain.matching.business.MatchingService;
+import org.son.haruharu.domain.matching.business.dto.LastApplyResultResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
 import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.RoomService;
@@ -45,6 +46,7 @@ class HomeServiceTest {
         given(coinService.getWallet(userId))
                 .willReturn(new WalletResponse(balance, balance, 0, LocalDateTime.now()));
         given(matchingService.getQueueStatus(userId)).willReturn(queue);
+        given(matchingService.getLastApplyResult(userId)).willReturn(Optional.empty());
         given(roomService.findMyRoom(userId)).willReturn(Optional.ofNullable(room));
         given(matchResultService.findPendingResult(userId)).willReturn(Optional.empty());
     }
@@ -165,5 +167,30 @@ class HomeServiceTest {
         HomeResponse result = service.getHome(userId);
 
         assertThat(result.matching().pendingResult()).isNull();
+    }
+
+    @Test
+    @DisplayName("직전 신청이 불발(EXPIRED)이면 matching.last_apply_result로 그대로 내려간다")
+    void givenExpiredLastApply_whenGetHome_thenExposedInMatching() {
+        HomeService service = serviceAt("2026-07-15T01:00:00Z");
+        stubDefaults(5L, QueueStatusResponse.none(), null);
+        LastApplyResultResponse lastApply = new LastApplyResultResponse(
+                "EXPIRED", LocalDateTime.of(2026, 7, 14, 22, 0), 5L);
+        given(matchingService.getLastApplyResult(userId)).willReturn(Optional.of(lastApply));
+
+        HomeResponse result = service.getHome(userId);
+
+        assertThat(result.matching().lastApplyResult()).isEqualTo(lastApply);
+    }
+
+    @Test
+    @DisplayName("직전 불발 결과가 없으면 last_apply_result는 null이다")
+    void givenNoLastApply_whenGetHome_thenNullLastApplyResult() {
+        HomeService service = serviceAt("2026-07-05T01:00:00Z");
+        stubDefaults(0L, QueueStatusResponse.none(), null);
+
+        HomeResponse result = service.getHome(userId);
+
+        assertThat(result.matching().lastApplyResult()).isNull();
     }
 }

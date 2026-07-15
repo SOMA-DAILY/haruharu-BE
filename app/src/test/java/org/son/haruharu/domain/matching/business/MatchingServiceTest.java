@@ -15,12 +15,14 @@ import org.son.haruharu.domain.coin.implement.CoinLedgerReason;
 import org.son.haruharu.domain.coin.implement.exception.InsufficientCoinException;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
+import org.son.haruharu.domain.matching.business.dto.LastApplyResultResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
 import org.son.haruharu.domain.matching.business.exception.MatchingAlreadyQueuedException;
 import org.son.haruharu.domain.matching.business.exception.MatchingClosedException;
 import org.son.haruharu.domain.matching.business.exception.MatchingNotVerifiedException;
 import org.son.haruharu.domain.matching.business.exception.MatchingRoomInProgressException;
+import org.son.haruharu.domain.matching.implement.LastApplyOutcome;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.matching.implement.MatchingQueueReader;
 import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
@@ -284,5 +286,44 @@ class MatchingServiceTest {
 
         assertThat(result.status()).isEqualTo("NONE");
         assertThat(result.queuedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("최근 신청이 미매칭(EXPIRED)이면 outcome·만료시각·환불액이 담긴 불발 결과를 반환한다")
+    void givenLatestExpired_whenGetLastApplyResult_thenReturnsExpiredResult() {
+        Long userId = 1L;
+        LocalDateTime expiredAt = LocalDateTime.of(2026, 7, 14, 22, 0);
+        given(matchingQueueReader.findLatestOutcome(userId))
+            .willReturn(Optional.of(new LastApplyOutcome(MatchingQueueStatus.EXPIRED, expiredAt)));
+
+        Optional<LastApplyResultResponse> result = matchingService.getLastApplyResult(userId);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().outcome()).isEqualTo("EXPIRED");
+        assertThat(result.get().expiredAt()).isEqualTo(expiredAt);
+        assertThat(result.get().refundAmount()).isEqualTo(matchingProperties.enterCost());
+    }
+
+    @Test
+    @DisplayName("최근 큐가 재신청(QUEUED)이면 불발 결과는 비어 있다(재신청 시 이전 불발 결과가 가려진다)")
+    void givenLatestQueued_whenGetLastApplyResult_thenEmpty() {
+        Long userId = 1L;
+        given(matchingQueueReader.findLatestOutcome(userId))
+            .willReturn(Optional.of(new LastApplyOutcome(MatchingQueueStatus.QUEUED, null)));
+
+        Optional<LastApplyResultResponse> result = matchingService.getLastApplyResult(userId);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("신청 이력이 없으면 불발 결과는 비어 있다")
+    void givenNoHistory_whenGetLastApplyResult_thenEmpty() {
+        Long userId = 1L;
+        given(matchingQueueReader.findLatestOutcome(userId)).willReturn(Optional.empty());
+
+        Optional<LastApplyResultResponse> result = matchingService.getLastApplyResult(userId);
+
+        assertThat(result).isEmpty();
     }
 }
