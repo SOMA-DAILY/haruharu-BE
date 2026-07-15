@@ -5,7 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.auth.business.AuthService;
 import org.son.haruharu.domain.auth.business.command.SocialAuthCommand;
-import org.son.haruharu.domain.auth.business.exception.ReRegistrationBlockedException;
+import org.son.haruharu.domain.auth.business.dto.AuthTokenResponse;
 import org.son.haruharu.domain.auth.implement.ProviderType;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -48,8 +47,8 @@ class CredentialRejoinIntegrationTest {
     @MockitoBean OAuthProviderRegistry oAuthProviderRegistry;
 
     @Test
-    @DisplayName("탈퇴로 soft-delete된 credential은 일반 조회에서 제외되고 30일 이내면 재가입 차단 대상이다")
-    void givenWithdrawnCredential_whenWithin30Days_thenExcludedFromFindAndBlockable() {
+    @DisplayName("탈퇴로 soft-delete된 credential은 일반 조회에서 제외되고 탈퇴 직후 purge로 즉시 물리 파기된다")
+    void givenJustWithdrawnCredential_whenPurgeNow_thenExcludedFromFindAndPurged() {
         userCredentialWriter.save(new UserCredential(null, 9001L, PROVIDER, SUB));
         em.flush();
 
@@ -59,32 +58,20 @@ class CredentialRejoinIntegrationTest {
 
         assertThat(userCredentialReader.findByProviderTypeAndProviderId(PROVIDER, SUB)).isEmpty();
 
-        LocalDateTime threshold = LocalDateTime.now().minusDays(30);
-        assertThat(userCredentialReader.existsWithdrawnWithin(PROVIDER, SUB, threshold)).isTrue();
-        // 30일 이내라 purge 대상 아님
-        assertThat(userCredentialWriter.purgeWithdrawnBefore(PROVIDER, SUB, threshold)).isZero();
+        // 차단 기간 없이 now 기준 → 탈퇴 직후에도 즉시 파기 대상
+        assertThat(userCredentialWriter.purgeWithdrawnBefore(PROVIDER, SUB, LocalDateTime.now())).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("30일 경과한 탈퇴 credential은 purge로 물리 파기되어 같은 OAuth 재삽입이 unique 충돌 없이 성공한다")
-    void givenWithdrawnOver30Days_whenPurgeAndReinsert_thenNoUniqueConflict() {
+    @DisplayName("탈퇴 직후 purge된 credential은 같은 OAuth 재삽입이 unique 충돌 없이 성공한다")
+    void givenJustWithdrawn_whenPurgeAndReinsert_thenNoUniqueConflict() {
         userCredentialWriter.save(new UserCredential(null, 9002L, PROVIDER, SUB));
         em.flush();
         userCredentialWriter.deleteByUserId(9002L);
         em.flush();
-
-        // 31일 전에 탈퇴한 것으로 deleted_at을 앞당긴다(native, 전역 필터 우회)
-        em.createNativeQuery("UPDATE user_credentials SET deleted_at = :past "
-                        + "WHERE provider_type = :pt AND provider_id = :pid")
-                .setParameter("past", LocalDateTime.now().minusDays(31))
-                .setParameter("pt", PROVIDER)
-                .setParameter("pid", SUB)
-                .executeUpdate();
         em.clear();
 
-        LocalDateTime threshold = LocalDateTime.now().minusDays(30);
-        assertThat(userCredentialReader.existsWithdrawnWithin(PROVIDER, SUB, threshold)).isFalse();
-        assertThat(userCredentialWriter.purgeWithdrawnBefore(PROVIDER, SUB, threshold)).isEqualTo(1);
+        assertThat(userCredentialWriter.purgeWithdrawnBefore(PROVIDER, SUB, LocalDateTime.now())).isEqualTo(1);
         em.clear();
 
         // 죽은 행이 물리 파기됐으므로 같은 provider_id 재삽입이 충돌 없이 성공한다
@@ -95,8 +82,8 @@ class CredentialRejoinIntegrationTest {
     }
 
     @Test
-    @DisplayName("탈퇴 직후 같은 OAuth로 authenticate 시 ReRegistrationBlockedException이 발생한다")
-    void givenJustWithdrawn_whenAuthenticateSameOAuth_thenBlocked() {
+    @DisplayName("탈퇴 직후 같은 OAuth로 authenticate 시 차단 없이 재가입되어 ONBOARDING이 반환된다")
+    void givenJustWithdrawn_whenAuthenticateSameOAuth_thenReSignupOnboarding() {
         userCredentialWriter.save(new UserCredential(null, 9004L, PROVIDER, SUB));
         em.flush();
         userCredentialWriter.deleteByUserId(9004L);
@@ -107,7 +94,9 @@ class CredentialRejoinIntegrationTest {
         given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(provider);
         given(provider.verify("id-token")).willReturn(new OAuthUserInfo(SUB, PROVIDER));
 
-        assertThatThrownBy(() -> authService.authenticate(new SocialAuthCommand(ProviderType.KAKAO, "id-token")))
-                .isInstanceOf(ReRegistrationBlockedException.class);
+        AuthTokenResponse result = authService.authenticate(new SocialAuthCommand(ProviderType.KAKAO, "id-token"));
+
+        assertThat(result.userStatus()).isEqualTo("ONBOARDING");
+        assertThat(result.accessToken()).isNotEmpty();
     }
 }

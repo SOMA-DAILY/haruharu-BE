@@ -14,7 +14,6 @@ import org.son.haruharu.domain.auth.business.dto.AuthTokenResponse;
 import org.son.haruharu.domain.auth.business.exception.InactiveMemberException;
 import org.son.haruharu.domain.auth.business.exception.InvalidRefreshTokenException;
 import org.son.haruharu.domain.auth.business.exception.InvalidTokenException;
-import org.son.haruharu.domain.auth.business.exception.ReRegistrationBlockedException;
 import org.son.haruharu.domain.auth.implement.ProviderType;
 import org.son.haruharu.domain.auth.implement.RefreshToken;
 import org.son.haruharu.domain.auth.implement.RefreshTokenReader;
@@ -203,26 +202,8 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("탈퇴 후 30일 이내 같은 OAuth로 재로그인 시 ReRegistrationBlockedException이 발생하고 신규 가입되지 않는다")
-    void givenWithdrawnCredentialWithin30Days_whenAuthenticate_thenThrowsReRegistrationBlocked() {
-        SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
-        OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-123", "KAKAO");
-
-        given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(oAuthProvider);
-        given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
-        given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(Optional.empty());
-        given(userCredentialReader.existsWithdrawnWithin(eq("KAKAO"), eq("kakao-sub-123"), any())).willReturn(true);
-
-        assertThatThrownBy(() -> authService.authenticate(command))
-            .isInstanceOf(ReRegistrationBlockedException.class);
-
-        then(userWriter).should(never()).save(any());
-        then(coinService).should(never()).grantSignupBonus(any());
-    }
-
-    @Test
-    @DisplayName("탈퇴 후 30일 경과한 같은 OAuth로 재로그인 시 재가입되지만 signup 보너스는 지급되지 않는다")
-    void givenWithdrawnCredentialAfter30Days_whenAuthenticate_thenReSignupWithoutBonus() {
+    @DisplayName("탈퇴 직후 같은 OAuth로 재로그인 시 차단 없이 재가입되고 signup 보너스는 지급되지 않는다")
+    void givenJustWithdrawnCredential_whenAuthenticate_thenReSignupWithoutBonus() {
         Long newUserId = 2L;
         SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
         OAuthUserInfo userInfo = new OAuthUserInfo("kakao-sub-123", "KAKAO");
@@ -231,7 +212,7 @@ class AuthServiceTest {
         given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(oAuthProvider);
         given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
         given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(Optional.empty());
-        given(userCredentialReader.existsWithdrawnWithin(eq("KAKAO"), eq("kakao-sub-123"), any())).willReturn(false);
+        // 탈퇴 잔존 행이 파기됨(=복귀 유저) → 보너스 skip
         given(userCredentialWriter.purgeWithdrawnBefore(eq("KAKAO"), eq("kakao-sub-123"), any())).willReturn(1);
         given(userWriter.save(any())).willReturn(created);
         given(userCredentialWriter.save(any())).willReturn(new UserCredential(20L, newUserId, "KAKAO", "kakao-sub-123"));
