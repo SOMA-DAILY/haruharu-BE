@@ -1,16 +1,14 @@
 name: Build & Push Image
 
-# develop 으로 향한 PR "머지" 시 자동 트리거(직접 push 무시),
-# 또는 선택 브랜치에서 수동 실행(workflow_dispatch).
-# prod 는 이 develop 이미지를 승격(build-once-promote)하므로 main 빌드는 없다.
+# develop 에 push(=PR 머지) 시 자동 빌드 → ECR 푸시. prod 는 develop 이미지 승격(main 빌드 없음).
+# push 이벤트라 GHA 캐시 쓰기가 가능하다(pull_request 이벤트는 캐시 read-only 라 캐시가 저장 안 됨).
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches: [develop]
   workflow_dispatch:
 
 concurrency:
-  group: image-${{ github.event.pull_request.base.ref || github.ref_name }}
+  group: image-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -23,20 +21,15 @@ env:
 
 jobs:
   build-push:
-    # 수동 실행은 항상, PR 이벤트는 머지된 경우에만.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
     runs-on: ubuntu-latest
     steps:
-      # 머지 이벤트는 base 브랜치(develop) 최신 HEAD 를, 수동 실행은 선택 브랜치를 체크아웃.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.base.ref || github.ref_name }}
 
       - name: Resolve tags (immutable SHA + moving branch)
         id: meta
         run: |
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "branch=${{ github.event.pull_request.base.ref || github.ref_name }}" >> "$GITHUB_OUTPUT"
+          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -66,7 +59,6 @@ jobs:
             ${{ env.ECR_REGISTRY }}/haruharu-app:${{ steps.meta.outputs.sha }}
             ${{ env.ECR_REGISTRY }}/haruharu-app:${{ steps.meta.outputs.branch }}
           cache-from: type=gha,scope=app
-          # 캐시 export 실패가 job 을 죽이지 않도록 무시(이미지 푸시는 이미 성공).
           cache-to: type=gha,mode=max,scope=app,ignore-error=true
 
       - name: Build & push (admin)
