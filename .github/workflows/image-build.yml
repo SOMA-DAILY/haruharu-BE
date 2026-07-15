@@ -1,5 +1,8 @@
 name: Build & Push Image
 
+# push 실행 제목을 커밋 메시지로 표시(pull_request 아니라 PR 제목이 안 붙어서).
+run-name: image-build ${{ github.event.head_commit.message || github.ref_name }}
+
 # develop 에 push(=PR 머지) 시 자동 빌드 → ECR 푸시. prod 는 develop 이미지 승격(main 빌드 없음).
 # push 이벤트라 GHA 캐시 쓰기가 가능하다(pull_request 이벤트는 캐시 read-only 라 캐시가 저장 안 됨).
 on:
