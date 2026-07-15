@@ -5,6 +5,7 @@ import org.son.haruharu.admin.domain.account.implement.AdminAccount;
 import org.son.haruharu.admin.domain.account.implement.AdminAccountRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -16,6 +17,16 @@ public class AdminAccountRepositoryImpl implements AdminAccountRepository {
     @Override
     public AdminAccount save(AdminAccount account) {
         return adminAccountJpaRepository.save(AdminAccountEntity.from(account)).toDomain();
+    }
+
+    @Override
+    public List<AdminAccount> findAll() {
+        return adminAccountJpaRepository.findAll().stream().map(AdminAccountEntity::toDomain).toList();
+    }
+
+    @Override
+    public boolean existsByEmail(String email) {
+        return adminAccountJpaRepository.existsByEmail(email);
     }
 
     @Override
