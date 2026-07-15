@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.matching.storage;
 
 import lombok.RequiredArgsConstructor;
+import org.son.haruharu.domain.matching.implement.LastApplyOutcome;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.matching.implement.MatchingQueueRepository;
 import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
@@ -31,6 +32,12 @@ public class MatchingQueueRepositoryImpl implements MatchingQueueRepository {
         return jpaRepository.findAllByStatusOrderByQueuedAtAsc(status).stream()
                 .map(MatchingQueueEntity::toDomain)
                 .toList();
+    }
+
+    @Override
+    public Optional<LastApplyOutcome> findLatestOutcomeByUserId(Long userId) {
+        return jpaRepository.findTopByUserIdOrderByIdDesc(userId)
+                .map(MatchingQueueEntity::toLastApplyOutcome);
     }
 
     @Override

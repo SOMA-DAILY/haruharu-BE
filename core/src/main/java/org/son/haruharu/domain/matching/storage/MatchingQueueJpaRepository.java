@@ -18,6 +18,9 @@ public interface MatchingQueueJpaRepository extends JpaRepository<MatchingQueueE
 
     List<MatchingQueueEntity> findAllByStatusOrderByQueuedAtAsc(MatchingQueueStatus status);
 
+    /** 유저의 가장 최근 큐 행(id 내림차순 1건). 홈의 직전 신청 결과 판정용 — 재신청 시 최신 QUEUED 행이 잡힌다. */
+    Optional<MatchingQueueEntity> findTopByUserIdOrderByIdDesc(Long userId);
+
     /** 조건부 상태 전이. 현재 상태가 from일 때만 갱신되므로 동시 취소·만료의 이중 처리(이중 환불)를 원천 차단한다. */
     @Modifying
     @Query("update MatchingQueueEntity q set q.status = :to, q.updatedAt = :now "

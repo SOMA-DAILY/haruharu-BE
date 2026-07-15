@@ -2,6 +2,7 @@ package org.son.haruharu.domain.home.business.dto;
 
 import java.time.LocalDateTime;
 
+import org.son.haruharu.domain.matching.business.dto.LastApplyResultResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
 import org.son.haruharu.domain.room.business.dto.PendingMatchResultResponse;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
@@ -12,6 +13,7 @@ import org.son.haruharu.domain.room.business.dto.RoomResponse;
  * applyDeadlineAt = 신청 마감(21:00) → 신청 전 "마감까지" 카운트다운 기준.
  * confirmAt = 결과 발표(22:00, 매칭 확정) → 신청 후 "결과 안내까지" 카운트다운 기준.
  * matching.pendingResult = 확인 대기 중인 최근 매칭 결과(발표 후~다음 매칭 전, 없으면 null).
+ * matching.lastApplyResult = 직전 신청의 불발(EXPIRED·환불) 결과(발표 후~다음 신청 전, 없으면 null). pendingResult(방 내 상호선택 실패)와 별개.
  */
 public record HomeResponse(
         LocalDateTime now,
@@ -22,7 +24,8 @@ public record HomeResponse(
 
     public record MatchingStatus(String status, LocalDateTime queuedAt,
                                  LocalDateTime applyDeadlineAt, LocalDateTime confirmAt,
-                                 PendingMatchResultResponse pendingResult) {}
+                                 PendingMatchResultResponse pendingResult,
+                                 LastApplyResultResponse lastApplyResult) {}
 
     public record ActiveRoom(
             Long roomId,
@@ -34,9 +37,10 @@ public record HomeResponse(
 
     public static HomeResponse of(LocalDateTime now, long pointBalance, QueueStatusResponse queue,
                                   RoomResponse room, PendingMatchResultResponse pendingResult,
+                                  LastApplyResultResponse lastApplyResult,
                                   LocalDateTime applyDeadlineAt, LocalDateTime confirmAt, int dayStartHour) {
         MatchingStatus matching = new MatchingStatus(queue.status(), queue.queuedAt(),
-                applyDeadlineAt, confirmAt, pendingResult);
+                applyDeadlineAt, confirmAt, pendingResult, lastApplyResult);
         ActiveRoom activeRoom = room == null ? null : new ActiveRoom(
                 room.roomId(),
                 room.status(),

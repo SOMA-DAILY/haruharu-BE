@@ -12,6 +12,8 @@ public interface MatchingQueueRepository {
 
     List<MatchingQueue> findAllByStatusOrderByQueuedAt(MatchingQueueStatus status);
 
+    Optional<LastApplyOutcome> findLatestOutcomeByUserId(Long userId);
+
     MatchingQueue save(MatchingQueue queue);
 
     boolean transitionStatus(Long id, MatchingQueueStatus from, MatchingQueueStatus to, LocalDateTime now);

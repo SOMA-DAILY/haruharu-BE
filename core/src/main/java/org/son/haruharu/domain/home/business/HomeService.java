@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.home.business.dto.HomeResponse;
 import org.son.haruharu.domain.matching.business.MatchingService;
+import org.son.haruharu.domain.matching.business.dto.LastApplyResultResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
@@ -41,8 +42,9 @@ public class HomeService {
         QueueStatusResponse queue = matchingService.getQueueStatus(userId);
         RoomResponse room = roomService.findMyRoom(userId).orElse(null);
         PendingMatchResultResponse pendingResult = matchResultService.findPendingResult(userId).orElse(null);
+        LastApplyResultResponse lastApplyResult = matchingService.getLastApplyResult(userId).orElse(null);
         LocalDateTime now = LocalDateTime.now(clock);
-        return HomeResponse.of(now, pointBalance, queue, room, pendingResult,
+        return HomeResponse.of(now, pointBalance, queue, room, pendingResult, lastApplyResult,
                 nextAtHour(now, MatchingQueue.APPLY_DEADLINE_HOUR),
                 nextAtHour(now, MatchingQueue.CONFIRM_HOUR), UploadSlot.dayStartHour());
     }

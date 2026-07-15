@@ -30,4 +30,9 @@ public class MatchingQueueReader {
     public List<MatchingQueue> findAllQueued() {
         return matchingQueueRepository.findAllByStatusOrderByQueuedAt(MatchingQueueStatus.QUEUED);
     }
+
+    /** 홈 직전 신청 결과용: 유저의 가장 최근 큐 행 요약을 조회한다(없으면 empty). */
+    public Optional<LastApplyOutcome> findLatestOutcome(Long userId) {
+        return matchingQueueRepository.findLatestOutcomeByUserId(userId);
+    }
 }

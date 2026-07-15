@@ -5,6 +5,7 @@ import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
 import org.son.haruharu.domain.coin.business.command.CoinSpendCommand;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
+import org.son.haruharu.domain.matching.business.dto.LastApplyResultResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
 import org.son.haruharu.domain.matching.business.exception.MatchingAlreadyQueuedException;
@@ -13,6 +14,7 @@ import org.son.haruharu.domain.matching.business.exception.MatchingNotVerifiedEx
 import org.son.haruharu.domain.matching.business.exception.MatchingRoomInProgressException;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
 import org.son.haruharu.domain.matching.implement.MatchingQueueReader;
+import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
 import org.son.haruharu.domain.matching.implement.MatchingQueueWriter;
 import org.son.haruharu.domain.matching.storage.exception.MatchingQueueNotFoundException;
 import org.son.haruharu.domain.room.business.RoomService;
@@ -21,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 @Transactional(readOnly = true)
@@ -56,6 +59,17 @@ public class MatchingService {
         return matchingQueueReader.findQueued(userId)
             .map(QueueStatusResponse::queued)
             .orElseGet(QueueStatusResponse::none);
+    }
+
+    /**
+     * 직전 신청의 불발 결과. 가장 최근 큐 행이 EXPIRED(22:00 배치 미매칭·환불)일 때만 노출한다.
+     * 재신청 시 최신 QUEUED 행이 잡혀 자연히 비고, 신청 이력이 없으면 비어 있다.
+     */
+    public Optional<LastApplyResultResponse> getLastApplyResult(Long userId) {
+        return matchingQueueReader.findLatestOutcome(userId)
+            .filter(outcome -> outcome.status() == MatchingQueueStatus.EXPIRED)
+            .map(outcome -> new LastApplyResultResponse(
+                MatchingQueueStatus.EXPIRED.name(), outcome.resolvedAt(), matchingProperties.enterCost()));
     }
 
     @Transactional
