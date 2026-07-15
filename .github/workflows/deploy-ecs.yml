@@ -1,0 +1,81 @@
+name: Deploy (ECS)
+
+# 수동 배포. 선택한 이미지 태그(SHA 권장)로 app·admin task def 새 리비전을 등록하고 서비스를 업데이트한다.
+# build-once-promote: develop 에서 빌드된 동일 이미지를 dev→prod 로 승격한다.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '배포 환경'
+        required: true
+        type: choice
+        options: [dev, prod]
+      image_tag:
+        description: '배포할 이미지 태그 (SHA 권장, 비우면 develop 무빙 태그)'
+        required: false
+        default: ''
+
+run-name: deploy-ecs ${{ inputs.environment }} @ ${{ inputs.image_tag || 'develop' }}
+
+concurrency:
+  group: deploy-ecs-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # OIDC 로 AWS 역할 assume
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REGISTRY: 049705857590.dkr.ecr.ap-northeast-2.amazonaws.com
+  CLUSTER: haruharu
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::049705857590:role/github-actions-deploy-policy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve env → task def family / service
+        id: map
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          [ -z "$TAG" ] && TAG="develop"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.environment }}" = "prod" ]; then
+            echo "app_family=haruharu-app"            >> "$GITHUB_OUTPUT"
+            echo "admin_family=haruharu-admin"         >> "$GITHUB_OUTPUT"
+            echo "app_service=haruharu-app-svc-prod"   >> "$GITHUB_OUTPUT"
+            echo "admin_service=haruharu-admin-svc-prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "app_family=haruharu-app-dev"         >> "$GITHUB_OUTPUT"
+            echo "admin_family=haruharu-admin-dev"      >> "$GITHUB_OUTPUT"
+            echo "app_service=haruharu-app-svc-dev"     >> "$GITHUB_OUTPUT"
+            echo "admin_service=haruharu-admin-svc-dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy app
+        run: |
+          bash .github/scripts/deploy-ecs-service.sh \
+            "${{ steps.map.outputs.app_family }}" "app" \
+            "${{ env.ECR_REGISTRY }}/haruharu-app:${{ steps.map.outputs.tag }}" \
+            "${{ steps.map.outputs.app_service }}"
+
+      - name: Deploy admin
+        run: |
+          bash .github/scripts/deploy-ecs-service.sh \
+            "${{ steps.map.outputs.admin_family }}" "admin" \
+            "${{ env.ECR_REGISTRY }}/haruharu-admin:${{ steps.map.outputs.tag }}" \
+            "${{ steps.map.outputs.admin_service }}"
+
+      - name: Wait for services stable
+        run: |
+          aws ecs wait services-stable --cluster "${{ env.CLUSTER }}" \
+            --services "${{ steps.map.outputs.app_service }}" "${{ steps.map.outputs.admin_service }}"
+          echo "✅ ${{ inputs.environment }} 배포 완료 (tag=${{ steps.map.outputs.tag }})"
