@@ -25,4 +25,9 @@ public record AdminAccount(
     public AdminAccount withLastLoginAt(LocalDateTime at) {
         return new AdminAccount(id, email, passwordHash, name, role, status, at);
     }
+
+    /** 역할·상태 변경본 반환(불변). email·passwordHash는 불변. */
+    public AdminAccount changedTo(AdminRole role, AdminAccountStatus status) {
+        return new AdminAccount(id, email, passwordHash, name, role, status, lastLoginAt);
+    }
 }
