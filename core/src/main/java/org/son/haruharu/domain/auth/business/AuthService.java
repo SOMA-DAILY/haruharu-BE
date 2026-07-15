@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.auth.business;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.domain.auth.business.command.LogoutCommand;
 import org.son.haruharu.domain.auth.business.command.SocialAuthCommand;
 import org.son.haruharu.domain.auth.business.command.TokenRefreshCommand;
@@ -32,6 +33,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -66,7 +68,9 @@ public class AuthService {
             })
             .orElseGet(() -> signup(providerType, providerId));
 
-        return issueNewTokenPair(user.id(), routingStatus(user));
+        String status = routingStatus(user);
+        log.info("auth login userId={} provider={} status={}", user.id(), providerType, status);
+        return issueNewTokenPair(user.id(), status);
     }
 
     /**
@@ -88,6 +92,8 @@ public class AuthService {
         if (!returning) {
             coinService.grantSignupBonus(created.id());
         }
+        // providerId 는 소셜 계정 식별자(PII)라 남기지 않는다.
+        log.info("auth signup userId={} provider={} returning={}", created.id(), providerType, returning);
         return created;
     }
 
@@ -95,6 +101,7 @@ public class AuthService {
     @Transactional
     public void deleteCredentials(Long userId) {
         userCredentialWriter.deleteByUserId(userId);
+        log.info("auth withdraw userId={}", userId);
     }
 
     @Transactional

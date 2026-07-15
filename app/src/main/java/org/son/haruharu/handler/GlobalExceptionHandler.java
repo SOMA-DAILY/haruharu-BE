@@ -1,5 +1,6 @@
 package org.son.haruharu.handler;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.common.ApiErrorDetail;
@@ -15,6 +16,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -27,32 +30,55 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    /**
+     * 유저 귀책 4xx는 WARN으로 남긴다 — 문의 대응 시 재현 없이 원인을 특정하기 위함.
+     * userId 외의 식별자(providerId 등)나 요청 본문은 PII라 남기지 않는다.
+     */
+    private void warn4xx(int status, HttpServletRequest request, String code, String message) {
+        log.warn("{} {} {} code={} userId={} msg={}",
+                status, request.getMethod(), request.getRequestURI(), code, currentUserId(), message);
+    }
+
+    /** 인증 전(401)이거나 필터를 타지 않은 요청이면 "-". principal은 JwtAuthenticationFilter가 넣은 userId(Long). */
+    private String currentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !(auth.getPrincipal() instanceof Long userId)) {
+            return "-";
+        }
+        return userId.toString();
+    }
+
     @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException e) {
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException e, HttpServletRequest request) {
+        warn4xx(400, request, e.getCode(), e.getMessage());
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 
     @ExceptionHandler(NotFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleNotFound(NotFoundException e) {
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(NotFoundException e, HttpServletRequest request) {
+        warn4xx(404, request, e.getCode(), e.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 
     @ExceptionHandler(UnauthorizedException.class)
-    public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException e) {
+    public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException e, HttpServletRequest request) {
+        warn4xx(401, request, e.getCode(), e.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 
     @ExceptionHandler(ForbiddenException.class)
-    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException e) {
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException e, HttpServletRequest request) {
+        warn4xx(403, request, e.getCode(), e.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 
     @ExceptionHandler(ConflictException.class)
-    public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException e) {
+    public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException e, HttpServletRequest request) {
+        warn4xx(409, request, e.getCode(), e.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
