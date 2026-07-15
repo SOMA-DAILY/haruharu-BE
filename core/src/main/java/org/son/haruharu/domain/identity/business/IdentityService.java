@@ -3,7 +3,6 @@ package org.son.haruharu.domain.identity.business;
 import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.identity.business.exception.DuplicateCiException;
-import org.son.haruharu.domain.identity.business.exception.ReRegistrationBlockedException;
 import org.son.haruharu.domain.identity.business.exception.UnderageNotAllowedException;
 import org.son.haruharu.domain.identity.business.exception.UserAlreadyVerifiedException;
 import org.son.haruharu.domain.identity.implement.UserIdentity;
@@ -24,8 +23,6 @@ import java.util.Optional;
 @Transactional(readOnly = true)
 public class IdentityService {
 
-    /** 탈퇴 후 재가입(본인인증) 차단 기간. */
-    private static final int REJOIN_BLOCK_DAYS = 30;
     /** 서비스 이용 최소 만 나이. AGE_19 약관 자기신고와 별개로 실명인증 생년월일로 서버가 강제한다(#207). */
     private static final int MINIMUM_AGE = 19;
 
@@ -74,12 +71,9 @@ public class IdentityService {
         if (userIdentityReader.existsByCi(result.ci())) {
             throw new DuplicateCiException();
         }
-        LocalDateTime blockThreshold = LocalDateTime.now(clock).minusDays(REJOIN_BLOCK_DAYS);
-        if (userIdentityReader.existsWithdrawnByCiWithin(result.ci(), blockThreshold)) {
-            throw new ReRegistrationBlockedException();
-        }
-        // 차단 기간이 지난 탈퇴 identity 잔존 행은 unique(ci_hash) 재삽입 충돌을 막기 위해 물리 파기한다.
-        userIdentityWriter.purgeWithdrawnByCiBefore(result.ci(), blockThreshold);
+        // 탈퇴 후 재인증은 즉시 허용한다(#245). 탈퇴 잔존 행은 물리 파기하지 않는다 —
+        // ci_hash 유니크가 partial index(WHERE deleted_at IS NULL)라 soft-delete된 행은 슬롯을 점유하지 않는다.
+        // CI/DI는 IdentityCleanupScheduler가 보관기간(30일) 경과 후 파기한다.
         UserIdentity identity = new UserIdentity(
             null, userId,
             result.ci(), result.di(),

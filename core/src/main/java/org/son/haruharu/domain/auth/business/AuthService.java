@@ -8,7 +8,6 @@ import org.son.haruharu.domain.auth.business.dto.AuthTokenResponse;
 import org.son.haruharu.domain.auth.business.exception.InactiveMemberException;
 import org.son.haruharu.domain.auth.business.exception.InvalidRefreshTokenException;
 import org.son.haruharu.domain.auth.business.exception.InvalidTokenException;
-import org.son.haruharu.domain.auth.business.exception.ReRegistrationBlockedException;
 import org.son.haruharu.domain.auth.implement.RefreshToken;
 import org.son.haruharu.domain.auth.implement.RefreshTokenReader;
 import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
@@ -37,9 +36,6 @@ import java.time.temporal.ChronoUnit;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class AuthService {
-
-    /** 탈퇴 후 같은 OAuth 계정 재가입 차단 기간. identity CI 차단과 동일. */
-    private static final int REJOIN_BLOCK_DAYS = 30;
 
     private final OAuthProviderRegistry oAuthProviderRegistry;
     private final UserReader userReader;
@@ -74,16 +70,18 @@ public class AuthService {
     }
 
     /**
-     * 활성 연동이 없는 소셜 계정 가입 처리. 탈퇴 이력이 차단 기간(30일) 내면 재가입을 막고,
-     * 경과한 탈퇴 잔존 행은 물리 파기(unique 슬롯 해제)한 뒤 신규 User를 생성한다.
-     * 탈퇴 이력이 있는 복귀 유저에게는 signup 보너스를 재지급하지 않는다(credential 단위 1회성).
+     * 활성 연동이 없는 소셜 계정 가입 처리. 탈퇴 후 재가입은 즉시 허용한다(#245).
+     * 탈퇴 잔존 행은 물리 파기(unique 슬롯 해제)한 뒤 신규 User를 생성하며, 파기된 행이 있으면
+     * 복귀 유저로 판정해 signup 보너스를 재지급하지 않는다(credential 단위 1회성).
+     * 주의: 이 returning 판정이 보너스 재지급을 막는 유일한 지점이다 — grantSignupBonus 의 멱등성은
+     * userId 기준이라 재가입으로 새 userId 가 생기면 무력하다.
+     * threshold 에 주입 Clock 이 아닌 시스템 시각을 쓰는 이유: 비교 대상인 deleted_at 은 Hibernate
+     * @SoftDelete(TIMESTAMP) 가 시스템 클록으로 찍는다. local·dev 의 AdjustableClock(#180)으로 가상 시각을
+     * 과거 고정한 상태라면 now(clock) 기준으로는 파기 대상이 0건이 되어 복귀 유저를 신규로 오판(보너스 재지급)한다.
      */
     private User signup(String providerType, String providerId) {
-        LocalDateTime blockThreshold = LocalDateTime.now(clock).minusDays(REJOIN_BLOCK_DAYS);
-        if (userCredentialReader.existsWithdrawnWithin(providerType, providerId, blockThreshold)) {
-            throw new ReRegistrationBlockedException();
-        }
-        boolean returning = userCredentialWriter.purgeWithdrawnBefore(providerType, providerId, blockThreshold) > 0;
+        boolean returning = userCredentialWriter.purgeWithdrawnBefore(
+            providerType, providerId, LocalDateTime.now()) > 0;
 
         User created = userWriter.save(new User(null, UserStatus.ONBOARDING, null));
         userCredentialWriter.save(new UserCredential(null, created.id(), providerType, providerId));
@@ -93,7 +91,7 @@ public class AuthService {
         return created;
     }
 
-    /** 탈퇴 시 소셜 연동을 soft-delete한다. 같은 OAuth 재가입 쿨다운의 기준 시각을 남긴다. */
+    /** 탈퇴 시 소셜 연동을 soft-delete한다. 남은 deleted_at 은 재가입 시 복귀 유저 판정(보너스 skip)에 쓰인다. */
     @Transactional
     public void deleteCredentials(Long userId) {
         userCredentialWriter.deleteByUserId(userId);

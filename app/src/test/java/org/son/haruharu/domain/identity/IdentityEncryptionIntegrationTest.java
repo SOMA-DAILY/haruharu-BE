@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
 import org.son.haruharu.domain.identity.business.exception.DuplicateCiException;
-import org.son.haruharu.domain.identity.business.exception.ReRegistrationBlockedException;
 import org.son.haruharu.domain.identity.storage.UserIdentityJpaRepository;
 import org.son.haruharu.infrastructure.pass.PassVerificationPort;
 import org.son.haruharu.infrastructure.pass.PassVerificationResult;
@@ -91,34 +90,24 @@ class IdentityEncryptionIntegrationTest {
     }
 
     @Test
-    @DisplayName("탈퇴(soft) 후 30일 이내 동일 CI로 재인증하면 ReRegistrationBlockedException이 발생한다")
-    void givenWithdrawnWithin30Days_whenReverifySameCi_thenBlocked() {
-        given(passVerificationPort.verify("iv-token")).willReturn(passResult());
-        identityService.verifyIdentity(100L, new VerifyIdentityCommand("iv-token"));
-        identityService.deleteIdentity(100L); // soft-delete → deleted_at = now
-
-        assertThatThrownBy(() ->
-                identityService.verifyIdentity(101L, new VerifyIdentityCommand("iv-token")))
-                .isInstanceOf(ReRegistrationBlockedException.class);
-    }
-
-    @Test
-    @DisplayName("탈퇴 후 30일이 지난 동일 CI는 재인증이 허용되고 잔존 행이 파기된 뒤 새로 저장된다")
-    void givenWithdrawnOver30Days_whenReverifySameCi_thenAllowedAndPurged() {
+    @DisplayName("탈퇴(soft) 직후 동일 CI로 재인증하면 차단 없이 허용되고 탈퇴 이력은 보존된다")
+    void givenJustWithdrawnCi_whenReverifySameCi_thenAllowedAndHistoryPreserved() {
         given(passVerificationPort.verify("iv-token")).willReturn(passResult());
         identityService.verifyIdentity(200L, new VerifyIdentityCommand("iv-token"));
-        identityService.deleteIdentity(200L);
-        // deleted_at을 31일 전으로 조정해 차단 기간 경과를 시뮬레이션 (native — soft-delete 필터 우회)
-        jdbcTemplate.update("UPDATE user_identities SET deleted_at = ? WHERE user_id = 200",
-                Timestamp.valueOf(LocalDateTime.now().minusDays(31)));
+        identityService.deleteIdentity(200L); // soft-delete → deleted_at = now
 
+        // 차단 기간 없이 즉시 재인증 — partial unique(WHERE deleted_at IS NULL) 덕에 충돌 없이 통과
         identityService.verifyIdentity(201L, new VerifyIdentityCommand("iv-token"));
 
         assertThat(jpaRepository.findByUserId(201L)).isPresent();
-        // 잔존(탈퇴) 행은 물리 파기되어 남지 않는다
-        Long remaining = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM user_identities WHERE user_id = 200", Long.class);
-        assertThat(remaining).isZero();
+        // 탈퇴 행은 파기하지 않고 남긴다 — 신고·제재 추적용(#245). 보관기간 경과분은 배치가 파기.
+        Long withdrawn = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_identities WHERE user_id = 200 AND deleted_at IS NOT NULL", Long.class);
+        assertThat(withdrawn).isEqualTo(1);
+        // 같은 ci_hash 가 활성 1건 + 탈퇴 1건으로 공존한다(full unique 였다면 불가능)
+        Long sameCi = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_identities WHERE user_id IN (200, 201)", Long.class);
+        assertThat(sameCi).isEqualTo(2);
     }
 
     @Test

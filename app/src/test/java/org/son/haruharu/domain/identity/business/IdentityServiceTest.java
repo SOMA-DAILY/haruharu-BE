@@ -8,7 +8,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
 import org.son.haruharu.domain.identity.business.exception.DuplicateCiException;
-import org.son.haruharu.domain.identity.business.exception.ReRegistrationBlockedException;
 import org.son.haruharu.domain.identity.business.exception.UnderageNotAllowedException;
 import org.son.haruharu.domain.identity.business.exception.UserAlreadyVerifiedException;
 import org.son.haruharu.domain.identity.implement.UserIdentityReader;
@@ -138,8 +137,8 @@ class IdentityServiceTest {
     }
 
     @Test
-    @DisplayName("탈퇴 후 30일 이내 동일 CI로 재인증 요청 시 ReRegistrationBlockedException이 발생한다")
-    void givenRecentlyWithdrawnCi_whenVerifyIdentity_thenThrowsReRegistrationBlocked() {
+    @DisplayName("탈퇴 직후 동일 CI로 재인증 요청 시 차단 없이 인증되고 탈퇴 잔존 행은 파기하지 않는다")
+    void givenJustWithdrawnCi_whenVerifyIdentity_thenVerifiedWithoutPurge() {
         Long userId = 4L;
         VerifyIdentityCommand command = new VerifyIdentityCommand("iv-token");
         PassVerificationResult passResult = new PassVerificationResult(
@@ -150,10 +149,11 @@ class IdentityServiceTest {
         given(userIdentityReader.existsByUserId(userId)).willReturn(false);
         given(passVerificationPort.verify("iv-token")).willReturn(passResult);
         given(userIdentityReader.existsByCi("ci-value")).willReturn(false);
-        given(userIdentityReader.existsWithdrawnByCiWithin(eq("ci-value"), any())).willReturn(true);
 
-        assertThatThrownBy(() -> identityService.verifyIdentity(userId, command))
-            .isInstanceOf(ReRegistrationBlockedException.class);
-        then(userIdentityWriter).should(never()).save(any());
+        identityService.verifyIdentity(userId, command);
+
+        // partial unique(WHERE deleted_at IS NULL) 덕에 파기 없이 저장된다 —
+        // 탈퇴 이력(CI)은 보존되어야 신고·제재 추적이 가능하다(#245).
+        then(userIdentityWriter).should().save(any());
     }
 }

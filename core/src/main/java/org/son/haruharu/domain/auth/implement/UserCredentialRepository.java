@@ -11,7 +11,5 @@ public interface UserCredentialRepository {
 
     void deleteByUserId(Long userId);
 
-    boolean existsWithdrawnWithin(String providerType, String providerId, LocalDateTime threshold);
-
     int purgeWithdrawnBefore(String providerType, String providerId, LocalDateTime threshold);
 }

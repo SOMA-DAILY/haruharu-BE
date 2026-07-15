@@ -32,7 +32,12 @@ public class UserIdentityEntity extends BaseEntity {
     @Column(nullable = false)
     private String ci;
 
-    @Column(nullable = false, unique = true)
+    /**
+     * blind index. 유니크는 partial index(uq_user_identities_ci_hash_active, WHERE deleted_at IS NULL)로
+     * 관리한다 — JPA는 partial을 표현할 수 없어 unique=true를 두면 soft-delete된 탈퇴 행이 슬롯을 점유해
+     * 재인증 INSERT가 충돌한다(#245, user_credentials의 #147과 동일 패턴).
+     */
+    @Column(nullable = false)
     private String ciHash;
 
     @Convert(converter = CiDiCryptoConverter.class)

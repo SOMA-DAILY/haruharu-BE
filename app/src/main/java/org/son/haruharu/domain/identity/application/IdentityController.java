@@ -26,8 +26,8 @@ public class IdentityController {
     @Operation(summary = "본인인증 등록",
             description = "PASS 인증 결과 식별자(pass_token)로 실명인증 정보를 조회해 계정에 연결한다. "
                     + "이미 다른 계정에 연결된 정보면 409(IDENTITY_ALREADY_LINKED), 이미 인증을 마친 사용자면 409(USER_ALREADY_VERIFIED), "
-                    + "탈퇴 후 30일 이내 재가입이면 403(IDENTITY_REJOIN_BLOCKED), "
-                    + "실명인증 생년월일 기준 만 19세 미만이면 403(IDENTITY_UNDERAGE_BLOCKED).")
+                    + "실명인증 생년월일 기준 만 19세 미만이면 403(IDENTITY_UNDERAGE_BLOCKED). "
+                    + "탈퇴 후 동일 CI 재인증은 즉시 허용된다(#245).")
     @PostMapping("/identity")
     public ApiResponse<Void> verifyIdentity(
             @Valid @RequestBody IdentityVerifyRequest request,

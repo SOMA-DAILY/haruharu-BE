@@ -29,7 +29,8 @@ public class AuthController {
     @Operation(summary = "소셜 로그인/회원가입",
             description = "provider_type(KAKAO/APPLE)와 id_token으로 인증한다. 신규면 가입, 기존이면 로그인 처리 후 "
                     + "access_token·refresh_token·user_status를 반환한다. 유효하지 않은 idToken이면 401(AUTH_INVALID_ID_TOKEN), "
-                    + "탈퇴 후 30일 이내 재가입이면 403(AUTH_REJOIN_BLOCKED), 비활성 계정이면 403(AUTH_INACTIVE_MEMBER).")
+                    + "비활성 계정이면 403(AUTH_INACTIVE_MEMBER). 탈퇴 후 재가입은 즉시 허용되며(#245), "
+                    + "복귀 유저에게는 첫 가입 보너스 구름이 재지급되지 않는다.")
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthTokenResponse>> login(@RequestBody @Valid SocialAuthRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(authService.authenticate(request.toCommand())));

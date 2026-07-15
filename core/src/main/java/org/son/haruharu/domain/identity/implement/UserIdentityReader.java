@@ -30,9 +30,4 @@ public class UserIdentityReader {
         return userIdentityRepository.findByUserId(userId);
     }
 
-    /** 탈퇴한 동일 CI가 threshold 이후에 삭제됐는지 — 재가입 차단 기간 내 여부. */
-    public boolean existsWithdrawnByCiWithin(String ci, LocalDateTime threshold) {
-        return userIdentityRepository.existsWithdrawnByCiWithin(ci, threshold);
-    }
-
 }

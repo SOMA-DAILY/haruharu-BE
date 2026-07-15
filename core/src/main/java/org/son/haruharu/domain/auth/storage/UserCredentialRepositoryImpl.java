@@ -31,11 +31,6 @@ public class UserCredentialRepositoryImpl implements UserCredentialRepository {
     }
 
     @Override
-    public boolean existsWithdrawnWithin(String providerType, String providerId, LocalDateTime threshold) {
-        return userCredentialJpaRepository.countWithdrawnWithin(providerType, providerId, threshold) > 0;
-    }
-
-    @Override
     public int purgeWithdrawnBefore(String providerType, String providerId, LocalDateTime threshold) {
         return userCredentialJpaRepository.purgeWithdrawnBefore(providerType, providerId, threshold);
     }

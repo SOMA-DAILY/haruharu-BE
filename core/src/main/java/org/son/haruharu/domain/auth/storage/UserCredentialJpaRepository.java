@@ -15,16 +15,8 @@ public interface UserCredentialJpaRepository extends JpaRepository<UserCredentia
 
     void deleteByUserId(Long userId);
 
-    // 재가입 차단 판정: 소프트삭제된(탈퇴) credential을 전역 필터 우회(native)로 조회한다.
-    // deleted_at이 threshold보다 최근이면 탈퇴 후 차단 기간 내.
-    @Query(value = "SELECT COUNT(*) FROM user_credentials "
-            + "WHERE provider_type = :providerType AND provider_id = :providerId "
-            + "AND deleted_at IS NOT NULL AND deleted_at > :threshold", nativeQuery = true)
-    long countWithdrawnWithin(@Param("providerType") String providerType,
-                              @Param("providerId") String providerId,
-                              @Param("threshold") LocalDateTime threshold);
-
-    // 차단 기간이 지난 소프트삭제 잔존 행을 물리 파기한다(unique(provider_type, provider_id) 재삽입 충돌 방지). native라 soft-delete 치환을 우회.
+    // 소프트삭제(탈퇴) 잔존 행을 물리 파기한다(unique(provider_type, provider_id) 재삽입 충돌 방지). native라 soft-delete 치환을 우회.
+    // 반환값(파기 행 수) > 0 이면 복귀 유저 판정에 쓰인다(#245 — signup 보너스 재지급 차단).
     @Transactional
     @Modifying
     @Query(value = "DELETE FROM user_credentials "
