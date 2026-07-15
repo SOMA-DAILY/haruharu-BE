@@ -1,70 +1,84 @@
 name: Build & Push Image
 
-# develop/main 으로 향한 PR "머지" 시 자동 트리거(직접 push 무시),
-# 또는 워크플로를 선택한 브랜치에서 수동 실행(workflow_dispatch).
+# develop 으로 향한 PR "머지" 시 자동 트리거(직접 push 무시),
+# 또는 선택 브랜치에서 수동 실행(workflow_dispatch).
+# prod 는 이 develop 이미지를 승격(build-once-promote)하므로 main 빌드는 없다.
 on:
   pull_request:
     types: [closed]
-    branches: [develop, main]
+    branches: [develop]
   workflow_dispatch:
 
 concurrency:
   group: image-${{ github.event.pull_request.base.ref || github.ref_name }}
   cancel-in-progress: false
 
+permissions:
+  id-token: write   # OIDC 로 AWS 역할 assume
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REGISTRY: 049705857590.dkr.ecr.ap-northeast-2.amazonaws.com
+
 jobs:
   build-push:
     # 수동 실행은 항상, PR 이벤트는 머지된 경우에만.
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
+      # 머지 이벤트는 base 브랜치(develop) 최신 HEAD 를, 수동 실행은 선택 브랜치를 체크아웃.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref || github.ref_name }}
 
-      - name: Resolve image name (lowercase) & branch tag
+      - name: Resolve tags (immutable SHA + moving branch)
         id: meta
         run: |
-          IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          # 머지 이벤트는 base.ref, 수동 실행은 실행 브랜치(ref_name).
-          BRANCH="${{ github.event.pull_request.base.ref || github.ref_name }}"
-          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "branch=${{ github.event.pull_request.base.ref || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::049705857590:role/github-actions-deploy-policy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Fargate 는 ARM64 → x86 러너에서 arm64 이미지를 굽기 위해 QEMU 필요.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push (app)
+      - name: Build & push (app)
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/arm64
           push: true
           build-args: |
             MODULE=app
           tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.branch }}
-            ${{ steps.meta.outputs.image }}:${{ github.sha }}
-          cache-from: type=gha
-          # 캐시 export(reserve) 실패가 job 전체를 죽이지 않도록 무시. 이미지 빌드·푸시는 이미 성공 상태.
-          cache-to: type=gha,mode=max,ignore-error=true
+            ${{ env.ECR_REGISTRY }}/haruharu-app:${{ steps.meta.outputs.sha }}
+            ${{ env.ECR_REGISTRY }}/haruharu-app:${{ steps.meta.outputs.branch }}
+          cache-from: type=gha,scope=app
+          # 캐시 export 실패가 job 을 죽이지 않도록 무시(이미지 푸시는 이미 성공).
+          cache-to: type=gha,mode=max,scope=app,ignore-error=true
 
-      - name: Build and push (admin)
+      - name: Build & push (admin)
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/arm64
           push: true
           build-args: |
             MODULE=admin
           tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.branch }}-admin
-            ${{ steps.meta.outputs.image }}:${{ github.sha }}-admin
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,ignore-error=true
+            ${{ env.ECR_REGISTRY }}/haruharu-admin:${{ steps.meta.outputs.sha }}
+            ${{ env.ECR_REGISTRY }}/haruharu-admin:${{ steps.meta.outputs.branch }}
+          cache-from: type=gha,scope=admin
+          cache-to: type=gha,mode=max,scope=admin,ignore-error=true
