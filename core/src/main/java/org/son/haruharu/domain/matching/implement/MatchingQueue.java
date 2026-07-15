@@ -19,12 +19,17 @@ public record MatchingQueue(
     /** 매칭 확정(결과 발표) 시각(시). MatchingScheduler의 확정 cron과 홈 결과 발표 카운트다운의 기준. */
     public static final int CONFIRM_HOUR = 22;
 
-    /** 신청 마감 시각(시). 매일 00:00~21:00만 신청 가능하고, 21:00부터 마감된다(다음날 00:00 자동 재개). */
+    /** 신청 마감 시각(시). 당일 22:00 배치에 포함되려면 이 시각(21:00) 전에 신청해야 한다. 홈 카운트다운(applyDeadlineAt) 기준. */
     public static final int APPLY_DEADLINE_HOUR = 21;
 
-    /** 지금 신청 가능 시간대인가. 00:00~20:59:59.…까지 허용, 21:00부터 마감. 00:00에 hour<21이 되어 자동 재개된다. */
+    /**
+     * 지금 신청 가능 시간대인가. 발표 시간대(21:00~22:00)만 차단하고 그 외 전 시간은 허용한다(#229).
+     * 즉 now &lt; 21:00 또는 now &gt;= 22:00이면 허용. 21:00 정각 차단 시작, 22:00 정각 허용 재개.
+     * (22:00 이후 신청은 당일 배치를 지나 다음 22:00 배치 대상이 된다.)
+     */
     public static boolean isApplyOpen(LocalTime now) {
-        return now.isBefore(LocalTime.of(APPLY_DEADLINE_HOUR, 0));
+        return now.isBefore(LocalTime.of(APPLY_DEADLINE_HOUR, 0))
+            || !now.isBefore(LocalTime.of(CONFIRM_HOUR, 0));
     }
 
     /** 큐 참가: 신규 대기 항목 생성. id는 영속화 시점에 부여, matchedAt은 매칭 확정 전까지 null. */
