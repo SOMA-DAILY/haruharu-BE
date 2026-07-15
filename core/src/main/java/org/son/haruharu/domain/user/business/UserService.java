@@ -69,6 +69,15 @@ public class UserService {
     }
 
     /**
+     * 탈퇴한 유저인지. 탈퇴는 users 행을 남기고 status만 DELETED로 전이하므로 status로 판정한다.
+     * 탈퇴 시 프로필은 soft-delete되어 조회 자체가 불가하므로, 다른 도메인이 상대 유저를 다룰 때
+     * 프로필 조회 전에 이걸로 먼저 걸러야 한다(#255).
+     */
+    public boolean isWithdrawn(Long userId) {
+        return userReader.getById(userId).status() == UserStatus.DELETED;
+    }
+
+    /**
      * 온보딩 완료 처리. 프로필·가치관·이미지 완료를 서버가 검증한 뒤 ONBOARDING → ACTIVE로 전이한다.
      * 이미 온보딩을 벗어난 상태면 재저장 없이 현재 라우팅 상태만 반환한다(멱등).
      */

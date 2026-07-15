@@ -3,6 +3,8 @@ package org.son.haruharu.domain.user.business;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -209,5 +211,22 @@ class UserServiceTest {
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         then(userWriter).should().save(captor.capture());
         assertThat(captor.getValue().status()).isEqualTo(UserStatus.DELETED);
+    }
+
+    @Test
+    @DisplayName("탈퇴한 유저는 isWithdrawn이 true다")
+    void givenDeletedUser_whenIsWithdrawn_thenTrue() {
+        given(userReader.getById(1L)).willReturn(new User(1L, UserStatus.DELETED, LocalDateTime.now()));
+
+        assertThat(userService.isWithdrawn(1L)).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = UserStatus.class, names = "DELETED", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("탈퇴하지 않은 유저는 상태와 무관하게 isWithdrawn이 false다")
+    void givenNotDeletedUser_whenIsWithdrawn_thenFalse(UserStatus status) {
+        given(userReader.getById(1L)).willReturn(new User(1L, status, LocalDateTime.now()));
+
+        assertThat(userService.isWithdrawn(1L)).isFalse();
     }
 }

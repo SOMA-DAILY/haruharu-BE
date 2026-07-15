@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse.PartnerVideo;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
+import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
@@ -15,6 +16,7 @@ import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.MemberProfileService;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.business.dto.PartnerMemberRef;
+import org.son.haruharu.domain.user.business.UserService;
 import org.son.haruharu.domain.video.business.VideoService;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
@@ -35,16 +37,18 @@ public class ChatPartnerService {
     private final MatchResultService matchResultService;
     private final MemberProfileService memberProfileService;
     private final VideoService videoService;
+    private final UserService userService;
     private final S3StoragePort s3StoragePort;
 
     public ChatPartnerService(ChatRoomReader chatRoomReader, ChatRoomMemberReader chatRoomMemberReader,
                               MatchResultService matchResultService, MemberProfileService memberProfileService,
-                              VideoService videoService, S3StoragePort s3StoragePort) {
+                              VideoService videoService, UserService userService, S3StoragePort s3StoragePort) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomMemberReader = chatRoomMemberReader;
         this.matchResultService = matchResultService;
         this.memberProfileService = memberProfileService;
         this.videoService = videoService;
+        this.userService = userService;
         this.s3StoragePort = s3StoragePort;
     }
 
@@ -55,6 +59,9 @@ public class ChatPartnerService {
                 .orElseThrow(ChatNotMemberException::new); // 방 참여자(=매칭쌍)만
 
         PartnerMemberRef partner = matchResultService.resolvePartner(chatRoom.matchResultId(), userId);
+        if (userService.isWithdrawn(partner.partnerUserId())) {
+            throw new ChatPartnerWithdrawnException(); // 탈퇴 상대의 프로필 카드는 노출하지 않는다(#255)
+        }
         MemberProfileResponse profile =
                 memberProfileService.getMemberProfile(partner.roomId(), partner.partnerMemberId(), userId);
         Map<Integer, List<PartnerVideo>> videosByDay = groupByDay(videoService.getMemberVideos(partner.partnerMemberId()));

@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
+import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
@@ -20,6 +21,7 @@ import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.MemberProfileService;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.business.dto.PartnerMemberRef;
+import org.son.haruharu.domain.user.business.UserService;
 import org.son.haruharu.domain.video.business.VideoService;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
@@ -41,6 +43,7 @@ class ChatPartnerServiceTest {
     @Mock MatchResultService matchResultService;
     @Mock MemberProfileService memberProfileService;
     @Mock VideoService videoService;
+    @Mock UserService userService;
     @Mock S3StoragePort s3StoragePort;
 
     ChatPartnerService service;
@@ -55,7 +58,7 @@ class ChatPartnerServiceTest {
     @BeforeEach
     void setUp() {
         service = new ChatPartnerService(chatRoomReader, chatRoomMemberReader,
-                matchResultService, memberProfileService, videoService, s3StoragePort);
+                matchResultService, memberProfileService, videoService, userService, s3StoragePort);
         // 비공개 영상 URL은 presigned GET URL로 서명해 응답한다(#162). 서명 적용 관찰용 접두사.
         lenient().when(s3StoragePort.createPresignedGetUrl(any()))
                 .thenAnswer(inv -> inv.getArgument(0) == null ? null : "signed:" + inv.getArgument(0));
@@ -133,5 +136,21 @@ class ChatPartnerServiceTest {
 
         assertThatThrownBy(() -> service.getPartner(CHAT_ROOM, ME))
                 .isInstanceOf(ChatNotMemberException.class);
+    }
+
+    @Test
+    @DisplayName("상대가 탈퇴했으면 프로필 카드를 조회할 수 없다")
+    void givenWithdrawnPartner_whenGetPartner_thenThrowsForbidden() {
+        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, MATCH, LocalDateTime.now()));
+        given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME))
+                .willReturn(Optional.of(membership(ME, null)));
+        given(matchResultService.resolvePartner(MATCH, ME))
+                .willReturn(new PartnerMemberRef(ROOM, PARTNER_MEMBER, PARTNER_USER));
+        given(userService.isWithdrawn(PARTNER_USER)).willReturn(true);
+
+        assertThatThrownBy(() -> service.getPartner(CHAT_ROOM, ME))
+                .isInstanceOf(ChatPartnerWithdrawnException.class);
+        then(memberProfileService).should(never()).getMemberProfile(anyLong(), anyLong(), anyLong());
+        then(videoService).should(never()).getMemberVideos(any());
     }
 }
