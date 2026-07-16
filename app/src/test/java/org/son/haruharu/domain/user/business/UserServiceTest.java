@@ -7,10 +7,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.auth.business.AuthService;
 import org.son.haruharu.domain.coin.business.CoinService;
+import org.son.haruharu.domain.matching.business.MatchingService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.profile.business.ProfileService;
@@ -40,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,6 +55,7 @@ class UserServiceTest {
     @Mock ValueService valueService;
     @Mock CoinService coinService;
     @Mock AuthService authService;
+    @Mock MatchingService matchingService;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     // 2026-06-26 고정 → 1999-06-26생은 27세
@@ -62,7 +66,7 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userReader, userWriter, profileService, identityService, valueService, coinService, authService, clock);
+        userService = new UserService(userReader, userWriter, profileService, identityService, valueService, coinService, authService, matchingService, clock);
     }
 
     @Test
@@ -211,6 +215,24 @@ class UserServiceTest {
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         then(userWriter).should().save(captor.capture());
         assertThat(captor.getValue().status()).isEqualTo(UserStatus.DELETED);
+    }
+
+    @Test
+    @DisplayName("매칭 신청(QUEUED) 상태로 탈퇴하면 큐가 취소·환불된 뒤 지갑이 삭제된다 — 22:00 배치가 탈퇴자를 방에 넣지 않도록")
+    void givenQueuedUser_whenWithdraw_thenCancelsQueueBeforeWalletDelete() {
+        Long userId = 1L;
+        User user = new User(userId, UserStatus.ACTIVE, LocalDateTime.now());
+
+        given(userReader.getById(userId)).willReturn(user);
+        given(userWriter.save(any())).willReturn(new User(userId, UserStatus.DELETED, user.createdAt()));
+
+        userService.withdraw(userId);
+
+        // 순서가 핵심: 환불(credit)이 지갑 삭제보다 먼저여야 지갑이 되살아나지 않는다.
+        // credit() 은 지갑이 없으면 CoinWallet.init() 으로 새로 만들기 때문.
+        InOrder order = inOrder(matchingService, coinService);
+        order.verify(matchingService).cancelQueueOnWithdraw(userId);
+        order.verify(coinService).deleteWallet(userId);
     }
 
     @Test

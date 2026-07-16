@@ -106,4 +106,20 @@ public class MatchingService {
         coinService.credit(CoinCreditCommand.matchRefund(
             userId, matchingProperties.enterCost(), MatchingQueue.COIN_REF_TYPE, queued.id().toString()));
     }
+
+    /**
+     * 탈퇴 시 잔여 매칭 신청을 취소·환불한다(#255). 큐가 없으면 아무 일도 하지 않는다.
+     * 정리하지 않으면 22:00 배치(MatchingExecutor)가 status=QUEUED 를 전부 대상으로 삼아
+     * 탈퇴자를 방에 배정하고, 같은 방의 정상 유저가 유령 멤버와 3일을 보내게 된다.
+     * leaveQueue 와 달리 큐 부재를 정상 흐름으로 처리한다 — 탈퇴자 대부분은 큐가 없다.
+     */
+    @Transactional
+    public void cancelQueueOnWithdraw(Long userId) {
+        matchingQueueReader.findQueued(userId).ifPresent(queued -> {
+            if (matchingQueueWriter.cancelIfQueued(queued.id(), LocalDateTime.now(clock))) {
+                coinService.credit(CoinCreditCommand.matchRefund(
+                    userId, matchingProperties.enterCost(), MatchingQueue.COIN_REF_TYPE, queued.id().toString()));
+            }
+        });
+    }
 }
