@@ -1,5 +1,6 @@
 package org.son.haruharu.handler;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.common.ApiErrorDetail;
@@ -23,111 +24,176 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+/**
+ * 전역 예외 → API 응답 변환 + 실패 로깅(#257).
+ *
+ * 로깅 책임 분담:
+ * - traceId·userId : MdcLoggingFilter 가 MDC 에 심어 모든 로그에 자동 부착
+ * - access log(method·path·status·duration) : ALB access log 담당 (앱에서 찍지 않는다)
+ * - 실패 원인(도메인 에러코드) : 여기. 예외 객체에 접근할 수 있는 유일한 지점이라
+ *   Filter 로는 대체할 수 없다 — Filter 는 응답 status(403)만 볼 뿐 왜 403 인지 모른다.
+ *
+ * 레벨 기준: 4xx=유저 귀책·재시도 가능 → WARN(스택 없음) / 5xx=서버 귀책 → ERROR(스택 포함).
+ * 요청 본문·쿼리스트링은 PII 가 섞일 수 있어 남기지 않는다.
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    /** 4xx 공통. 스택은 남기지 않는다 — 유저 귀책이라 노이즈만 되고 코드로 원인이 특정된다. */
+    private void warn(int status, HttpServletRequest request, String code, String message) {
+        log.warn("{} {} {} code={} msg={}",
+                status, request.getMethod(), request.getRequestURI(), code, message);
+    }
+
+    /** 5xx 공통. 스택을 남긴다 — 서버 귀책이라 원인 추적이 필요하다. */
+    private void error(int status, HttpServletRequest request, String code, Exception e) {
+        log.error("{} {} {} code={}",
+                status, request.getMethod(), request.getRequestURI(), code, e);
+    }
+
+    // ===================== 도메인 예외 (4xx) =====================
+
     @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException e) {
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException e, HttpServletRequest request) {
+        warn(400, request, e.getCode(), e.getMessage());
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 
     @ExceptionHandler(NotFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleNotFound(NotFoundException e) {
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(NotFoundException e, HttpServletRequest request) {
+        warn(404, request, e.getCode(), e.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 
     @ExceptionHandler(UnauthorizedException.class)
-    public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException e) {
+    public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException e, HttpServletRequest request) {
+        warn(401, request, e.getCode(), e.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 
     @ExceptionHandler(ForbiddenException.class)
-    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException e) {
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException e, HttpServletRequest request) {
+        warn(403, request, e.getCode(), e.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 
     @ExceptionHandler(ConflictException.class)
-    public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException e) {
+    public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException e, HttpServletRequest request) {
+        warn(409, request, e.getCode(), e.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 
-    @ExceptionHandler(BadGatewayException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBadGateway(BadGatewayException e) {
-        log.error("Upstream service error: {}", e.getCode(), e);
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
-    }
+    // ===================== 프레임워크 예외 (4xx) =====================
+    // 도메인 예외와 같은 기준으로 남긴다 — FE 연동 시 "왜 400인지"를 서버 로그로 답할 수 있어야 한다.
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
+    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e,
+                                                              HttpServletRequest request) {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getDefaultMessage())
                 .findFirst()
                 .orElse("잘못된 요청입니다.");
+        // 어느 필드가 틀렸는지는 필드명만 남긴다(값은 PII 가능).
+        String fields = e.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField())
+                .distinct()
+                .reduce((a, b) -> a + "," + b)
+                .orElse("-");
+        warn(400, request, "INVALID_INPUT", message + " fields=" + fields);
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail("INVALID_INPUT", message)));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException e) {
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException e,
+                                                                       HttpServletRequest request) {
+        warn(400, request, "INVALID_INPUT", e.getMessage());
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail("INVALID_INPUT", "잘못된 요청 파라미터입니다.")));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e,
+                                                                HttpServletRequest request) {
+        warn(400, request, "INVALID_TYPE", "param=" + e.getName());
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail("INVALID_TYPE", "잘못된 타입의 요청입니다.")));
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMissingParameter(MissingServletRequestParameterException e) {
+    public ResponseEntity<ApiResponse<Void>> handleMissingParameter(MissingServletRequestParameterException e,
+                                                                    HttpServletRequest request) {
+        warn(400, request, "MISSING_PARAMETER", "param=" + e.getParameterName());
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail("MISSING_PARAMETER",
                         "필수 요청 파라미터가 누락되었습니다: " + e.getParameterName())));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException e) {
+    public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException e,
+                                                               HttpServletRequest request) {
+        // 파싱 실패 원문은 요청 본문이 섞이므로 남기지 않는다(PII).
+        warn(400, request, "INVALID_REQUEST_BODY", "요청 바디 파싱 실패");
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail("INVALID_REQUEST_BODY", "잘못된 요청 바디입니다.")));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e,
+                                                                      HttpServletRequest request) {
+        warn(405, request, "METHOD_NOT_ALLOWED", e.getMessage());
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
                 .body(ApiResponse.error(new ApiErrorDetail("METHOD_NOT_ALLOWED", "허용되지 않는 HTTP 메서드입니다.")));
     }
 
+    /** 정적 리소스·오타 경로. 봇 스캔으로도 발생하므로 WARN 이되 메시지는 최소화한다. */
     @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException e) {
+    public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException e,
+                                                              HttpServletRequest request) {
+        warn(404, request, "NOT_FOUND", "매핑 없음");
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error(new ApiErrorDetail("NOT_FOUND", "요청한 경로를 찾을 수 없습니다.")));
     }
 
+    /**
+     * unique 제약 위반 등. 앱이 막지 못한 동시성·중복이라 WARN 으로 남기고 원인(제약명)을 함께 본다.
+     * 예: 같은 기기로 다른 계정 로그인 시 ux_device_tokens_token 충돌.
+     */
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException e) {
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException e,
+                                                                 HttpServletRequest request) {
+        String cause = e.getMostSpecificCause().getMessage();
+        warn(409, request, "DATA_INTEGRITY_VIOLATION", cause == null ? "-" : cause.replaceAll("\\s+", " "));
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(new ApiErrorDetail("DATA_INTEGRITY_VIOLATION", "중복된 데이터가 존재합니다.")));
     }
 
+    // ===================== 5xx =====================
+
+    @ExceptionHandler(BadGatewayException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBadGateway(BadGatewayException e, HttpServletRequest request) {
+        error(502, request, e.getCode(), e);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
+    }
+
     // DB 연결 실패, 쿼리 타임아웃, 데드락 등 인프라 장애 (DataIntegrityViolationException은 더 구체적이므로 위 핸들러가 우선)
     @ExceptionHandler(DataAccessException.class)
-    public ResponseEntity<ApiResponse<Void>> handleDataAccess(DataAccessException e) {
-        log.error("DataAccessException", e);
+    public ResponseEntity<ApiResponse<Void>> handleDataAccess(DataAccessException e, HttpServletRequest request) {
+        error(503, request, "DATABASE_ERROR", e);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiResponse.error(new ApiErrorDetail("DATABASE_ERROR", "데이터베이스 오류가 발생했습니다.")));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
-        log.error("Unexpected error", e);
+    public ResponseEntity<ApiResponse<Void>> handleException(Exception e, HttpServletRequest request) {
+        error(500, request, "INTERNAL_SERVER_ERROR", e);
         return ResponseEntity.internalServerError()
                 .body(ApiResponse.error(new ApiErrorDetail("INTERNAL_SERVER_ERROR", "알 수 없는 에러가 발생했습니다.")));
     }

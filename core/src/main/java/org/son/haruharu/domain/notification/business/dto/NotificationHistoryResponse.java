@@ -15,7 +15,7 @@ public record NotificationHistoryResponse(
         String body,
         @Schema(description = "타입별 딥링크 키 — roomId(ROOM_MATCHED·ROOM_STARTED·FINAL_SELECTION_OPEN·MUTUAL_MATCH·"
                 + "SELECTED_BY_SOMEONE·MATCH_CONSOLATION) / videoPostId(REACTION_RECEIVED) / chatRoomId(CHAT) / "
-                + "빈 객체(COIN_REFUNDED). 값은 전부 문자열. 상세는 docs/notification-payload.md",
+                + "빈 객체(COIN_REFUNDED). 값은 전부 문자열.",
                 example = "{\"roomId\": \"12\"}") Map<String, String> payload,
         @JsonProperty("is_read") boolean isRead,
         @JsonProperty("created_at") LocalDateTime createdAt

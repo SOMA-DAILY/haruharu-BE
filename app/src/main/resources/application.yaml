@@ -82,3 +82,11 @@ management:
   endpoint:
     health:
       show-details: never
+
+# 요청 단위 식별자를 모든 로그에 노출한다(#257). 값은 MdcLoggingFilter가 심는다.
+# traceId는 ALB가 주입한 X-Amzn-Trace-Id — ALB access log와 같은 키라 두 로그를 조인할 수 있다.
+# level 패턴을 오버라이드하는 방식은 Spring Boot 권장(Micrometer Tracing도 동일 방식).
+# 구조화 로그(logging.structured.format=ecs) 전환 시에는 MDC가 최상위 필드로 자동 승격되어 이 패턴이 무시된다.
+logging:
+  pattern:
+    level: "%5p [%X{traceId:--}/%X{userId:--}]"

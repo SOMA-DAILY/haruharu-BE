@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.coin.business;
 
+import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
 import org.son.haruharu.domain.coin.business.command.CoinRevokeCommand;
 import org.son.haruharu.domain.coin.business.command.CoinSpendCommand;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class CoinService {
@@ -100,6 +102,8 @@ public class CoinService {
         coinLedgerWriter.append(CoinLedger.of(
                 command.userId(), command.amount(), credited.totalBalance(), command.bucket(),
                 command.reason(), command.refType(), command.refId(), LocalDateTime.now()));
+        logCoin("credit", command.userId(), command.amount(), credited.totalBalance(),
+                command.bucket(), command.reason(), command.refType(), command.refId());
     }
 
     /** 코인 소모(리워드 먼저). 차감된 버킷마다 원장 항목을 남긴다. balanceAfter는 각 항목 적용 후의 총 잔액(순차). */
@@ -123,6 +127,20 @@ public class CoinService {
                     command.userId(), -spend.fromPaid(), balanceAfter, CoinBucket.PAID,
                     command.reason(), command.refType(), command.refId(), now));
         }
+        logCoin("spend", command.userId(), -command.amount(), balanceAfter,
+                null, command.reason(), command.refType(), command.refId());
+    }
+
+    /**
+     * 구름 증감 감사 로그(#257). 분쟁·문의 대응 시 원장(coin_ledger) 조회 없이 흐름을 추적하기 위함.
+     * 원장에 남지 않는 실패 트랜잭션은 이 로그로도 안 남는다 — 성공한 증감의 시계열 추적이 목적.
+     * userId 외 식별자는 남기지 않는다(PII).
+     */
+    private void logCoin(String op, Long userId, long delta, long balanceAfter,
+                         CoinBucket bucket, CoinLedgerReason reason, String refType, String refId) {
+        log.info("coin {} userId={} delta={} balance={} bucket={} reason={} ref={}:{}",
+                op, userId, delta, balanceAfter, bucket == null ? "-" : bucket, reason,
+                refType == null ? "-" : refType, refId == null ? "-" : refId);
     }
 
     /**

@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.matching.business;
 
+import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.coin.business.command.CoinCreditCommand;
 import org.son.haruharu.domain.matching.business.event.MatchRefundedEvent;
@@ -30,6 +31,7 @@ import java.util.Set;
  * 주의: 다중 인스턴스(HA) 환경에서는 동시 실행 시 같은 QUEUED 집합을 각자 읽어 이중 생성될 수 있으므로,
  * HA 전환 시 분산 락(ShedLock 등) 또는 SELECT ... FOR UPDATE 도입이 필요하다.
  */
+@Slf4j
 @Service
 public class MatchingExecutor {
 
@@ -99,6 +101,10 @@ public class MatchingExecutor {
             // 커밋 후 발송 — 불발 통지 푸시 실패가 매칭 배치를 롤백시키지 않도록
             eventPublisher.publishEvent(new MatchRefundedEvent(refundedUserIds, matchingProperties.enterCost()));
         }
+        // 스케줄러는 방 수만 남기므로 불발·환불은 여기서 남긴다 — 없으면 환불 발생을 로그로 알 수 없다(#257).
+        log.info("매칭 실행: 큐 남{}/여{} → {}개 방 확정, 불발 {}명 환불(각 {}구름), scheduledDate={}",
+                males.size(), females.size(), groups.size(), refundedUserIds.size(),
+                matchingProperties.enterCost(), scheduledDate);
         return groups.size();
     }
 
