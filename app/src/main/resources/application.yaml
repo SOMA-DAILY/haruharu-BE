@@ -7,6 +7,18 @@ spring:
 
   datasource:
     driver-class-name: org.postgresql.Driver
+    hikari:
+      data-source-properties:
+        # 지우지 말 것 — DB 예외 메시지의 PII 유출을 막는 사실상 유일한 방어다(#259).
+        # pgjdbc 기본값(true)이면 서버 에러의 DETAIL 이 예외 메시지에 실린다 — 유니크 충돌 시
+        # "Key (token)=(실제 FCM 토큰) already exists" 형태로 값이 로그에 노출된다.
+        # 프로파일별 DB_URL 5곳(Secrets Manager 4 + local)에 각각 거는 대신 여기서 한 번에 건다.
+        #
+        # GlobalExceptionHandler 의 제약명 추출은 DataIntegrityViolationException 경로만 덮는다.
+        # DataAccessException·캐치올(풀스택)과 GlobalExceptionHandler 가 닿지 않는 스케줄러 스레드,
+        # PushSendService(하필 ux_device_tokens_token 충돌이 실제로 터지는 FCM 경로)는
+        # 이 설정에만 의존한다. 제거하면 그 경로들에서 조용히 재발한다.
+        logServerErrorDetail: false
 
   jpa:
     properties:

@@ -1,9 +1,11 @@
 package org.son.haruharu.utils;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -45,13 +47,25 @@ public class JwtProvider {
         return Long.parseLong(parseClaims(token).getSubject());
     }
 
-    public boolean isValid(String token) {
+    /**
+     * 검증 결과를 사유와 함께 반환한다(#259). 사유는 로그 전용 — 응답으로 노출하면 계정 열거에 악용된다.
+     * boolean 만 반환하던 isValid() 로는 EntryPoint 가 401 원인을 남길 수 없었다.
+     */
+    public JwtValidation validate(String token) {
         try {
             parseClaims(token);
-            return true;
+            return JwtValidation.VALID;
+        } catch (ExpiredJwtException e) {
+            return JwtValidation.EXPIRED;
+        } catch (SignatureException e) {
+            return JwtValidation.BAD_SIGNATURE;
         } catch (JwtException | IllegalArgumentException e) {
-            return false;
+            return JwtValidation.MALFORMED;
         }
+    }
+
+    public boolean isValid(String token) {
+        return validate(token) == JwtValidation.VALID;
     }
 
     public boolean isAccessToken(String token) {

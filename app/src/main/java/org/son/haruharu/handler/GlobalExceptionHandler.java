@@ -23,15 +23,21 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.util.DisconnectedClientHelper;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 전역 예외 → API 응답 변환 + 실패 로깅(#257).
  *
  * 로깅 책임 분담:
  * - traceId·userId : MdcLoggingFilter 가 MDC 에 심어 모든 로그에 자동 부착
- * - access log(method·path·status·duration) : ALB access log 담당 (앱에서 찍지 않는다)
+ * - access log(method·path·status·duration) : AccessLogFilter 담당(#259).
+ *   원래 ALB access log 몫으로 봤으나 실제 ALB 는 접근로그가 꺼져 있어 200 이 아무 데도 남지 않았다.
  * - 실패 원인(도메인 에러코드) : 여기. 예외 객체에 접근할 수 있는 유일한 지점이라
  *   Filter 로는 대체할 수 없다 — Filter 는 응답 status(403)만 볼 뿐 왜 403 인지 모른다.
+ *   access log 와는 관심사가 달라 이중 로깅이 아니라 상보 관계다.
  *
  * 레벨 기준: 4xx=유저 귀책·재시도 가능 → WARN(스택 없음) / 5xx=서버 귀책 → ERROR(스택 포함).
  * 요청 본문·쿼리스트링은 PII 가 섞일 수 있어 남기지 않는다.
@@ -39,6 +45,14 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /**
+     * PostgreSQL 제약 위반 메시지에서 제약명만 뽑는다: ... violates unique constraint "ux_device_tokens_token"
+     * violates 절에 앵커링한다 — 그냥 constraint "..." 로 두면 DETAIL 의 컬럼 값 안에 같은 문구가 있을 때
+     * 그 조각을 제약명으로 오인해 값 일부가 로그로 샌다.
+     */
+    private static final Pattern CONSTRAINT_NAME_PATTERN =
+            Pattern.compile("violates (?:unique|foreign key|check|exclusion|not-null) constraint \"([^\"]+)\"");
 
     /** 4xx 공통. 스택은 남기지 않는다 — 유저 귀책이라 노이즈만 되고 코드로 원인이 특정된다. */
     private void warn(int status, HttpServletRequest request, String code, String message) {
@@ -164,14 +178,31 @@ public class GlobalExceptionHandler {
     /**
      * unique 제약 위반 등. 앱이 막지 못한 동시성·중복이라 WARN 으로 남기고 원인(제약명)을 함께 본다.
      * 예: 같은 기기로 다른 계정 로그인 시 ux_device_tokens_token 충돌.
+     *
+     * 예외 메시지 원문은 절대 남기지 않는다(#259) — pgjdbc 는 logServerErrorDetail 기본값 true 라
+     * 서버 에러의 DETAIL("Key (token)=(실제값) already exists")이 메시지에 실린다.
+     * FCM 디바이스 토큰·실명인증 CI blind index 가 그대로 로그로 나가므로 제약명만 뽑아 쓴다.
+     *
+     * 단 이 방어는 <b>이 핸들러 경로에만</b> 적용된다 — 아래 handleDataAccess·캐치올은 풀스택을 남기고,
+     * 스케줄러 스레드엔 이 핸들러가 아예 닿지 않는다. 그 경로들은 application.yaml 의
+     * logServerErrorDetail=false 에 단독으로 의존하므로 그 설정을 지우면 조용히 재발한다.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException e,
                                                                  HttpServletRequest request) {
-        String cause = e.getMostSpecificCause().getMessage();
-        warn(409, request, "DATA_INTEGRITY_VIOLATION", cause == null ? "-" : cause.replaceAll("\\s+", " "));
+        warn(409, request, "DATA_INTEGRITY_VIOLATION", "constraint=" + extractConstraintName(e));
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(new ApiErrorDetail("DATA_INTEGRITY_VIOLATION", "중복된 데이터가 존재합니다.")));
+    }
+
+    /** 제약명만 화이트리스트로 추출한다. 못 찾으면 원문 대신 "-" — 원문에는 컬럼 값이 섞여 있다. */
+    private String extractConstraintName(DataIntegrityViolationException e) {
+        String cause = e.getMostSpecificCause().getMessage();
+        if (cause == null) {
+            return "-";
+        }
+        Matcher matcher = CONSTRAINT_NAME_PATTERN.matcher(cause);
+        return matcher.find() ? matcher.group(1) : "-";
     }
 
     // ===================== 5xx =====================
@@ -191,8 +222,20 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(new ApiErrorDetail("DATABASE_ERROR", "데이터베이스 오류가 발생했습니다.")));
     }
 
+    /**
+     * 캐치올. 클라이언트 연결 종료(탭 닫기·앱 이탈)는 서버 버그가 아니므로 5xx 로 집계하지 않는다(#259).
+     * Spring 은 이를 위해 DisconnectedClientHelper 를 제공한다 — 프레임워크 기본 설계는 DEBUG 1줄이고,
+     * 캐치올이 그 설계를 덮어 broken pipe 를 ERROR + 풀스택으로 남기고 있었다.
+     * 이대로 두면 유저가 탭을 닫을 때마다 ERROR 기준 알람이 울린다.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e, HttpServletRequest request) {
+        if (DisconnectedClientHelper.isClientDisconnectedException(e)) {
+            // 이미 닫힌 소켓이라 응답 바디는 나가지 않는다. 로그만 남기고 조용히 끝낸다.
+            log.debug("클라이언트 연결 종료 {} {}", request.getMethod(), request.getRequestURI());
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error(new ApiErrorDetail("INTERNAL_SERVER_ERROR", "알 수 없는 에러가 발생했습니다.")));
+        }
         error(500, request, "INTERNAL_SERVER_ERROR", e);
         return ResponseEntity.internalServerError()
                 .body(ApiResponse.error(new ApiErrorDetail("INTERNAL_SERVER_ERROR", "알 수 없는 에러가 발생했습니다.")));

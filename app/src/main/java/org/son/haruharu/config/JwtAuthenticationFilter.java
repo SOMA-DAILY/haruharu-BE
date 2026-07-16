@@ -4,12 +4,15 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.son.haruharu.common.ApiErrorDetail;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.domain.user.implement.UserStatus;
 import org.son.haruharu.domain.user.storage.exception.UserNotFoundException;
 import org.son.haruharu.utils.JwtProvider;
+import org.son.haruharu.utils.JwtValidation;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,8 +24,15 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+@Slf4j
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    /**
+     * 인증 실패 사유를 EntryPoint 로 전달하는 요청 속성 키(#259).
+     * 401 응답은 SecurityConfig 의 EntryPoint 가 직접 쓰는데, 그 지점엔 실패 사유가 없어 로그를 남길 수 없었다.
+     */
+    static final String AUTH_FAILURE_REASON = "haruharu.authFailureReason";
 
     // ONBOARDING(온보딩 미완) 유저가 접근할 수 있는 경로 prefix. 그 외 보호 자원(매칭·채팅·방·홈·구름·영상)은 차단한다.
     private static final List<String> ONBOARDING_ALLOWED_PREFIXES = List.of(
@@ -46,17 +56,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String token = extractToken(request);
-        if (token != null && jwtProvider.isValid(token) && jwtProvider.isAccessToken(token)) {
-            try {
-                Long userId = jwtProvider.extractUserId(token);
-                if (!enforceStatus(request, response, userId)) {
-                    return;
+        if (token == null) {
+            request.setAttribute(AUTH_FAILURE_REASON, "NO_TOKEN");
+        } else {
+            JwtValidation validation = jwtProvider.validate(token);
+            if (validation != JwtValidation.VALID) {
+                // 사유를 EntryPoint 로 넘긴다 — 401 을 실제로 낼지(=보호 자원인지)는 인가 단계가 결정하므로
+                // 여기서 바로 로깅하면 permitAll 경로의 무해한 실패까지 남는다(#259).
+                request.setAttribute(AUTH_FAILURE_REASON, validation.name());
+            } else if (!jwtProvider.isAccessToken(token)) {
+                request.setAttribute(AUTH_FAILURE_REASON, "NOT_ACCESS_TOKEN");
+            } else {
+                try {
+                    Long userId = jwtProvider.extractUserId(token);
+                    if (!enforceStatus(request, response, userId)) {
+                        return;
+                    }
+                    var auth = new UsernamePasswordAuthenticationToken(userId, null, List.of());
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                    // MdcLoggingFilter는 인증 전에 실행되므로 userId를 알 수 없다. 인증을 마친 여기서 채운다(#259).
+                    MDC.put(MdcLoggingFilter.USER_ID, userId.toString());
+                } catch (NumberFormatException e) {
+                    // subject가 Long이 아님(예: 마이그레이션 이전 발급된 구 UUID subject 토큰).
+                    // 인증을 설정하지 않고 통과시켜 401로 자연스럽게 이어지도록 한다.
+                    request.setAttribute(AUTH_FAILURE_REASON, "NON_NUMERIC_SUBJECT");
                 }
-                var auth = new UsernamePasswordAuthenticationToken(userId, null, List.of());
-                SecurityContextHolder.getContext().setAuthentication(auth);
-            } catch (NumberFormatException e) {
-                // subject가 Long이 아님(예: 마이그레이션 이전 발급된 구 UUID subject 토큰).
-                // 인증을 설정하지 않고 통과시켜 401로 자연스럽게 이어지도록 한다.
             }
         }
         filterChain.doFilter(request, response);
@@ -71,6 +95,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      */
     private boolean enforceStatus(HttpServletRequest request, HttpServletResponse response, Long userId) throws IOException {
         String path = request.getRequestURI();
+        String method = request.getMethod();
         // 로그인/갱신/로그아웃은 자체적으로 상태를 관리하므로(AuthService) 여기서 강제하지 않는다.
         if (path.startsWith("/api/v1/auth/")) {
             return true;
@@ -79,15 +104,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             status = userReader.getById(userId).status();
         } catch (UserNotFoundException e) {
-            writeError(response, "USER_INACTIVE", "비활성화된 계정입니다.");
+            writeError(response, method, path, "USER_INACTIVE", "비활성화된 계정입니다.", userId);
             return false;
         }
         if (!status.canAuthenticate()) {
-            writeError(response, "USER_INACTIVE", "비활성화된 계정입니다.");
+            writeError(response, method, path, "USER_INACTIVE", "비활성화된 계정입니다.", userId);
             return false;
         }
         if (status == UserStatus.ONBOARDING && !isOnboardingAllowed(path)) {
-            writeError(response, "ONBOARDING_REQUIRED", "온보딩을 완료해야 이용할 수 있습니다.");
+            writeError(response, method, path, "ONBOARDING_REQUIRED", "온보딩을 완료해야 이용할 수 있습니다.", userId);
             return false;
         }
         return true;
@@ -97,7 +122,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return ONBOARDING_ALLOWED_PREFIXES.stream().anyMatch(path::startsWith);
     }
 
-    private void writeError(HttpServletResponse response, String code, String message) throws IOException {
+    /**
+     * 403 을 직접 응답한다 — GlobalExceptionHandler 에 도달하지 않으므로 로그도 여기서 남긴다(#259).
+     * 제재 우회 시도(BANNED 유저의 반복 접근)를 탐지하려면 흔적이 필요하다(OWASP A09).
+     */
+    private void writeError(HttpServletResponse response, String method, String path, String code, String message,
+                            Long userId) throws IOException {
+        // 스키마는 GlobalExceptionHandler.warn()과 맞춘다: {status} {method} {uri} code=... — 알람·파싱 기준이 된다.
+        log.warn("403 {} {} code={} userId={}", method, path, code, userId);
         response.setStatus(403);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());

@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.utils.JwtProvider;
+import org.son.haruharu.utils.JwtValidation;
 import org.springframework.security.core.context.SecurityContextHolder;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -46,7 +47,7 @@ class JwtAuthenticationFilterTest {
 
         String legacyToken = "signed-but-uuid-subject";
         given(request.getHeader("Authorization")).willReturn("Bearer " + legacyToken);
-        given(jwtProvider.isValid(legacyToken)).willReturn(true);
+        given(jwtProvider.validate(legacyToken)).willReturn(JwtValidation.VALID);
         given(jwtProvider.isAccessToken(legacyToken)).willReturn(true);
         given(jwtProvider.extractUserId(legacyToken))
             .willThrow(new NumberFormatException("For input string: \"3fa85f64-5717-4562-b3fc-2c963f66afa6\""));

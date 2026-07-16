@@ -77,22 +77,45 @@ throw new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니
 | `UnauthorizedException` | 401 | `warn` |
 | `ForbiddenException` | 403 | `warn` |
 | `ConflictException` | 409 | `warn` |
-| `MethodArgumentNotValidException` | 400 | 없음 |
+| `MethodArgumentNotValidException` | 400 | `warn` (필드명만 — 값은 PII) |
 | `ConstraintViolationException` | 400 | `warn` |
-| `MethodArgumentTypeMismatchException` | 400 | `warn` |
-| `MissingServletRequestParameterException` | 400 | 없음 |
-| `HttpMessageNotReadableException` | 400 | `warn` |
+| `MethodArgumentTypeMismatchException` | 400 | `warn` (파라미터명만) |
+| `MissingServletRequestParameterException` | 400 | `warn` |
+| `HttpMessageNotReadableException` | 400 | `warn` (파싱 원문 제외 — 요청 바디는 PII) |
 | `HttpRequestMethodNotSupportedException` | 405 | `warn` |
 | `NoResourceFoundException` | 404 | `warn` |
-| `DataIntegrityViolationException` | 409 | `warn` |
-| `Exception` (catch-all) | 500 | `error` (스택 포함) |
+| `DataIntegrityViolationException` | 409 | `warn` (**제약명만** — 아래 참조) |
+| `BadGatewayException` | 502 | `error` (스택 포함) |
+| `DataAccessException` | 503 | `error` (스택 포함) |
+| `Exception` (catch-all) | 500 | `error` (스택 포함) / 클라 끊김은 `debug` |
 
-핸들러에는 로깅을 넣지 않는다. 로깅은 Filter 또는 Interceptor로 중앙화한다.
-- `log.error`는 catch-all `Exception` 핸들러에만 허용 (예상치 못한 오류만)
-- 4xx 핸들러에 `log.warn` 추가 시 이후 AOP/Filter 도입 시 이중 로깅 발생
+## 로깅 책임 분담 (#257, #259)
 
-> 향후 HTTP 레벨 전체 로깅(200·4xx·5xx)은 `OncePerRequestFilter` 또는 `HandlerInterceptor`로 구현한다.
-> AOP는 HTTP 상태코드를 직접 알 수 없어 이 목적에 적합하지 않다.
+실패 로깅은 **핸들러가 담당한다.** Filter는 응답 status(403)만 볼 뿐 *왜* 403인지 모르므로,
+도메인 에러코드는 예외 객체에 접근할 수 있는 핸들러에서만 남길 수 있다.
+
+| 무엇 | 어디 |
+|------|------|
+| traceId·userId | `MdcLoggingFilter` (MDC → 모든 로그에 자동 부착) |
+| access log (method·path·status·duration) | `AccessLogFilter` |
+| 실패 원인 (도메인 에러코드) | `GlobalExceptionHandler` |
+| 인증 실패 사유 (401) | `SecurityConfig`의 EntryPoint — 핸들러에 도달하지 않는다 |
+| 인가 실패 (403) | `JwtAuthenticationFilter.writeError` — 핸들러에 도달하지 않는다 |
+
+access log와 실패 원인은 관심사가 달라 **이중 로깅이 아니라 상보 관계다.**
+레벨 기준: 4xx = 유저 귀책·재시도 가능 → `warn`(스택 없음) / 5xx = 서버 귀책 → `error`(스택 포함).
+
+## 로그에 남기지 않는 것 (#259)
+
+- **요청 본문·쿼리스트링** — PII가 섞인다
+- **토큰 원문** — 401 로그에는 사유(`BAD_SIGNATURE`·`EXPIRED`·`MALFORMED`)만 남긴다
+- **DB 예외 메시지 원문** — pgjdbc는 `logServerErrorDetail` 기본값이 true라 서버 에러의 DETAIL
+  (`Key (token)=(실제 FCM 토큰) already exists`)이 예외 메시지에 실린다.
+  `DataIntegrityViolationException` 핸들러는 **제약명만** 추출하고,
+  `application.yaml`의 `logServerErrorDetail: false`와 두 겹으로 막는다.
+
+> 인증 실패 **사유는 로그에만** 남기고 클라이언트 응답은 "인증이 필요합니다."로 뭉뚱그린다.
+> 사유를 응답으로 노출하면 계정 열거·토큰 대조에 악용된다.
 
 ## API 응답 형식
 
