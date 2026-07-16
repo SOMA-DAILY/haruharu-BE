@@ -2,6 +2,7 @@ package org.son.haruharu.domain.user.business;
 
 import org.son.haruharu.domain.auth.business.AuthService;
 import org.son.haruharu.domain.coin.business.CoinService;
+import org.son.haruharu.domain.matching.business.MatchingService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.identity.implement.VerificationStatus;
@@ -35,6 +36,7 @@ public class UserService {
     private final ValueService valueService;
     private final CoinService coinService;
     private final AuthService authService;
+    private final MatchingService matchingService;
     private final Clock clock;
 
     public UserService(
@@ -45,6 +47,7 @@ public class UserService {
         ValueService valueService,
         CoinService coinService,
         AuthService authService,
+        MatchingService matchingService,
         Clock clock
     ) {
         this.userReader = userReader;
@@ -54,6 +57,7 @@ public class UserService {
         this.valueService = valueService;
         this.coinService = coinService;
         this.authService = authService;
+        this.matchingService = matchingService;
         this.clock = clock;
     }
 
@@ -66,6 +70,15 @@ public class UserService {
             .orElse(null);
         VerificationStatus status = VerificationStatus.of(verified.isPresent());
         return UserProfileResponse.from(userId, profile, gender, age, status.name());
+    }
+
+    /**
+     * 탈퇴한 유저인지. 탈퇴는 users 행을 남기고 status만 DELETED로 전이하므로 status로 판정한다.
+     * 탈퇴 시 프로필은 soft-delete되어 조회 자체가 불가하므로, 다른 도메인이 상대 유저를 다룰 때
+     * 프로필 조회 전에 이걸로 먼저 걸러야 한다(#255).
+     */
+    public boolean isWithdrawn(Long userId) {
+        return userReader.getById(userId).status() == UserStatus.DELETED;
     }
 
     /**
@@ -98,6 +111,9 @@ public class UserService {
     @Transactional
     public void withdraw(Long userId) {
         User user = userReader.getById(userId);
+        // 잔여 매칭 신청 취소·환불을 지갑 삭제보다 먼저 한다(#255).
+        // 순서가 뒤바뀌면 환불(credit)이 CoinWallet.init()으로 지갑을 되살려 탈퇴자에게 구름이 남는다.
+        matchingService.cancelQueueOnWithdraw(userId);
         profileService.deleteProfileAndImages(userId);
         valueService.deleteAnswers(userId);
         coinService.deleteWallet(userId);

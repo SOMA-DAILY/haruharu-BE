@@ -8,6 +8,7 @@ import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
 import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
+import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
@@ -18,6 +19,7 @@ import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.profile.business.ProfileService;
+import org.son.haruharu.domain.user.business.UserService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -46,6 +48,7 @@ public class ChatService {
     private final ChatMessageReader chatMessageReader;
     private final ChatMessageWriter chatMessageWriter;
     private final ProfileService profileService;
+    private final UserService userService;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -56,6 +59,7 @@ public class ChatService {
                        ChatMessageReader chatMessageReader,
                        ChatMessageWriter chatMessageWriter,
                        ProfileService profileService,
+                       UserService userService,
                        ApplicationEventPublisher eventPublisher,
                        Clock clock) {
         this.chatRoomReader = chatRoomReader;
@@ -65,6 +69,7 @@ public class ChatService {
         this.chatMessageReader = chatMessageReader;
         this.chatMessageWriter = chatMessageWriter;
         this.profileService = profileService;
+        this.userService = userService;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -94,8 +99,8 @@ public class ChatService {
     @Transactional
     public ChatMessageBroadcast sendMessage(Long chatRoomId, Long senderId, String content) {
         requireMember(chatRoomId, senderId);
+        Long recipientId = requireActivePartner(chatRoomId, senderId);
         ChatMessage saved = chatMessageWriter.save(ChatMessage.create(chatRoomId, senderId, content));
-        Long recipientId = partnerUserId(chatRoomId, senderId);
         String senderNickname = profileService.getNickname(senderId);
         eventPublisher.publishEvent(new ChatMessageSentEvent(chatRoomId, recipientId, senderNickname));
         return ChatMessageBroadcast.from(saved);
@@ -114,13 +119,15 @@ public class ChatService {
 
     public ChatRoomDetailResponse getRoom(Long chatRoomId, Long userId) {
         requireMember(chatRoomId, userId);
+        Long partnerUserId = requireActivePartner(chatRoomId, userId);
         ChatRoom room = chatRoomReader.getById(chatRoomId);
-        return new ChatRoomDetailResponse(chatRoomId, partnerBrief(chatRoomId, userId), room.createdAt());
+        return new ChatRoomDetailResponse(chatRoomId, toPartnerBrief(partnerUserId), room.createdAt());
     }
 
     /** 과거 메시지(최신순 커서 페이지). 삭제된 메시지는 제외. */
     public MessagePageResponse getMessages(Long chatRoomId, Long userId, Long cursor, int size) {
         requireMember(chatRoomId, userId);
+        requireActivePartner(chatRoomId, userId);
         int limit = Math.min(Math.max(size, 1), MAX_MESSAGE_PAGE_SIZE);
         List<ChatMessage> messages = chatMessageReader.findPage(chatRoomId, cursor, limit);
         return MessagePageResponse.of(messages, limit);
@@ -130,6 +137,7 @@ public class ChatService {
     @Transactional
     public ReadResponse markRead(Long chatRoomId, Long userId, Long lastReadMessageId) {
         ChatRoomMember member = requireMember(chatRoomId, userId);
+        requireActivePartner(chatRoomId, userId);
         ChatRoomMember updated = chatRoomMemberWriter.save(member.readUpTo(lastReadMessageId));
         long unread = chatMessageReader.countUnread(chatRoomId, updated.lastReadMessageId(), userId);
         return new ReadResponse(chatRoomId, unread);
@@ -144,6 +152,10 @@ public class ChatService {
 
     private ChatRoomsResponse.ChatRoomSummary toSummary(ChatRoomMember me, Long userId) {
         Long partnerUserId = partnerUserId(me.chatRoomId(), userId);
+        // 탈퇴자는 프로필이 soft-delete되어 조회 시 404가 난다. 조회 전에 걸러야 목록 전체가 죽지 않는다(#255).
+        if (userService.isWithdrawn(partnerUserId)) {
+            return ChatRoomsResponse.ChatRoomSummary.withdrawn(me.chatRoomId());
+        }
         PartnerBrief partner = toPartnerBrief(partnerUserId);
         Optional<ChatMessage> last = chatMessageReader.findLast(me.chatRoomId());
         long unread = chatMessageReader.countUnread(me.chatRoomId(), me.lastReadMessageId(), userId);
@@ -152,11 +164,8 @@ public class ChatService {
                 partner,
                 last.map(ChatMessage::content).orElse(null),
                 last.map(ChatMessage::createdAt).orElse(null),
-                unread);
-    }
-
-    private PartnerBrief partnerBrief(Long chatRoomId, Long userId) {
-        return toPartnerBrief(partnerUserId(chatRoomId, userId));
+                unread,
+                false);
     }
 
     /** 상대 프로필에서 목록·헤더용 경량 정보를 뽑는다. 대표사진 = sorted_order 최소 이미지(없으면 null). */
@@ -175,6 +184,19 @@ public class ChatService {
         return chatRoomMemberReader.findMembership(chatRoomId, userId)
                 .filter(member -> !member.hasLeft())
                 .orElseThrow(ChatNotMemberException::new);
+    }
+
+    /**
+     * 상대가 탈퇴하지 않았는지 검증하고 상대 userId를 반환한다(#255).
+     * 상대가 탈퇴한 방은 대화 기록을 볼 수 없고 진입할 수 없다 — 나가기(leaveRoom)만 허용된다.
+     * 반환값을 호출부가 재사용해 상대 조회가 요청당 한 번만 일어나게 한다.
+     */
+    private Long requireActivePartner(Long chatRoomId, Long userId) {
+        Long partnerUserId = partnerUserId(chatRoomId, userId);
+        if (userService.isWithdrawn(partnerUserId)) {
+            throw new ChatPartnerWithdrawnException();
+        }
+        return partnerUserId;
     }
 
     private Long partnerUserId(Long chatRoomId, Long userId) {

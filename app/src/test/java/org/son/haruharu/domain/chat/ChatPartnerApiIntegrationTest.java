@@ -28,6 +28,10 @@ import org.son.haruharu.domain.room.storage.RoomEntity;
 import org.son.haruharu.domain.room.storage.RoomJpaRepository;
 import org.son.haruharu.domain.room.storage.RoomMemberEntity;
 import org.son.haruharu.domain.room.storage.RoomMemberJpaRepository;
+import org.son.haruharu.domain.user.implement.User;
+import org.son.haruharu.domain.user.implement.UserStatus;
+import org.son.haruharu.domain.user.storage.UserEntity;
+import org.son.haruharu.domain.user.storage.UserJpaRepository;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.storage.VideoPostEntity;
 import org.son.haruharu.domain.video.storage.VideoPostJpaRepository;
@@ -56,6 +60,7 @@ class ChatPartnerApiIntegrationTest {
     @Autowired ChatRoomMemberJpaRepository chatRoomMemberJpaRepository;
     @Autowired VideoPostJpaRepository videoPostJpaRepository;
     @Autowired UserProfileJpaRepository userProfileJpaRepository;
+    @Autowired UserJpaRepository userJpaRepository;
 
     @BeforeEach
     void clean() {
@@ -66,6 +71,11 @@ class ChatPartnerApiIntegrationTest {
         roomMemberJpaRepository.deleteAll();
         roomJpaRepository.deleteAll();
         userProfileJpaRepository.deleteAll();
+        userJpaRepository.deleteAll();
+    }
+
+    private Long saveUser(UserStatus status) {
+        return userJpaRepository.save(UserEntity.from(new User(null, status, null))).toDomain().id();
     }
 
     private static UsernamePasswordAuthenticationToken auth(Long userId) {
@@ -81,8 +91,8 @@ class ChatPartnerApiIntegrationTest {
     @Test
     @DisplayName("매칭 상대 카드 조회 시 프로필 + videos_by_day(day별 영상)가 snake_case로 직렬화된다")
     void givenMatchedPartner_whenGetPartner_thenReturnsProfileAndVideosByDay() throws Exception {
-        Long meUser = 900L;
-        Long partnerUser = 901L;
+        Long meUser = saveUser(UserStatus.ACTIVE);
+        Long partnerUser = saveUser(UserStatus.ACTIVE);
         LocalDate started = LocalDate.of(2026, 6, 24);
         Long roomId = roomJpaRepository.save(RoomEntity.from(
                 new Room(null, RoomStatus.ENDED, started, 3, started.atTime(9, 0), started.plusDays(3).atTime(9, 0))))
@@ -125,5 +135,50 @@ class ChatPartnerApiIntegrationTest {
                 .andExpect(jsonPath("$.data.videos_by_day['1'][0].slot_index").value(1))
                 .andExpect(jsonPath("$.data.videos_by_day['2']", org.hamcrest.Matchers.hasSize(1)))
                 .andExpect(jsonPath("$.data.videos_by_day['3'][0].slot_index").value(3));
+    }
+
+    @Test
+    @DisplayName("상대가 탈퇴하면 채팅방 목록은 200으로 탈퇴 표시만 내려주고, 방 진입은 403으로 막힌다 (#255)")
+    void givenWithdrawnPartner_whenGetChatRooms_thenListSurvivesAndRoomIsBlocked() throws Exception {
+        Long meUser = saveUser(UserStatus.ACTIVE);
+        Long partnerUser = saveUser(UserStatus.DELETED); // 탈퇴 완료 상태
+        LocalDate started = LocalDate.of(2026, 6, 24);
+        Long roomId = roomJpaRepository.save(RoomEntity.from(
+                new Room(null, RoomStatus.ENDED, started, 3, started.atTime(9, 0), started.plusDays(3).atTime(9, 0))))
+                .toDomain().id();
+        Long meMemberId = roomMemberJpaRepository.save(RoomMemberEntity.from(
+                RoomMember.of(roomId, meUser, "MALE", LocalDate.of(2000, 1, 1), started.atTime(9, 0)))).toDomain().id();
+        Long partnerMemberId = roomMemberJpaRepository.save(RoomMemberEntity.from(
+                RoomMember.of(roomId, partnerUser, "FEMALE", LocalDate.of(1999, 1, 1), started.atTime(9, 0))))
+                .toDomain().id();
+        // 탈퇴 시 프로필은 soft-delete되어 조회 불가 — 그래서 user_profiles 행을 아예 만들지 않는다
+        Long matchResultId = matchResultJpaRepository.save(MatchResultEntity.from(
+                MatchResult.of(meMemberId, partnerMemberId, LocalDateTime.of(2026, 6, 26, 22, 0)))).toDomain().id();
+        Long chatRoomId = chatRoomJpaRepository.save(ChatRoomEntity.from(ChatRoom.create(matchResultId))).toDomain().id();
+        chatRoomMemberJpaRepository.save(ChatRoomMemberEntity.from(
+                ChatRoomMember.join(chatRoomId, meUser, LocalDateTime.now())));
+        chatRoomMemberJpaRepository.save(ChatRoomMemberEntity.from(
+                ChatRoomMember.join(chatRoomId, partnerUser, LocalDateTime.now())));
+
+        // 목록은 살아있어야 한다 — 이 API가 404로 죽는 것이 #255의 증상이었다
+        mockMvc.perform(get("/api/v1/chat-rooms").with(authentication(auth(meUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.data.chat_rooms", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.data.chat_rooms[0].chat_room_id").value(chatRoomId.intValue()))
+                .andExpect(jsonPath("$.data.chat_rooms[0].partner_withdrawn").value(true))
+                .andExpect(jsonPath("$.data.chat_rooms[0].partner").doesNotExist())
+                .andExpect(jsonPath("$.data.chat_rooms[0].last_message").doesNotExist());
+
+        // 진입·기록 열람은 막힌다
+        mockMvc.perform(get("/api/v1/chat-rooms/{id}", chatRoomId).with(authentication(auth(meUser))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("CHAT_PARTNER_WITHDRAWN"));
+        mockMvc.perform(get("/api/v1/chat-rooms/{id}/messages", chatRoomId).with(authentication(auth(meUser))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("CHAT_PARTNER_WITHDRAWN"));
+        mockMvc.perform(get("/api/v1/chat-rooms/{id}/partner", chatRoomId).with(authentication(auth(meUser))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("CHAT_PARTNER_WITHDRAWN"));
     }
 }
