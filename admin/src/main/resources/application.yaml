@@ -7,6 +7,10 @@ spring:
 
   datasource:
     driver-class-name: org.postgresql.Driver
+    hikari:
+      data-source-properties:
+        # 유저 서버와 동일 방침(#259). 서버 에러 DETAIL 에 실리는 컬럼 실제 값의 로그 노출을 드라이버 레벨에서 막는다.
+        logServerErrorDetail: false
 
   jpa:
     # 어드민은 스키마를 소유하지 않는다(app이 소유). 스키마 변경/검증을 하지 않음.

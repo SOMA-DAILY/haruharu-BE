@@ -7,41 +7,52 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * 요청 단위 식별자를 MDC에 심어 모든 로그에 자동 부착한다(#257).
- * 로그를 직접 남기지 않는다 — access log(method·path·status·duration)는 ALB가 담당하고,
- * 예외 상세는 GlobalExceptionHandler가 담당한다. 이 필터는 둘을 잇는 키만 제공한다.
+ * 요청 단위 식별자(traceId·userId)를 MDC에 심어 모든 로그에 자동 부착한다(#257).
  *
- * traceId는 ALB가 주입하는 X-Amzn-Trace-Id를 그대로 쓴다. ALB access log에도 같은 값이 남으므로
- * S3의 access log와 CloudWatch의 앱 로그를 같은 키로 조인할 수 있다 — 자체 UUID를 쓰면 이 연결이 끊긴다.
- * ALB를 거치지 않는 경로(로컬·헬스체크)만 UUID로 대체한다.
+ * traceId는 ALB가 주입하는 X-Amzn-Trace-Id의 Root 값이다 — ALB access log와 같은 키라 조인이 된다.
+ * 다만 ALB는 클라이언트가 보낸 Root=를 지우지 않고 Self=만 앞에 붙이므로 이 값은 클라 통제 하에 있다.
+ * 그대로 MDC에 넣으면 logging.pattern.level의 [traceId/userId] 구조를 ']'·'/'로 깨고 가짜 내용을
+ * 심을 수 있어(CWE-117) X-Ray 형식만 화이트리스트로 통과시킨다(#259). 형식이 길이도 고정한다.
  *
- * userId는 JwtAuthenticationFilter가 인증을 마친 뒤에 채워지므로 이 필터가 그보다 뒤에 실행돼야 한다.
- * springSecurityFilterChain의 기본 order(-100)보다 뒤인 LOWEST_PRECEDENCE로 등록해 순서를 보장한다.
- * (Security 필터체인 안에서 끝나는 401은 EntryPoint가 직접 응답하므로 MDC 없이 나가며, 인증 전이라 userId도 없다.)
+ * 순서: Security 체인(-100) 안에서 끝나는 401·403 로그에도 traceId가 필요해 그보다 앞에 둔다.
+ * HIGHEST_PRECEDENCE는 Boot의 request-wrapper 필터(OrderedCharacterEncodingFilter)와 같은 값이라
+ * 순서가 미지정이 되므로 비켜 앉는다. 인증 전이라 userId는 여기서 못 채운다 — JwtAuthenticationFilter가 넣는다.
+ *
+ * 어떤 경로도 제외하지 않는다 — 제외하면 MDC.clear()가 실행되지 않아 userId가 스레드에 잔류한다(#259).
+ * 로그량 억제는 실제로 로그를 찍는 AccessLogFilter의 책임이다.
+ *
+ * 동기 요청 전제 — ASYNC 디스패치에선 실행되지 않아(shouldNotFilterAsyncDispatch 기본 true)
+ * SSE 도입 시 async 스레드 로그에서 traceId가 사라진다. 그땐 AsyncListener.onComplete 기반으로 옮겨야 한다.
  */
 @Component
-@Order(Ordered.LOWEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class MdcLoggingFilter extends OncePerRequestFilter {
 
     private static final String TRACE_HEADER = "X-Amzn-Trace-Id";
     static final String TRACE_ID = "traceId";
     static final String USER_ID = "userId";
+    /** 인증되지 않은 요청의 userId 자리. logging.pattern.level의 [traceId/userId] 자리를 비우지 않는다. */
+    static final String ANONYMOUS = "-";
+
+    /** X-Ray 트레이스 ID 형식(Root=1-{8 hex}-{24 hex}). Self=...;Root=... 형태에서도 Root 값만 뽑는다. */
+    private static final Pattern ROOT_PATTERN = Pattern.compile("Root=(1-[0-9a-f]{8}-[0-9a-f]{24})");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         try {
             MDC.put(TRACE_ID, resolveTraceId(request));
-            MDC.put(USER_ID, resolveUserId());
+            // 인증 전이라 아직 모른다. 인증에 성공하면 JwtAuthenticationFilter가 덮어쓴다.
+            MDC.put(USER_ID, ANONYMOUS);
             filterChain.doFilter(request, response);
         } finally {
             // 스레드풀 재사용 시 이전 요청의 값이 새는 것을 막는다.
@@ -49,26 +60,15 @@ public class MdcLoggingFilter extends OncePerRequestFilter {
         }
     }
 
-    /** 헬스체크는 traceId가 무의미하고 30초마다 쌓이므로 제외한다. */
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        return request.getRequestURI().startsWith("/actuator");
-    }
-
     private String resolveTraceId(HttpServletRequest request) {
         String header = request.getHeader(TRACE_HEADER);
-        if (header != null && !header.isBlank()) {
-            return header;
+        if (header != null) {
+            Matcher matcher = ROOT_PATTERN.matcher(header);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
         }
         return UUID.randomUUID().toString().substring(0, 8);
     }
 
-    /** 인증 전(401)이거나 익명 요청이면 "-". principal은 JwtAuthenticationFilter가 넣은 userId(Long). */
-    private String resolveUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !(auth.getPrincipal() instanceof Long userId)) {
-            return "-";
-        }
-        return userId.toString();
-    }
 }

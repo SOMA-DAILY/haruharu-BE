@@ -1,5 +1,6 @@
 package org.son.haruharu.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.common.ApiErrorDetail;
 import org.son.haruharu.common.ApiResponse;
 import org.springframework.context.annotation.Bean;
@@ -16,6 +17,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -48,6 +50,13 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, e) -> {
+                // 실패 사유는 JwtAuthenticationFilter 가 요청 속성에 심어둔다 — AuthenticationException 은
+                // 여기까지 사유를 싣고 오지 않는다(토큰 검증은 필터가 끝낸 뒤라 이 예외엔 정보가 없다).
+                // 사유는 로그에만 남기고 응답은 뭉뚱그린다 — 노출하면 계정 열거·토큰 대조에 악용된다(#259).
+                // 스키마는 GlobalExceptionHandler.warn()과 맞춘다: {status} {method} {uri} code=... reason=...
+                Object reason = request.getAttribute(JwtAuthenticationFilter.AUTH_FAILURE_REASON);
+                log.warn("401 {} {} code=UNAUTHORIZED reason={}", request.getMethod(), request.getRequestURI(),
+                        reason == null ? "UNKNOWN" : reason);
                 response.setStatus(401);
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.setCharacterEncoding(StandardCharsets.UTF_8.name());

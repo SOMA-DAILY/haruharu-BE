@@ -1,5 +1,6 @@
 package org.son.haruharu.admin.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.admin.security.AdminJwtAuthenticationFilter;
 import org.son.haruharu.common.ApiErrorDetail;
 import org.son.haruharu.common.ApiResponse;
@@ -30,6 +31,7 @@ import java.util.List;
  * 어드민 서버 시큐리티. staff JWT(role claim) 기반 stateless 인증.
  * 로그인·헬스체크·API 문서만 공개하고 그 외는 인증 필요. 역할별 인가는 후속 API에서 requestMatcher로 추가한다.
  */
+@Slf4j
 @Configuration
 @EnableWebSecurity
 public class AdminSecurityConfig {
@@ -94,10 +96,21 @@ public class AdminSecurityConfig {
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         // 401·403 모두 ApiResponse 표준 포맷으로 응답(컨테이너 기본 에러 우회 방지).
-                        .authenticationEntryPoint((request, response, e) ->
-                                writeError(response, 401, "UNAUTHORIZED", "인증이 필요합니다."))
-                        .accessDeniedHandler((request, response, e) ->
-                                writeError(response, 403, "FORBIDDEN", "권한이 없습니다.")))
+                        // 실패 사유는 로그에만 남긴다 — 응답 노출은 계정 열거에 악용된다(#259).
+                        // 어드민은 유저 개인정보를 다루므로 인증 실패 흔적이 더 중요하다(OWASP A09).
+                        .authenticationEntryPoint((request, response, e) -> {
+                            Object reason = request.getAttribute(AdminJwtAuthenticationFilter.AUTH_FAILURE_REASON);
+                            log.warn("401 {} {} code=UNAUTHORIZED reason={}", request.getMethod(),
+                                    request.getRequestURI(), reason == null ? "UNKNOWN" : reason);
+                            writeError(response, 401, "UNAUTHORIZED", "인증이 필요합니다.");
+                        })
+                        .accessDeniedHandler((request, response, e) -> {
+                            // 인증은 됐으나 역할이 모자란 경우 — 권한 상승 시도 탐지에 필요하다.
+                            log.warn("403 {} {} code=FORBIDDEN adminId={}", request.getMethod(),
+                                    request.getRequestURI(),
+                                    request.getUserPrincipal() == null ? "-" : request.getUserPrincipal().getName());
+                            writeError(response, 403, "FORBIDDEN", "권한이 없습니다.");
+                        }))
                 .addFilterBefore(adminJwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }

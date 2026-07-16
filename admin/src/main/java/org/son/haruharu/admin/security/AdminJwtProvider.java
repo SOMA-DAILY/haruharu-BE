@@ -1,10 +1,13 @@
 package org.son.haruharu.admin.security;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import org.son.haruharu.admin.domain.account.implement.AdminRole;
+import org.son.haruharu.utils.JwtValidation;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -56,13 +59,22 @@ public class AdminJwtProvider {
         return AdminRole.valueOf(parseClaims(token).get(CLAIM_ROLE, String.class));
     }
 
-    public boolean isValid(String token) {
+    /** 유저 서버와 동일 방침(#259) — 401 사유를 EntryPoint 로그에 남기기 위해 결과를 타입으로 반환한다. */
+    public JwtValidation validate(String token) {
         try {
             parseClaims(token);
-            return true;
+            return JwtValidation.VALID;
+        } catch (ExpiredJwtException e) {
+            return JwtValidation.EXPIRED;
+        } catch (SignatureException e) {
+            return JwtValidation.BAD_SIGNATURE;
         } catch (JwtException | IllegalArgumentException e) {
-            return false;
+            return JwtValidation.MALFORMED;
         }
+    }
+
+    public boolean isValid(String token) {
+        return validate(token) == JwtValidation.VALID;
     }
 
     public boolean isAccessToken(String token) {

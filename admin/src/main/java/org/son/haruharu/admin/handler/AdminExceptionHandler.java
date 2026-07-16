@@ -15,6 +15,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.util.DisconnectedClientHelper;
 
 /** 어드민 서버 공통 예외 처리. 유저 서버 GlobalExceptionHandler와 동일한 ApiResponse 계약. */
 @Slf4j
@@ -74,9 +75,14 @@ public class AdminExceptionHandler {
                 .body(ApiResponse.error(new ApiErrorDetail("DATA_INTEGRITY_VIOLATION", "중복되거나 제약을 위반한 데이터입니다.")));
     }
 
+    /** 유저 서버와 동일 방침(#259) — 클라 연결 종료는 서버 버그가 아니므로 ERROR·스택으로 남기지 않는다. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
-        log.error("Unexpected admin error", e);
+        if (DisconnectedClientHelper.isClientDisconnectedException(e)) {
+            log.debug("클라이언트 연결 종료");
+        } else {
+            log.error("Unexpected admin error", e);
+        }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error(new ApiErrorDetail("INTERNAL_ERROR", "서버 오류가 발생했습니다.")));
     }
