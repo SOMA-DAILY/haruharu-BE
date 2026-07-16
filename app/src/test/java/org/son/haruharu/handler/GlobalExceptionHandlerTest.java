@@ -1,15 +1,13 @@
 package org.son.haruharu.handler;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
+import org.son.haruharu.support.LogCapture;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 
@@ -26,21 +24,17 @@ import static org.mockito.Mockito.mock;
 class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
-    private ListAppender<ILoggingEvent> appender;
-    private Logger logger;
+    private LogCapture logs;
 
     @BeforeEach
     void attachAppender() {
-        logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
-        appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-        logger.setLevel(Level.DEBUG);
+        // 클라 끊김을 DEBUG로 낮추는 것이 계약이라 DEBUG까지 봐야 한다
+        logs = LogCapture.of(GlobalExceptionHandler.class).atLevel(Level.DEBUG);
     }
 
     @AfterEach
     void detachAppender() {
-        logger.detachAppender(appender);
+        logs.close();
     }
 
     private HttpServletRequest request(String method, String uri) {
@@ -48,12 +42,6 @@ class GlobalExceptionHandlerTest {
         given(request.getMethod()).willReturn(method);
         given(request.getRequestURI()).willReturn(uri);
         return request;
-    }
-
-    private String allLogMessages() {
-        return appender.list.stream()
-                .map(ILoggingEvent::getFormattedMessage)
-                .reduce("", (a, b) -> a + "\n" + b);
     }
 
     @Test
@@ -70,10 +58,10 @@ class GlobalExceptionHandlerTest {
 
         // then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        String logs = allLogMessages();
-        assertThat(logs).contains("ux_device_tokens_token");
-        assertThat(logs).doesNotContain("fcm-real-device-token-abcdef123456");
-        assertThat(logs).doesNotContain("Key (token)=");
+        String text = logs.text();
+        assertThat(text).contains("ux_device_tokens_token");
+        assertThat(text).doesNotContain("fcm-real-device-token-abcdef123456");
+        assertThat(text).doesNotContain("Key (token)=");
     }
 
     @Test
@@ -89,9 +77,9 @@ class GlobalExceptionHandlerTest {
         handler.handleDataIntegrity(e, request("POST", "/api/v1/identity/verify"));
 
         // then
-        String logs = allLogMessages();
-        assertThat(logs).contains("uq_user_identities_ci_hash_active");
-        assertThat(logs).doesNotContain("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
+        String text = logs.text();
+        assertThat(text).contains("uq_user_identities_ci_hash_active");
+        assertThat(text).doesNotContain("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
     }
 
     @Test
@@ -105,9 +93,9 @@ class GlobalExceptionHandlerTest {
         handler.handleDataIntegrity(e, request("POST", "/api/v1/profiles"));
 
         // then
-        String logs = allLogMessages();
-        assertThat(logs).doesNotContain("010-1234-5678");
-        assertThat(logs).doesNotContain("Failing row contains");
+        String text = logs.text();
+        assertThat(text).doesNotContain("010-1234-5678");
+        assertThat(text).doesNotContain("Failing row contains");
     }
 
     @Test
@@ -121,13 +109,9 @@ class GlobalExceptionHandlerTest {
         handler.handleException(e, request("GET", "/v3/api-docs"));
 
         // then
-        assertThat(appender.list)
-                .filteredOn(event -> event.getLevel() == Level.ERROR)
-                .isEmpty();
-        assertThat(appender.list)
-                .filteredOn(event -> event.getLevel() == Level.DEBUG)
-                .hasSize(1);
-        assertThat(appender.list.getFirst().getThrowableProxy()).isNull();
+        assertThat(logs.at(Level.ERROR)).isEmpty();
+        assertThat(logs.at(Level.DEBUG)).hasSize(1);
+        assertThat(logs.first().getThrowableProxy()).isNull();
     }
 
     @Test
@@ -141,9 +125,7 @@ class GlobalExceptionHandlerTest {
 
         // then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        List<ILoggingEvent> errors = appender.list.stream()
-                .filter(event -> event.getLevel() == Level.ERROR)
-                .toList();
+        List<ILoggingEvent> errors = logs.at(Level.ERROR);
         assertThat(errors).hasSize(1);
         assertThat(errors.getFirst().getThrowableProxy()).isNotNull();
     }

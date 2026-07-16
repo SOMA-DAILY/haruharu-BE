@@ -1,14 +1,12 @@
 package org.son.haruharu.config;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
+import org.son.haruharu.support.LogCapture;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserStatus;
 import org.son.haruharu.domain.user.storage.UserEntity;
@@ -21,7 +19,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,25 +48,18 @@ class AuthFailureLoggingIntegrationTest {
     // 만료 토큰은 같은 시크릿으로 서명해야 BAD_SIGNATURE가 아닌 EXPIRED로 갈린다.
     @Value("${jwt.secret}") String jwtSecret;
 
-    private final List<Logger> attached = new ArrayList<>();
-    private ListAppender<ILoggingEvent> appender;
+    private LogCapture logs;
 
     @BeforeEach
     void setUp() {
         userJpaRepository.deleteAll();
-        appender = new ListAppender<>();
-        appender.start();
-        for (Class<?> source : List.of(SecurityConfig.class, JwtAuthenticationFilter.class)) {
-            Logger logger = (Logger) LoggerFactory.getLogger(source);
-            logger.addAppender(appender);
-            attached.add(logger);
-        }
+        // 401은 EntryPoint(SecurityConfig), 403은 JwtAuthenticationFilter가 남긴다
+        logs = LogCapture.of(SecurityConfig.class, JwtAuthenticationFilter.class);
     }
 
     @AfterEach
     void tearDown() {
-        attached.forEach(logger -> logger.detachAppender(appender));
-        attached.clear();
+        logs.close();
     }
 
     private String tokenForUser(UserStatus status) {
@@ -78,13 +68,11 @@ class AuthFailureLoggingIntegrationTest {
     }
 
     private List<ILoggingEvent> warnings() {
-        return appender.list.stream().filter(event -> event.getLevel() == Level.WARN).toList();
+        return logs.at(Level.WARN);
     }
 
     private String warningText() {
-        return warnings().stream()
-                .map(ILoggingEvent::getFormattedMessage)
-                .reduce("", (a, b) -> a + "\n" + b);
+        return logs.text();
     }
 
     @Test

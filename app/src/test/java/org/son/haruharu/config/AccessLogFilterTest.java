@@ -1,9 +1,7 @@
 package org.son.haruharu.config;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -11,7 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
+import org.son.haruharu.support.LogCapture;
 
 import java.io.IOException;
 
@@ -31,20 +29,16 @@ import static org.mockito.Mockito.verify;
 class AccessLogFilterTest {
 
     private final AccessLogFilter filter = new AccessLogFilter();
-    private ListAppender<ILoggingEvent> appender;
-    private Logger logger;
+    private LogCapture logs;
 
     @BeforeEach
     void attachAppender() {
-        logger = (Logger) LoggerFactory.getLogger(AccessLogFilter.class);
-        appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
+        logs = LogCapture.of(AccessLogFilter.class);
     }
 
     @AfterEach
     void detachAppender() {
-        logger.detachAppender(appender);
+        logs.close();
     }
 
     private HttpServletRequest request(String method, String uri) {
@@ -64,8 +58,8 @@ class AccessLogFilterTest {
 
         filter.doFilterInternal(request, response, chain);
 
-        assertThat(appender.list).hasSize(1);
-        ILoggingEvent event = appender.list.getFirst();
+        assertThat(logs.events()).hasSize(1);
+        ILoggingEvent event = logs.first();
         assertThat(event.getLevel()).isEqualTo(Level.INFO);
         assertThat(event.getFormattedMessage())
                 .contains("GET")
@@ -84,7 +78,7 @@ class AccessLogFilterTest {
 
         filter.doFilterInternal(request, response, mock(FilterChain.class));
 
-        assertThat(appender.list.getFirst().getFormattedMessage()).contains("403");
+        assertThat(logs.first().getFormattedMessage()).contains("403");
     }
 
     @Test
@@ -97,7 +91,7 @@ class AccessLogFilterTest {
 
         filter.doFilterInternal(request, response, mock(FilterChain.class));
 
-        String message = appender.list.getFirst().getFormattedMessage();
+        String message = logs.first().getFormattedMessage();
         assertThat(message).doesNotContain("user@test.com");
         assertThat(message).doesNotContain("010-1234-5678");
         assertThat(message).doesNotContain("email=");
@@ -118,8 +112,8 @@ class AccessLogFilterTest {
                 .hasMessage("boom");
 
         // 실패한 요청이야말로 기록이 필요하다
-        assertThat(appender.list).hasSize(1);
-        assertThat(appender.list.getFirst().getFormattedMessage()).contains("500");
+        assertThat(logs.events()).hasSize(1);
+        assertThat(logs.first().getFormattedMessage()).contains("500");
     }
 
     @Test

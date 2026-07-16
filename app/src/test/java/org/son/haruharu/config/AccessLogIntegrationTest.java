@@ -1,13 +1,11 @@
 package org.son.haruharu.config;
 
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
+import org.son.haruharu.support.LogCapture;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserStatus;
 import org.son.haruharu.domain.user.storage.UserEntity;
@@ -37,21 +35,17 @@ class AccessLogIntegrationTest {
     @Autowired UserJpaRepository userJpaRepository;
     @Autowired JwtProvider jwtProvider;
 
-    private ListAppender<ILoggingEvent> appender;
-    private Logger logger;
+    private LogCapture logs;
 
     @BeforeEach
     void setUp() {
         userJpaRepository.deleteAll();
-        logger = (Logger) LoggerFactory.getLogger(AccessLogFilter.class);
-        appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
+        logs = LogCapture.of(AccessLogFilter.class);
     }
 
     @AfterEach
     void tearDown() {
-        logger.detachAppender(appender);
+        logs.close();
     }
 
     @Test
@@ -64,8 +58,8 @@ class AccessLogIntegrationTest {
                 .header("Authorization", "Bearer " + token)
                 .header("X-Amzn-Trace-Id", "Root=" + VALID_ROOT));
 
-        assertThat(appender.list).hasSize(1);
-        ILoggingEvent event = appender.list.getFirst();
+        assertThat(logs.events()).hasSize(1);
+        ILoggingEvent event = logs.first();
         assertThat(event.getMDCPropertyMap()).containsEntry("traceId", VALID_ROOT);
         assertThat(event.getMDCPropertyMap()).containsEntry("userId", String.valueOf(userId));
         assertThat(event.getFormattedMessage()).contains("GET").contains("/api/v1/users/me");
@@ -77,8 +71,8 @@ class AccessLogIntegrationTest {
         mockMvc.perform(get("/api/v1/matching/__probe")
                 .header("X-Amzn-Trace-Id", "Root=" + VALID_ROOT));
 
-        assertThat(appender.list).hasSize(1);
-        ILoggingEvent event = appender.list.getFirst();
+        assertThat(logs.events()).hasSize(1);
+        ILoggingEvent event = logs.first();
         assertThat(event.getMDCPropertyMap()).containsEntry("traceId", VALID_ROOT);
         assertThat(event.getMDCPropertyMap()).containsEntry("userId", "-");
     }
@@ -88,6 +82,6 @@ class AccessLogIntegrationTest {
     void givenActuatorHealth_whenRequested_thenNoAccessLog() throws Exception {
         mockMvc.perform(get("/actuator/health"));
 
-        assertThat(appender.list).isEmpty();
+        assertThat(logs.events()).isEmpty();
     }
 }

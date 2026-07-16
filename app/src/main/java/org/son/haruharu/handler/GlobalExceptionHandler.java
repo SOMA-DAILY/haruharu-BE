@@ -179,13 +179,12 @@ public class GlobalExceptionHandler {
      * unique 제약 위반 등. 앱이 막지 못한 동시성·중복이라 WARN 으로 남기고 원인(제약명)을 함께 본다.
      * 예: 같은 기기로 다른 계정 로그인 시 ux_device_tokens_token 충돌.
      *
-     * 예외 메시지 원문은 절대 남기지 않는다(#259) — pgjdbc 는 logServerErrorDetail 기본값 true 라
-     * 서버 에러의 DETAIL("Key (token)=(실제값) already exists")이 메시지에 실린다.
-     * FCM 디바이스 토큰·실명인증 CI blind index 가 그대로 로그로 나가므로 제약명만 뽑아 쓴다.
+     * 예외 메시지 원문은 남기지 않는다(#259) — pgjdbc 는 logServerErrorDetail 기본값이 true 라
+     * DETAIL("Key (token)=(실제 FCM 토큰) already exists")이 메시지에 실린다.
      *
-     * 단 이 방어는 <b>이 핸들러 경로에만</b> 적용된다 — 아래 handleDataAccess·캐치올은 풀스택을 남기고,
-     * 스케줄러 스레드엔 이 핸들러가 아예 닿지 않는다. 그 경로들은 application.yaml 의
-     * logServerErrorDetail=false 에 단독으로 의존하므로 그 설정을 지우면 조용히 재발한다.
+     * 단 이 방어는 <b>이 핸들러 경로에만</b> 미친다 — handleDataAccess·캐치올은 풀스택을 남기고
+     * 스케줄러 스레드엔 이 핸들러가 닿지 않는다. 그 경로들은 application.yaml 의
+     * logServerErrorDetail=false 에 단독 의존하므로 그 설정을 지우면 조용히 재발한다.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException e,
@@ -223,10 +222,8 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 캐치올. 클라이언트 연결 종료(탭 닫기·앱 이탈)는 서버 버그가 아니므로 5xx 로 집계하지 않는다(#259).
-     * Spring 은 이를 위해 DisconnectedClientHelper 를 제공한다 — 프레임워크 기본 설계는 DEBUG 1줄이고,
-     * 캐치올이 그 설계를 덮어 broken pipe 를 ERROR + 풀스택으로 남기고 있었다.
-     * 이대로 두면 유저가 탭을 닫을 때마다 ERROR 기준 알람이 울린다.
+     * 캐치올. 클라이언트 연결 종료(탭 닫기·앱 이탈)는 서버 버그가 아니라서 ERROR 로 남기지 않는다(#259) —
+     * 그대로 두면 유저가 탭을 닫을 때마다 ERROR 기준 알람이 울린다.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e, HttpServletRequest request) {

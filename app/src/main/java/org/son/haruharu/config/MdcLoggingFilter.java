@@ -16,34 +16,22 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 요청 단위 식별자를 MDC에 심어 모든 로그에 자동 부착한다(#257).
- * 로그를 직접 남기지 않는다 — access log는 AccessLogFilter가, 예외 상세는 GlobalExceptionHandler가
- * 담당한다. 이 필터는 둘을 잇는 키만 제공한다.
+ * 요청 단위 식별자(traceId·userId)를 MDC에 심어 모든 로그에 자동 부착한다(#257).
  *
- * traceId는 ALB가 주입하는 X-Amzn-Trace-Id의 Root 값을 쓴다. ALB access log에도 같은 값이 남으므로
- * 두 로그를 같은 키로 조인할 수 있다 — 자체 UUID를 쓰면 이 연결이 끊긴다.
+ * traceId는 ALB가 주입하는 X-Amzn-Trace-Id의 Root 값이다 — ALB access log와 같은 키라 조인이 된다.
+ * 다만 ALB는 클라이언트가 보낸 Root=를 지우지 않고 Self=만 앞에 붙이므로 이 값은 클라 통제 하에 있다.
+ * 그대로 MDC에 넣으면 logging.pattern.level의 [traceId/userId] 구조를 ']'·'/'로 깨고 가짜 내용을
+ * 심을 수 있어(CWE-117) X-Ray 형식만 화이트리스트로 통과시킨다(#259). 형식이 길이도 고정한다.
  *
- * 헤더를 그대로 신뢰하지 않고 X-Ray Root 형식만 화이트리스트로 통과시킨다(#259).
- * ALB는 클라이언트가 보낸 Root=를 지우지 않고 Self=만 앞에 붙이므로 이 값은 클라이언트 통제 하에 있다.
- * 무검증으로 MDC에 넣으면 logging.pattern.level의 [traceId/userId] 구조를 ']'·'/'로 깨고
- * 가짜 내용을 심을 수 있다(CWE-117). 형식이 길이를 고정하므로 길이 상한도 함께 충족된다.
- * 형식 불일치·헤더 없음(로컬·헬스체크)은 자체 UUID로 대체한다.
+ * 순서: Security 체인(-100) 안에서 끝나는 401·403 로그에도 traceId가 필요해 그보다 앞에 둔다.
+ * HIGHEST_PRECEDENCE는 Boot의 request-wrapper 필터(OrderedCharacterEncodingFilter)와 같은 값이라
+ * 순서가 미지정이 되므로 비켜 앉는다. 인증 전이라 userId는 여기서 못 채운다 — JwtAuthenticationFilter가 넣는다.
  *
- * 필터 체인의 앞쪽에 둔다 — Security 필터체인(order -100) 안에서 끝나는
- * 401·403 로그에도 traceId가 붙어야 하고, AccessLogFilter도 이 값을 쓰기 때문이다(#259).
- * HIGHEST_PRECEDENCE 자리는 Boot 이 request-wrapper 필터(OrderedCharacterEncodingFilter 등)에
- * 쓰므로 비켜 앉는다 — 같은 order 는 순서가 빈 등록 순서에 좌우돼 미지정이 된다.
+ * 어떤 경로도 제외하지 않는다 — 제외하면 MDC.clear()가 실행되지 않아 userId가 스레드에 잔류한다(#259).
+ * 로그량 억제는 실제로 로그를 찍는 AccessLogFilter의 책임이다.
  *
- * 동기 요청을 전제한다. SSE·DeferredResult 를 도입하면 ASYNC 디스패치에서 이 필터가 실행되지 않아
- * (shouldNotFilterAsyncDispatch 기본 true) 최초 디스패치 반환 시 MDC.clear()가 돌고
- * async 스레드의 로그에서 traceId 가 사라진다. 그때는 AsyncListener.onComplete 기반으로 옮겨야 한다.
- * 그래서 userId는 여기서 채울 수 없다(아직 인증 전) — 인증에 성공한 JwtAuthenticationFilter가 직접 넣는다.
- * 인증되지 않은 요청은 "-"로 남는다.
- *
- * 어떤 경로도 제외하지 않는다. 이 필터는 로그를 남기지 않으므로 제외해도 로그량이 줄지 않는 반면,
- * 제외된 경로에서는 MDC.clear()가 실행되지 않아 JwtAuthenticationFilter가 넣은 userId가
- * 스레드에 잔류한다(#259). MDC 수명주기는 이 필터가 단독으로 소유한다.
- * 로그량 억제(헬스체크 제외)는 실제로 로그를 찍는 AccessLogFilter의 책임이다.
+ * 동기 요청 전제 — ASYNC 디스패치에선 실행되지 않아(shouldNotFilterAsyncDispatch 기본 true)
+ * SSE 도입 시 async 스레드 로그에서 traceId가 사라진다. 그땐 AsyncListener.onComplete 기반으로 옮겨야 한다.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
