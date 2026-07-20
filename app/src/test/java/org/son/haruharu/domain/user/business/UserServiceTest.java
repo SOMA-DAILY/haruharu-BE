@@ -80,6 +80,7 @@ class UserServiceTest {
             List.of(new ProfileResponse.ImageInfo(imageId, "https://image1.png", 0))
         );
 
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, null, false));
         given(profileService.getProfile(userId)).willReturn(profileResponse);
         given(identityService.findVerified(userId))
             .willReturn(Optional.of(new VerifiedIdentity("MALE", LocalDate.of(1999, 6, 26))));
@@ -88,6 +89,7 @@ class UserServiceTest {
 
         assertThat(result.userId()).isEqualTo(userId);
         assertThat(result.userStatus()).isEqualTo("VERIFIED");
+        assertThat(result.demoMode()).isFalse();
         assertThat(result.profile().nickname()).isEqualTo("테스터");
         assertThat(result.profile().age()).isEqualTo(27);
         assertThat(result.images()).hasSize(1);
@@ -99,6 +101,7 @@ class UserServiceTest {
     @DisplayName("미인증 유저 조회 시 user_status가 UNVERIFIED로 반환된다")
     void givenUnverifiedUser_whenGetMyProfile_thenUserStatusUnverified() {
         Long userId = 1L;
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ONBOARDING, null, false));
         given(profileService.getProfile(userId)).willReturn(new ProfileResponse(
             "유저", "서울", "학생", 160, "ENFP", DrinkingStatus.NONE, SmokingStatus.NONE, List.of()));
         // 미인증: findVerified가 empty → user_status UNVERIFIED
@@ -106,6 +109,19 @@ class UserServiceTest {
         UserProfileResponse result = userService.getMyProfile(userId);
 
         assertThat(result.userStatus()).isEqualTo("UNVERIFIED");
+    }
+
+    @Test
+    @DisplayName("데모 계정(demo_mode=true) 조회 시 응답 demo_mode가 true로 반환된다")
+    void givenDemoUser_whenGetMyProfile_thenDemoModeTrue() {
+        Long userId = 1L;
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, null, true));
+        given(profileService.getProfile(userId)).willReturn(new ProfileResponse(
+            "데모", "서울", "직장인", 170, "INFP", DrinkingStatus.NONE, SmokingStatus.NONE, List.of()));
+
+        UserProfileResponse result = userService.getMyProfile(userId);
+
+        assertThat(result.demoMode()).isTrue();
     }
 
     // ===================== completeOnboarding =====================
