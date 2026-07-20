@@ -62,6 +62,7 @@ public class UserService {
     }
 
     public UserProfileResponse getMyProfile(Long userId) {
+        User user = userReader.getById(userId);
         ProfileResponse profile = profileService.getProfile(userId);
         Optional<VerifiedIdentity> verified = identityService.findVerified(userId);
         String gender = verified.map(VerifiedIdentity::gender).orElse(null);
@@ -69,7 +70,7 @@ public class UserService {
             .map(birthday -> Period.between(birthday, LocalDate.now(clock)).getYears())
             .orElse(null);
         VerificationStatus status = VerificationStatus.of(verified.isPresent());
-        return UserProfileResponse.from(userId, profile, gender, age, status.name());
+        return UserProfileResponse.from(userId, profile, gender, age, status.name(), user.demoMode());
     }
 
     /**
@@ -95,7 +96,7 @@ public class UserService {
             if (!profileService.hasCompletedProfile(userId) || !valueService.hasAnswered(userId)) {
                 throw new OnboardingIncompleteException();
             }
-            userWriter.save(new User(userId, UserStatus.ACTIVE, user.createdAt()));
+            userWriter.save(new User(userId, UserStatus.ACTIVE, user.createdAt(), user.demoMode()));
         }
         boolean verified = identityService.findVerified(userId).isPresent();
         String status = verified ? VerificationStatus.VERIFIED.name() : UserStatus.ACTIVE.name();
@@ -119,6 +120,6 @@ public class UserService {
         coinService.deleteWallet(userId);
         identityService.deleteIdentity(userId);
         authService.deleteCredentials(userId);
-        userWriter.save(new User(userId, UserStatus.DELETED, user.createdAt()));
+        userWriter.save(new User(userId, UserStatus.DELETED, user.createdAt(), user.demoMode()));
     }
 }

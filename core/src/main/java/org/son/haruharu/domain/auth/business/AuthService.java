@@ -87,7 +87,7 @@ public class AuthService {
         boolean returning = userCredentialWriter.purgeWithdrawnBefore(
             providerType, providerId, LocalDateTime.now()) > 0;
 
-        User created = userWriter.save(new User(null, UserStatus.ONBOARDING, null));
+        User created = userWriter.save(new User(null, UserStatus.ONBOARDING, null, false));
         userCredentialWriter.save(new UserCredential(null, created.id(), providerType, providerId));
         if (!returning) {
             coinService.grantSignupBonus(created.id());

@@ -6,6 +6,10 @@ import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.command.UpdateProfileCommand;
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
+import org.son.haruharu.domain.user.implement.User;
+import org.son.haruharu.domain.user.implement.UserStatus;
+import org.son.haruharu.domain.user.storage.UserEntity;
+import org.son.haruharu.domain.user.storage.UserJpaRepository;
 import org.son.haruharu.infrastructure.s3.PresignedUpload;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +41,7 @@ class ImageApiIntegrationTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ProfileService profileService;
+    @Autowired UserJpaRepository userJpaRepository;
 
     @MockitoBean S3StoragePort s3StoragePort;
 
@@ -94,7 +99,8 @@ class ImageApiIntegrationTest {
     @Test
     @DisplayName("마이페이지 조회 응답이 user_id·user_status·profile 중첩·images 객체배열(snake_case)로 직렬화되고 birthday는 노출되지 않는다")
     void givenProfile_whenGetMe_thenReturnsNestedSnakeCase() throws Exception {
-        Long userId = 4L;
+        // /users/me는 users 행을 요구하므로(demo_mode 조회, #264) 유저를 먼저 시드한다.
+        Long userId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null))).toDomain().id();
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",
             178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE));
