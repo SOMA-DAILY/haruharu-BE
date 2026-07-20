@@ -10,8 +10,10 @@ import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
 import org.son.haruharu.domain.identity.business.exception.DuplicateCiException;
 import org.son.haruharu.domain.identity.business.exception.UnderageNotAllowedException;
 import org.son.haruharu.domain.identity.business.exception.UserAlreadyVerifiedException;
+import org.son.haruharu.domain.identity.implement.UserIdentity;
 import org.son.haruharu.domain.identity.implement.UserIdentityReader;
 import org.son.haruharu.domain.identity.implement.UserIdentityWriter;
+import org.mockito.ArgumentCaptor;
 import org.son.haruharu.infrastructure.pass.PassVerificationPort;
 import org.son.haruharu.infrastructure.pass.PassVerificationResult;
 
@@ -20,6 +22,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -155,5 +158,46 @@ class IdentityServiceTest {
         // partial unique(WHERE deleted_at IS NULL) 덕에 파기 없이 저장된다 —
         // 탈퇴 이력(CI)은 보존되어야 신고·제재 추적이 가능하다(#245).
         then(userIdentityWriter).should().save(any());
+    }
+
+    @Test
+    @DisplayName("데모 시드는 PASS 없이 결정적 CI/DI로 인증 정보를 저장한다(#264)")
+    void givenUnverifiedUser_whenSeedDemoIdentity_thenSavesWithoutPass() {
+        Long userId = 7L;
+
+        given(userIdentityReader.existsByUserId(userId)).willReturn(false);
+
+        identityService.seedDemoIdentity(userId, "MALE", LocalDate.of(1995, 6, 15));
+
+        ArgumentCaptor<UserIdentity> captor = ArgumentCaptor.forClass(UserIdentity.class);
+        then(userIdentityWriter).should().save(captor.capture());
+        then(passVerificationPort).shouldHaveNoInteractions();
+        assertThat(captor.getValue().ci()).isEqualTo("DEMO_CI_7");
+        assertThat(captor.getValue().gender()).isEqualTo("MALE");
+    }
+
+    @Test
+    @DisplayName("이미 인증된 유저면 데모 시드는 멱등적으로 skip한다(#264)")
+    void givenVerifiedUser_whenSeedDemoIdentity_thenSkips() {
+        Long userId = 7L;
+
+        given(userIdentityReader.existsByUserId(userId)).willReturn(true);
+
+        identityService.seedDemoIdentity(userId, "MALE", LocalDate.of(1995, 6, 15));
+
+        then(userIdentityWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("데모 시드도 미성년(만 19세 미만)은 UnderageNotAllowedException으로 차단한다(#264)")
+    void givenUnderageBirthday_whenSeedDemoIdentity_thenThrows() {
+        Long userId = 7L;
+        // clock=2026-06-26 기준 만 18세
+        LocalDate underage = LocalDate.of(2008, 1, 1);
+        given(userIdentityReader.existsByUserId(userId)).willReturn(false);
+
+        assertThatThrownBy(() -> identityService.seedDemoIdentity(userId, "MALE", underage))
+            .isInstanceOf(UnderageNotAllowedException.class);
+        then(userIdentityWriter).shouldHaveNoInteractions();
     }
 }

@@ -205,4 +205,30 @@ class CoinServiceTest {
 
         verify(coinWalletWriter).deleteByUserId(userId);
     }
+
+    @Test
+    @DisplayName("데모 지급 미이력이면 REWARD 버킷에 DEMO_GRANT로 지정 수량을 적립한다")
+    void givenNoDemoGrant_whenGrantDemoCoins_thenCreditsReward() {
+        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)).willReturn(false);
+        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.empty());
+
+        coinService.grantDemoCoins(userId, 200L);
+
+        ArgumentCaptor<CoinLedger> captor = ArgumentCaptor.forClass(CoinLedger.class);
+        verify(coinLedgerWriter).append(captor.capture());
+        assertThat(captor.getValue().reason()).isEqualTo(CoinLedgerReason.DEMO_GRANT);
+        assertThat(captor.getValue().bucket()).isEqualTo(CoinBucket.REWARD);
+        assertThat(captor.getValue().delta()).isEqualTo(200L);
+        verify(coinWalletWriter).save(any());
+    }
+
+    @Test
+    @DisplayName("이미 데모 지급을 받은 계정이면 재지급하지 않는다(멱등)")
+    void givenAlreadyDemoGranted_whenGrantDemoCoins_thenSkips() {
+        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)).willReturn(true);
+
+        coinService.grantDemoCoins(userId, 200L);
+
+        verify(coinWalletWriter, never()).save(any());
+    }
 }

@@ -58,6 +58,30 @@ public class IdentityService {
         userIdentityWriter.deleteByUserId(userId);
     }
 
+    /**
+     * 데모/심사 계정 본인인증 시드(#264). 리뷰어(해외)는 다날 PASS를 통과할 수 없으므로,
+     * PASS 검증을 우회해 결정적 더미 CI/DI로 인증 상태를 만든다(실서비스 verifyIdentity와 분리).
+     * 이미 인증된 유저면 멱등적으로 skip. CI는 "DEMO_CI_{userId}"라 실사용자 CI와 충돌하지 않는다.
+     */
+    @Transactional
+    public void seedDemoIdentity(Long userId, String gender, LocalDate birthday) {
+        if (userIdentityReader.existsByUserId(userId)) {
+            return;
+        }
+        // PASS 우회 경로여도 미성년 차단 불변식은 verifyIdentity와 동일하게 자체 강제한다(#207) —
+        // 호출자(시더) 신뢰에만 의존하지 않아, 향후 이 메서드가 외부 입력에 노출돼도 미성년이 새지 않는다.
+        if (Period.between(birthday, LocalDate.now(clock)).getYears() < MINIMUM_AGE) {
+            throw new UnderageNotAllowedException();
+        }
+        UserIdentity identity = new UserIdentity(
+            null, userId,
+            "DEMO_CI_" + userId, "DEMO_DI_" + userId,
+            null, birthday, gender, "데모심사", null, false,
+            LocalDateTime.now(clock)
+        );
+        userIdentityWriter.save(identity);
+    }
+
     @Transactional
     public void verifyIdentity(Long userId, VerifyIdentityCommand command) {
         if (userIdentityReader.existsByUserId(userId)) {

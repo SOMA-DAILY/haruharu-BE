@@ -72,6 +72,17 @@ public class CoinService {
         return true;
     }
 
+    /**
+     * 데모/심사 계정 구름 지급(#264). 유저당 1회만 지급하며(원장에 DEMO_GRANT 존재 시 skip), 재부팅·재실행에도 중복 지급되지 않는다.
+     */
+    @Transactional
+    public void grantDemoCoins(Long userId, long amount) {
+        if (coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)) {
+            return;
+        }
+        credit(CoinCreditCommand.demoGrant(userId, amount));
+    }
+
     /** 코인 잔액 조회. 지갑이 아직 없으면 0 잔액으로 응답한다. */
     public WalletResponse getWallet(Long userId) {
         CoinWallet wallet = coinWalletReader.findByUserId(userId)

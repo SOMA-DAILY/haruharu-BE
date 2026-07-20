@@ -21,5 +21,7 @@ public enum CoinLedgerReason {
     /** 일일 업로드 슬롯 완주 보상 적립 */
     UPLOAD_COMPLETION_REWARD,
     /** 세션 미매칭 위로 구름 적립(#143) */
-    MATCH_CONSOLATION
+    MATCH_CONSOLATION,
+    /** 데모/심사 계정 구름 지급(#264) */
+    DEMO_GRANT
 }
