@@ -17,6 +17,7 @@ import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.domain.user.implement.UserStatus;
 import org.son.haruharu.domain.user.implement.UserWriter;
 import org.son.haruharu.domain.value.business.ValueService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ import java.time.LocalDate;
 import java.time.Period;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class UserService {
@@ -121,5 +123,29 @@ public class UserService {
         identityService.deleteIdentity(userId);
         authService.deleteCredentials(userId);
         userWriter.save(new User(userId, UserStatus.DELETED, user.createdAt(), user.demoMode()));
+    }
+
+    /**
+     * 데모/심사 계정 프로비저닝(#264). demo_mode·ACTIVE 전이 + 본인인증 시드(PASS 우회) + 구름 지급을
+     * 한 트랜잭션으로 조율한다(withdraw·completeOnboarding과 동일한 business 조율 위치). 각 단계 멱등.
+     * env(DEMO_PROVISION_USER_IDS) 오배포로 실사용자 id가 섞이면 가짜 인증·권한·구름이 부여되는 민감 조작이라,
+     * 배포 후 로그 점검으로 조기 발견할 수 있도록 대상 userId를 WARN으로 남긴다.
+     */
+    @Transactional
+    public void provisionDemo(Long userId, String gender, LocalDate birthday, long coins) {
+        User user = userReader.getById(userId);
+        // 예방 가드: 데모가 아닌데 이미 본인인증을 마친 계정 = 실사용자. env 오배포로 실계정이 섞인 것으로 보고
+        // 상태 전이·구름 지급을 아예 시작하지 않는다(가짜 인증 유저는 seedDemoIdentity가 멱등 skip으로 이미 보호).
+        // 이미 프로비저닝된 데모 계정(demo_mode=true)은 이 가드를 통과해 재실행이 멱등으로 동작한다.
+        if (!user.demoMode() && identityService.isVerified(userId)) {
+            throw new IllegalStateException("본인인증을 마친 실사용자는 데모 프로비저닝 대상이 아닙니다: userId=" + userId);
+        }
+        log.warn("데모 계정 프로비저닝: userId={} — demo_mode·ACTIVE 전이 + 본인인증 시드 + 구름 {} 지급(실계정 오염 주의)",
+            userId, coins);
+        if (!user.demoMode() || user.status() != UserStatus.ACTIVE) {
+            userWriter.save(new User(user.id(), UserStatus.ACTIVE, user.createdAt(), true));
+        }
+        identityService.seedDemoIdentity(userId, gender, birthday);
+        coinService.grantDemoCoins(userId, coins);
     }
 }

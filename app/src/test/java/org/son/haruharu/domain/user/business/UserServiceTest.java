@@ -267,4 +267,54 @@ class UserServiceTest {
 
         assertThat(userService.isWithdrawn(1L)).isFalse();
     }
+
+    // ===================== provisionDemo (#264) =====================
+
+    @Test
+    @DisplayName("일반 계정 데모 프로비저닝 시 demo_mode·ACTIVE 저장 + 본인인증 시드 + 구름 지급을 수행한다")
+    void givenNormalUser_whenProvisionDemo_thenSetsDemoAndSeedsAndGrants() {
+        Long userId = 1L;
+        LocalDate birthday = LocalDate.of(1995, 6, 15);
+        given(userReader.getById(userId))
+            .willReturn(new User(userId, UserStatus.ONBOARDING, LocalDateTime.of(2026, 6, 1, 0, 0), false));
+
+        userService.provisionDemo(userId, "MALE", birthday, 200L);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        then(userWriter).should().save(captor.capture());
+        assertThat(captor.getValue().demoMode()).isTrue();
+        assertThat(captor.getValue().status()).isEqualTo(UserStatus.ACTIVE);
+        then(identityService).should().seedDemoIdentity(userId, "MALE", birthday);
+        then(coinService).should().grantDemoCoins(userId, 200L);
+    }
+
+    @Test
+    @DisplayName("본인인증을 마친 실사용자(demo_mode=false)는 데모 프로비저닝을 거부한다(오배포 오염 예방)")
+    void givenVerifiedRealUser_whenProvisionDemo_thenThrowsAndDoesNotMutate() {
+        Long userId = 1L;
+        given(userReader.getById(userId))
+            .willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.of(2026, 6, 1, 0, 0), false));
+        given(identityService.isVerified(userId)).willReturn(true);
+
+        assertThatThrownBy(() -> userService.provisionDemo(userId, "MALE", LocalDate.of(1995, 6, 15), 200L))
+            .isInstanceOf(IllegalStateException.class);
+        then(userWriter).should(never()).save(any());
+        then(identityService).should(never()).seedDemoIdentity(any(), any(), any());
+        then(coinService).should(never()).grantDemoCoins(any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    @DisplayName("이미 데모·ACTIVE 계정이면 유저 재저장은 생략하고 시드·지급만 멱등 호출한다")
+    void givenAlreadyDemoActive_whenProvisionDemo_thenSkipsUserSave() {
+        Long userId = 1L;
+        LocalDate birthday = LocalDate.of(1995, 6, 15);
+        given(userReader.getById(userId))
+            .willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.of(2026, 6, 1, 0, 0), true));
+
+        userService.provisionDemo(userId, "MALE", birthday, 200L);
+
+        then(userWriter).should(never()).save(any());
+        then(identityService).should().seedDemoIdentity(userId, "MALE", birthday);
+        then(coinService).should().grantDemoCoins(userId, 200L);
+    }
 }
