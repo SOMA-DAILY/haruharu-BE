@@ -304,6 +304,21 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("실결제(IAP) 이력이 있는 계정은 데모 프로비저닝을 거부한다(#277)")
+    void givenPurchaseHistory_whenProvisionDemo_thenThrowsAndDoesNotMutate() {
+        Long userId = 1L;
+        given(userReader.getById(userId))
+            .willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.of(2026, 6, 1, 0, 0), false));
+        given(coinService.hasPurchaseHistory(userId)).willReturn(true);
+
+        assertThatThrownBy(() -> userService.provisionDemo(userId, "MALE", LocalDate.of(1995, 6, 15), 200L))
+            .isInstanceOf(IllegalStateException.class);
+        then(userWriter).should(never()).save(any());
+        then(identityService).should(never()).seedDemoIdentity(any(), any(), any());
+        then(coinService).should(never()).grantDemoCoins(any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
     @DisplayName("이미 데모·ACTIVE 계정이면 유저 재저장은 생략하고 시드·지급만 멱등 호출한다")
     void givenAlreadyDemoActive_whenProvisionDemo_thenSkipsUserSave() {
         Long userId = 1L;

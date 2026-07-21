@@ -148,7 +148,13 @@ public class UserService {
     @Transactional
     public void provisionDemo(Long userId, String gender, LocalDate birthday, long coins) {
         User user = userReader.getById(userId);
-        // 예방 가드: 데모가 아닌데 이미 본인인증을 마친 계정 = 실사용자. env 오배포로 실계정이 섞인 것으로 보고
+        // 예방 가드 1(#277): 실결제(IAP) 이력이 있으면 무조건 실사용자로 보고 데모 전환을 시작조차 하지 않는다.
+        // env 오배포·demo_mode 오설정과 무관하게 결제 원장을 보호한다(데모 리셋의 원장 하드삭제로부터).
+        // 정상 데모 계정은 결제 이력이 없어 이 가드를 통과하므로 재실행 멱등성은 유지된다.
+        if (coinService.hasPurchaseHistory(userId)) {
+            throw new IllegalStateException("실결제 이력이 있는 계정은 데모 프로비저닝 대상이 아닙니다: userId=" + userId);
+        }
+        // 예방 가드 2: 데모가 아닌데 이미 본인인증을 마친 계정 = 실사용자. env 오배포로 실계정이 섞인 것으로 보고
         // 상태 전이·구름 지급을 아예 시작하지 않는다(가짜 인증 유저는 seedDemoIdentity가 멱등 skip으로 이미 보호).
         // 이미 프로비저닝된 데모 계정(demo_mode=true)은 이 가드를 통과해 재실행이 멱등으로 동작한다.
         if (!user.demoMode() && identityService.isVerified(userId)) {

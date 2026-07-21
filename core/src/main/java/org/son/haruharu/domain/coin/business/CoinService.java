@@ -99,6 +99,14 @@ public class CoinService {
         grantDemoCoins(userId, amount);
     }
 
+    /**
+     * 실결제(IAP 구매) 이력 존재 여부(#277). 데모 프로비저닝 대상 판별용 — 결제 원장이 있는 계정은
+     * 실사용자로 보고 데모 전환(및 이후 리셋의 원장 하드삭제)을 코드 레벨에서 차단하기 위함이다.
+     */
+    public boolean hasPurchaseHistory(Long userId) {
+        return coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.PURCHASE);
+    }
+
     /** 코인 잔액 조회. 지갑이 아직 없으면 0 잔액으로 응답한다. */
     public WalletResponse getWallet(Long userId) {
         CoinWallet wallet = coinWalletReader.findByUserId(userId)

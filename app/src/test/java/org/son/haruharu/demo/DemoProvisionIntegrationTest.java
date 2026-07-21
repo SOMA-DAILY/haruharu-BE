@@ -73,4 +73,24 @@ class DemoProvisionIntegrationTest {
         assertThat(identityService.isVerified(userId)).isTrue();
         assertThat(coinService.getWallet(userId).totalBalance()).isEqualTo(200L); // 400 아님
     }
+
+    @Test
+    @DisplayName("실결제(PURCHASE) 이력이 있는 계정은 데모 프로비저닝을 거부하고 아무것도 바꾸지 않는다(#277)")
+    void givenPurchaseHistory_whenProvision_thenRejectedAndUnchanged() {
+        Long userId = saveUser();
+        // 실경로로 IAP 구매 원장을 남긴다(reason=PURCHASE).
+        coinService.credit(org.son.haruharu.domain.coin.business.command.CoinCreditCommand
+                .purchase(userId, 100L, "IAP", "txn-1"));
+
+        assertThat(coinService.hasPurchaseHistory(userId)).isTrue();
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> userService.provisionDemo(userId, "MALE", BIRTHDAY, 200L))
+                .isInstanceOf(IllegalStateException.class);
+
+        // demo_mode 전환·본인인증 시드·데모 구름 지급이 일어나지 않았다(결제 잔액만 유지).
+        User user = userJpaRepository.findById(userId).orElseThrow().toDomain();
+        assertThat(user.demoMode()).isFalse();
+        assertThat(identityService.isVerified(userId)).isFalse();
+        assertThat(coinService.getWallet(userId).totalBalance()).isEqualTo(100L); // 데모 200 미지급
+    }
 }
