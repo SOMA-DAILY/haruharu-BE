@@ -91,6 +91,16 @@ public class VideoService {
         }
     }
 
+    /**
+     * 데모 리셋 전용 피드 재설정(#267). 지정 멤버들의 기존 영상을 전부 하드삭제한 뒤 지정 Day 피드를 새로 시드한다.
+     * 하드삭제는 재시드(advance-day 재진행 포함) 시 이전 Day 영상이 누적·중복되는 것을 막는다.
+     */
+    @Transactional
+    public void resetDemoFeed(List<Long> roomMemberIds, int dayNumber) {
+        videoPostWriter.deleteByRoomMemberIds(roomMemberIds);
+        seedDemoFeed(roomMemberIds, dayNumber);
+    }
+
     /** 영상 업로드용 presigned PUT URL 발급. 영상은 비공개 prefix(users/{id}/videos/). */
     public VideoUploadUrlResponse createPresignUrl(Long userId, String filename) {
         String extension = extractExtension(filename);

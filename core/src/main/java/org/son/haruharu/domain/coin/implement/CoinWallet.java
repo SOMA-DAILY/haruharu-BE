@@ -25,6 +25,14 @@ public record CoinWallet(
         return paidBalance + rewardBalance;
     }
 
+    /**
+     * 잔액을 0으로 되돌린 새 지갑(식별자 유지). 데모 리셋 등 잔액 초기화용.
+     * 전역 soft-delete + user_id 유니크 제약 때문에 지갑은 삭제-후-재생성 대신 이 방식으로 제자리 초기화한다.
+     */
+    public CoinWallet resetToZero() {
+        return new CoinWallet(id, userId, 0L, 0L, updatedAt);
+    }
+
     /** 적립: 지정한 버킷에 코인을 더한 새 지갑을 반환한다. */
     public CoinWallet credit(CoinBucket bucket, long amount) {
         requirePositive(amount);

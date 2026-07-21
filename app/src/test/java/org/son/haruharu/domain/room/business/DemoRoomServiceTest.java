@@ -52,6 +52,7 @@ class DemoRoomServiceTest {
     @Mock UserService userService;
     @Mock ProfileService profileService;
     @Mock org.son.haruharu.domain.video.business.VideoService videoService;
+    @Mock org.son.haruharu.domain.coin.business.CoinService coinService;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final Clock clock = Clock.fixed(ZonedDateTime.of(2026, 7, 20, 12, 0, 0, 0, SEOUL).toInstant(), SEOUL);
@@ -61,7 +62,7 @@ class DemoRoomServiceTest {
     @BeforeEach
     void setUp() {
         service = new DemoRoomService(roomReader, roomWriter, roomMemberReader, roomMemberWriter,
-                identityService, userService, profileService, videoService, clock);
+                identityService, userService, profileService, videoService, coinService, clock);
     }
 
     @Test
@@ -167,5 +168,57 @@ class DemoRoomServiceTest {
 
         assertThatThrownBy(() -> service.advanceDay(userId))
                 .isInstanceOf(DemoRoomNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("데모 리셋 시 Day1로 되돌리고 피드 재시드·구름 리시드한다")
+    void givenDemoRoom_whenReset_thenDay1AndReseed() {
+        Long userId = 42L;
+        Room room = new Room(7L, RoomStatus.ACTIVE, LocalDate.of(2026, 7, 20), 3,
+                LocalDateTime.of(2026, 7, 20, 9, 0), null, true, 3);
+        given(userService.isDemoAccount(userId)).willReturn(true);
+        given(roomMemberReader.findByUserId(userId))
+                .willReturn(List.of(RoomMember.of(7L, userId, "MALE", null, LocalDateTime.now(clock))));
+        given(roomReader.findById(7L)).willReturn(Optional.of(room));
+        given(roomWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(
+                new RoomMember(70L, 7L, userId, "MALE", null, LocalDateTime.now(clock))));
+
+        DemoRoomResponse result = service.reset(userId);
+
+        assertThat(result.roomId()).isEqualTo(7L);
+        assertThat(result.day()).isEqualTo(1);
+        then(coinService).should().resetDemoWallet(userId, 200L);
+        ArgumentCaptor<Room> captor = ArgumentCaptor.forClass(Room.class);
+        then(roomWriter).should().save(captor.capture());
+        assertThat(captor.getValue().demoDay()).isEqualTo(1);
+        then(videoService).should().resetDemoFeed(anyList(), org.mockito.ArgumentMatchers.eq(1));
+    }
+
+    @Test
+    @DisplayName("데모 방이 없어도 구름은 리시드하고 방 조작은 하지 않는다")
+    void givenNoRoom_whenReset_thenReseedCoinsOnly() {
+        Long userId = 42L;
+        given(userService.isDemoAccount(userId)).willReturn(true);
+        given(roomMemberReader.findByUserId(userId)).willReturn(List.of());
+
+        DemoRoomResponse result = service.reset(userId);
+
+        assertThat(result.roomId()).isNull();
+        assertThat(result.day()).isEqualTo(1);
+        then(coinService).should().resetDemoWallet(userId, 200L);
+        then(roomWriter).should(never()).save(any());
+        then(videoService).should(never()).resetDemoFeed(anyList(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    @DisplayName("데모 계정이 아니면 리셋을 거부하고 구름도 건드리지 않는다")
+    void givenNonDemoAccount_whenReset_thenThrowsAndNoCoinReset() {
+        Long userId = 42L;
+        given(userService.isDemoAccount(userId)).willReturn(false);
+
+        assertThatThrownBy(() -> service.reset(userId))
+                .isInstanceOf(org.son.haruharu.domain.room.business.exception.NotDemoAccountException.class);
+        then(coinService).should(never()).resetDemoWallet(anyLong(), org.mockito.ArgumentMatchers.anyLong());
     }
 }

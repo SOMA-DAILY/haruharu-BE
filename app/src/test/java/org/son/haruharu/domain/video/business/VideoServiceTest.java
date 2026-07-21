@@ -204,4 +204,15 @@ class VideoServiceTest {
 
         org.mockito.Mockito.verify(videoPostWriter, org.mockito.Mockito.times(10)).save(any());
     }
+
+    @Test
+    @DisplayName("데모 피드 리셋은 기존 영상 하드삭제 후 재시드한다(#267)")
+    void givenMembers_whenResetDemoFeed_thenDeletesThenReseeds() {
+        given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        serviceAt(12).resetDemoFeed(java.util.List.of(10L, 20L), 1);
+
+        then(videoPostWriter).should().deleteByRoomMemberIds(java.util.List.of(10L, 20L));
+        org.mockito.Mockito.verify(videoPostWriter, org.mockito.Mockito.times(10)).save(any());
+    }
 }

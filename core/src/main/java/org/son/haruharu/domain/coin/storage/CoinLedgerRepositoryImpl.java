@@ -38,6 +38,11 @@ public class CoinLedgerRepositoryImpl implements CoinLedgerRepository {
     }
 
     @Override
+    public void deleteByUserId(Long userId) {
+        jpaRepository.deleteByUserId(userId);
+    }
+
+    @Override
     public List<CoinLedger> findPage(Long userId, LocalDateTime before, int limit) {
         PageRequest page = PageRequest.of(0, limit);
         List<CoinLedgerEntity> rows = (before == null)
