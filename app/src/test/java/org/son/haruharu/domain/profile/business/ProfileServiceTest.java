@@ -284,4 +284,23 @@ class ProfileServiceTest {
 
         then(s3StoragePort).should(never()).createPresignedPutUrl(anyString(), anyString());
     }
+
+    @Test
+    @DisplayName("데모 프로필 시드는 프로필과 대표 이미지를 저장하며 외부 플레이스홀더 URL을 허용한다(#272)")
+    void givenExternalUrl_whenSeedDemoProfile_thenSavesProfileAndImage() {
+        Long userId = 500L;
+        String externalUrl = "https://picsum.photos/seed/x/600/800";
+
+        profileService.seedDemoProfile(userId, "서연", "서울", externalUrl);
+
+        org.mockito.ArgumentCaptor<org.son.haruharu.domain.profile.implement.UserProfile> profileCaptor =
+            org.mockito.ArgumentCaptor.forClass(org.son.haruharu.domain.profile.implement.UserProfile.class);
+        then(userProfileWriter).should().save(profileCaptor.capture());
+        assertThat(profileCaptor.getValue().nickname()).isEqualTo("서연");
+        org.mockito.ArgumentCaptor<org.son.haruharu.domain.profile.implement.UserImage> imageCaptor =
+            org.mockito.ArgumentCaptor.forClass(org.son.haruharu.domain.profile.implement.UserImage.class);
+        then(userImageWriter).should().save(imageCaptor.capture());
+        // own-bucket 검증 없이 외부 URL이 그대로 저장됨(데모 전용 우회)
+        assertThat(imageCaptor.getValue().imageUrl()).isEqualTo(externalUrl);
+    }
 }

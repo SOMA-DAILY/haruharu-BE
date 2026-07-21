@@ -44,6 +44,8 @@ class DemoRoomApiIntegrationTest {
     void clean() {
         jdbcTemplate.update("DELETE FROM room_members");
         jdbcTemplate.update("DELETE FROM rooms");
+        jdbcTemplate.update("DELETE FROM user_images");
+        jdbcTemplate.update("DELETE FROM user_profiles");
         jdbcTemplate.update("DELETE FROM users");
     }
 
@@ -70,6 +72,13 @@ class DemoRoomApiIntegrationTest {
         Room room = roomJpaRepository.findAll().get(0).toDomain();
         assertThat(room.demo()).isTrue();
         assertThat(room.demoDay()).isEqualTo(1);
+        // 본인 + 가상 5명 = 6명, 가상 5명의 프로필·이미지가 시드됨(#272)
+        Long memberCount = jdbcTemplate.queryForObject("SELECT count(*) FROM room_members", Long.class);
+        assertThat(memberCount).isEqualTo(6L);
+        Long profileCount = jdbcTemplate.queryForObject("SELECT count(*) FROM user_profiles", Long.class);
+        assertThat(profileCount).isEqualTo(5L);
+        Long imageCount = jdbcTemplate.queryForObject("SELECT count(*) FROM user_images", Long.class);
+        assertThat(imageCount).isEqualTo(5L);
 
         mockMvc.perform(post("/api/v1/demo/room/advance-day").with(authentication(auth(userId))))
                 .andExpect(status().isOk())

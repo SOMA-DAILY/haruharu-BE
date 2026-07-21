@@ -18,6 +18,8 @@ import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
+import org.son.haruharu.domain.profile.business.ProfileService;
+import org.son.haruharu.domain.user.business.UserService;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -31,9 +33,12 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class DemoRoomServiceTest {
@@ -43,6 +48,8 @@ class DemoRoomServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock IdentityService identityService;
+    @Mock UserService userService;
+    @Mock ProfileService profileService;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final Clock clock = Clock.fixed(ZonedDateTime.of(2026, 7, 20, 12, 0, 0, 0, SEOUL).toInstant(), SEOUL);
@@ -51,12 +58,13 @@ class DemoRoomServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new DemoRoomService(roomReader, roomWriter, roomMemberReader, roomMemberWriter, identityService, clock);
+        service = new DemoRoomService(roomReader, roomWriter, roomMemberReader, roomMemberWriter,
+                identityService, userService, profileService, clock);
     }
 
     @Test
-    @DisplayName("데모 방이 없으면 Day1 데모 방을 생성하고 호출자를 멤버로 추가한다")
-    void givenNoRoom_whenCreateOrGet_thenCreatesDemoRoomAndMember() {
+    @DisplayName("데모 방이 없으면 Day1 데모 방을 생성하고 본인+가상5명(총 6명)을 멤버로 추가한다")
+    void givenNoRoom_whenCreateOrGet_thenCreatesDemoRoomAndSixMembers() {
         Long userId = 42L;
         given(roomMemberReader.findByUserId(userId)).willReturn(List.of());
         given(roomWriter.save(any())).willReturn(
@@ -64,6 +72,8 @@ class DemoRoomServiceTest {
                         LocalDateTime.of(2026, 7, 20, 9, 0), null, true, 1));
         given(identityService.findVerified(userId))
                 .willReturn(Optional.of(new VerifiedIdentity("MALE", LocalDate.of(1995, 6, 15))));
+        // 가상 계정 생성은 UserService 위임 — 101..105 순차 반환
+        given(userService.createDemoVirtualAccount()).willReturn(101L, 102L, 103L, 104L, 105L);
 
         DemoRoomResponse result = service.createOrGet(userId);
 
@@ -72,11 +82,16 @@ class DemoRoomServiceTest {
         ArgumentCaptor<Room> roomCaptor = ArgumentCaptor.forClass(Room.class);
         then(roomWriter).should().save(roomCaptor.capture());
         assertThat(roomCaptor.getValue().demo()).isTrue();
-        assertThat(roomCaptor.getValue().demoDay()).isEqualTo(1);
+        // 가상 5명 계정·프로필 시드 위임 확인
+        then(userService).should(times(5)).createDemoVirtualAccount();
+        then(profileService).should(times(5))
+                .seedDemoProfile(anyLong(), anyString(),
+                        anyString(), anyString());
+        // 본인 1 + 가상 5 = 6명 저장
         ArgumentCaptor<RoomMember> memberCaptor = ArgumentCaptor.forClass(RoomMember.class);
-        then(roomMemberWriter).should().save(memberCaptor.capture());
-        assertThat(memberCaptor.getValue().userId()).isEqualTo(userId);
-        assertThat(memberCaptor.getValue().gender()).isEqualTo("MALE");
+        then(roomMemberWriter).should(times(6)).save(memberCaptor.capture());
+        assertThat(memberCaptor.getAllValues()).extracting(RoomMember::userId)
+                .containsExactly(42L, 101L, 102L, 103L, 104L, 105L);
     }
 
     @Test
