@@ -37,15 +37,15 @@ public class RoomRepositoryImpl implements RoomRepository {
     }
 
     @Override
-    public List<Room> findAllByScheduledDateAndStatus(LocalDate scheduledDate, RoomStatus status) {
-        return jpaRepository.findAllByScheduledDateAndStatus(scheduledDate, status).stream()
+    public List<Room> findAllByScheduledDateAndStatusAndDemoFalse(LocalDate scheduledDate, RoomStatus status) {
+        return jpaRepository.findAllByScheduledDateAndStatusAndDemoFalse(scheduledDate, status).stream()
                 .map(RoomEntity::toDomain)
                 .toList();
     }
 
     @Override
-    public List<Room> findAllByStatus(RoomStatus status) {
-        return jpaRepository.findAllByStatus(status).stream()
+    public List<Room> findAllByStatusAndDemoFalse(RoomStatus status) {
+        return jpaRepository.findAllByStatusAndDemoFalse(status).stream()
                 .map(RoomEntity::toDomain)
                 .toList();
     }

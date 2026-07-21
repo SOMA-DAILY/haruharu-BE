@@ -23,11 +23,13 @@ public class RoomReader {
                 .findFirst();
     }
 
+    /** 09:00 자동 시작 배치용. 데모 방은 제외(#265) — 데모 방은 즉시 ACTIVE로 생성되고 배치와 무관하다. */
     public List<Room> getScheduledPending(LocalDate scheduledDate) {
-        return roomRepository.findAllByScheduledDateAndStatus(scheduledDate, RoomStatus.PENDING);
+        return roomRepository.findAllByScheduledDateAndStatusAndDemoFalse(scheduledDate, RoomStatus.PENDING);
     }
 
+    /** 종료·위로구름·슬롯/최종선택 푸시 배치의 단일 진입점. 데모 방은 제외(#265) — 무만료·무진행 보장. */
     public List<Room> getActive() {
-        return roomRepository.findAllByStatus(RoomStatus.ACTIVE);
+        return roomRepository.findAllByStatusAndDemoFalse(RoomStatus.ACTIVE);
     }
 }

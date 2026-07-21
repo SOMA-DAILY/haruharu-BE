@@ -122,4 +122,30 @@ class RoomTest {
         assertThat(result.startedAt()).isEqualTo(STARTED_AT);
         assertThat(result.totalDays()).isEqualTo(3);
     }
+
+    // ===================== 데모 방(#265) =====================
+
+    @Test
+    @DisplayName("데모 방은 실시간이 흘러도 currentDay를 저장된 demoDay로 고정한다")
+    void givenDemoRoom_whenCurrentDayAt_thenReturnsDemoDayRegardlessOfClock() {
+        Room demo = Room.createDemo(LocalDate.of(2026, 6, 24), 3, 2, STARTED_AT);
+        // 시작 한참 전(Day 파생이면 0)·한참 후(Day 파생이면 3)여도 demoDay=2 고정
+        assertThat(demo.currentDayAt(LocalDateTime.of(2026, 6, 24, 9, 0), DAY_START_HOUR)).isEqualTo(2);
+        assertThat(demo.currentDayAt(LocalDateTime.of(2026, 7, 1, 9, 0), DAY_START_HOUR)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("데모 방 Day 진행은 demoDay를 갱신하고 currentDay에 반영된다")
+    void givenDemoRoom_whenWithDemoDay_thenCurrentDayReflects() {
+        Room demo = Room.createDemo(LocalDate.of(2026, 6, 24), 3, 1, STARTED_AT);
+        Room advanced = demo.withDemoDay(3);
+        assertThat(advanced.currentDayAt(LocalDateTime.of(2026, 6, 24, 9, 0), DAY_START_HOUR)).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("데모 방은 시각이 아무리 지나도 hasEndedBy가 false다(무만료)")
+    void givenDemoRoom_whenHasEndedBy_thenAlwaysFalse() {
+        Room demo = Room.createDemo(LocalDate.of(2026, 6, 24), 3, 3, STARTED_AT);
+        assertThat(demo.hasEndedBy(LocalDateTime.of(2026, 12, 31, 9, 0), DAY_START_HOUR)).isFalse();
+    }
 }
