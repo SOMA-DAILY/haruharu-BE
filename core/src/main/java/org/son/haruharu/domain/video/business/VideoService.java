@@ -69,6 +69,28 @@ public class VideoService {
         return videoPostReader.findActiveByRoomMember(roomMemberId);
     }
 
+    // 데모 피드 플레이스홀더 영상(#274). 외부 URL이라 presign이 그대로 통과시킨다. 실물 에셋 확정 시 교체.
+    private static final String DEMO_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+    private static final String DEMO_THUMBNAIL_URL = "https://picsum.photos/seed/haruharu-demo-feed/600/800";
+
+    /**
+     * 데모 방 피드 시드(#274). 지정 Day의 모든 슬롯에 대해 각 멤버에게 플레이스홀더 영상을 1개씩 넣는다.
+     * 피드 열람 게이트는 "본인이 업로드한 슬롯만 열람"이라, 호출자 본인 멤버까지 포함해 시드해야 리뷰어가 피드를 볼 수 있다.
+     * 정상 업로드 경로(시간창·중복·소유권 검증)를 우회하는 데모 전용 시드이므로 video 도메인이 스스로 소유한다.
+     */
+    @Transactional
+    public void seedDemoFeed(List<Long> roomMemberIds, int dayNumber) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<UploadSlot> slots = UploadSlot.ofDay(dayNumber);
+        for (Long roomMemberId : roomMemberIds) {
+            for (UploadSlot slot : slots) {
+                videoPostWriter.save(VideoPost.create(
+                        roomMemberId, dayNumber, slot.slotIndex(), null,
+                        "데모 일상", DEMO_VIDEO_URL, DEMO_THUMBNAIL_URL, now));
+            }
+        }
+    }
+
     /** 영상 업로드용 presigned PUT URL 발급. 영상은 비공개 prefix(users/{id}/videos/). */
     public VideoUploadUrlResponse createPresignUrl(Long userId, String filename) {
         String extension = extractExtension(filename);

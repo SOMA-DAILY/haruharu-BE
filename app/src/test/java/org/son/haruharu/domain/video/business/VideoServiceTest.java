@@ -193,4 +193,15 @@ class VideoServiceTest {
         assertThatThrownBy(() -> serviceAt(12).delete(userId, postId))
             .isInstanceOf(NotVideoOwnerException.class);
     }
+
+    @Test
+    @DisplayName("데모 피드 시드는 Day의 모든 슬롯에 각 멤버 영상을 1개씩 저장한다(#274)")
+    void givenMembers_whenSeedDemoFeed_thenSavesPerSlotPerMember() {
+        given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        // Day1 = 5슬롯, 멤버 2명 → 10개 저장
+        serviceAt(12).seedDemoFeed(java.util.List.of(10L, 20L), 1);
+
+        org.mockito.Mockito.verify(videoPostWriter, org.mockito.Mockito.times(10)).save(any());
+    }
 }
