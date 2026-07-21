@@ -317,4 +317,17 @@ class UserServiceTest {
         then(identityService).should().seedDemoIdentity(userId, "MALE", birthday);
         then(coinService).should().grantDemoCoins(userId, 200L);
     }
+    @Test
+    @DisplayName("데모 가상 참여자 계정은 demo=true·ACTIVE로 생성되고 userId를 반환한다(#272)")
+    void givenNoAccount_whenCreateDemoVirtualAccount_thenSavesDemoActiveUser() {
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        given(userWriter.save(captor.capture()))
+            .willReturn(new User(500L, UserStatus.ACTIVE, LocalDateTime.now(clock), true));
+
+        Long id = userService.createDemoVirtualAccount();
+
+        assertThat(id).isEqualTo(500L);
+        assertThat(captor.getValue().demoMode()).isTrue();
+        assertThat(captor.getValue().status()).isEqualTo(UserStatus.ACTIVE);
+    }
 }

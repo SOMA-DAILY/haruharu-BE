@@ -63,6 +63,15 @@ public class UserService {
         this.clock = clock;
     }
 
+    /**
+     * 데모 방 가상 참여자용 계정 생성(#272). demo=true·ACTIVE로 생성하되 자격증명(user_credentials)이 없어 로그인/API 호출은 불가하다.
+     * 생성된 userId를 반환해 프로필·이미지 시드에 사용한다.
+     */
+    @Transactional
+    public Long createDemoVirtualAccount() {
+        return userWriter.save(new User(null, UserStatus.ACTIVE, null, true)).id();
+    }
+
     public UserProfileResponse getMyProfile(Long userId) {
         User user = userReader.getById(userId);
         ProfileResponse profile = profileService.getProfile(userId);
