@@ -256,4 +256,20 @@ class CoinServiceTest {
         assertThat(ledgerCaptor.getValue().reason()).isEqualTo(CoinLedgerReason.DEMO_GRANT);
         assertThat(ledgerCaptor.getValue().delta()).isEqualTo(200L);
     }
+
+    @Test
+    @DisplayName("PURCHASE 원장이 있으면 결제 이력 있음으로 판정한다(#277)")
+    void givenPurchaseLedger_whenHasPurchaseHistory_thenTrue() {
+        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.PURCHASE)).willReturn(true);
+
+        assertThat(coinService.hasPurchaseHistory(userId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("PURCHASE 원장이 없으면 결제 이력 없음으로 판정한다(#277)")
+    void givenNoPurchaseLedger_whenHasPurchaseHistory_thenFalse() {
+        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.PURCHASE)).willReturn(false);
+
+        assertThat(coinService.hasPurchaseHistory(userId)).isFalse();
+    }
 }
