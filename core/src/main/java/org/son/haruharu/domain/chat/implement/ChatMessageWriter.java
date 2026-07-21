@@ -14,4 +14,9 @@ public class ChatMessageWriter {
     public ChatMessage save(ChatMessage message) {
         return chatMessageRepository.save(message);
     }
+
+    /** 데모 정리 전용 하드삭제(#266). */
+    public void hardDeleteByChatRoomId(Long chatRoomId) {
+        chatMessageRepository.hardDeleteByChatRoomId(chatRoomId);
+    }
 }

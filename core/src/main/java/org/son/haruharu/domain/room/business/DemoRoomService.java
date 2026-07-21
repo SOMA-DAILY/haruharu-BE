@@ -7,12 +7,11 @@ import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.room.business.dto.DemoRoomResponse;
 import org.son.haruharu.domain.room.business.exception.DemoRoomNotFoundException;
 import org.son.haruharu.domain.room.business.exception.NotDemoAccountException;
+import org.son.haruharu.domain.room.implement.DemoRoomFinder;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
-import org.son.haruharu.domain.room.implement.RoomReader;
-import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.user.business.UserService;
@@ -53,7 +52,6 @@ public class DemoRoomService {
             new VirtualSpec("시우", "MALE", 26, "인천", "https://picsum.photos/seed/haruharu-demo-5/600/800")
     );
 
-    private final RoomReader roomReader;
     private final RoomWriter roomWriter;
     private final RoomMemberReader roomMemberReader;
     private final RoomMemberWriter roomMemberWriter;
@@ -62,14 +60,16 @@ public class DemoRoomService {
     private final ProfileService profileService;
     private final VideoService videoService;
     private final CoinService coinService;
+    private final DemoRoomFinder demoRoomFinder;
+    private final DemoMatchService demoMatchService;
     private final Clock clock;
 
-    public DemoRoomService(RoomReader roomReader, RoomWriter roomWriter,
+    public DemoRoomService(RoomWriter roomWriter,
                            RoomMemberReader roomMemberReader, RoomMemberWriter roomMemberWriter,
                            IdentityService identityService, UserService userService,
                            ProfileService profileService, VideoService videoService,
-                           CoinService coinService, Clock clock) {
-        this.roomReader = roomReader;
+                           CoinService coinService, DemoRoomFinder demoRoomFinder,
+                           DemoMatchService demoMatchService, Clock clock) {
         this.roomWriter = roomWriter;
         this.roomMemberReader = roomMemberReader;
         this.roomMemberWriter = roomMemberWriter;
@@ -78,6 +78,8 @@ public class DemoRoomService {
         this.profileService = profileService;
         this.videoService = videoService;
         this.coinService = coinService;
+        this.demoRoomFinder = demoRoomFinder;
+        this.demoMatchService = demoMatchService;
         this.clock = clock;
     }
 
@@ -87,7 +89,7 @@ public class DemoRoomService {
      */
     @Transactional
     public DemoRoomResponse createOrGet(Long userId) {
-        Optional<Room> existing = findDemoRoom(userId);
+        Optional<Room> existing = demoRoomFinder.find(userId);
         if (existing.isPresent()) {
             Room room = existing.get();
             return new DemoRoomResponse(room.id(), currentDay(room));
@@ -123,7 +125,7 @@ public class DemoRoomService {
     /** 데모 방 Day 진행(1→2→3, totalDays로 캡). 새로 진행한 Day의 피드를 시드한다. 데모 방이 없으면 404. */
     @Transactional
     public DemoRoomResponse advanceDay(Long userId) {
-        Room room = findDemoRoom(userId).orElseThrow(DemoRoomNotFoundException::new);
+        Room room = demoRoomFinder.find(userId).orElseThrow(DemoRoomNotFoundException::new);
         int current = room.demoDay() == null ? 1 : room.demoDay();
         int next = Math.min(TOTAL_DAYS, current + 1);
         Room saved = roomWriter.save(room.withDemoDay(next));
@@ -151,7 +153,7 @@ public class DemoRoomService {
         // 구름 리시드는 방 유무와 무관하게 항상 수행 — 방 없이도 참가신청 재시연이 가능하도록.
         coinService.resetDemoWallet(userId, DEMO_COINS);
 
-        Optional<Room> existing = findDemoRoom(userId);
+        Optional<Room> existing = demoRoomFinder.find(userId);
         if (existing.isEmpty()) {
             return new DemoRoomResponse(null, 1);
         }
@@ -160,16 +162,9 @@ public class DemoRoomService {
         List<Long> memberIds = roomMemberReader.getByRoomId(reset.id()).stream()
                 .map(RoomMember::id).toList();
         videoService.resetDemoFeed(memberIds, 1);
+        // 최종선택 결과·채팅까지 지워야 참가신청부터 재시연된다(#266). 하드삭제 이유는 DemoMatchService 참고.
+        demoMatchService.purge(memberIds);
         return new DemoRoomResponse(reset.id(), 1);
-    }
-
-    /** 호출자가 속한 방 중 데모(비종료) 방을 찾는다. 유저 본인 방 조회라 배치 격리(demo=false)와 무관. */
-    private Optional<Room> findDemoRoom(Long userId) {
-        return roomMemberReader.findByUserId(userId).stream()
-                .map(member -> roomReader.findById(member.roomId()))
-                .flatMap(Optional::stream)
-                .filter(room -> room.demo() && room.status() != RoomStatus.ENDED)
-                .findFirst();
     }
 
     private int currentDay(Room room) {

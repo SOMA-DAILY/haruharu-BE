@@ -53,6 +53,8 @@ class DemoRoomServiceTest {
     @Mock ProfileService profileService;
     @Mock org.son.haruharu.domain.video.business.VideoService videoService;
     @Mock org.son.haruharu.domain.coin.business.CoinService coinService;
+    @Mock org.son.haruharu.domain.room.implement.DemoRoomFinder demoRoomFinder;
+    @Mock DemoMatchService demoMatchService;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final Clock clock = Clock.fixed(ZonedDateTime.of(2026, 7, 20, 12, 0, 0, 0, SEOUL).toInstant(), SEOUL);
@@ -61,15 +63,16 @@ class DemoRoomServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new DemoRoomService(roomReader, roomWriter, roomMemberReader, roomMemberWriter,
-                identityService, userService, profileService, videoService, coinService, clock);
+        service = new DemoRoomService(roomWriter, roomMemberReader, roomMemberWriter,
+                identityService, userService, profileService, videoService, coinService,
+                demoRoomFinder, demoMatchService, clock);
     }
 
     @Test
     @DisplayName("데모 방이 없으면 Day1 데모 방을 생성하고 본인+가상5명(총 6명)을 멤버로 추가한다")
     void givenNoRoom_whenCreateOrGet_thenCreatesDemoRoomAndSixMembers() {
         Long userId = 42L;
-        given(roomMemberReader.findByUserId(userId)).willReturn(List.of());
+        given(demoRoomFinder.find(userId)).willReturn(Optional.empty());
         given(roomWriter.save(any())).willReturn(
                 new Room(1L, RoomStatus.ACTIVE, LocalDate.of(2026, 7, 20), 3,
                         LocalDateTime.of(2026, 7, 20, 9, 0), null, true, 1));
@@ -110,9 +113,7 @@ class DemoRoomServiceTest {
         Long userId = 42L;
         Room existing = new Room(7L, RoomStatus.ACTIVE, LocalDate.of(2026, 7, 20), 3,
                 LocalDateTime.of(2026, 7, 20, 9, 0), null, true, 2);
-        given(roomMemberReader.findByUserId(userId))
-                .willReturn(List.of(RoomMember.of(7L, userId, "MALE", null, LocalDateTime.now(clock))));
-        given(roomReader.findById(7L)).willReturn(Optional.of(existing));
+        given(demoRoomFinder.find(userId)).willReturn(Optional.of(existing));
 
         DemoRoomResponse result = service.createOrGet(userId);
 
@@ -128,9 +129,7 @@ class DemoRoomServiceTest {
         Long userId = 42L;
         Room room = new Room(7L, RoomStatus.ACTIVE, LocalDate.of(2026, 7, 20), 3,
                 LocalDateTime.of(2026, 7, 20, 9, 0), null, true, 1);
-        given(roomMemberReader.findByUserId(userId))
-                .willReturn(List.of(RoomMember.of(7L, userId, "MALE", null, LocalDateTime.now(clock))));
-        given(roomReader.findById(7L)).willReturn(Optional.of(room));
+        given(demoRoomFinder.find(userId)).willReturn(Optional.of(room));
         given(roomWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(
                 new RoomMember(70L, 7L, userId, "MALE", null, LocalDateTime.now(clock))));
@@ -148,9 +147,7 @@ class DemoRoomServiceTest {
         Long userId = 42L;
         Room room = new Room(7L, RoomStatus.ACTIVE, LocalDate.of(2026, 7, 20), 3,
                 LocalDateTime.of(2026, 7, 20, 9, 0), null, true, 3);
-        given(roomMemberReader.findByUserId(userId))
-                .willReturn(List.of(RoomMember.of(7L, userId, "MALE", null, LocalDateTime.now(clock))));
-        given(roomReader.findById(7L)).willReturn(Optional.of(room));
+        given(demoRoomFinder.find(userId)).willReturn(Optional.of(room));
         given(roomWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         DemoRoomResponse result = service.advanceDay(userId);
@@ -164,7 +161,7 @@ class DemoRoomServiceTest {
     @DisplayName("데모 방이 없는데 Day 진행 시 DemoRoomNotFoundException(404)")
     void givenNoRoom_whenAdvanceDay_thenThrows() {
         Long userId = 42L;
-        given(roomMemberReader.findByUserId(userId)).willReturn(List.of());
+        given(demoRoomFinder.find(userId)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.advanceDay(userId))
                 .isInstanceOf(DemoRoomNotFoundException.class);
@@ -177,9 +174,7 @@ class DemoRoomServiceTest {
         Room room = new Room(7L, RoomStatus.ACTIVE, LocalDate.of(2026, 7, 20), 3,
                 LocalDateTime.of(2026, 7, 20, 9, 0), null, true, 3);
         given(userService.isDemoAccount(userId)).willReturn(true);
-        given(roomMemberReader.findByUserId(userId))
-                .willReturn(List.of(RoomMember.of(7L, userId, "MALE", null, LocalDateTime.now(clock))));
-        given(roomReader.findById(7L)).willReturn(Optional.of(room));
+        given(demoRoomFinder.find(userId)).willReturn(Optional.of(room));
         given(roomWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(
                 new RoomMember(70L, 7L, userId, "MALE", null, LocalDateTime.now(clock))));
@@ -193,6 +188,8 @@ class DemoRoomServiceTest {
         then(roomWriter).should().save(captor.capture());
         assertThat(captor.getValue().demoDay()).isEqualTo(1);
         then(videoService).should().resetDemoFeed(anyList(), org.mockito.ArgumentMatchers.eq(1));
+        // 최종선택 결과·채팅까지 정리해야 참가신청부터 재시연된다(#266)
+        then(demoMatchService).should().purge(anyList());
     }
 
     @Test
@@ -200,7 +197,7 @@ class DemoRoomServiceTest {
     void givenNoRoom_whenReset_thenReseedCoinsOnly() {
         Long userId = 42L;
         given(userService.isDemoAccount(userId)).willReturn(true);
-        given(roomMemberReader.findByUserId(userId)).willReturn(List.of());
+        given(demoRoomFinder.find(userId)).willReturn(Optional.empty());
 
         DemoRoomResponse result = service.reset(userId);
 

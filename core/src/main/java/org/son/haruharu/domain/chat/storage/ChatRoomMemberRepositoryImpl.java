@@ -38,4 +38,9 @@ public class ChatRoomMemberRepositoryImpl implements ChatRoomMemberRepository {
                 .map(ChatRoomMemberEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    public void deleteByChatRoomId(Long chatRoomId) {
+        chatRoomMemberJpaRepository.deleteByChatRoomId(chatRoomId);
+    }
 }

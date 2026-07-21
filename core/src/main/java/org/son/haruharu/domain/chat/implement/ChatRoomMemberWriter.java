@@ -14,4 +14,9 @@ public class ChatRoomMemberWriter {
     public ChatRoomMember save(ChatRoomMember member) {
         return chatRoomMemberRepository.save(member);
     }
+
+    /** 데모 정리 전용 삭제(#266). */
+    public void deleteByChatRoomId(Long chatRoomId) {
+        chatRoomMemberRepository.deleteByChatRoomId(chatRoomId);
+    }
 }
