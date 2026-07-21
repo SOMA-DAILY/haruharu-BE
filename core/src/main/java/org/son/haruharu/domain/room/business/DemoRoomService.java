@@ -14,12 +14,14 @@ import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.son.haruharu.domain.user.business.UserService;
+import org.son.haruharu.domain.video.business.VideoService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -53,12 +55,13 @@ public class DemoRoomService {
     private final IdentityService identityService;
     private final UserService userService;
     private final ProfileService profileService;
+    private final VideoService videoService;
     private final Clock clock;
 
     public DemoRoomService(RoomReader roomReader, RoomWriter roomWriter,
                            RoomMemberReader roomMemberReader, RoomMemberWriter roomMemberWriter,
                            IdentityService identityService, UserService userService,
-                           ProfileService profileService, Clock clock) {
+                           ProfileService profileService, VideoService videoService, Clock clock) {
         this.roomReader = roomReader;
         this.roomWriter = roomWriter;
         this.roomMemberReader = roomMemberReader;
@@ -66,6 +69,7 @@ public class DemoRoomService {
         this.identityService = identityService;
         this.userService = userService;
         this.profileService = profileService;
+        this.videoService = videoService;
         this.clock = clock;
     }
 
@@ -86,30 +90,41 @@ public class DemoRoomService {
         LocalDateTime startedAt = today.atTime(UploadSlot.dayStartHour(), 0);
         Room room = roomWriter.save(Room.createDemo(today, TOTAL_DAYS, 1, startedAt));
 
+        List<Long> memberIds = new ArrayList<>();
         // 1) 호출자 본인. gender는 room_members NOT NULL — 데모 계정은 보통 프로비저닝돼 본인인증값이 있지만,
         //    없더라도 방 생성이 깨지지 않도록 기본값(MALE)으로 폴백한다(성별은 데모 표시용).
         VerifiedIdentity identity = identityService.findVerified(userId).orElse(null);
         String gender = identity != null ? identity.gender() : "MALE";
         LocalDate birthday = identity != null ? identity.birthday() : null;
-        roomMemberWriter.save(RoomMember.of(room.id(), userId, gender, birthday, now));
+        memberIds.add(roomMemberWriter.save(RoomMember.of(room.id(), userId, gender, birthday, now)).id());
 
         // 2) 가상 참여자 5명(#272). 계정·프로필은 소유 도메인 서비스로 시드(Service-to-Service).
-        VIRTUAL_SPECS.forEach(spec -> {
+        for (VirtualSpec spec : VIRTUAL_SPECS) {
             Long virtualUserId = userService.createDemoVirtualAccount();
             profileService.seedDemoProfile(virtualUserId, spec.nickname(), spec.location(), spec.photoUrl());
-            roomMemberWriter.save(RoomMember.of(
-                    room.id(), virtualUserId, spec.gender(), today.minusYears(spec.age()), now));
-        });
+            memberIds.add(roomMemberWriter.save(RoomMember.of(
+                    room.id(), virtualUserId, spec.gender(), today.minusYears(spec.age()), now)).id());
+        }
+
+        // 3) Day1 피드 시드(#274). 열람 게이트가 "본인 업로드 슬롯만"이라 본인 포함 전원 시드해야 리뷰어가 피드를 본다.
+        videoService.seedDemoFeed(memberIds, 1);
 
         return new DemoRoomResponse(room.id(), 1);
     }
 
-    /** 데모 방 Day 진행(1→2→3, totalDays로 캡). 데모 방이 없으면 404. */
+    /** 데모 방 Day 진행(1→2→3, totalDays로 캡). 새로 진행한 Day의 피드를 시드한다. 데모 방이 없으면 404. */
     @Transactional
     public DemoRoomResponse advanceDay(Long userId) {
         Room room = findDemoRoom(userId).orElseThrow(DemoRoomNotFoundException::new);
-        int next = Math.min(TOTAL_DAYS, (room.demoDay() == null ? 1 : room.demoDay()) + 1);
+        int current = room.demoDay() == null ? 1 : room.demoDay();
+        int next = Math.min(TOTAL_DAYS, current + 1);
         Room saved = roomWriter.save(room.withDemoDay(next));
+        // 새 Day로 진행했을 때만 그 Day 피드를 1회 시드(이미 최종일이면 중복 시드 방지).
+        if (next > current) {
+            List<Long> memberIds = roomMemberReader.getByRoomId(saved.id()).stream()
+                    .map(RoomMember::id).toList();
+            videoService.seedDemoFeed(memberIds, next);
+        }
         return new DemoRoomResponse(saved.id(), next);
     }
 

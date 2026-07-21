@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -42,6 +43,7 @@ class DemoRoomApiIntegrationTest {
 
     @BeforeEach
     void clean() {
+        jdbcTemplate.update("DELETE FROM video_posts");
         jdbcTemplate.update("DELETE FROM room_members");
         jdbcTemplate.update("DELETE FROM rooms");
         jdbcTemplate.update("DELETE FROM user_images");
@@ -79,6 +81,15 @@ class DemoRoomApiIntegrationTest {
         assertThat(profileCount).isEqualTo(5L);
         Long imageCount = jdbcTemplate.queryForObject("SELECT count(*) FROM user_images", Long.class);
         assertThat(imageCount).isEqualTo(5L);
+        // Day1 피드: 6명 × 5슬롯 = 30개 video_posts 시드(#274)
+        Long videoCount = jdbcTemplate.queryForObject("SELECT count(*) FROM video_posts", Long.class);
+        assertThat(videoCount).isEqualTo(30L);
+
+        // 리뷰어(본인)가 Day1 피드를 열람 — 본인도 전 슬롯 시드돼 mySlots가 열려 6명 영상이 보인다
+        mockMvc.perform(get("/api/v1/rooms/{roomId}/feed", room.id())
+                        .param("day", "1").with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.posts.length()").value(30));
 
         mockMvc.perform(post("/api/v1/demo/room/advance-day").with(authentication(auth(userId))))
                 .andExpect(status().isOk())

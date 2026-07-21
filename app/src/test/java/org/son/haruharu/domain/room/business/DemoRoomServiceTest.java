@@ -33,6 +33,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -50,6 +51,7 @@ class DemoRoomServiceTest {
     @Mock IdentityService identityService;
     @Mock UserService userService;
     @Mock ProfileService profileService;
+    @Mock org.son.haruharu.domain.video.business.VideoService videoService;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final Clock clock = Clock.fixed(ZonedDateTime.of(2026, 7, 20, 12, 0, 0, 0, SEOUL).toInstant(), SEOUL);
@@ -59,7 +61,7 @@ class DemoRoomServiceTest {
     @BeforeEach
     void setUp() {
         service = new DemoRoomService(roomReader, roomWriter, roomMemberReader, roomMemberWriter,
-                identityService, userService, profileService, clock);
+                identityService, userService, profileService, videoService, clock);
     }
 
     @Test
@@ -74,6 +76,11 @@ class DemoRoomServiceTest {
                 .willReturn(Optional.of(new VerifiedIdentity("MALE", LocalDate.of(1995, 6, 15))));
         // 가상 계정 생성은 UserService 위임 — 101..105 순차 반환
         given(userService.createDemoVirtualAccount()).willReturn(101L, 102L, 103L, 104L, 105L);
+        // 저장 시 id가 부여된 멤버 반환(피드 시드에 roomMemberId 필요)
+        given(roomMemberWriter.save(any())).willAnswer(inv -> {
+            RoomMember m = inv.getArgument(0);
+            return new RoomMember(900L + m.userId(), m.roomId(), m.userId(), m.gender(), m.birthday(), m.joinedAt());
+        });
 
         DemoRoomResponse result = service.createOrGet(userId);
 
@@ -92,6 +99,8 @@ class DemoRoomServiceTest {
         then(roomMemberWriter).should(times(6)).save(memberCaptor.capture());
         assertThat(memberCaptor.getAllValues()).extracting(RoomMember::userId)
                 .containsExactly(42L, 101L, 102L, 103L, 104L, 105L);
+        // Day1 피드 시드 위임(본인 포함 6명)
+        then(videoService).should().seedDemoFeed(anyList(), org.mockito.ArgumentMatchers.eq(1));
     }
 
     @Test
@@ -122,10 +131,14 @@ class DemoRoomServiceTest {
                 .willReturn(List.of(RoomMember.of(7L, userId, "MALE", null, LocalDateTime.now(clock))));
         given(roomReader.findById(7L)).willReturn(Optional.of(room));
         given(roomWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(
+                new RoomMember(70L, 7L, userId, "MALE", null, LocalDateTime.now(clock))));
 
         DemoRoomResponse result = service.advanceDay(userId);
 
         assertThat(result.day()).isEqualTo(2);
+        // 새 Day(2)로 진행했으므로 그 Day 피드가 시드된다
+        then(videoService).should().seedDemoFeed(anyList(), org.mockito.ArgumentMatchers.eq(2));
     }
 
     @Test
@@ -142,6 +155,8 @@ class DemoRoomServiceTest {
         DemoRoomResponse result = service.advanceDay(userId);
 
         assertThat(result.day()).isEqualTo(3);
+        // 최종일에 머무르면 새 Day 진행이 없으므로 피드 재시드도 하지 않는다(중복 방지)
+        then(videoService).should(never()).seedDemoFeed(anyList(), org.mockito.ArgumentMatchers.anyInt());
     }
 
     @Test
