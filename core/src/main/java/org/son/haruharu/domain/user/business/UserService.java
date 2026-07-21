@@ -72,6 +72,11 @@ public class UserService {
         return userWriter.save(new User(null, UserStatus.ACTIVE, null, true)).id();
     }
 
+    /** 데모 계정 여부. 데모 전용 파괴적 조작(리셋 등) 호출부의 이중 방어 가드용(#267). */
+    public boolean isDemoAccount(Long userId) {
+        return userReader.getById(userId).demoMode();
+    }
+
     public UserProfileResponse getMyProfile(Long userId) {
         User user = userReader.getById(userId);
         ProfileResponse profile = profileService.getProfile(userId);

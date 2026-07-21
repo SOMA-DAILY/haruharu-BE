@@ -231,4 +231,29 @@ class CoinServiceTest {
 
         verify(coinWalletWriter, never()).save(any());
     }
+
+    @Test
+    @DisplayName("데모 지갑 리셋은 원장을 비우고 지갑 잔액을 0으로 되돌린 뒤 구름을 재지급한다(#267)")
+    void givenSpentDemoWallet_whenReset_thenClearsLedgerAndReseeds() {
+        // 기존 지갑(리워드 50)이 있는 상태. 원장을 비웠으므로 멱등 가드를 통과해 재지급된다.
+        CoinWallet existing = new CoinWallet(9L, userId, 0L, 50L, null);
+        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.of(existing));
+        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)).willReturn(false);
+
+        coinService.resetDemoWallet(userId, 200L);
+
+        // 원장은 비우되, 지갑은 삭제하지 않는다(soft-delete+user_id 유니크라 재삽입 불가).
+        verify(coinLedgerWriter).deleteByUserId(userId);
+        verify(coinWalletWriter, never()).deleteByUserId(userId);
+        // 잔액을 0으로 되돌리는 저장이 일어난다(식별자 유지).
+        ArgumentCaptor<CoinWallet> walletCaptor = ArgumentCaptor.forClass(CoinWallet.class);
+        verify(coinWalletWriter, times(2)).save(walletCaptor.capture());
+        assertThat(walletCaptor.getAllValues().get(0).id()).isEqualTo(9L);
+        assertThat(walletCaptor.getAllValues().get(0).totalBalance()).isEqualTo(0L);
+        // DEMO_GRANT로 재지급된다.
+        ArgumentCaptor<CoinLedger> ledgerCaptor = ArgumentCaptor.forClass(CoinLedger.class);
+        verify(coinLedgerWriter).append(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue().reason()).isEqualTo(CoinLedgerReason.DEMO_GRANT);
+        assertThat(ledgerCaptor.getValue().delta()).isEqualTo(200L);
+    }
 }

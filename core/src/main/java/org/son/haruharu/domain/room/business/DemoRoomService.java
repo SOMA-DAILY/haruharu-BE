@@ -6,6 +6,7 @@ import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.room.business.dto.DemoRoomResponse;
 import org.son.haruharu.domain.room.business.exception.DemoRoomNotFoundException;
+import org.son.haruharu.domain.room.business.exception.NotDemoAccountException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -13,6 +14,7 @@ import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
+import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.user.business.UserService;
 import org.son.haruharu.domain.video.business.VideoService;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,9 @@ public class DemoRoomService {
 
     private static final int TOTAL_DAYS = 3;
 
+    /** 데모 계정 기본 구름 잔액. 부팅 시더·리셋이 공유해 지급/재지급 금액이 어긋나지 않게 한다(#267). */
+    public static final long DEMO_COINS = 200L;
+
     /** 가상 참여자 스펙(고정). 나이 25~30, 성비 3F·2M(본인 MALE 기준 3:3). 사진은 외부 플레이스홀더 URL(presign 통과). */
     private record VirtualSpec(String nickname, String gender, int age, String location, String photoUrl) {}
 
@@ -56,12 +61,14 @@ public class DemoRoomService {
     private final UserService userService;
     private final ProfileService profileService;
     private final VideoService videoService;
+    private final CoinService coinService;
     private final Clock clock;
 
     public DemoRoomService(RoomReader roomReader, RoomWriter roomWriter,
                            RoomMemberReader roomMemberReader, RoomMemberWriter roomMemberWriter,
                            IdentityService identityService, UserService userService,
-                           ProfileService profileService, VideoService videoService, Clock clock) {
+                           ProfileService profileService, VideoService videoService,
+                           CoinService coinService, Clock clock) {
         this.roomReader = roomReader;
         this.roomWriter = roomWriter;
         this.roomMemberReader = roomMemberReader;
@@ -70,6 +77,7 @@ public class DemoRoomService {
         this.userService = userService;
         this.profileService = profileService;
         this.videoService = videoService;
+        this.coinService = coinService;
         this.clock = clock;
     }
 
@@ -126,6 +134,33 @@ public class DemoRoomService {
             videoService.seedDemoFeed(memberIds, next);
         }
         return new DemoRoomResponse(saved.id(), next);
+    }
+
+    /**
+     * 데모 데이터 제자리 리셋(#267). 리뷰어가 참가신청부터 다시 시연할 수 있도록 초기 상태로 되돌린다.
+     * 방·멤버·가상계정은 재사용하고(하드삭제 안 함), Day를 1로 되돌린 뒤 피드를 재시드하고 구름을 리시드한다.
+     * 실서비스 데이터·배치는 demo=true 방/데모 계정에만 작용하므로 무영향.
+     */
+    @Transactional
+    public DemoRoomResponse reset(Long userId) {
+        // 방어: /api/v1/demo/** 게이트가 이미 데모 계정만 통과시키지만, 구름 원장 하드삭제가 파괴적이라 이중 확인.
+        if (!userService.isDemoAccount(userId)) {
+            throw new NotDemoAccountException();
+        }
+
+        // 구름 리시드는 방 유무와 무관하게 항상 수행 — 방 없이도 참가신청 재시연이 가능하도록.
+        coinService.resetDemoWallet(userId, DEMO_COINS);
+
+        Optional<Room> existing = findDemoRoom(userId);
+        if (existing.isEmpty()) {
+            return new DemoRoomResponse(null, 1);
+        }
+
+        Room reset = roomWriter.save(existing.get().withDemoDay(1));
+        List<Long> memberIds = roomMemberReader.getByRoomId(reset.id()).stream()
+                .map(RoomMember::id).toList();
+        videoService.resetDemoFeed(memberIds, 1);
+        return new DemoRoomResponse(reset.id(), 1);
     }
 
     /** 호출자가 속한 방 중 데모(비종료) 방을 찾는다. 유저 본인 방 조회라 배치 격리(demo=false)와 무관. */

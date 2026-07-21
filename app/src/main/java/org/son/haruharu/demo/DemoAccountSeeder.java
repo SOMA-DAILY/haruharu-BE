@@ -1,6 +1,7 @@
 package org.son.haruharu.demo;
 
 import lombok.extern.slf4j.Slf4j;
+import org.son.haruharu.domain.room.business.DemoRoomService;
 import org.son.haruharu.domain.user.business.UserService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -26,7 +27,8 @@ public class DemoAccountSeeder implements ApplicationRunner {
     // 데모 계정 기본값. 리뷰어가 반대 성별 후보를 보도록 남성 기준(반대 성별 계정은 후속 확장).
     private static final String DEMO_GENDER = "MALE";
     private static final LocalDate DEMO_BIRTHDAY = LocalDate.of(1995, 6, 15);
-    private static final long DEMO_COINS = 200L;
+    // 리셋(#267)과 지급 금액이 어긋나지 않도록 단일 상수 공유.
+    private static final long DEMO_COINS = DemoRoomService.DEMO_COINS;
 
     private final UserService userService;
     private final String userIdsCsv;

@@ -83,6 +83,22 @@ public class CoinService {
         credit(CoinCreditCommand.demoGrant(userId, amount));
     }
 
+    /**
+     * 데모 리셋 전용 지갑 초기화(#267). 원장을 비우고 지갑 잔액을 0으로 되돌린 뒤 데모 구름을 재지급해 잔액을 amount로 만든다.
+     * <p>
+     * 지갑은 전역 soft-delete + user_id 유니크라 "삭제 후 재생성"이 불가하다(soft-delete된 행이 유니크를 점유).
+     * 따라서 기존 지갑 행을 재사용해 잔액만 0으로 초기화한다. 원장을 먼저 비워야 {@link #grantDemoCoins}의
+     * 멱등 가드(DEMO_GRANT 존재 시 skip)를 통과해 재지급된다. 원장 삭제는 결제 감사 이력을 지우므로
+     * 반드시 데모 계정에만 호출해야 한다(호출부 DemoRoomService가 demo_mode 확인).
+     */
+    @Transactional
+    public void resetDemoWallet(Long userId, long amount) {
+        coinLedgerWriter.deleteByUserId(userId);
+        coinWalletReader.findByUserId(userId)
+                .ifPresent(wallet -> coinWalletWriter.save(wallet.resetToZero()));
+        grantDemoCoins(userId, amount);
+    }
+
     /** 코인 잔액 조회. 지갑이 아직 없으면 0 잔액으로 응답한다. */
     public WalletResponse getWallet(Long userId) {
         CoinWallet wallet = coinWalletReader.findByUserId(userId)
