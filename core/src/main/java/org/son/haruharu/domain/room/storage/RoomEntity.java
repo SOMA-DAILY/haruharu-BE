@@ -12,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.ColumnDefault;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomStatus;
@@ -44,6 +45,16 @@ public class RoomEntity extends BaseEntity {
     @Column
     private LocalDateTime endedAt;
 
+    // 데모 방 여부(#265). 데모 방은 시각이 아니라 demoDay로 Day를 고정하고 배치(getActive 등)에서 격리된다.
+    // 기존 행 마이그레이션 안전을 위해 @ColumnDefault("false").
+    @ColumnDefault("false")
+    @Column(nullable = false)
+    private boolean demo;
+
+    // 데모 방의 고정 Day(1~totalDays). 비데모 방은 null(시각 파생).
+    @Column
+    private Integer demoDay;
+
     public static RoomEntity from(Room room) {
         RoomEntity entity = new RoomEntity();
         entity.id = room.id();
@@ -52,10 +63,12 @@ public class RoomEntity extends BaseEntity {
         entity.totalDays = room.totalDays();
         entity.startedAt = room.startedAt();
         entity.endedAt = room.endedAt();
+        entity.demo = room.demo();
+        entity.demoDay = room.demoDay();
         return entity;
     }
 
     public Room toDomain() {
-        return new Room(id, status, scheduledDate, totalDays, startedAt, endedAt);
+        return new Room(id, status, scheduledDate, totalDays, startedAt, endedAt, demo, demoDay);
     }
 }

@@ -12,7 +12,9 @@ public interface RoomRepository {
 
     List<Room> findByIdInAndStatusNot(List<Long> ids, RoomStatus status);
 
-    List<Room> findAllByScheduledDateAndStatus(LocalDate scheduledDate, RoomStatus status);
+    /** 배치용 — 데모 방 제외(#265). */
+    List<Room> findAllByScheduledDateAndStatusAndDemoFalse(LocalDate scheduledDate, RoomStatus status);
 
-    List<Room> findAllByStatus(RoomStatus status);
+    /** 배치용 — 데모 방 제외(#265). */
+    List<Room> findAllByStatusAndDemoFalse(RoomStatus status);
 }
