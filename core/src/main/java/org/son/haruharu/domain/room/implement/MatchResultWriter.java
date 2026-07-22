@@ -14,4 +14,9 @@ public class MatchResultWriter {
     public MatchResult save(MatchResult matchResult) {
         return matchResultRepository.save(matchResult);
     }
+
+    /** 데모 정리 전용 하드삭제(#266). */
+    public void hardDeleteByMemberIds(java.util.List<Long> memberIds) {
+        matchResultRepository.hardDeleteByMemberIds(memberIds);
+    }
 }

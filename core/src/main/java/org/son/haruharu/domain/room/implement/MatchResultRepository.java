@@ -12,4 +12,7 @@ public interface MatchResultRepository {
     boolean existsBetween(Long memberId1, Long memberId2);
 
     MatchResult save(MatchResult matchResult);
+
+    /** 데모 정리 전용 하드삭제(#266). 전역 soft-delete + UNIQUE(member_a,member_b)라 재시연 재생성을 위해 물리 삭제한다. */
+    void hardDeleteByMemberIds(java.util.List<Long> memberIds);
 }

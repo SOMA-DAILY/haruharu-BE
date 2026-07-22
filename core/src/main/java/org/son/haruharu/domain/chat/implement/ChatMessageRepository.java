@@ -18,4 +18,7 @@ public interface ChatMessageRepository {
      * 순차 Long id라 커서 비교(id > cursor)로 저렴하게 계산된다.
      */
     long countUnread(Long chatRoomId, Long lastReadMessageId, Long excludeSenderId);
+
+    /** 데모 정리 전용 하드삭제(#266). 전역 soft-delete라 재시드 시 누적되므로 물리 삭제한다. */
+    void hardDeleteByChatRoomId(Long chatRoomId);
 }

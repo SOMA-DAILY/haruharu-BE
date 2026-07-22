@@ -49,4 +49,9 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
         return chatMessageJpaRepository.countByChatRoomIdAndIdGreaterThanAndSenderIdNot(
                 chatRoomId, cursor, excludeSenderId);
     }
+
+    @Override
+    public void hardDeleteByChatRoomId(Long chatRoomId) {
+        chatMessageJpaRepository.hardDeleteByChatRoomId(chatRoomId);
+    }
 }
