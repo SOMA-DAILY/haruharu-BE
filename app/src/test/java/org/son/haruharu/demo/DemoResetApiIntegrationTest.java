@@ -65,16 +65,16 @@ class DemoResetApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("데모 리셋: Day2·피드60 상태를 Day1·피드30·구름200으로 되돌리고 방·가상계정은 유지한다")
+    @DisplayName("데모 리셋: Day2·피드50 상태를 Day1·피드25·구름200으로 되돌리고 방·가상계정은 유지한다")
     void givenAdvancedDemo_whenReset_thenRestoredInPlace() throws Exception {
         Long userId = saveDemoUser();
 
-        // 방 생성(Day1, 30개) → Day2 진행(+30개, demoDay=2)
+        // 방 생성(Day1, 가상5명×5=25개) → Day2 진행(+25개, demoDay=2). 데모 계정 본인은 시드 안 함(#282).
         mockMvc.perform(post("/api/v1/demo/room").with(authentication(auth(userId)))).andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/demo/room/advance-day").with(authentication(auth(userId)))).andExpect(status().isOk());
-        assertThat(count("SELECT count(*) FROM video_posts")).isEqualTo(60L);
+        assertThat(count("SELECT count(*) FROM video_posts")).isEqualTo(50L);
 
-        // 1차 리셋 → Day1 복귀, 피드 재시드(30), 구름 리시드(DEMO_GRANT 1건)
+        // 1차 리셋 → Day1 복귀, 피드 재시드(가상만 25), 구름 리시드(DEMO_GRANT 1건)
         mockMvc.perform(post("/api/v1/demo/reset").with(authentication(auth(userId))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.day").value(1))
@@ -83,7 +83,7 @@ class DemoResetApiIntegrationTest {
         Room room = roomJpaRepository.findAll().get(0).toDomain();
         assertThat(room.demo()).isTrue();
         assertThat(room.demoDay()).isEqualTo(1);
-        assertThat(count("SELECT count(*) FROM video_posts")).isEqualTo(30L);
+        assertThat(count("SELECT count(*) FROM video_posts")).isEqualTo(25L);
         // 방·멤버·가상계정은 하드삭제하지 않고 재사용
         assertThat(count("SELECT count(*) FROM room_members")).isEqualTo(6L);
         assertThat(count("SELECT count(*) FROM user_profiles")).isEqualTo(5L);
@@ -91,11 +91,11 @@ class DemoResetApiIntegrationTest {
         assertThat(count("SELECT count(*) FROM coin_ledger WHERE user_id = ? AND reason = 'DEMO_GRANT'", userId))
                 .isEqualTo(1L);
 
-        // 2차 리셋 → 원장 하드삭제 후 재지급이라 DEMO_GRANT는 여전히 1건(누적 안 됨), 피드도 30 유지
+        // 2차 리셋 → 원장 하드삭제 후 재지급이라 DEMO_GRANT는 여전히 1건(누적 안 됨), 피드도 25 유지
         mockMvc.perform(post("/api/v1/demo/reset").with(authentication(auth(userId)))).andExpect(status().isOk());
         assertThat(count("SELECT count(*) FROM coin_ledger WHERE user_id = ? AND reason = 'DEMO_GRANT'", userId))
                 .isEqualTo(1L);
-        assertThat(count("SELECT count(*) FROM video_posts")).isEqualTo(30L);
+        assertThat(count("SELECT count(*) FROM video_posts")).isEqualTo(25L);
     }
 
     @Test
