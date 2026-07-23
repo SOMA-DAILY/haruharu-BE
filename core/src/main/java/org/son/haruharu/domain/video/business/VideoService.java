@@ -73,8 +73,9 @@ public class VideoService {
     }
 
     /**
-     * 데모 방 피드 시드(#274). 지정 Day의 모든 슬롯에 대해 각 멤버에게 플레이스홀더 영상을 1개씩 넣는다.
-     * 피드 열람 게이트는 "본인이 업로드한 슬롯만 열람"이라, 호출자 본인 멤버까지 포함해 시드해야 리뷰어가 피드를 볼 수 있다.
+     * 데모 방 피드 시드(#274). 지정 Day의 모든 슬롯에 대해 넘겨받은 각 멤버에게 플레이스홀더 영상을 1개씩 넣는다.
+     * 누구를 시드할지는 호출자(DemoRoomService)가 정한다 — #282부터 데모 계정 본인은 제외하고 가상 참여자만 시드해,
+     * 리뷰어가 직접 업로드해야 피드 게이트("본인이 업로드한 슬롯만 열람")가 열리는 앱 본연의 흐름을 시연한다.
      * 정상 업로드 경로(시간창·중복·소유권 검증)를 우회하는 데모 전용 시드이므로 video 도메인이 스스로 소유한다.
      * <p>
      * 플레이스홀더 URL은 하드코딩이 아니라 설정({@link DemoFeedProperties})에서 주입한다(#280) — 외부 URL이 죽어도
@@ -94,13 +95,15 @@ public class VideoService {
     }
 
     /**
-     * 데모 리셋 전용 피드 재설정(#267). 지정 멤버들의 기존 영상을 전부 하드삭제한 뒤 지정 Day 피드를 새로 시드한다.
-     * 하드삭제는 재시드(advance-day 재진행 포함) 시 이전 Day 영상이 누적·중복되는 것을 막는다.
+     * 데모 리셋 전용 피드 재설정(#267·#282). deleteMemberIds의 기존 영상을 전부 하드삭제한 뒤,
+     * seedMemberIds에만 지정 Day 피드를 시드한다. 삭제·시드 대상을 분리한 이유(#282):
+     * 리셋은 리뷰어 테스트 업로드분까지 전원 삭제해야 하지만, 재시드는 가상 참여자만 해야 하기 때문
+     * (데모 계정 본인 슬롯은 비워둬 리뷰어가 직접 업로드해 게이트를 여는 흐름을 시연).
      */
     @Transactional
-    public void resetDemoFeed(List<Long> roomMemberIds, int dayNumber) {
-        videoPostWriter.deleteByRoomMemberIds(roomMemberIds);
-        seedDemoFeed(roomMemberIds, dayNumber);
+    public void resetDemoFeed(List<Long> deleteMemberIds, List<Long> seedMemberIds, int dayNumber) {
+        videoPostWriter.deleteByRoomMemberIds(deleteMemberIds);
+        seedDemoFeed(seedMemberIds, dayNumber);
     }
 
     /** 영상 업로드용 presigned PUT URL 발급. 영상은 비공개 prefix(users/{id}/videos/). */

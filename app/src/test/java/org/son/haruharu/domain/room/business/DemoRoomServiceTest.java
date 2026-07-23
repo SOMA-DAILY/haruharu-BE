@@ -103,8 +103,11 @@ class DemoRoomServiceTest {
         then(roomMemberWriter).should(times(6)).save(memberCaptor.capture());
         assertThat(memberCaptor.getAllValues()).extracting(RoomMember::userId)
                 .containsExactly(42L, 101L, 102L, 103L, 104L, 105L);
-        // Day1 피드 시드 위임(본인 포함 6명)
-        then(videoService).should().seedDemoFeed(anyList(), org.mockito.ArgumentMatchers.eq(1));
+        // Day1 피드 시드는 데모 계정 본인(멤버 942) 제외, 가상 5명(1001..1005)만(#282)
+        ArgumentCaptor<List<Long>> seedCaptor = ArgumentCaptor.forClass(List.class);
+        then(videoService).should().seedDemoFeed(seedCaptor.capture(), org.mockito.ArgumentMatchers.eq(1));
+        assertThat(seedCaptor.getValue()).containsExactly(1001L, 1002L, 1003L, 1004L, 1005L)
+                .doesNotContain(942L);
     }
 
     @Test
@@ -131,14 +134,17 @@ class DemoRoomServiceTest {
                 LocalDateTime.of(2026, 7, 20, 9, 0), null, true, 1);
         given(demoRoomFinder.find(userId)).willReturn(Optional.of(room));
         given(roomWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+        // 본인(70,userId) + 가상(72,101)
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(
-                new RoomMember(70L, 7L, userId, "MALE", null, LocalDateTime.now(clock))));
+                new RoomMember(70L, 7L, userId, "MALE", null, LocalDateTime.now(clock)),
+                new RoomMember(72L, 7L, 101L, "FEMALE", null, LocalDateTime.now(clock))));
 
         DemoRoomResponse result = service.advanceDay(userId);
 
         assertThat(result.day()).isEqualTo(2);
-        // 새 Day(2)로 진행했으므로 그 Day 피드가 시드된다
-        then(videoService).should().seedDemoFeed(anyList(), org.mockito.ArgumentMatchers.eq(2));
+        // 새 Day(2) 피드는 데모 계정 본인(70) 제외, 가상(72)만 시드(#282)
+        then(videoService).should().seedDemoFeed(
+                org.mockito.ArgumentMatchers.eq(List.of(72L)), org.mockito.ArgumentMatchers.eq(2));
     }
 
     @Test
@@ -176,8 +182,10 @@ class DemoRoomServiceTest {
         given(userService.isDemoAccount(userId)).willReturn(true);
         given(demoRoomFinder.find(userId)).willReturn(Optional.of(room));
         given(roomWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+        // 본인(70,userId) + 가상(72,101)
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(
-                new RoomMember(70L, 7L, userId, "MALE", null, LocalDateTime.now(clock))));
+                new RoomMember(70L, 7L, userId, "MALE", null, LocalDateTime.now(clock)),
+                new RoomMember(72L, 7L, 101L, "FEMALE", null, LocalDateTime.now(clock))));
 
         DemoRoomResponse result = service.reset(userId);
 
@@ -187,9 +195,13 @@ class DemoRoomServiceTest {
         ArgumentCaptor<Room> captor = ArgumentCaptor.forClass(Room.class);
         then(roomWriter).should().save(captor.capture());
         assertThat(captor.getValue().demoDay()).isEqualTo(1);
-        then(videoService).should().resetDemoFeed(anyList(), org.mockito.ArgumentMatchers.eq(1));
-        // 최종선택 결과·채팅까지 정리해야 참가신청부터 재시연된다(#266)
-        then(demoMatchService).should().purge(anyList());
+        // 삭제는 전원(70,72), 재시드는 가상(72)만(#282)
+        then(videoService).should().resetDemoFeed(
+                org.mockito.ArgumentMatchers.eq(List.of(70L, 72L)),
+                org.mockito.ArgumentMatchers.eq(List.of(72L)),
+                org.mockito.ArgumentMatchers.eq(1));
+        // 최종선택 결과·채팅 정리는 전원 대상
+        then(demoMatchService).should().purge(List.of(70L, 72L));
     }
 
     @Test
@@ -205,7 +217,7 @@ class DemoRoomServiceTest {
         assertThat(result.day()).isEqualTo(1);
         then(coinService).should().resetDemoWallet(userId, 200L);
         then(roomWriter).should(never()).save(any());
-        then(videoService).should(never()).resetDemoFeed(anyList(), org.mockito.ArgumentMatchers.anyInt());
+        then(videoService).should(never()).resetDemoFeed(anyList(), anyList(), org.mockito.ArgumentMatchers.anyInt());
     }
 
     @Test

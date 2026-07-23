@@ -100,24 +100,25 @@ public class DemoRoomService {
         LocalDateTime startedAt = today.atTime(UploadSlot.dayStartHour(), 0);
         Room room = roomWriter.save(Room.createDemo(today, TOTAL_DAYS, 1, startedAt));
 
-        List<Long> memberIds = new ArrayList<>();
         // 1) 호출자 본인. gender는 room_members NOT NULL — 데모 계정은 보통 프로비저닝돼 본인인증값이 있지만,
         //    없더라도 방 생성이 깨지지 않도록 기본값(MALE)으로 폴백한다(성별은 데모 표시용).
         VerifiedIdentity identity = identityService.findVerified(userId).orElse(null);
         String gender = identity != null ? identity.gender() : "MALE";
         LocalDate birthday = identity != null ? identity.birthday() : null;
-        memberIds.add(roomMemberWriter.save(RoomMember.of(room.id(), userId, gender, birthday, now)).id());
+        roomMemberWriter.save(RoomMember.of(room.id(), userId, gender, birthday, now));
 
         // 2) 가상 참여자 5명(#272). 계정·프로필은 소유 도메인 서비스로 시드(Service-to-Service).
+        List<Long> virtualMemberIds = new ArrayList<>();
         for (VirtualSpec spec : VIRTUAL_SPECS) {
             Long virtualUserId = userService.createDemoVirtualAccount();
             profileService.seedDemoProfile(virtualUserId, spec.nickname(), spec.location(), spec.photoUrl());
-            memberIds.add(roomMemberWriter.save(RoomMember.of(
+            virtualMemberIds.add(roomMemberWriter.save(RoomMember.of(
                     room.id(), virtualUserId, spec.gender(), today.minusYears(spec.age()), now)).id());
         }
 
-        // 3) Day1 피드 시드(#274). 열람 게이트가 "본인 업로드 슬롯만"이라 본인 포함 전원 시드해야 리뷰어가 피드를 본다.
-        videoService.seedDemoFeed(memberIds, 1);
+        // 3) Day1 피드 시드(#274·#282). 데모 계정 본인은 제외하고 가상 5명만 시드한다 —
+        //    리뷰어가 직접 업로드해야 그 슬롯 피드가 열리는 앱 본연의 흐름을 시연하기 위함.
+        videoService.seedDemoFeed(virtualMemberIds, 1);
 
         return new DemoRoomResponse(room.id(), 1);
     }
@@ -130,12 +131,18 @@ public class DemoRoomService {
         int next = Math.min(TOTAL_DAYS, current + 1);
         Room saved = roomWriter.save(room.withDemoDay(next));
         // 새 Day로 진행했을 때만 그 Day 피드를 1회 시드(이미 최종일이면 중복 시드 방지).
+        // 데모 계정 본인은 제외하고 가상 참여자만 시드한다(#282) — 리뷰어가 직접 업로드하는 흐름 유지.
         if (next > current) {
-            List<Long> memberIds = roomMemberReader.getByRoomId(saved.id()).stream()
-                    .map(RoomMember::id).toList();
-            videoService.seedDemoFeed(memberIds, next);
+            videoService.seedDemoFeed(virtualMemberIds(saved.id(), userId), next);
         }
         return new DemoRoomResponse(saved.id(), next);
+    }
+
+    /** 방의 가상 참여자(호출자 본인 제외) 멤버 id. 피드 시드 대상 — 데모 계정 본인은 직접 업로드하도록 비운다(#282). */
+    private List<Long> virtualMemberIds(Long roomId, Long callerUserId) {
+        return roomMemberReader.getByRoomId(roomId).stream()
+                .filter(m -> !m.userId().equals(callerUserId))
+                .map(RoomMember::id).toList();
     }
 
     /**
@@ -159,11 +166,15 @@ public class DemoRoomService {
         }
 
         Room reset = roomWriter.save(existing.get().withDemoDay(1));
-        List<Long> memberIds = roomMemberReader.getByRoomId(reset.id()).stream()
+        List<RoomMember> members = roomMemberReader.getByRoomId(reset.id());
+        List<Long> allMemberIds = members.stream().map(RoomMember::id).toList();
+        // 삭제는 전원(리뷰어 테스트 업로드분 포함), 재시드는 가상 참여자만(#282).
+        List<Long> virtualMemberIds = members.stream()
+                .filter(m -> !m.userId().equals(userId))
                 .map(RoomMember::id).toList();
-        videoService.resetDemoFeed(memberIds, 1);
+        videoService.resetDemoFeed(allMemberIds, virtualMemberIds, 1);
         // 최종선택 결과·채팅까지 지워야 참가신청부터 재시연된다(#266). 하드삭제 이유는 DemoMatchService 참고.
-        demoMatchService.purge(memberIds);
+        demoMatchService.purge(allMemberIds);
         return new DemoRoomResponse(reset.id(), 1);
     }
 
