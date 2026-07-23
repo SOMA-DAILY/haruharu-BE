@@ -45,6 +45,8 @@ class VideoServiceTest {
     private static final String BASE = "https://bucket.s3.ap-northeast-2.amazonaws.com/";
     // Day1 slot2 = 12-15 시간창 (UploadSlot.DAY1_SLOT2)
     private static final int SLOT_INDEX = 2;
+    private static final String DEMO_VIDEO = BASE + "demo/placeholder.mp4";
+    private static final String DEMO_THUMB = "https://picsum.photos/seed/haruharu-demo-feed/600/800";
 
     @Mock S3StoragePort s3StoragePort;
     @Mock RoomReader roomReader;
@@ -56,7 +58,8 @@ class VideoServiceTest {
     private VideoService serviceAt(int hour) {
         Clock clock = Clock.fixed(ZonedDateTime.of(2026, 6, 26, hour, 0, 0, 0, SEOUL).toInstant(), SEOUL);
         return new VideoService(s3StoragePort, roomReader, roomMemberReader,
-                videoPostReader, videoPostWriter, eventPublisher, clock);
+                videoPostReader, videoPostWriter, eventPublisher,
+                new org.son.haruharu.domain.video.business.DemoFeedProperties(DEMO_VIDEO, DEMO_THUMB), clock);
     }
 
     private RoomMember member(Long id, Long userId) {
@@ -202,7 +205,11 @@ class VideoServiceTest {
         // Day1 = 5슬롯, 멤버 2명 → 10개 저장
         serviceAt(12).seedDemoFeed(java.util.List.of(10L, 20L), 1);
 
-        org.mockito.Mockito.verify(videoPostWriter, org.mockito.Mockito.times(10)).save(any());
+        ArgumentCaptor<VideoPost> captor = ArgumentCaptor.forClass(VideoPost.class);
+        org.mockito.Mockito.verify(videoPostWriter, org.mockito.Mockito.times(10)).save(captor.capture());
+        // 하드코딩이 아니라 설정(DemoFeedProperties)에서 온 URL로 저장된다(#280)
+        assertThat(captor.getValue().videoUrl()).isEqualTo(DEMO_VIDEO);
+        assertThat(captor.getValue().thumbnailUrl()).isEqualTo(DEMO_THUMB);
     }
 
     @Test

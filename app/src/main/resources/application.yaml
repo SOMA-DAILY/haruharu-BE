@@ -63,6 +63,12 @@ haruharu:
         3: 5
     consolation-reward:
       amount: 5
+  # 데모 피드 플레이스홀더 자산(#280). 접근 가능한 URL로 env 지정(권장: 우리 S3 오브젝트 — presign 서명됨).
+  # video-url 미지정 시 영상이 재생되지 않는다. 값만 바꿔 재배포 없이 교체 가능.
+  demo:
+    feed:
+      video-url: ${DEMO_FEED_VIDEO_URL:}
+      thumbnail-url: ${DEMO_FEED_THUMBNAIL_URL:https://picsum.photos/seed/haruharu-demo-feed/600/800}
 
 oauth:
   providers:
