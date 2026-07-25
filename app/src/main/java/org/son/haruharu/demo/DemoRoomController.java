@@ -9,6 +9,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.context.annotation.Profile;
 
 /**
  * 데모 방 조작(#265). 데모 계정 인가는 DemoModeInterceptor가 /api/v1/demo/** 경로에 강제하므로
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Demo Room", description = "앱스토어 심사용 데모 방(데모 계정 전용)")
 @RestController
 @RequestMapping("/api/v1/demo/room")
+@Profile("!prod") // 데모는 dev/local/test에서만 로드, prod 제외(#284)
 public class DemoRoomController {
 
     private final DemoRoomService demoRoomService;

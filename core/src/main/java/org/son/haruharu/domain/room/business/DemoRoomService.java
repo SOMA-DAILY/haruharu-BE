@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.context.annotation.Profile;
 
 /**
  * 데모 방 라이프사이클(#265·#272). 시간에 의존하지 않도록 방을 실제 rooms 테이블에 demo=true·demo_day로 만들고,
@@ -34,6 +35,7 @@ import java.util.Optional;
  */
 @Service
 @Transactional(readOnly = true)
+@Profile("!prod") // 데모는 dev/local/test에서만 로드, prod 제외(#284)
 public class DemoRoomService {
 
     private static final int TOTAL_DAYS = 3;

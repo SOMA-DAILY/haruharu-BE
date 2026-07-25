@@ -4,6 +4,7 @@ import org.son.haruharu.demo.exception.DemoForbiddenException;
 import org.son.haruharu.domain.user.implement.UserReader;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
 
 /**
  * 데모 API 접근 게이트(#264). 데모 조작 API(#265·#266·#267)는 프로덕션에도 로드되므로,
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
  * 실제 강제는 {@code DemoModeInterceptor}가 /api/v1/demo/** 전 경로에 적용한다.
  */
 @Component
+@Profile("!prod") // 데모는 dev/local/test에서만 로드, prod 제외(#284)
 public class DemoAccessGuard {
 
     private final UserReader userReader;

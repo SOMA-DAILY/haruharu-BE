@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.context.annotation.Profile;
 
 /**
  * 데모/심사 계정 부팅 시더(#264). env DEMO_PROVISION_USER_IDS(쉼표구분 userId)가 있을 때만
@@ -22,6 +23,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@Profile("!prod") // 데모는 dev/local/test에서만 로드, prod 제외(#284)
 public class DemoAccountSeeder implements ApplicationRunner {
 
     // 데모 계정 기본값. 리뷰어가 반대 성별 후보를 보도록 남성 기준(반대 성별 계정은 후속 확장).

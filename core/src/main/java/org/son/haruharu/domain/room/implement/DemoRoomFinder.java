@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import org.son.haruharu.domain.room.business.exception.DemoRoomNotFoundException;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
 
 /**
  * 데모 방 조회 단일 진입점(#266). "호출자가 속한 비종료 데모 방"이라는 규칙을 한 곳에 두어
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
  * 유저 본인 방 조회라 배치 격리(demo=false)와는 무관하다.
  */
 @Component
+@Profile("!prod") // 데모는 dev/local/test에서만 로드, prod 제외(#284)
 public class DemoRoomFinder {
 
     private final RoomReader roomReader;
