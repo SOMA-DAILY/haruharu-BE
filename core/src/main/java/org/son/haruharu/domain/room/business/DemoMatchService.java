@@ -18,6 +18,7 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.annotation.Profile;
 
 /**
  * 데모 최종선택 결과 + 채팅 시드(#266). 앱스토어 리젝 사유가 "채팅의 pre-populated content"였으므로,
@@ -28,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @Transactional(readOnly = true)
+@Profile("!prod") // 데모는 dev/local/test에서만 로드, prod 제외(#284)
 public class DemoMatchService {
 
     private final DemoRoomFinder demoRoomFinder;
