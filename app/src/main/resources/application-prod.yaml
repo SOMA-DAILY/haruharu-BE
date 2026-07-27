@@ -22,3 +22,11 @@ oauth:
       client-id: ${KAKAO_CLIENT_ID}
     apple:
       client-id: ${APPLE_CLIENT_ID}
+
+# 배포 프로파일은 콘솔 로그를 JSON 1줄/이벤트로 구조화(Datadog 수집용). Boot 4 네이티브 구조화 로깅이라
+# 별도 인코더 의존성 불필요. MDC(traceId·userId)와 APM의 dd.trace_id가 필드로 자동 포함된다.
+# 로컬(default 프로파일)은 application.yaml의 사람이 읽는 패턴 유지. admin 모듈은 무영향.
+logging:
+  structured:
+    format:
+      console: logstash
