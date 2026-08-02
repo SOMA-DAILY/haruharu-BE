@@ -34,6 +34,7 @@ public class ChatRoomEntity extends BaseEntity {
         ChatRoomEntity entity = new ChatRoomEntity();
         entity.id = chatRoom.id();
         entity.matchResultId = chatRoom.matchResultId();
+        entity.createdAt = chatRoom.createdAt();
         return entity;
     }
 
