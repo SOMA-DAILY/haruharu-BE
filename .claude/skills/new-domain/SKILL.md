@@ -23,7 +23,16 @@ allowed-tools: Write Bash(mkdir *) Bash(./gradlew *) Read Agent
 
 `.claude/rules/architecture.md` 기준으로 아래 구조를 생성한다.
 
-**모듈 배치 (Gradle 멀티모듈)**: business·implement·storage는 `core`, application(Controller)은 `app`, 테스트는 `app/src/test`.
+**모듈 배치 (Gradle 멀티모듈)**
+
+| 계층 | 모듈 | 이유 |
+|------|------|------|
+| `business` · `implement` · `storage` | `core` | `app`·`admin`이 공유하는 도메인 로직 |
+| `application` (Controller·Request DTO) | `app` | core는 웹 계층을 모른다 |
+| 테스트 | `app/src/test` | 현행 관례 — 도메인 테스트는 전부 실행 모듈에 둔다 |
+
+베이스 패키지는 두 모듈 모두 `org.son.haruharu`로 동일하다 (`admin`만 `org.son.haruharu.admin`).
+어드민 전용 기능이면 이 스킬 대신 `admin/domain/{domain}/`에 4계층 전부를 만든다.
 
 ```
 core/src/main/java/org/son/haruharu/domain/{domain}/
@@ -62,41 +71,59 @@ app/src/test/java/org/son/haruharu/domain/{domain}/
 
 ### Step 3. 스텁 파일 생성
 
-패키지명은 `org.son.haruharu.domain.{domain}` 사용.
+패키지명은 모듈이 달라도 동일하게 `org.son.haruharu.domain.{domain}` 을 쓴다
+(`core`와 `app`이 같은 베이스 패키지를 공유하므로 컴포넌트 스캔이 그대로 동작한다).
 
-**`{Domain}Controller.java`**
+> **모듈이 다르면 import는 필수다.** `app`의 Controller에서 `core`의 Service·DTO를 쓸 때
+> 같은 `org.son.haruharu.domain.{domain}` 아래라도 하위 패키지가 다르므로 반드시 import한다.
+
+**`{Domain}Controller.java`** — `app` 모듈
 ```java
 package org.son.haruharu.domain.{domain}.application;
 
-import lombok.RequiredArgsConstructor;
-import org.son.haruharu.utils.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.son.haruharu.domain.{domain}.business.{Domain}Service;   // core 모듈 — import 필수
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "{도메인 한글명}", description = "{도메인 설명}")
 @RestController
-@RequestMapping("/api/{domain}")
-@RequiredArgsConstructor
+@RequestMapping("/api/v1/{domain}s")
 public class {Domain}Controller {
+
     private final {Domain}Service {domain}Service;
+
+    public {Domain}Controller({Domain}Service {domain}Service) {
+        this.{domain}Service = {domain}Service;
+    }
+
+    // 응답은 org.son.haruharu.common.ApiResponse 로 감싼다 (core 모듈).
+    // @Operation(summary = "...", description = "...")
+    // @GetMapping
+    // public ApiResponse<{Domain}Response> get(Authentication authentication) { ... }
 }
 ```
 
-**`{Domain}Service.java`**
+**`{Domain}Service.java`** — `core` 모듈
 ```java
 package org.son.haruharu.domain.{domain}.business;
 
-import lombok.RequiredArgsConstructor;
 import org.son.haruharu.domain.{domain}.implement.{Domain}Reader;
 import org.son.haruharu.domain.{domain}.implement.{Domain}Writer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class {Domain}Service {
+
     private final {Domain}Reader {domain}Reader;
     private final {Domain}Writer {domain}Writer;
+
+    public {Domain}Service({Domain}Reader {domain}Reader, {Domain}Writer {domain}Writer) {
+        this.{domain}Reader = {domain}Reader;
+        this.{domain}Writer = {domain}Writer;
+    }
 
     // 읽기 메서드: 클래스 기본 readOnly = true 상속
     // 쓰기 메서드: @Transactional 개별 추가
@@ -104,6 +131,8 @@ public class {Domain}Service {
     // public {Domain}Response create({Domain}CreateCommand command) { ... }
 }
 ```
+
+아래 implement·storage 스텁은 모두 `core` 모듈에 생성한다.
 
 **`{Domain}.java`** — 순수 도메인 객체 (JPA 없음)
 ```java
@@ -165,12 +194,15 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.{domain}.implement.{Domain};
 
+// BaseEntity 상속: createdAt/updatedAt 자동 관리 + deleted_at 기반 전역 soft-delete.
+// 감사 컬럼도 soft-delete도 불필요한 예외 케이스만 상속을 뺀다.
 @Entity
-@Table(name = "{domain}")
+@Table(name = "{domain}s")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class {Domain}Entity {
+public class {Domain}Entity extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -229,7 +261,7 @@ public class {Domain}RepositoryImpl implements {Domain}Repository {
 }
 ```
 
-**`{Domain}ServiceTest.java`**
+**`{Domain}ServiceTest.java`** — `app/src/test` (테스트 대상 Service는 `core`에 있다)
 ```java
 package org.son.haruharu.domain.{domain}.business;
 
@@ -282,7 +314,11 @@ Agent: domain-reviewer
 ./gradlew build
 ```
 
+멀티모듈이므로 루트에서 실행해 `core`·`app`·`admin`을 함께 검증한다.
+빠르게 확인하려면 `./gradlew :core:compileJava :app:compileJava`.
+
 컴파일 오류가 있으면 수정한다. 스텁 파일의 `UnsupportedOperationException`은 정상.
+**모듈 간 import 누락이 이 단계에서 가장 흔한 실패다** — `app`의 Controller가 `core`의 Service를 import했는지 확인.
 
 ### Step 6. 완료 보고
 
@@ -292,5 +328,8 @@ Agent: domain-reviewer
 ## Anti-Patterns (금지)
 
 - application 계층을 `core` 모듈에 생성 (Controller는 `app` 전용 — core는 웹 계층을 모른다)
+- Entity·Repository·Service를 `app` 모듈에 생성 (`admin`이 못 쓴다 — 도메인은 전부 `core`)
+- `core`에 필터·스케줄러·`@SpringBootApplication` 추가 (admin에 cron·STOMP가 딸려온다)
+- 모듈이 다른데 import 없이 클래스 참조 (같은 베이스 패키지라도 하위 패키지가 다르면 import 필수)
 - 스텁 단계에서 비즈니스 로직 미리 구현 (스캐폴딩은 구조만, 로직은 /bdd-implement에서)
 - domain-reviewer PASS 없이 완료 보고
