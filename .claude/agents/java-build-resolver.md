@@ -44,7 +44,6 @@ Gradle 멀티모듈: `core`(도메인·비즈니스) ← `app`(API 서버), `adm
 | `Circular dependency` | 생성자 주입 순환 | 구조 문제 — 중단하고 설계 대안 보고 |
 | `Failed to configure a DataSource` | .env 미로드, 프로퍼티 누락 | `.env` CRLF 여부 확인 (`tr -d '\r'`), `${}` 플레이스홀더 확인 |
 | Lombok 관련 컴파일 에러 | annotationProcessor 설정 | build.gradle의 `annotationProcessor 'org.projectlombok:lombok'` 확인 |
-| QueryDSL Q클래스 없음 | 생성 태스크 미실행 | `./gradlew clean compileJava`로 재생성 |
 
 ## 금지 사항
 

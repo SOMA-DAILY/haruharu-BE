@@ -1,7 +1,7 @@
 # Haruharu Backend
 
 ## Tech Stack
-Java 21 · Spring Boot 4.1.0 · Gradle Groovy DSL · PostgreSQL · JPA + QueryDSL
+Java 21 · Spring Boot 4.1.0 · Gradle Groovy DSL · PostgreSQL · JPA (Hibernate)
 OAuth2 (Kakao/Apple) · JWT · Spring Security · PASS 지연인증
 Base package: `org.son.haruharu`
 
