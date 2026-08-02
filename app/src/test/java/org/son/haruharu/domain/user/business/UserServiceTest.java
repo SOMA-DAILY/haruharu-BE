@@ -21,6 +21,8 @@ import org.son.haruharu.domain.profile.implement.DrinkingStatus;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.user.business.dto.OnboardingStatusResponse;
 import org.son.haruharu.domain.user.business.dto.UserProfileResponse;
+import org.son.haruharu.domain.user.business.exception.DemoProvisionPurchaseExistsException;
+import org.son.haruharu.domain.user.business.exception.DemoProvisionVerifiedUserException;
 import org.son.haruharu.domain.user.business.exception.InactiveUserException;
 import org.son.haruharu.domain.user.business.exception.OnboardingIncompleteException;
 import org.son.haruharu.domain.value.business.ValueService;
@@ -297,7 +299,7 @@ class UserServiceTest {
         given(identityService.isVerified(userId)).willReturn(true);
 
         assertThatThrownBy(() -> userService.provisionDemo(userId, "MALE", LocalDate.of(1995, 6, 15), 200L))
-            .isInstanceOf(IllegalStateException.class);
+            .isInstanceOf(DemoProvisionVerifiedUserException.class);
         then(userWriter).should(never()).save(any());
         then(identityService).should(never()).seedDemoIdentity(any(), any(), any());
         then(coinService).should(never()).grantDemoCoins(any(), org.mockito.ArgumentMatchers.anyLong());
@@ -312,7 +314,7 @@ class UserServiceTest {
         given(coinService.hasPurchaseHistory(userId)).willReturn(true);
 
         assertThatThrownBy(() -> userService.provisionDemo(userId, "MALE", LocalDate.of(1995, 6, 15), 200L))
-            .isInstanceOf(IllegalStateException.class);
+            .isInstanceOf(DemoProvisionPurchaseExistsException.class);
         then(userWriter).should(never()).save(any());
         then(identityService).should(never()).seedDemoIdentity(any(), any(), any());
         then(coinService).should(never()).grantDemoCoins(any(), org.mockito.ArgumentMatchers.anyLong());
