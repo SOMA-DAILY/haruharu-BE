@@ -5,39 +5,56 @@ paths:
 
 # Architecture: 도메인 기반 4계층
 
+## 모듈 구조 (Gradle 멀티모듈)
+
+`settings.gradle` → `include 'core', 'app', 'admin'`
+
+| 모듈 | 역할 | 산출물 |
+|------|------|--------|
+| `core` | 공유 라이브러리. 도메인 전체(business/implement/storage) + 공통·설정·인프라 어댑터 | `java-library` (boot jar 아님) |
+| `app` | 유저용 API 서버. HTTP·WebSocket(STOMP)·스케줄러·유저 시큐리티 | 실행형 boot jar |
+| `admin` | 운영 어드민 서버. core를 공유하되 유저용 웹소켓/스케줄러는 제외 | 실행형 boot jar |
+
+```
+app  → core     (implementation project(':core'))
+admin → core    (implementation project(':core'))
+app  ⇄ admin    금지 — 서로 참조하지 않는다
+```
+
+**core에 두지 않는 것 (중요):** `@SpringBootApplication`·스케줄러·웹/시큐리티 필터 빈.
+core에 두면 admin에 cron·STOMP가 딸려온다. 이 빈들은 각 실행 모듈(`app`/`admin`)이 가진다.
+
 ## 패키지 구조
 
 도메인 우선. 모든 코드는 `domain/{도메인명}/` 하위에 위치한다.
+**4계층은 모듈을 가로질러 나뉜다 — `application`은 실행 모듈에, 나머지 3계층은 `core`에 둔다.**
 
 ```
-src/main/java/org/son/haruharu/
+core/src/main/java/org/son/haruharu/
 ├── domain/
-│   └── {domain}/
-│       ├── application/                      # HTTP 진입점
-│       │   ├── {Domain}Controller.java       # @RestController
-│       │   └── dto/
-│       │       └── {Action}Request.java      # toCommand() 포함
-│       │
+│   └── {domain}/                             # ← application 계층 없음
 │       ├── business/                         # UseCase 명세 (흐름 조율만)
 │       │   ├── {Domain}Service.java          # @Service
 │       │   ├── command/                      # 입력 Command
 │       │   ├── dto/                          # 출력 Response DTO
-│       │   └── exception/                   # 비즈니스 규칙 위반 (extends BusinessException)
+│       │   └── exception/                    # 비즈니스 규칙 위반 (extends BusinessException)
 │       │
 │       ├── implement/                        # 실제 도메인 로직
 │       │   ├── {Domain}.java                 # 순수 도메인 객체 (JPA 없음)
 │       │   ├── {Domain}Repository.java       # 포트 인터페이스 (도메인 계약, JPA 무관)
 │       │   ├── {Domain}Reader.java           # @Component 읽기
 │       │   ├── {Domain}Writer.java           # @Component 쓰기
-│       │   └── exception/                   # 도메인 불변식 위반 (extends BusinessException)
+│       │   └── exception/                    # 도메인 불변식 위반 (extends BusinessException)
 │       │
 │       └── storage/                          # 영속성
 │           ├── {Domain}Entity.java           # @Entity + from() / toDomain()
 │           ├── {Domain}JpaRepository.java    # JpaRepository<Entity, ID>
 │           ├── {Domain}RepositoryImpl.java   # implements {Domain}Repository (DIP 구현체)
-│           └── exception/                   # 영속성 조회 실패 (extends BusinessException)
+│           └── exception/                    # 영속성 조회 실패 (extends BusinessException)
 │
 ├── common/
+│   ├── ApiResponse.java · ApiErrorDetail.java
+│   ├── crypto/ · entity/ · time/
 │   └── exception/
 │       ├── BadRequestException.java          # abstract, 400
 │       ├── NotFoundException.java            # abstract, 404
@@ -45,18 +62,56 @@ src/main/java/org/son/haruharu/
 │       ├── ForbiddenException.java           # abstract, 403
 │       └── ConflictException.java            # abstract, 409
 │
-├── infrastructure/                           # 외부 시스템 어댑터 (OAuth 등)
-├── config/
+├── config/                                   # @ConfigurationProperties·Clock·JPA 등 공유 설정
+├── infrastructure/                           # 외부 시스템 어댑터 (oauth·pass·revenuecat·fcm·s3)
+└── utils/                                    # JwtProvider·MaskingUtils 등
+
+app/src/main/java/org/son/haruharu/
+├── HaruharuApplication.java                  # @SpringBootApplication
+├── domain/
+│   └── {domain}/
+│       └── application/                      # HTTP 진입점 — 이 모듈에는 이 계층만 둔다
+│           ├── {Domain}Controller.java       # @RestController
+│           └── dto/
+│               └── {Action}Request.java      # toCommand() 포함
+├── config/                                   # Security·WebSocket·Scheduling·필터·OpenApi
 ├── handler/                                  # @RestControllerAdvice (GlobalExceptionHandler)
-└── utils/
+├── infrastructure/scheduler/                 # cron (매칭 확정 등)
+├── demo/                                     # 데모 시드·리셋 (@Profile("!prod"))
+└── devsupport/                               # 개발 편의 API (운영 제외)
+
+admin/src/main/java/org/son/haruharu/admin/
+├── AdminApplication.java                     # @SpringBootApplication
+├── domain/{account,dashboard,payment,product,room,user}/
+│                                             # 어드민 전용 도메인은 4계층 전부 이 모듈에 둔다
+├── common/ · config/ · handler/ · security/ · bootstrap/
 ```
+
+**어느 모듈에 쓸지 판정:**
+
+| 만드는 것 | 위치 |
+|-----------|------|
+| Controller·Request DTO (유저 API) | `app/domain/{domain}/application/` |
+| Service·Command·Response·Reader·Writer·Entity·Repository | `core/domain/{domain}/` |
+| 외부 시스템 어댑터(OAuth·S3·FCM…) | `core/infrastructure/` |
+| 필터·스케줄러·SecurityConfig·WebSocketConfig | `app/config/`, `app/infrastructure/scheduler/` |
+| 어드민 전용 조회·관리 기능 | `admin/domain/{domain}/` 4계층 전부 |
+
+**어드민 전용 도메인 규칙:** `admin/`은 core 도메인 객체·Entity를 읽어 조인 조회하는 것을 허용한다
+(예: `AdminUserQueryRepository`가 `UserEntity`·`CoinWalletEntity`·`RoomMemberEntity`를 함께 조회).
+어드민은 여러 도메인을 가로지르는 조회가 본질이므로, core에 어드민 전용 쿼리를 넣지 말고
+`admin/domain/{domain}/storage/`에 `Admin*QueryRepository`로 둔다.
 
 ## 의존성 방향 (단방향 + DIP)
 
 ```
 application → business → implement → storage
+  (app)         └───────── core ─────────┘
                                   ←  storage (implements {Domain}Repository)
 ```
+
+모듈이 갈려도 계층 방향은 동일하다. `app`의 Controller는 `core`의 Service만 호출하고,
+`core`의 implement/storage를 건너뛰어 직접 주입받지 않는다.
 
 `storage/`가 `implement/`의 Repository 인터페이스를 구현하는 것은 DIP(의존성 역전 원칙)의 올바른 적용이다.
 고수준 모듈(implement/도메인)이 인터페이스를 정의하고, 저수준 모듈(storage/인프라)이 구현한다.
@@ -179,7 +234,7 @@ public class UserEntity {
 
 ## 도메인 경계 (확정 2026-06-21)
 
-ERD 테이블을 관심사 기준으로 5개 최상위 도메인으로 분리한다.
+ERD 테이블을 관심사 기준으로 5개 최상위 도메인으로 분리한다. (경로는 `core/src/main/java/org/son/haruharu/domain/`)
 
 ```
 domain/
@@ -204,10 +259,11 @@ domain/
 
 ## 외부 시스템 (OAuth 등)
 
-포트 인터페이스는 `infrastructure/` 안에서 정의하고 구현한다.
+포트 인터페이스는 `core/src/main/java/org/son/haruharu/infrastructure/` 안에서 정의하고 구현한다.
+`app`/`admin`이 공유해야 하므로 실행 모듈에 두지 않는다. (현재: `oauth` · `pass` · `revenuecat` · `fcm` · `s3`)
 
 ```java
-// infrastructure/oauth/KakaoOAuthPort.java
+// core: infrastructure/oauth/KakaoOAuthPort.java
 public interface KakaoOAuthPort {
     KakaoUserInfo getUserInfo(String authCode);
 }
@@ -219,7 +275,10 @@ public class KakaoOAuthAdapter implements KakaoOAuthPort { ... }
 
 ## Controller → Service 흐름
 
+Controller는 `app`(또는 `admin`), Service는 `core`에 있다. 모듈이 다를 뿐 호출 형태는 동일하다.
+
 ```java
+// app: domain/auth/application/AuthController.java
 @PostMapping("/login")
 public ApiResponse<TokenResponse> login(@RequestBody KakaoLoginRequest request) {
     return ApiResponse.ok(authService.loginWithKakao(request.toCommand()));
