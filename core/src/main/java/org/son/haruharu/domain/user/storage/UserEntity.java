@@ -32,6 +32,7 @@ public class UserEntity extends BaseEntity {
         entity.id = user.id();
         entity.status = user.status();
         entity.demoMode = user.demoMode();
+        entity.createdAt = user.createdAt();
         return entity;
     }
 

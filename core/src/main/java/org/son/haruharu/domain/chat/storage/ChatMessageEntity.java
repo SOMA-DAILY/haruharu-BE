@@ -38,6 +38,7 @@ public class ChatMessageEntity extends BaseEntity {
         entity.chatRoomId = message.chatRoomId();
         entity.senderId = message.senderId();
         entity.content = message.content();
+        entity.createdAt = message.createdAt();
         return entity;
     }
 

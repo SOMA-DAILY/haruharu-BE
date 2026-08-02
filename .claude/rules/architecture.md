@@ -222,6 +222,35 @@ public class UserEntity {
 }
 ```
 
+**왕복이 맞아야 한다 — `toDomain()`이 읽는 필드는 `from()`도 복원한다.**
+특히 `BaseEntity`의 감사 컬럼(`createdAt`)을 도메인 객체가 보유한다면 `from()`에서 반드시 세팅한다.
+
+```java
+// PASS — 왕복 성립: from(x).toDomain() 이 x와 같은 createdAt을 갖는다
+public static UserEntity from(User user) {
+    var entity = new UserEntity();
+    entity.id = user.id();
+    entity.status = user.status();
+    entity.createdAt = user.createdAt();   // ← BaseEntity의 protected 필드
+    return entity;
+}
+
+// FAIL — toDomain()은 createdAt을 읽는데 from()이 안 넣음
+public static UserEntity from(User user) {
+    var entity = new UserEntity();
+    entity.id = user.id();
+    entity.status = user.status();
+    return entity;                          // createdAt = null
+}
+```
+
+빠뜨려도 DB는 안 깨진다(`@Column(updatable = false)`라 UPDATE SQL에서 제외). 대신 **`save()`가 돌려주는
+객체의 `createdAt`이 null이 되고, 호출부가 넘긴 인자는 조용히 버려진다** — 코드만 봐서는 알 수 없는 죽은 코드가 된다.
+실제로 `ChatService.sendMessage`는 `save()` 반환값의 `createdAt`을 STOMP 브로드캐스트 `sentAt`으로 내보낸다(#290).
+
+> 회귀 방지: `EntityAuditColumnRoundTripTest`가 대상 엔티티의 왕복을 검증한다.
+> 도메인 객체에 `createdAt`을 추가하는 엔티티가 생기면 그 테스트에도 케이스를 추가한다.
+
 ## JPA 성능 패턴 (storage 계층 작성 시)
 
 - **연관관계 기본 LAZY.** 컬렉션 `FetchType.EAGER` 금지 — N+1의 주범.

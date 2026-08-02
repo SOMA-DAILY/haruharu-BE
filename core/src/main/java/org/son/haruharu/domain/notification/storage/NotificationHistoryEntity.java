@@ -56,6 +56,7 @@ public class NotificationHistoryEntity extends BaseEntity {
         entity.body = history.body();
         entity.payloadJson = payloadJson;
         entity.isRead = history.isRead();
+        entity.createdAt = history.createdAt();
         return entity;
     }
 
