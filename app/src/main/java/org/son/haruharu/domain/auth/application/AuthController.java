@@ -38,7 +38,10 @@ public class AuthController {
 
     @Operation(summary = "액세스 토큰 갱신",
             description = "refresh_token으로 새 access_token·refresh_token을 재발급한다(리프레시 재사용 탐지). "
-                    + "유효하지 않거나 만료된 토큰이면 401(AUTH_INVALID_REFRESH_TOKEN), 저장된 토큰이 없으면 404(REFRESH_TOKEN_NOT_FOUND).")
+                    + "JWT가 유효하지 않거나, 만료됐거나, 저장된 토큰이 없거나, 이미 폐기된 경우 모두 "
+                    + "401(AUTH_INVALID_REFRESH_TOKEN)로 응답한다 — 계정 열거·토큰 대조에 악용되지 않도록 사유를 구분하지 않는다. "
+                    + "이미 폐기된 토큰이 오면 탈취로 보고 해당 유저의 전 세션을 무효화한다. "
+                    + "비활성 계정이면 403(AUTH_INACTIVE_MEMBER).")
     @PostMapping("/token/refresh")
     public ResponseEntity<ApiResponse<AuthTokenResponse>> refresh(@RequestBody @Valid TokenRefreshRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(authService.refresh(request.toCommand())));
