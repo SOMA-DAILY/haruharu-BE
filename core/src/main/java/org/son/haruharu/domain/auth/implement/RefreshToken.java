@@ -9,6 +9,13 @@ public record RefreshToken(
         LocalDateTime expiresAt,
         LocalDateTime revokedAt
 ) {
+    /**
+     * 만료 판정은 주입 Clock이 아니라 시스템 시각 기준이다(#296, AuthService 클래스 주석 참조).
+     * expiresAt 자체가 시스템 시각으로 계산돼 저장되므로 판정도 같은 기준을 써야 한다.
+     * local·dev의 AdjustableClock(#180)으로 가상 시각을 옮겨도 토큰 만료는 실시간을 따른다 —
+     * 시각을 앞당겨 방 진행을 테스트하는 동안 로그인이 풀리지 않게 하려는 의도다.
+     * 그래서 만료 시나리오 테스트는 시각을 옮기는 대신 expiresAt을 과거로 세팅해 만든다.
+     */
     public boolean isExpired() {
         return expiresAt.isBefore(LocalDateTime.now());
     }
