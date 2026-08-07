@@ -37,8 +37,10 @@ public class CoinController {
     @GetMapping("/ledger")
     public ApiResponse<LedgerPageResponse> getLedger(
             Authentication authentication,
+            // Long으로 받아 숫자가 아닌 커서를 Spring이 400(INVALID_TYPE)으로 거른다(#304).
+            // String으로 받으면 Service의 파싱에서 NumberFormatException → catch-all 500이 된다.
             @Parameter(description = "이전 페이지 마지막 항목 id(커서). 첫 페이지는 생략", example = "1024")
-            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Long cursor,
             @Parameter(description = "페이지 크기(기본 20)", example = "20")
             @RequestParam(defaultValue = "20") int size
     ) {
