@@ -45,6 +45,7 @@ class DemoMatchResultApiIntegrationTest {
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired ChatService chatService;
     @Autowired ProfileService profileService;
+    @Autowired org.son.haruharu.domain.coin.business.CoinService coinService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
@@ -72,6 +73,8 @@ class DemoMatchResultApiIntegrationTest {
                 .toDomain().id();
         // 리뷰어 계정도 온보딩을 마친 실계정이므로 프로필이 있다 — 채팅 송신이 발신자 닉네임을 요구한다.
         profileService.seedDemoProfile(userId, "리뷰어", "서울", "https://picsum.photos/seed/haruharu-demo-reviewer/600/800");
+        // 지갑은 가입 시점에 생성된다(#298). 이 헬퍼는 가입 경로를 타지 않으므로 직접 만든다.
+        coinService.createWallet(userId);
         return userId;
     }
 

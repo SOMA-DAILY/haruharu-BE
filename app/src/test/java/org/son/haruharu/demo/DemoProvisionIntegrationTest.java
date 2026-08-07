@@ -79,6 +79,8 @@ class DemoProvisionIntegrationTest {
     @DisplayName("실결제(PURCHASE) 이력이 있는 계정은 데모 프로비저닝을 거부하고 아무것도 바꾸지 않는다(#277)")
     void givenPurchaseHistory_whenProvision_thenRejectedAndUnchanged() {
         Long userId = saveUser();
+        // 지갑은 가입 시점에 생성된다(#298). saveUser는 가입 경로를 타지 않으므로 직접 만든다.
+        coinService.createWallet(userId);
         // 실경로로 IAP 구매 원장을 남긴다(reason=PURCHASE).
         coinService.credit(org.son.haruharu.domain.coin.business.command.CoinCreditCommand
                 .purchase(userId, 100L, "IAP", "txn-1"));

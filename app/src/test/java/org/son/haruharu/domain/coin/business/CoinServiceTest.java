@@ -53,7 +53,8 @@ class CoinServiceTest {
     @DisplayName("첫 가입 보너스 미지급 상태면 REWARD 버킷에 SIGNUP_BONUS로 설정값만큼 적립한다")
     void givenNoSignupBonus_whenGrant_thenCreditsReward() {
         given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.SIGNUP_BONUS)).willReturn(false);
-        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.empty());
+        // 지갑은 가입 시점에 생성되므로 적립 경로는 항상 존재하는 지갑을 락 조회한다(#298).
+        given(coinWalletReader.getByUserIdForUpdate(userId)).willReturn(CoinWallet.init(userId));
 
         coinService.grantSignupBonus(userId);
 
@@ -82,7 +83,7 @@ class CoinServiceTest {
         Long roomId = 10L;
         given(coinLedgerReader.existsByUserIdAndReasonAndRefId(
                 userId, CoinLedgerReason.MATCH_CONSOLATION, roomId.toString())).willReturn(false);
-        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.empty());
+        given(coinWalletReader.getByUserIdForUpdate(userId)).willReturn(CoinWallet.init(userId));
 
         boolean granted = coinService.grantMatchConsolation(userId, roomId, 5L);
 
@@ -129,7 +130,7 @@ class CoinServiceTest {
     void givenWallet_whenCredit_thenSaveWalletAndAppendLedger() {
         // given
         CoinWallet wallet = new CoinWallet(1L, userId, 0, 0, null);
-        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.of(wallet));
+        given(coinWalletReader.getByUserIdForUpdate(userId)).willReturn(wallet);
 
         // when
         coinService.credit(new CoinCreditCommand(
@@ -151,7 +152,7 @@ class CoinServiceTest {
     void givenRewardAndPaid_whenSpend_thenTwoLedgerEntries() {
         // given — 유료100·리워드50에서 80 소모 → 리워드50 + 유료30
         CoinWallet wallet = new CoinWallet(1L, userId, 100, 50, null);
-        given(coinWalletReader.getByUserId(userId)).willReturn(wallet);
+        given(coinWalletReader.getByUserIdForUpdate(userId)).willReturn(wallet);
 
         // when
         coinService.spend(new CoinSpendCommand(
@@ -175,7 +176,7 @@ class CoinServiceTest {
     @DisplayName("환불 회수 시 PAID를 차감하고 차감 후 총 잔액을 balance_after로 원장에 기록한다")
     void givenWallet_whenRevoke_thenAppendsLedgerWithSnapshot() {
         // paid=100, reward=20 (총 120) → 30 회수 → paid 70, 총 잔액 90
-        given(coinWalletReader.getByUserId(userId)).willReturn(new CoinWallet(1L, userId, 100, 20, null));
+        given(coinWalletReader.getByUserIdForUpdate(userId)).willReturn(new CoinWallet(1L, userId, 100, 20, null));
 
         coinService.revoke(new CoinRevokeCommand(userId, 30, "REFUND", "ref-x"));
 
@@ -190,7 +191,7 @@ class CoinServiceTest {
     @DisplayName("지갑이 없는 사용자가 소모를 시도하면 CoinWalletNotFoundException이 발생한다")
     void givenNoWallet_whenSpend_thenThrows() {
         // given
-        given(coinWalletReader.getByUserId(userId)).willThrow(new CoinWalletNotFoundException());
+        given(coinWalletReader.getByUserIdForUpdate(userId)).willThrow(new CoinWalletNotFoundException());
 
         // when & then
         assertThatThrownBy(() -> coinService.spend(new CoinSpendCommand(
@@ -210,7 +211,7 @@ class CoinServiceTest {
     @DisplayName("데모 지급 미이력이면 REWARD 버킷에 DEMO_GRANT로 지정 수량을 적립한다")
     void givenNoDemoGrant_whenGrantDemoCoins_thenCreditsReward() {
         given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)).willReturn(false);
-        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.empty());
+        given(coinWalletReader.getByUserIdForUpdate(userId)).willReturn(CoinWallet.init(userId));
 
         coinService.grantDemoCoins(userId, 200L);
 
@@ -237,7 +238,10 @@ class CoinServiceTest {
     void givenSpentDemoWallet_whenReset_thenClearsLedgerAndReseeds() {
         // 기존 지갑(리워드 50)이 있는 상태. 원장을 비웠으므로 멱등 가드를 통과해 재지급된다.
         CoinWallet existing = new CoinWallet(9L, userId, 0L, 50L, null);
-        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.of(existing));
+        // createWallet의 존재 확인(soft-delete 포함) → 초기화 대상 조회 → 재지급 시 락 조회 순으로 쓰인다(#298).
+        given(coinWalletReader.existsIncludingDeleted(userId)).willReturn(true);
+        given(coinWalletReader.getByUserId(userId)).willReturn(existing);
+        given(coinWalletReader.getByUserIdForUpdate(userId)).willReturn(existing.resetToZero());
         given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)).willReturn(false);
 
         coinService.resetDemoWallet(userId, 200L);

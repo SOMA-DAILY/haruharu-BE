@@ -30,6 +30,7 @@ class UploadRewardIntegrationTest {
     @Autowired VideoPostJpaRepository videoPostJpaRepository;
     @Autowired DailyUploadRewardJpaRepository dailyUploadRewardJpaRepository;
     @Autowired CoinWalletReader coinWalletReader;
+    @Autowired org.son.haruharu.domain.coin.business.CoinService coinService;
     @Autowired JdbcTemplate jdbcTemplate;
 
     @BeforeEach
@@ -56,6 +57,8 @@ class UploadRewardIntegrationTest {
     void givenDay1AllSlots_whenGrant_thenCreditsOnceIdempotent() {
         Long userId = 700L;
         Long memberId = seedMember(userId);
+        // 지갑은 가입 시점에 생성된다(#298). 이 테스트는 가입 경로를 타지 않으므로 직접 만든다.
+        coinService.createWallet(userId);
         for (int slot = 1; slot <= 5; slot++) {
             seedUpload(memberId, 1, slot);
         }

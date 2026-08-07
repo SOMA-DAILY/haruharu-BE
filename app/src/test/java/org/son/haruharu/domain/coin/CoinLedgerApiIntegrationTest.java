@@ -47,6 +47,8 @@ class CoinLedgerApiIntegrationTest {
     @DisplayName("이용내역 조회 시 각 거래의 거래 후 잔액(balance_after)이 함께 반환된다")
     void givenTransactions_whenGetLedger_thenEachItemHasBalanceAfter() throws Exception {
         Long userId = 500L;
+        // 지갑은 가입 시점에 생성된다(#298). 이 테스트는 가입 경로를 타지 않으므로 직접 만든다.
+        coinService.createWallet(userId);
         // 유료 100 적립 → 잔액 100
         coinService.credit(new CoinCreditCommand(
                 userId, CoinBucket.PAID, 100, CoinLedgerReason.PURCHASE, "IAP", "r1"));

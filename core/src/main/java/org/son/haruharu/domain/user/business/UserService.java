@@ -71,7 +71,10 @@ public class UserService {
      */
     @Transactional
     public Long createDemoVirtualAccount() {
-        return userWriter.save(new User(null, UserStatus.ACTIVE, null, true)).id();
+        Long userId = userWriter.save(new User(null, UserStatus.ACTIVE, null, true)).id();
+        // 잔액 변경 경로가 지갑 존재를 전제하므로 유저 생성 경로는 모두 지갑을 만든다(#298).
+        coinService.createWallet(userId);
+        return userId;
     }
 
     /** 데모 계정 여부. 데모 전용 파괴적 조작(리셋 등) 호출부의 이중 방어 가드용(#267). */
@@ -171,6 +174,8 @@ public class UserService {
             userWriter.save(new User(user.id(), UserStatus.ACTIVE, user.createdAt(), true));
         }
         identityService.seedDemoIdentity(userId, gender, birthday);
+        // env로 받은 대상 유저가 지갑 없이 존재할 수 있어(백필 이전 가입자 등) 지급 전에 보장한다(#298).
+        coinService.createWallet(userId);
         coinService.grantDemoCoins(userId, coins);
     }
 }

@@ -48,6 +48,25 @@ public class CoinService {
     }
 
     /**
+     * 지갑 생성(가입 시점). 이미 있으면 아무것도 하지 않는다(멱등).
+     * <p>
+     * 잔액 변경 경로(credit·spend·revoke)가 "지갑은 항상 존재한다"를 전제하므로(#298) 유저를 만드는
+     * 모든 경로가 이걸 호출해야 한다. 예전에는 첫 가입 보너스 지급의 부수효과로 지갑이 생겨서,
+     * 보너스를 받지 않는 복귀 유저(#245)와 데모 가상 계정(#272)은 지갑 없이 시작했다.
+     * <p>
+     * 존재 확인에 일반 조회가 아니라 soft-delete 포함 조회를 쓴다 — user_id 유니크 제약은 죽은 행에도
+     * 걸리므로, 탈퇴로 soft-delete된 지갑이 남은 계정에 일반 조회로 판단해 INSERT하면 제약 위반이 난다
+     * (탈퇴 후 재프로비저닝되는 데모 계정이 실제로 이 상태다).
+     */
+    @Transactional
+    public void createWallet(Long userId) {
+        if (coinWalletReader.existsIncludingDeleted(userId)) {
+            return;
+        }
+        coinWalletWriter.save(CoinWallet.init(userId));
+    }
+
+    /**
      * 첫 가입 보너스 지급. 유저당 1회만 지급되며(원장에 SIGNUP_BONUS 존재 시 skip), 재호출·재로그인에도 중복 지급되지 않는다.
      */
     @Transactional
@@ -94,8 +113,9 @@ public class CoinService {
     @Transactional
     public void resetDemoWallet(Long userId, long amount) {
         coinLedgerWriter.deleteByUserId(userId);
-        coinWalletReader.findByUserId(userId)
-                .ifPresent(wallet -> coinWalletWriter.save(wallet.resetToZero()));
+        // 지갑이 없던 계정(백필 이전 가입자 등)도 리셋 대상이 될 수 있어 먼저 보장한다(#298).
+        createWallet(userId);
+        coinWalletWriter.save(coinWalletReader.getByUserId(userId).resetToZero());
         grantDemoCoins(userId, amount);
     }
 
@@ -127,11 +147,13 @@ public class CoinService {
         return new LedgerPageResponse(items, nextCursor);
     }
 
-    /** 코인 적립. 지갑이 없으면 새로 생성해 적립한다. */
+    /**
+     * 코인 적립. 지갑에 행 배타 락을 걸고 갱신한다(#298) — 같은 유저에 대한 동시 적립·소모가
+     * 서로의 갱신을 덮어쓰지 못하게 한다. 지갑은 가입 시점에 생성되므로 없으면 불변식 위반이다.
+     */
     @Transactional
     public void credit(CoinCreditCommand command) {
-        CoinWallet wallet = coinWalletReader.findByUserId(command.userId())
-                .orElseGet(() -> CoinWallet.init(command.userId()));
+        CoinWallet wallet = coinWalletReader.getByUserIdForUpdate(command.userId());
         CoinWallet credited = wallet.credit(command.bucket(), command.amount());
         coinWalletWriter.save(credited);
         coinLedgerWriter.append(CoinLedger.of(
@@ -144,7 +166,7 @@ public class CoinService {
     /** 코인 소모(리워드 먼저). 차감된 버킷마다 원장 항목을 남긴다. balanceAfter는 각 항목 적용 후의 총 잔액(순차). */
     @Transactional
     public void spend(CoinSpendCommand command) {
-        CoinWallet wallet = coinWalletReader.getByUserId(command.userId());
+        CoinWallet wallet = coinWalletReader.getByUserIdForUpdate(command.userId());
         CoinSpend spend = wallet.spendRewardFirst(command.amount());
         coinWalletWriter.save(spend.wallet());
 
@@ -190,7 +212,7 @@ public class CoinService {
     /** 코인 환불 회수. PAID 잔액에서 차감(음수 허용)하고 원장에 기록한다. */
     @Transactional
     public void revoke(CoinRevokeCommand command) {
-        CoinWallet wallet = coinWalletReader.getByUserId(command.userId());
+        CoinWallet wallet = coinWalletReader.getByUserIdForUpdate(command.userId());
         CoinWallet revoked = wallet.revokePaid(command.amount());
         coinWalletWriter.save(revoked);
         coinLedgerWriter.append(CoinLedger.of(

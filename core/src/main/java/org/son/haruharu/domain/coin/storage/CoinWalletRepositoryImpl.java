@@ -19,6 +19,16 @@ public class CoinWalletRepositoryImpl implements CoinWalletRepository {
     }
 
     @Override
+    public Optional<CoinWallet> findByUserIdForUpdate(Long userId) {
+        return jpaRepository.findByUserIdForUpdate(userId).map(CoinWalletEntity::toDomain);
+    }
+
+    @Override
+    public boolean existsIncludingDeleted(Long userId) {
+        return jpaRepository.countByUserIdIncludingDeleted(userId) > 0;
+    }
+
+    @Override
     public CoinWallet save(CoinWallet wallet) {
         return jpaRepository.save(CoinWalletEntity.from(wallet)).toDomain();
     }
