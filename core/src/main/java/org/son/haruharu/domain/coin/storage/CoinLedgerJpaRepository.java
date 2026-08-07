@@ -26,5 +26,5 @@ public interface CoinLedgerJpaRepository extends JpaRepository<CoinLedgerEntity,
     // 리셋 경로는 삭제한 원장을 이후 재조회하지 않아 stale 문제도 없다.
     @Modifying
     @Query("delete from CoinLedgerEntity c where c.userId = :userId")
-    void deleteByUserId(@Param("userId") Long userId);
+    int deleteByUserId(@Param("userId") Long userId);
 }
