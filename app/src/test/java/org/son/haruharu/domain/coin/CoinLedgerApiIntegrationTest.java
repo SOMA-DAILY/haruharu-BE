@@ -67,4 +67,30 @@ class CoinLedgerApiIntegrationTest {
                 .andExpect(jsonPath("$.data.items[?(@.delta == -50)].balance_after").value(hasItem(100)))
                 .andExpect(jsonPath("$.data.items[?(@.delta == -30)].balance_after").value(hasItem(70)));
     }
+
+    @Test
+    @DisplayName("숫자가 아닌 커서로 조회하면 400을 반환한다 — 서버 오류(500)가 아니다")
+    void givenNonNumericCursor_whenGetLedger_thenBadRequest() throws Exception {
+        Long userId = 501L;
+        coinService.createWallet(userId);
+
+        mockMvc.perform(get("/api/v1/coin/ledger").param("cursor", "abc")
+                        .with(authentication(auth(userId))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.error.code").value("INVALID_TYPE"));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 커서 id로 조회하면 첫 페이지를 반환한다")
+    void givenUnknownCursor_whenGetLedger_thenReturnsFirstPage() throws Exception {
+        Long userId = 502L;
+        coinService.createWallet(userId);
+        coinService.credit(CoinCreditCommand.matchRefund(userId, 10, "MATCH", "r1"));
+
+        mockMvc.perform(get("/api/v1/coin/ledger").param("cursor", "99999999")
+                        .with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1));
+    }
 }

@@ -134,8 +134,12 @@ public class CoinService {
         return WalletResponse.from(wallet);
     }
 
-    /** 코인 내역 조회(최신순 커서 페이징). */
-    public LedgerPageResponse getLedger(Long userId, String cursor, int size) {
+    /**
+     * 코인 내역 조회(최신순 커서 페이징).
+     * cursor는 Long으로 받는다 — 숫자가 아닌 값은 Controller 바인딩 단계에서 400으로 걸러진다(#304).
+     * 응답의 nextCursor는 클라이언트 호환을 위해 String을 유지한다.
+     */
+    public LedgerPageResponse getLedger(Long userId, Long cursor, int size) {
         LocalDateTime before = resolveCursor(cursor);
         List<CoinLedger> rows = coinLedgerReader.findPage(userId, before, size + 1);
 
@@ -220,11 +224,12 @@ public class CoinService {
                 CoinLedgerReason.REFUND_REVOKE, command.refType(), command.refId(), LocalDateTime.now()));
     }
 
-    private LocalDateTime resolveCursor(String cursor) {
-        if (cursor == null || cursor.isBlank()) {
+    /** 커서 id로 기준 시각을 찾는다. 없는 id면 null을 반환해 첫 페이지로 되돌린다. */
+    private LocalDateTime resolveCursor(Long cursor) {
+        if (cursor == null) {
             return null;
         }
-        return coinLedgerReader.findById(Long.parseLong(cursor))
+        return coinLedgerReader.findById(cursor)
                 .map(CoinLedger::createdAt)
                 .orElse(null);
     }
