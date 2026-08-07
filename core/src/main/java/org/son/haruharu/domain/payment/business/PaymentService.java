@@ -16,6 +16,7 @@ import org.son.haruharu.domain.payment.implement.IapPurchaseWriter;
 import org.son.haruharu.domain.payment.implement.IapWebhookEvent;
 import org.son.haruharu.domain.payment.implement.IapWebhookEventReader;
 import org.son.haruharu.domain.payment.implement.IapWebhookEventWriter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * 결제 감사 로그 방침(#302): 돈이 오가는 경로라 webhook 수신·적립·회수·멱등 skip을 모두 남긴다.
+ * rawPayload는 남기지 않는다 — 이미 iap_webhook_event.payload에 원문이 있고 구매자 정보가 섞일 수 있다.
+ * 인증 실패는 GlobalExceptionHandler가 401 warn으로 남기므로 여기서 중복 기록하지 않는다.
+ */
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class PaymentService {
@@ -74,13 +81,22 @@ public class PaymentService {
     @Transactional
     public void handleWebhook(IapWebhookCommand command) {
         if (iapWebhookEventReader.isProcessed(command.eventId())) {
+            log.info("iap webhook-skip reason=DUPLICATE_EVENT eventId={} type={}",
+                    command.eventId(), command.eventType());
             return;
         }
+        log.info("iap webhook-received eventId={} type={}", command.eventId(), command.eventType());
 
         Long purchaseId = switch (command.eventType()) {
             case TYPE_PURCHASE, TYPE_INITIAL_PURCHASE -> handlePurchase(command);
             case TYPE_CANCELLATION -> handleCancellation(command);
-            default -> null;
+            // 코인 적립·회수와 무관한 타입(RENEWAL·EXPIRATION·BILLING_ISSUE 등)은 기록만 하고 넘긴다.
+            // 조용히 삼키면 새 타입 유입이나 처리 누락을 눈치채지 못하므로 warn으로 남긴다(#302).
+            default -> {
+                log.warn("iap webhook-unhandled eventId={} type={} — 기록만 하고 코인 처리는 하지 않는다",
+                        command.eventId(), command.eventType());
+                yield null;
+            }
         };
 
         iapWebhookEventWriter.append(IapWebhookEvent.of(
@@ -91,6 +107,8 @@ public class PaymentService {
         // 거래 단위 멱등 — 동일 transaction 재수신 시 중복 적립 방지
         Optional<IapPurchase> existing = iapPurchaseReader.findByStoreTransactionId(command.storeTransactionId());
         if (existing.isPresent()) {
+            log.info("iap webhook-skip reason=DUPLICATE_TRANSACTION eventId={} purchaseId={} txn={}",
+                    command.eventId(), existing.get().id(), command.storeTransactionId());
             return existing.get().id();
         }
 
@@ -103,6 +121,11 @@ public class PaymentService {
                 command.store(), totalCoins, command.purchasedAt()));
 
         coinService.credit(CoinCreditCommand.purchase(userId, totalCoins, REF_TYPE, saved.id().toString()));
+        // 적립은 CoinService 로그(coin credit ... ref=IAP_PURCHASE:{id})에도 남는다.
+        // 여기서는 그 ref를 결제 이벤트·거래와 이어주는 정보를 남겨, 두 로그가 purchaseId로 연결되게 한다.
+        log.info("iap purchase userId={} purchaseId={} product={} coins={} txn={} eventId={}",
+                userId, saved.id(), command.storeProductId(), totalCoins,
+                command.storeTransactionId(), command.eventId());
         // 커밋 후 발송 — 결제 완료 통지 푸시 실패가 충전 처리를 롤백시키지 않도록
         eventPublisher.publishEvent(new PaymentCompletedEvent(userId, totalCoins));
         return saved.id();
@@ -122,6 +145,10 @@ public class PaymentService {
     private Long handleCancellation(IapWebhookCommand command) {
         Optional<IapPurchase> found = iapPurchaseReader.findByStoreTransactionId(command.storeTransactionId());
         if (found.isEmpty() || !found.get().isOwned()) {
+            // 구매 기록이 없거나 이미 환불된 건 — 재수신이거나 우리가 처리한 적 없는 거래다.
+            log.warn("iap refund-skip reason={} eventId={} txn={}",
+                    found.isEmpty() ? "PURCHASE_NOT_FOUND" : "ALREADY_REFUNDED",
+                    command.eventId(), command.storeTransactionId());
             return found.map(IapPurchase::id).orElse(null);
         }
 
@@ -129,6 +156,10 @@ public class PaymentService {
         IapPurchase refunded = iapPurchaseWriter.save(purchase.refunded(LocalDateTime.now()));
         coinService.revoke(new CoinRevokeCommand(
                 purchase.userId(), purchase.coinAmount(), REF_TYPE, purchase.id().toString()));
+        // 환불 회수는 분쟁 문의가 가장 잦은 경로다. 회수 결과 잔액은 CoinService revoke 로그에 남는다.
+        log.info("iap refund userId={} purchaseId={} coins={} txn={} eventId={}",
+                purchase.userId(), purchase.id(), purchase.coinAmount(),
+                command.storeTransactionId(), command.eventId());
         return refunded.id();
     }
 }
