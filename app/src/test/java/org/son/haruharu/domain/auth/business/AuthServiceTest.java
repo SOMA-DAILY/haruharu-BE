@@ -33,10 +33,7 @@ import org.son.haruharu.infrastructure.oauth.OAuthUserInfo;
 import org.son.haruharu.utils.JwtProvider;
 import org.son.haruharu.utils.TokenHashUtils;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,19 +60,17 @@ class AuthServiceTest {
     @Mock RefreshTokenWriter refreshTokenWriter;
     @Mock JwtProvider jwtProvider;
 
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private final Clock clock = Clock.fixed(
-        ZonedDateTime.of(2026, 7, 8, 12, 0, 0, 0, SEOUL).toInstant(), SEOUL);
-
     AuthService authService;
 
     @BeforeEach
     void setUp() {
+        // Clock을 주입하지 않는다 — 토큰 만료는 시스템 시각 기준이다(#296).
+        // 만료 시나리오는 시각을 옮기는 대신 expiresAt을 과거로 세팅한 RefreshToken으로 만든다.
         authService = new AuthService(
             oAuthProviderRegistry, userReader, userWriter,
             userCredentialReader, userCredentialWriter,
             identityService, coinService,
-            refreshTokenReader, refreshTokenWriter, jwtProvider, clock
+            refreshTokenReader, refreshTokenWriter, jwtProvider
         );
     }
 

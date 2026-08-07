@@ -29,10 +29,16 @@ import org.son.haruharu.utils.TokenHashUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
+/**
+ * 인증·세션 관리. 토큰 만료 시각만은 주입 Clock이 아니라 시스템 시각을 기준으로 삼는다(#296).
+ * ClockConfig가 "시간 구동 로직은 Clock을 주입받는다"고 규정하지만 여기는 의도적 예외다 —
+ * local·dev의 AdjustableClock(#180)으로 가상 시각을 앞당겨 방 진행·슬롯·최종선택을 테스트할 때
+ * 토큰 만료까지 딸려가면 로그인 세션이 풀려 테스트가 불가능해진다. 운영 프로필의 Clock은
+ * Clock.system(Asia/Seoul)이라 시스템 시각과 동일하므로 운영 동작 차이는 없다.
+ */
 @Slf4j
 @Service
 @Transactional(readOnly = true)
@@ -49,7 +55,6 @@ public class AuthService {
     private final RefreshTokenReader refreshTokenReader;
     private final RefreshTokenWriter refreshTokenWriter;
     private final JwtProvider jwtProvider;
-    private final Clock clock;
 
     @Transactional
     public AuthTokenResponse authenticate(SocialAuthCommand command) {
@@ -169,6 +174,10 @@ public class AuthService {
         return AuthTokenResponse.withStatus(accessToken, refreshToken, userStatus);
     }
 
+    /**
+     * expiresAt 은 시스템 시각 기준이다(클래스 주석의 의도적 예외 참조).
+     * JwtProvider 가 JWT exp 클레임을 Instant.now() 로 찍으므로 같은 기준을 써야 둘이 어긋나지 않는다.
+     */
     private void saveRefreshToken(Long userId, String refreshToken) {
         String tokenHash = TokenHashUtils.sha256Hex(refreshToken);
         LocalDateTime expiresAt = LocalDateTime.now().plus(jwtProvider.getRefreshTokenExpiryMs(), ChronoUnit.MILLIS);
