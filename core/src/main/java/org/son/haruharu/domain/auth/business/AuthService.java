@@ -89,6 +89,9 @@ public class AuthService {
 
         User created = userWriter.save(new User(null, UserStatus.ONBOARDING, null, false));
         userCredentialWriter.save(new UserCredential(null, created.id(), providerType, providerId));
+        // 보너스 지급 여부와 무관하게 지갑을 먼저 만든다(#298). 예전에는 보너스 지급의 부수효과로
+        // 지갑이 생겨서, 보너스를 skip하는 복귀 유저는 지갑 없이 시작했다.
+        coinService.createWallet(created.id());
         if (!returning) {
             coinService.grantSignupBonus(created.id());
         }
