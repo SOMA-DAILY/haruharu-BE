@@ -18,5 +18,6 @@ public interface CoinLedgerRepository {
     List<CoinLedger> findPage(Long userId, LocalDateTime before, int limit);
 
     /** 데모 리셋 전용 하드삭제(#267). 해당 유저의 원장을 물리 삭제한다. */
-    void deleteByUserId(Long userId);
+    /** 데모 리셋 전용 하드삭제. 삭제한 행 수를 반환한다(감사 로그용, #300). */
+    int deleteByUserId(Long userId);
 }

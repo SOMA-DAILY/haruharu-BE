@@ -38,8 +38,8 @@ public class CoinLedgerRepositoryImpl implements CoinLedgerRepository {
     }
 
     @Override
-    public void deleteByUserId(Long userId) {
-        jpaRepository.deleteByUserId(userId);
+    public int deleteByUserId(Long userId) {
+        return jpaRepository.deleteByUserId(userId);
     }
 
     @Override

@@ -112,7 +112,12 @@ public class CoinService {
      */
     @Transactional
     public void resetDemoWallet(Long userId, long amount) {
-        coinLedgerWriter.deleteByUserId(userId);
+        long balanceBefore = coinWalletReader.findByUserId(userId).map(CoinWallet::totalBalance).orElse(0L);
+        int deletedRows = coinLedgerWriter.deleteByUserId(userId);
+        // 원장 하드삭제는 결제 감사 이력을 지우는 파괴적 조작이라 반드시 흔적을 남긴다(#300).
+        // 실사용자에게 잘못 호출됐을 때 사후 확인의 유일한 근거가 된다 — 그래서 warn이다.
+        log.warn("coin demo-reset userId={} deletedLedgerRows={} balanceBefore={} reseedAmount={}",
+                userId, deletedRows, balanceBefore, amount);
         // 지갑이 없던 계정(백필 이전 가입자 등)도 리셋 대상이 될 수 있어 먼저 보장한다(#298).
         createWallet(userId);
         coinWalletWriter.save(coinWalletReader.getByUserId(userId).resetToZero());
@@ -172,26 +177,32 @@ public class CoinService {
 
         LocalDateTime now = LocalDateTime.now();
         long balanceAfter = wallet.totalBalance();
+        // 로그는 원장 항목마다 한 줄씩 남긴다 — 합산해서 한 줄로 남기면 원장의 개별 delta와 대조되지 않는다(#300).
         if (spend.fromReward() > 0) {
             balanceAfter -= spend.fromReward();
             coinLedgerWriter.append(CoinLedger.of(
                     command.userId(), -spend.fromReward(), balanceAfter, CoinBucket.REWARD,
                     command.reason(), command.refType(), command.refId(), now));
+            logCoin("spend", command.userId(), -spend.fromReward(), balanceAfter,
+                    CoinBucket.REWARD, command.reason(), command.refType(), command.refId());
         }
         if (spend.fromPaid() > 0) {
             balanceAfter -= spend.fromPaid();
             coinLedgerWriter.append(CoinLedger.of(
                     command.userId(), -spend.fromPaid(), balanceAfter, CoinBucket.PAID,
                     command.reason(), command.refType(), command.refId(), now));
+            logCoin("spend", command.userId(), -spend.fromPaid(), balanceAfter,
+                    CoinBucket.PAID, command.reason(), command.refType(), command.refId());
         }
-        logCoin("spend", command.userId(), -command.amount(), balanceAfter,
-                null, command.reason(), command.refType(), command.refId());
     }
 
     /**
      * 구름 증감 감사 로그(#257). 분쟁·문의 대응 시 원장(coin_ledger) 조회 없이 흐름을 추적하기 위함.
      * 원장에 남지 않는 실패 트랜잭션은 이 로그로도 안 남는다 — 성공한 증감의 시계열 추적이 목적.
      * userId 외 식별자는 남기지 않는다(PII).
+     * <p>
+     * <b>원장 항목 1건당 로그 1줄</b>을 유지한다(#300). 소모처럼 버킷이 나뉘어 원장이 2건 남는 경우도
+     * 합산하지 않고 각각 남겨야 delta·balance가 원장과 1:1로 대조된다.
      */
     private void logCoin(String op, Long userId, long delta, long balanceAfter,
                          CoinBucket bucket, CoinLedgerReason reason, String refType, String refId) {
@@ -206,7 +217,10 @@ public class CoinService {
      */
     @Transactional
     public void deleteWallet(Long userId) {
+        long balance = coinWalletReader.findByUserId(userId).map(CoinWallet::totalBalance).orElse(0L);
         coinWalletWriter.deleteByUserId(userId);
+        // 탈퇴 시점 잔액을 남긴다 — 탈퇴 후 환불·잔액 문의가 들어오면 이 값이 근거가 된다.
+        log.info("coin wallet-delete userId={} balanceAtDelete={}", userId, balance);
     }
 
     /** 코인 환불 회수. PAID 잔액에서 차감(음수 허용)하고 원장에 기록한다. */
@@ -218,6 +232,9 @@ public class CoinService {
         coinLedgerWriter.append(CoinLedger.of(
                 command.userId(), -command.amount(), revoked.totalBalance(), CoinBucket.PAID,
                 CoinLedgerReason.REFUND_REVOKE, command.refType(), command.refId(), LocalDateTime.now()));
+        // 환불 회수는 분쟁 대응이 가장 잦은 경로다 — 잔액이 음수가 될 수 있어 결과 잔액까지 남긴다(#300).
+        logCoin("revoke", command.userId(), -command.amount(), revoked.totalBalance(),
+                CoinBucket.PAID, CoinLedgerReason.REFUND_REVOKE, command.refType(), command.refId());
     }
 
     private LocalDateTime resolveCursor(String cursor) {
