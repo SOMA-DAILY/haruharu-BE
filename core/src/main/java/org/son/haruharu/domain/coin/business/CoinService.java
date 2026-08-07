@@ -53,10 +53,14 @@ public class CoinService {
      * 잔액 변경 경로(credit·spend·revoke)가 "지갑은 항상 존재한다"를 전제하므로(#298) 유저를 만드는
      * 모든 경로가 이걸 호출해야 한다. 예전에는 첫 가입 보너스 지급의 부수효과로 지갑이 생겨서,
      * 보너스를 받지 않는 복귀 유저(#245)와 데모 가상 계정(#272)은 지갑 없이 시작했다.
+     * <p>
+     * 존재 확인에 일반 조회가 아니라 soft-delete 포함 조회를 쓴다 — user_id 유니크 제약은 죽은 행에도
+     * 걸리므로, 탈퇴로 soft-delete된 지갑이 남은 계정에 일반 조회로 판단해 INSERT하면 제약 위반이 난다
+     * (탈퇴 후 재프로비저닝되는 데모 계정이 실제로 이 상태다).
      */
     @Transactional
     public void createWallet(Long userId) {
-        if (coinWalletReader.findByUserId(userId).isPresent()) {
+        if (coinWalletReader.existsIncludingDeleted(userId)) {
             return;
         }
         coinWalletWriter.save(CoinWallet.init(userId));

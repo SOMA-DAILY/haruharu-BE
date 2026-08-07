@@ -238,8 +238,8 @@ class CoinServiceTest {
     void givenSpentDemoWallet_whenReset_thenClearsLedgerAndReseeds() {
         // 기존 지갑(리워드 50)이 있는 상태. 원장을 비웠으므로 멱등 가드를 통과해 재지급된다.
         CoinWallet existing = new CoinWallet(9L, userId, 0L, 50L, null);
-        // createWallet의 존재 확인 → 초기화 대상 조회 → 재지급 시 락 조회 순으로 쓰인다(#298).
-        given(coinWalletReader.findByUserId(userId)).willReturn(Optional.of(existing));
+        // createWallet의 존재 확인(soft-delete 포함) → 초기화 대상 조회 → 재지급 시 락 조회 순으로 쓰인다(#298).
+        given(coinWalletReader.existsIncludingDeleted(userId)).willReturn(true);
         given(coinWalletReader.getByUserId(userId)).willReturn(existing);
         given(coinWalletReader.getByUserIdForUpdate(userId)).willReturn(existing.resetToZero());
         given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)).willReturn(false);

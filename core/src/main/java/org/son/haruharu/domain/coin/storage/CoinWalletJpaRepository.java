@@ -21,5 +21,15 @@ public interface CoinWalletJpaRepository extends JpaRepository<CoinWalletEntity,
     @Query("select w from CoinWalletEntity w where w.userId = :userId")
     Optional<CoinWalletEntity> findByUserIdForUpdate(@Param("userId") Long userId);
 
+    /**
+     * soft-delete된 행까지 포함한 지갑 개수. 지갑 생성 전 존재 확인에 쓴다(#298).
+     * <p>
+     * user_id 유니크 제약은 deleted_at과 무관하게 걸리는데 @SoftDelete가 붙은 일반 조회는 죽은 행을
+     * 보지 못한다. 그래서 탈퇴로 soft-delete된 지갑이 남은 계정에 일반 조회로 판단해 INSERT하면
+     * 제약 위반이 난다. 죽은 행이 유니크 슬롯을 점유하는 이 구조는 user_credentials(#147)와 동일하다.
+     */
+    @Query(value = "SELECT count(*) FROM coin_wallet WHERE user_id = :userId", nativeQuery = true)
+    long countByUserIdIncludingDeleted(@Param("userId") Long userId);
+
     void deleteByUserId(Long userId);
 }
