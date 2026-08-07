@@ -10,6 +10,8 @@ import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.user.business.dto.OnboardingStatusResponse;
 import org.son.haruharu.domain.user.business.dto.UserProfileResponse;
+import org.son.haruharu.domain.user.business.exception.DemoProvisionPurchaseExistsException;
+import org.son.haruharu.domain.user.business.exception.DemoProvisionVerifiedUserException;
 import org.son.haruharu.domain.user.business.exception.InactiveUserException;
 import org.son.haruharu.domain.user.business.exception.OnboardingIncompleteException;
 import org.son.haruharu.domain.user.implement.User;
@@ -86,7 +88,7 @@ public class UserService {
             .map(birthday -> Period.between(birthday, LocalDate.now(clock)).getYears())
             .orElse(null);
         VerificationStatus status = VerificationStatus.of(verified.isPresent());
-        return UserProfileResponse.from(userId, profile, gender, age, status.name(), user.demoMode());
+        return UserProfileResponse.from(userId, profile, gender, age, status.name(), user.demoMode());  
     }
 
     /**
@@ -152,13 +154,16 @@ public class UserService {
         // env 오배포·demo_mode 오설정과 무관하게 결제 원장을 보호한다(데모 리셋의 원장 하드삭제로부터).
         // 정상 데모 계정은 결제 이력이 없어 이 가드를 통과하므로 재실행 멱등성은 유지된다.
         if (coinService.hasPurchaseHistory(userId)) {
-            throw new IllegalStateException("실결제 이력이 있는 계정은 데모 프로비저닝 대상이 아닙니다: userId=" + userId);
+            // 대상 userId는 예외 메시지가 아니라 로그로 남긴다(예외는 코드·메시지 고정).
+            log.warn("데모 프로비저닝 거부: 실결제 이력 존재 userId={}", userId);
+            throw new DemoProvisionPurchaseExistsException();
         }
         // 예방 가드 2: 데모가 아닌데 이미 본인인증을 마친 계정 = 실사용자. env 오배포로 실계정이 섞인 것으로 보고
         // 상태 전이·구름 지급을 아예 시작하지 않는다(가짜 인증 유저는 seedDemoIdentity가 멱등 skip으로 이미 보호).
         // 이미 프로비저닝된 데모 계정(demo_mode=true)은 이 가드를 통과해 재실행이 멱등으로 동작한다.
         if (!user.demoMode() && identityService.isVerified(userId)) {
-            throw new IllegalStateException("본인인증을 마친 실사용자는 데모 프로비저닝 대상이 아닙니다: userId=" + userId);
+            log.warn("데모 프로비저닝 거부: 본인인증을 마친 실사용자 userId={}", userId);
+            throw new DemoProvisionVerifiedUserException();
         }
         log.warn("데모 계정 프로비저닝: userId={} — demo_mode·ACTIVE 전이 + 본인인증 시드 + 구름 {} 지급(실계정 오염 주의)",
             userId, coins);

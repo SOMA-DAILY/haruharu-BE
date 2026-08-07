@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.user.business.UserService;
+import org.son.haruharu.domain.user.business.exception.DemoProvisionPurchaseExistsException;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserStatus;
@@ -85,7 +86,7 @@ class DemoProvisionIntegrationTest {
         assertThat(coinService.hasPurchaseHistory(userId)).isTrue();
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> userService.provisionDemo(userId, "MALE", BIRTHDAY, 200L))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(DemoProvisionPurchaseExistsException.class);
 
         // demo_mode 전환·본인인증 시드·데모 구름 지급이 일어나지 않았다(결제 잔액만 유지).
         User user = userJpaRepository.findById(userId).orElseThrow().toDomain();
