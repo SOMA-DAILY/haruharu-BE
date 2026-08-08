@@ -9,3 +9,11 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+
+# 배포 프로파일은 콘솔 로그를 JSON 1줄/이벤트로 구조화(Datadog 수집용). Boot 4 네이티브 구조화 로깅이라
+# 별도 인코더 의존성 불필요. admin은 MDC 미적용이라 traceId/userId 필드는 없다(저트래픽 내부 툴로 허용).
+# 로컬(default 프로파일)은 application.yaml의 사람이 읽는 패턴 유지.
+logging:
+  structured:
+    format:
+      console: logstash
