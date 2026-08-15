@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.payment.business.PaymentService;
 import org.son.haruharu.domain.payment.business.dto.ProductsResponse;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "결제(IAP)", description = "RevenueCat 인앱결제 · 코인 상품")
 @RestController
 @RequestMapping("/api/v1/coin")
+// 결제 비활성(#309) — haruharu.payment.enabled=true 일 때만 빈 등록. 기본 false라 상품 API 부재(404). 코드 보존.
+@ConditionalOnProperty(prefix = "haruharu.payment", name = "enabled", havingValue = "true")
 public class IapProductController {
 
     private final PaymentService paymentService;

@@ -71,6 +71,9 @@ public class CoinService {
      */
     @Transactional
     public void grantSignupBonus(Long userId) {
+        if (!coinProperties.enabled()) {
+            return; // 코인 비활성(#309 피벗) — 가입 보너스 미지급. 코드는 보존.
+        }
         if (coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.SIGNUP_BONUS)) {
             return;
         }

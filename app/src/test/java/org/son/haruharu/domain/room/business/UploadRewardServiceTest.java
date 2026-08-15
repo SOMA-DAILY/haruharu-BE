@@ -118,4 +118,20 @@ class UploadRewardServiceTest {
         then(coinService).should(never()).credit(any());
         then(dailyUploadRewardWriter).should(never()).save(any());
     }
+
+    @Test
+    @DisplayName("업로드 보상 비활성(daily-completion 빈 맵, #309)이면 완주해도 지급·기록하지 않는다")
+    void givenEmptyRewardConfig_whenDayCompleted_thenNoGrant() {
+        UploadRewardProperties emptyReward = new UploadRewardProperties(Map.of());
+        UploadRewardService disabled = new UploadRewardService(videoPostReader, roomMemberReader,
+                dailyUploadRewardReader, dailyUploadRewardWriter, coinService, emptyReward, clock);
+        Long memberId = 10L;
+        given(videoPostReader.countUploaded(memberId, 1)).willReturn(5L);
+        given(dailyUploadRewardReader.isRewarded(memberId, 1)).willReturn(false);
+
+        disabled.grantIfDayCompleted(memberId, 1);
+
+        then(dailyUploadRewardWriter).should(never()).save(any());
+        then(coinService).should(never()).credit(any());
+    }
 }

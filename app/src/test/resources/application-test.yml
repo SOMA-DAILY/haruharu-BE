@@ -37,3 +37,17 @@ aws:
 identity:
   encryption:
     key: ${IDENTITY_ENCRYPTION_KEY:test-only-identity-encryption-master-key}
+
+# 코인·결제·업로드보상 로직 테스트 커버리지용 — 운영은 application.yaml에서 비활성(#309), 여기선 켜서 보존 코드의 로직을 검증.
+# (disabled 동작 검증 테스트는 각자 @SpringBootTest(properties=...enabled=false)로 개별 오버라이드한다.)
+haruharu:
+  coin:
+    enabled: true
+  payment:
+    enabled: true
+  room:
+    upload-reward:
+      daily-completion:
+        1: 5
+        2: 5
+        3: 5
