@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.notification.business;
 
 import org.son.haruharu.domain.notification.implement.NotificationType;
-import org.son.haruharu.domain.room.business.event.MemberSelectedEvent;
 import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -26,9 +25,7 @@ public class FinalSelectionEventListener {
                 NotificationType.MUTUAL_MATCH, Map.of("roomId", event.roomId().toString()));
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void handleMemberSelected(MemberSelectedEvent event) {
-        pushSendService.sendToUsers(List.of(event.selectedUserId()),
-                NotificationType.SELECTED_BY_SOMEONE, Map.of("roomId", event.roomId().toString()));
-    }
+    // SELECTED_BY_SOMEONE(누가 널 선택함) 실시간 푸시는 제거(#310) — 새 모델은 result_at 동시공개라
+    // 조기 노출을 막는다. MemberSelectedEvent 발행부는 최종선택 재설계(#311)에서 함께 정리.
+    // enum 상수 SELECTED_BY_SOMEONE 은 dormant 로 보존.
 }
