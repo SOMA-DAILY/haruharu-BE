@@ -7,6 +7,7 @@ import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.coin.business.CoinService;
 import org.son.haruharu.domain.coin.business.dto.LedgerPageResponse;
 import org.son.haruharu.domain.coin.business.dto.WalletResponse;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "코인", description = "코인 지갑 잔액·이동 내역 조회")
 @RestController
 @RequestMapping("/api/v1/coin")
+// 코인 비활성(#309) — haruharu.coin.enabled=true 일 때만 빈 등록. 기본 false라 엔드포인트 부재(404). 코드 보존.
+@ConditionalOnProperty(prefix = "haruharu.coin", name = "enabled", havingValue = "true")
 public class CoinController {
 
     private final CoinService coinService;

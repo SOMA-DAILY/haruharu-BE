@@ -53,15 +53,16 @@ haruharu:
   # 첫 가입 1회 보너스 구름(#232). 정책값은 코드 @DefaultValue가 아닌 이 yaml 리터럴로 관리(matching.enter-cost와 동일 방침).
   coin:
     signup-bonus: 20
+    enabled: false  # 코인 경제 비활성(#309 피벗). 가입 보너스·코인 API off. 되살릴 때만 true
   matching:
     enter-cost: 20
     enabled: false  # 자동매칭 비활성(#308 피벗). 되살릴 때만 true
+  payment:
+    enabled: false  # 결제(IAP) 비활성(#309 피벗). webhook·상품 API off. 되살릴 때만 true
   room:
     upload-reward:
-      daily-completion:
-        1: 5
-        2: 5
-        3: 5
+      # 업로드 보상 비활성(#309 피벗): 완주 보상 없음(amountFor→0→미지급). 되살릴 때 day별 값 채움.
+      daily-completion: {}
     consolation-reward:
       amount: 5
   # 데모 피드 플레이스홀더 자산(#280). 접근 가능한 URL로 env 지정(권장: 우리 S3 오브젝트 — presign 서명됨).

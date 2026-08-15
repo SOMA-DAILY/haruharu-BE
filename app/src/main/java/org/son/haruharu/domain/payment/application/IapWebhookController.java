@@ -7,6 +7,7 @@ import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.payment.application.dto.RevenueCatWebhookRequest;
 import org.son.haruharu.domain.payment.business.PaymentService;
 import org.son.haruharu.infrastructure.revenuecat.WebhookSecretVerifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,6 +19,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag(name = "결제(IAP)", description = "RevenueCat 인앱결제 · 코인 상품")
 @RestController
 @RequestMapping("/api/v1/iap")
+// 결제 비활성(#309) — haruharu.payment.enabled=true 일 때만 빈 등록. 기본 false라 webhook 부재(404). 코드 보존.
+@ConditionalOnProperty(prefix = "haruharu.payment", name = "enabled", havingValue = "true")
 public class IapWebhookController {
 
     private final WebhookSecretVerifier webhookSecretVerifier;

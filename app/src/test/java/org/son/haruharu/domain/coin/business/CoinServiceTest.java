@@ -46,7 +46,7 @@ class CoinServiceTest {
     @BeforeEach
     void setUp() {
         coinService = new CoinService(coinWalletReader, coinWalletWriter, coinLedgerReader, coinLedgerWriter,
-                new CoinProperties(20L));
+                new CoinProperties(20L, true));
     }
 
     @Test
@@ -64,6 +64,19 @@ class CoinServiceTest {
         assertThat(captor.getValue().bucket()).isEqualTo(CoinBucket.REWARD);
         assertThat(captor.getValue().delta()).isEqualTo(20L);
         verify(coinWalletWriter).save(any());
+    }
+
+    @Test
+    @DisplayName("코인 비활성(enabled=false) 시 가입 보너스를 지급하지 않는다")
+    void givenCoinDisabled_whenGrantSignupBonus_thenNoCredit() {
+        CoinService disabled = new CoinService(coinWalletReader, coinWalletWriter, coinLedgerReader, coinLedgerWriter,
+                new CoinProperties(20L, false));
+
+        disabled.grantSignupBonus(userId);
+
+        verify(coinLedgerReader, never()).existsByUserIdAndReason(any(), any());
+        verify(coinLedgerWriter, never()).append(any());
+        verify(coinWalletWriter, never()).save(any());
     }
 
     @Test
