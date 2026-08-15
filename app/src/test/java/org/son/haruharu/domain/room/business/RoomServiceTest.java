@@ -14,17 +14,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.room.business.command.CreateRoomCommand;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
+import org.son.haruharu.domain.room.business.exception.RoomInvalidScheduleException;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
+import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,6 +37,7 @@ class RoomServiceTest {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     @Mock RoomReader roomReader;
+    @Mock RoomWriter roomWriter;
     @Mock RoomMemberReader roomMemberReader;
 
     RoomService roomService;
@@ -43,7 +48,35 @@ class RoomServiceTest {
 
     @BeforeEach
     void setUp() {
-        roomService = new RoomService(roomReader, roomMemberReader, clock);
+        roomService = new RoomService(roomReader, roomWriter, roomMemberReader, clock);
+    }
+
+    @Test
+    @DisplayName("유효한 스케줄로 방 생성 시 PENDING 방을 저장하고 roomId를 반환한다")
+    void givenValidSchedule_whenCreateRoom_thenSavesAndReturnsId() {
+        LocalDateTime starts = LocalDateTime.of(2026, 6, 26, 14, 0);
+        CreateRoomCommand cmd = new CreateRoomCommand(
+                starts, starts.plusDays(2).withHour(20), starts.plusDays(2).withHour(22),
+                starts.plusDays(2).withHour(23), starts.plusDays(2).withHour(23).withMinute(30), 3);
+        given(roomWriter.save(any())).willReturn(new Room(99L, RoomStatus.PENDING, starts.toLocalDate(), 3,
+                null, null, false, null, cmd.startsAt(), cmd.finalSelectionOpensAt(),
+                cmd.finalSelectionClosesAt(), cmd.resultAt(), cmd.endsAt()));
+
+        Long id = roomService.createRoom(cmd);
+
+        assertThat(id).isEqualTo(99L);
+    }
+
+    @Test
+    @DisplayName("시각 순서가 어긋난 스케줄로 방 생성 시 RoomInvalidScheduleException")
+    void givenMisorderedSchedule_whenCreateRoom_thenThrows() {
+        LocalDateTime t = LocalDateTime.of(2026, 6, 26, 14, 0);
+        // 선택오픈이 시작보다 앞 → 순서 위반
+        CreateRoomCommand bad = new CreateRoomCommand(
+                t, t.minusHours(1), t.plusHours(2), t.plusHours(3), t.plusHours(4), 3);
+
+        assertThatThrownBy(() -> roomService.createRoom(bad))
+                .isInstanceOf(RoomInvalidScheduleException.class);
     }
 
     @Test

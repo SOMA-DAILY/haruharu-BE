@@ -19,7 +19,9 @@ public class RoomReader {
 
     /** 후보 방 id들 중 종료되지 않은(PENDING/ACTIVE) 현재 방을 단일 조회로 찾는다. */
     public Optional<Room> findCurrent(List<Long> candidateRoomIds) {
+        // ENDED·CANCELLED(#311, sticky 종료 상태) 방은 '현재 방'에서 제외한다.
         return roomRepository.findByIdInAndStatusNot(candidateRoomIds, RoomStatus.ENDED).stream()
+                .filter(room -> room.status() != RoomStatus.CANCELLED)
                 .findFirst();
     }
 

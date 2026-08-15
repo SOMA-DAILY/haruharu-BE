@@ -6,12 +6,15 @@ import java.util.List;
 import java.util.Optional;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
+import org.son.haruharu.domain.room.business.command.CreateRoomCommand;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
+import org.son.haruharu.domain.room.business.exception.RoomInvalidScheduleException;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,13 +23,45 @@ import org.springframework.transaction.annotation.Transactional;
 public class RoomService {
 
     private final RoomReader roomReader;
+    private final RoomWriter roomWriter;
     private final RoomMemberReader roomMemberReader;
     private final Clock clock;
 
-    public RoomService(RoomReader roomReader, RoomMemberReader roomMemberReader, Clock clock) {
+    public RoomService(RoomReader roomReader, RoomWriter roomWriter,
+                       RoomMemberReader roomMemberReader, Clock clock) {
         this.roomReader = roomReader;
+        this.roomWriter = roomWriter;
         this.roomMemberReader = roomMemberReader;
         this.clock = clock;
+    }
+
+    /**
+     * 초대코드 모델 방 생성(#311). 운영진/어드민이 스케줄 시각을 입력해 PENDING 방을 만든다.
+     * 멤버 입장은 초대코드(#312), HTTP 진입점은 admin 세션이 담당한다 — 여기선 core 도메인 로직만.
+     * 반환은 생성된 roomId(호출측이 코드 발급·응답 구성).
+     */
+    @Transactional
+    public Long createRoom(CreateRoomCommand command) {
+        validateSchedule(command);
+        Room saved = roomWriter.save(Room.createScheduled(
+                command.startsAt(), command.finalSelectionOpensAt(), command.finalSelectionClosesAt(),
+                command.resultAt(), command.endsAt(), command.totalDays()));
+        return saved.id();
+    }
+
+    private void validateSchedule(CreateRoomCommand c) {
+        boolean allPresent = c.startsAt() != null && c.finalSelectionOpensAt() != null
+                && c.finalSelectionClosesAt() != null && c.resultAt() != null && c.endsAt() != null;
+        if (!allPresent || c.totalDays() <= 0) {
+            throw new RoomInvalidScheduleException();
+        }
+        boolean ordered = c.startsAt().isBefore(c.finalSelectionOpensAt())
+                && c.finalSelectionOpensAt().isBefore(c.finalSelectionClosesAt())
+                && !c.finalSelectionClosesAt().isAfter(c.resultAt())
+                && !c.resultAt().isAfter(c.endsAt());
+        if (!ordered) {
+            throw new RoomInvalidScheduleException();
+        }
     }
 
     public RoomResponse getMyRoom(Long userId) {

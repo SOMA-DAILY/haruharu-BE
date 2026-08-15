@@ -17,6 +17,61 @@ class RoomTest {
         return new Room(null, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), totalDays, startedAt, null);
     }
 
+    // ── #311 초대코드 모델: 스케줄 시각 + 파생 상태 ──
+    private static final LocalDateTime SCHED_START = LocalDateTime.of(2026, 6, 24, 14, 0);
+
+    private Room scheduledRoom() {
+        return Room.createScheduled(SCHED_START, SCHED_START.plusHours(4), SCHED_START.plusHours(6),
+                SCHED_START.plusHours(7), SCHED_START.plusHours(8), 3);
+    }
+
+    @Test
+    @DisplayName("createScheduled: PENDING·시각 세팅·scheduledDate=시작일")
+    void givenTimes_whenCreateScheduled_thenPendingWithTimes() {
+        Room room = scheduledRoom();
+        assertThat(room.status()).isEqualTo(RoomStatus.PENDING);
+        assertThat(room.startsAt()).isEqualTo(SCHED_START);
+        assertThat(room.finalSelectionOpensAt()).isEqualTo(SCHED_START.plusHours(4));
+        assertThat(room.scheduledDate()).isEqualTo(SCHED_START.toLocalDate());
+    }
+
+    @Test
+    @DisplayName("statusAt: 시작 전이면 PENDING")
+    void givenBeforeStart_whenStatusAt_thenPending() {
+        assertThat(scheduledRoom().statusAt(SCHED_START.minusMinutes(1))).isEqualTo(RoomStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("statusAt: 시작~선택오픈 전이면 ACTIVE")
+    void givenBetweenStartAndOpens_whenStatusAt_thenActive() {
+        assertThat(scheduledRoom().statusAt(SCHED_START.plusHours(1))).isEqualTo(RoomStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("statusAt: 선택오픈~종료 전이면 SELECTING")
+    void givenAfterOpensBeforeEnds_whenStatusAt_thenSelecting() {
+        assertThat(scheduledRoom().statusAt(SCHED_START.plusHours(5))).isEqualTo(RoomStatus.SELECTING);
+    }
+
+    @Test
+    @DisplayName("statusAt: 종료 시각 이후면 ENDED")
+    void givenAfterEnds_whenStatusAt_thenEnded() {
+        assertThat(scheduledRoom().statusAt(SCHED_START.plusHours(9))).isEqualTo(RoomStatus.ENDED);
+    }
+
+    @Test
+    @DisplayName("statusAt: CANCELLED는 시각과 무관하게 sticky")
+    void givenCancelled_whenStatusAt_thenCancelled() {
+        assertThat(scheduledRoom().cancelled().statusAt(SCHED_START.plusHours(5))).isEqualTo(RoomStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("statusAt: 스케줄 시각 없는 구 모델 방은 저장 status를 반환한다")
+    void givenLegacyRoomNoTimes_whenStatusAt_thenStoredStatus() {
+        Room legacy = new Room(1L, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), 3, STARTED_AT, null);
+        assertThat(legacy.statusAt(LocalDateTime.of(2026, 6, 24, 12, 0))).isEqualTo(RoomStatus.ACTIVE);
+    }
+
     @Test
     @DisplayName("PENDING 방은 currentDay가 0이다")
     void givenPending_whenCurrentDayAt_thenZero() {
