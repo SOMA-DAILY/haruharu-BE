@@ -57,7 +57,7 @@ class MatchingServiceTest {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     MatchingService matchingService;
-    final MatchingProperties matchingProperties = new MatchingProperties(5L);
+    final MatchingProperties matchingProperties = new MatchingProperties(5L, false);
 
     /** 지정 시각(Asia/Seoul)에 고정된 Clock으로 서비스를 만든다. 마감(21:00) 판정 테스트용. */
     private MatchingService serviceAt(int hour, int minute) {

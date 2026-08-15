@@ -12,7 +12,7 @@ class MetaServiceTest {
     @Test
     @DisplayName("메타 응답에 매칭 참가 비용(enter_cost)이 설정값 그대로 담긴다")
     void givenEnterCost_whenGetMeta_thenReturnsConfiguredValue() {
-        MetaService service = new MetaService(new MatchingProperties(20L));
+        MetaService service = new MetaService(new MatchingProperties(20L, false));
 
         MetaResponse result = service.getMeta();
 
@@ -22,7 +22,7 @@ class MetaServiceTest {
     @Test
     @DisplayName("메타 응답에 세션 정책 상수(day_start_hour=9, total_days=3)가 담긴다")
     void givenSessionPolicy_whenGetMeta_thenReturnsSessionConstants() {
-        MetaService service = new MetaService(new MatchingProperties(20L));
+        MetaService service = new MetaService(new MatchingProperties(20L, false));
 
         MetaResponse result = service.getMeta();
 

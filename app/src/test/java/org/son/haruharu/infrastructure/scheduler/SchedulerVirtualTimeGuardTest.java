@@ -7,6 +7,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.common.time.AdjustableClock;
 import org.son.haruharu.domain.matching.business.MatchingExecutor;
+import org.son.haruharu.domain.matching.business.MatchingProperties;
 import org.son.haruharu.domain.notification.business.FinalSelectionOpenNotifier;
 import org.son.haruharu.domain.room.business.ConsolationRewardService;
 import org.son.haruharu.domain.room.business.RoomActivator;
@@ -57,7 +58,7 @@ class SchedulerVirtualTimeGuardTest {
     void givenFixedClock_whenSchedulersRun_thenRoomBatchesSkipped() {
         MatchingScheduler scheduler = new MatchingScheduler(
                 matchingExecutor, roomActivator, roomTerminator, consolationRewardService,
-                providerOf(fixedClock()));
+                providerOf(fixedClock()), new MatchingProperties(20L, false));
 
         scheduler.activateRooms();
         scheduler.terminateSessions();
@@ -73,7 +74,7 @@ class SchedulerVirtualTimeGuardTest {
         ObjectProvider<AdjustableClock> untouchedProvider = mock(ObjectProvider.class);
         MatchingScheduler scheduler = new MatchingScheduler(
                 matchingExecutor, roomActivator, roomTerminator, consolationRewardService,
-                untouchedProvider);
+                untouchedProvider, new MatchingProperties(20L, true));
 
         scheduler.runMatching();
 
@@ -86,13 +87,13 @@ class SchedulerVirtualTimeGuardTest {
     void givenNoOrUnfixedClock_whenSchedulersRun_thenBatchesExecute() {
         MatchingScheduler withoutBean = new MatchingScheduler(
                 matchingExecutor, roomActivator, roomTerminator, consolationRewardService,
-                providerOf(null));
+                providerOf(null), new MatchingProperties(20L, false));
         withoutBean.activateRooms();
         verify(roomActivator).activate(any(), any());
 
         MatchingScheduler withUnfixed = new MatchingScheduler(
                 matchingExecutor, roomActivator, roomTerminator, consolationRewardService,
-                providerOf(new AdjustableClock(Clock.system(SEOUL))));
+                providerOf(new AdjustableClock(Clock.system(SEOUL))), new MatchingProperties(20L, false));
         withUnfixed.terminateSessions();
         verify(roomTerminator).terminate(any(), anyInt());
     }

@@ -46,7 +46,7 @@ class MatchingExecutorTest {
     @Mock ApplicationEventPublisher eventPublisher;
 
     MatchingExecutor executor;
-    final MatchingProperties matchingProperties = new MatchingProperties(5L);
+    final MatchingProperties matchingProperties = new MatchingProperties(5L, false);
 
     @BeforeEach
     void setUp() {

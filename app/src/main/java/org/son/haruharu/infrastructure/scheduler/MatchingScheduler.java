@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.common.time.AdjustableClock;
 import org.son.haruharu.domain.matching.business.MatchingExecutor;
+import org.son.haruharu.domain.matching.business.MatchingProperties;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.ConsolationRewardService;
 import org.son.haruharu.domain.room.business.RoomActivator;
@@ -38,9 +39,14 @@ public class MatchingScheduler {
     private final RoomTerminator roomTerminator;
     private final ConsolationRewardService consolationRewardService;
     private final ObjectProvider<AdjustableClock> adjustableClockProvider;
+    private final MatchingProperties matchingProperties;
 
     @Scheduled(cron = "0 0 22 * * *", zone = "Asia/Seoul")
     public void runMatching() {
+        if (!matchingProperties.enabled()) {
+            log.info("자동매칭 비활성(haruharu.matching.enabled=false) — 매칭 배치 skip (#308)");
+            return;
+        }
         try {
             int rooms = matchingExecutor.execute(LocalDate.now(SEOUL).plusDays(1), LocalDateTime.now(SEOUL));
             log.info("매칭 배치 완료: {}개 방 확정", rooms);
