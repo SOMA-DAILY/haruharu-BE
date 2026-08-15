@@ -55,6 +55,7 @@ haruharu:
     signup-bonus: 20
   matching:
     enter-cost: 20
+    enabled: false  # 자동매칭 비활성(#308 피벗). 되살릴 때만 true
   room:
     upload-reward:
       daily-completion:

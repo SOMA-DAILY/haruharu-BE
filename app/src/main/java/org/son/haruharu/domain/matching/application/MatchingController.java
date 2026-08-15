@@ -6,6 +6,7 @@ import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.matching.business.MatchingService;
 import org.son.haruharu.domain.matching.business.dto.QueueResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "매칭", description = "매칭 대기열 참가·조회·취소 (하루 1회 신청, 입장 코인 차감)")
 @RestController
 @RequestMapping("/api/v1/matching")
+// 자동매칭 비활성(#308) — haruharu.matching.enabled=true 일 때만 빈 등록. 기본 false라 엔드포인트 부재(404). 코드는 보존.
+@ConditionalOnProperty(prefix = "haruharu.matching", name = "enabled", havingValue = "true")
 public class MatchingController {
 
     private final MatchingService matchingService;
