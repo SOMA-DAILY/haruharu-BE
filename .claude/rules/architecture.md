@@ -261,22 +261,28 @@ public static UserEntity from(User user) {
 - **인덱스**: 자주 필터하는 컬럼·FK·복합 조건(`status, created_at`)은 `@Table(indexes=...)` 또는 마이그레이션 SQL로 명시.
 - SQL 효율 검증은 `hibernate.SQL=DEBUG` 로그로 실제 쿼리 수를 확인한다.
 
-## 도메인 경계 (확정 2026-06-21)
+## 도메인 경계
 
-ERD 테이블을 관심사 기준으로 5개 최상위 도메인으로 분리한다. (경로는 `core/src/main/java/org/son/haruharu/domain/`)
+`core/src/main/java/org/son/haruharu/domain/` 아래에 도메인별로 나눈다. **2026-08-13 피벗 기준 상태** (상세: 메모리 `mvp-pivot-invite-code`):
 
-```
-domain/
-├── user/        ← users 테이블만. 사용자 존재(id, status) 담당.
-├── auth/        ← user_credentials, refresh_tokens.
-│                   OAuth 공급자 연결, JWT 세션 관리 담당.
-├── profile/     ← user_profiles, user_images.
-│                   데이팅 프로필(nickname, mbti 등) 및 이미지 담당.
-├── identity/    ← user_identities.
-│                   PASS 실명인증(CI/DI, 이름, 생년월일) 담당.
-└── value/       ← value_questions, user_value_answers.
-                    가치관 질문 및 유저 답변 담당.
-```
+**활성 (새 MVP 루프):**
+- `user` — users. 사용자 존재(id, status)
+- `auth` — user_credentials · refresh_tokens. OAuth 연결·JWT 세션
+- `profile` — user_profiles · user_images. 온보딩=닉네임·지역 (옛 필드 nullable 잔존)
+- `agreement` — user_agreements. 약관 동의
+- `room` — rooms(초대코드·어드민 스케줄·status) · room_members · room_invites(신규) · final_selections · match_results
+- `video` — video_posts(슬롯 시간창) · video_reactions
+- `chat` — chat_rooms(GROUP/DIRECT) · chat_room_members · chat_messages
+- `mission` — missions(카탈로그) · room_missions(인스턴스)
+- `notification` — device_tokens · notification_settings · notification_history (FCM)
+- `report` — reports
+
+**보류 (비활성 잔존, 삭제 X):**
+- `identity` — user_identities. PASS 실명인증 → 지연인증(성별/실명 필요 시점에만)
+- `value` — value_questions · user_value_answers. 가치관(MVP 온보딩 제외)
+
+**폐기 (새 MVP 비활성/제거 대상):**
+- `matching`(자동매칭) · `coin` · `payment`(IAP)
 
 **도메인 간 호출 방향:**
 - `auth/` → OAuth 로그인 시 userId 확인 후 `user/UserReader.getById()` 위임
