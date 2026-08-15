@@ -55,6 +55,22 @@ public class RoomEntity extends BaseEntity {
     @Column
     private Integer demoDay;
 
+    // 초대코드 모델(#311): 운영진/어드민이 방마다 입력하는 스케줄 시각. 구 모델 방은 전부 null.
+    @Column
+    private LocalDateTime startsAt;
+
+    @Column
+    private LocalDateTime finalSelectionOpensAt;
+
+    @Column
+    private LocalDateTime finalSelectionClosesAt;
+
+    @Column
+    private LocalDateTime resultAt;
+
+    @Column
+    private LocalDateTime endsAt;
+
     public static RoomEntity from(Room room) {
         RoomEntity entity = new RoomEntity();
         entity.id = room.id();
@@ -65,10 +81,16 @@ public class RoomEntity extends BaseEntity {
         entity.endedAt = room.endedAt();
         entity.demo = room.demo();
         entity.demoDay = room.demoDay();
+        entity.startsAt = room.startsAt();
+        entity.finalSelectionOpensAt = room.finalSelectionOpensAt();
+        entity.finalSelectionClosesAt = room.finalSelectionClosesAt();
+        entity.resultAt = room.resultAt();
+        entity.endsAt = room.endsAt();
         return entity;
     }
 
     public Room toDomain() {
-        return new Room(id, status, scheduledDate, totalDays, startedAt, endedAt, demo, demoDay);
+        return new Room(id, status, scheduledDate, totalDays, startedAt, endedAt, demo, demoDay,
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
     }
 }
