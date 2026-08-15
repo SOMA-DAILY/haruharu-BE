@@ -7,14 +7,17 @@ import jakarta.validation.Valid;
 
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.room.application.dto.FinalSelectionRequest;
+import org.son.haruharu.domain.room.application.dto.JoinRoomRequest;
 import org.son.haruharu.domain.room.business.FinalSelectionService;
 import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.MemberProfileService;
 import org.son.haruharu.domain.room.business.RoomFeedService;
+import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomMembersService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.RoomTodayService;
 import org.son.haruharu.domain.room.business.dto.FeedResponse;
+import org.son.haruharu.domain.room.business.dto.JoinRoomResponse;
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
 import org.son.haruharu.domain.room.business.dto.MatchResultResponse;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
@@ -37,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class RoomController {
 
     private final RoomService roomService;
+    private final RoomInviteService roomInviteService;
     private final RoomTodayService roomTodayService;
     private final RoomMembersService roomMembersService;
     private final MemberProfileService memberProfileService;
@@ -44,17 +48,30 @@ public class RoomController {
     private final MatchResultService matchResultService;
     private final RoomFeedService roomFeedService;
 
-    public RoomController(RoomService roomService, RoomTodayService roomTodayService,
+    public RoomController(RoomService roomService, RoomInviteService roomInviteService,
+                          RoomTodayService roomTodayService,
                           RoomMembersService roomMembersService, MemberProfileService memberProfileService,
                           FinalSelectionService finalSelectionService,
                           MatchResultService matchResultService, RoomFeedService roomFeedService) {
         this.roomService = roomService;
+        this.roomInviteService = roomInviteService;
         this.roomTodayService = roomTodayService;
         this.roomMembersService = roomMembersService;
         this.memberProfileService = memberProfileService;
         this.finalSelectionService = finalSelectionService;
         this.matchResultService = matchResultService;
         this.roomFeedService = roomFeedService;
+    }
+
+    @Operation(summary = "초대코드로 방 입장",
+            description = "운영진이 발급한 초대코드로 소개팅방에 입장한다. room_member가 생성되고 입장한 room_id를 반환한다. "
+                    + "코드가 없으면 404(INVITE_CODE_NOT_FOUND), 만료·비활성·정원 초과이거나 종료·취소된 방이면 400(INVITE_CODE_NOT_USABLE), "
+                    + "이미 입장한 방이면 409(ROOM_ALREADY_JOINED).")
+    @PostMapping("/join")
+    public ApiResponse<JoinRoomResponse> join(@Valid @RequestBody JoinRoomRequest request,
+                                              Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(roomInviteService.join(userId, request.code()));
     }
 
     @Operation(summary = "내 소개팅방 조회",

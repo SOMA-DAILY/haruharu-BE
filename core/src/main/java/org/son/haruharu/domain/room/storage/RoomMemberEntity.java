@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -16,8 +17,10 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
+// (room_id, user_id) 유니크: 초대코드 동시 입장 중복 생성 방지 backstop(#312).
 @Entity
-@Table(name = "room_members")
+@Table(name = "room_members",
+        uniqueConstraints = @UniqueConstraint(name = "uk_room_member_room_user", columnNames = {"room_id", "user_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RoomMemberEntity extends BaseEntity {
 
@@ -31,7 +34,8 @@ public class RoomMemberEntity extends BaseEntity {
     @Column(nullable = false)
     private Long userId;
 
-    @Column(nullable = false, length = 10)
+    // #312: 온보딩에서 gender를 안 받으므로 초대코드 입장 시 null 허용. 이후 운영진/PASS 인증이 채운다.
+    @Column(length = 10)
     private String gender;
 
     // 성별·나이의 단일 출처는 본인인증(identity). 매칭 확정 시 스냅샷으로 복사해 방 세션 동안 고정.
