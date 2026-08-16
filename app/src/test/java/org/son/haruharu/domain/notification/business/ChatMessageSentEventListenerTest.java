@@ -29,7 +29,7 @@ class ChatMessageSentEventListenerTest {
     @Test
     @DisplayName("채팅 메시지 이벤트 수신 시 수신자에게 CHAT 푸시를 chatRoomId payload·발신자 닉네임과 함께 발송한다")
     void givenEvent_whenHandle_thenSendsChatPushToRecipient() {
-        listener.handle(new ChatMessageSentEvent(10L, 2L, "지예"));
+        listener.handle(new ChatMessageSentEvent(10L, List.of(2L), "지예"));
 
         then(pushSendService).should().sendToUsers(
                 List.of(2L), NotificationType.CHAT, Map.of("chatRoomId", "10"), "지예");

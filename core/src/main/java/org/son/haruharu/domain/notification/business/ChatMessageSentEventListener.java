@@ -21,7 +21,10 @@ public class ChatMessageSentEventListener {
     // 커밋 후 발송 — 메시지 저장 트랜잭션이 푸시 실패로 롤백되지 않도록
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(ChatMessageSentEvent event) {
-        pushSendService.sendToUsers(List.of(event.recipientUserId()),
+        if (event.recipientUserIds().isEmpty()) {
+            return;
+        }
+        pushSendService.sendToUsers(event.recipientUserIds(),
                 NotificationType.CHAT, Map.of("chatRoomId", event.chatRoomId().toString()),
                 event.senderNickname());
     }

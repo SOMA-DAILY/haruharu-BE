@@ -111,7 +111,7 @@ class ChatPartnerApiIntegrationTest {
 
         Long matchResultId = matchResultJpaRepository.save(MatchResultEntity.from(
                 MatchResult.of(meMemberId, partnerMemberId, LocalDateTime.of(2026, 6, 26, 22, 0)))).toDomain().id();
-        Long chatRoomId = chatRoomJpaRepository.save(ChatRoomEntity.from(ChatRoom.create(matchResultId))).toDomain().id();
+        Long chatRoomId = chatRoomJpaRepository.save(ChatRoomEntity.from(ChatRoom.createDirect(matchResultId))).toDomain().id();
         chatRoomMemberJpaRepository.save(ChatRoomMemberEntity.from(
                 ChatRoomMember.join(chatRoomId, meUser, LocalDateTime.now())));
         chatRoomMemberJpaRepository.save(ChatRoomMemberEntity.from(
@@ -155,7 +155,7 @@ class ChatPartnerApiIntegrationTest {
         // 탈퇴 시 프로필은 soft-delete되어 조회 불가 — 그래서 user_profiles 행을 아예 만들지 않는다
         Long matchResultId = matchResultJpaRepository.save(MatchResultEntity.from(
                 MatchResult.of(meMemberId, partnerMemberId, LocalDateTime.of(2026, 6, 26, 22, 0)))).toDomain().id();
-        Long chatRoomId = chatRoomJpaRepository.save(ChatRoomEntity.from(ChatRoom.create(matchResultId))).toDomain().id();
+        Long chatRoomId = chatRoomJpaRepository.save(ChatRoomEntity.from(ChatRoom.createDirect(matchResultId))).toDomain().id();
         chatRoomMemberJpaRepository.save(ChatRoomMemberEntity.from(
                 ChatRoomMember.join(chatRoomId, meUser, LocalDateTime.now())));
         chatRoomMemberJpaRepository.save(ChatRoomMemberEntity.from(

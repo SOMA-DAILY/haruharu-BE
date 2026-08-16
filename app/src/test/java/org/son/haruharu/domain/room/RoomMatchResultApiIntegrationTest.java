@@ -90,7 +90,7 @@ class RoomMatchResultApiIntegrationTest {
 
         Long matchResultId = matchResultJpaRepository.save(MatchResultEntity.from(
                 MatchResult.of(meMemberId, partnerMemberId, LocalDateTime.of(2026, 6, 26, 22, 0)))).toDomain().id();
-        Long chatRoomId = chatRoomJpaRepository.save(ChatRoomEntity.from(ChatRoom.create(matchResultId))).toDomain().id();
+        Long chatRoomId = chatRoomJpaRepository.save(ChatRoomEntity.from(ChatRoom.createDirect(matchResultId))).toDomain().id();
 
         mockMvc.perform(get("/api/v1/rooms/{roomId}/match-result", roomId)
                         .with(authentication(auth(meUser))))

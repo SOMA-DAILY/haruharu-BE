@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface ChatRoomJpaRepository extends JpaRepository<ChatRoomEntity, Long> {
     boolean existsByMatchResultId(Long matchResultId);
     Optional<ChatRoomEntity> findByMatchResultId(Long matchResultId);
+    boolean existsByRoomId(Long roomId);
+    Optional<ChatRoomEntity> findByRoomId(Long roomId);
 
     // 네이티브 DELETE — 전역 @SoftDelete는 JPQL 벌크 delete까지 soft로 바꾸므로, UNIQUE(match_result_id)를
     // 점유한 행을 실제로 지우려면 네이티브 SQL이어야 한다(데모 재시연 시 재생성 가능하게).

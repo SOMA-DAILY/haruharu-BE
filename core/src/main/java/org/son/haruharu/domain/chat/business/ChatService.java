@@ -13,6 +13,7 @@ import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
+import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
@@ -86,10 +87,27 @@ public class ChatService {
         if (chatRoomReader.existsByMatchResultId(matchResultId)) {
             return;
         }
-        ChatRoom room = chatRoomWriter.save(ChatRoom.create(matchResultId));
+        ChatRoom room = chatRoomWriter.save(ChatRoom.createDirect(matchResultId));
         LocalDateTime now = LocalDateTime.now(clock);
         chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), userIdA, now));
         chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), userIdB, now));
+    }
+
+    /**
+     * 소개팅방 시작 시 방 전체 그룹채팅(GROUP)을 생성한다(RoomStartedEvent 커밋 후 호출).
+     * room_id 당 1방 멱등 — 이벤트 재발행에도 중복 생성하지 않는다(exists + UNIQUE). 멤버는 생성 시점 스냅샷.
+     *
+     * AFTER_COMMIT 리스너에서 호출되므로 REQUIRES_NEW로 새 트랜잭션을 연다(#158, DIRECT와 동일).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void createGroupRoom(Long roomId, List<Long> memberUserIds) {
+        if (chatRoomReader.existsByRoomId(roomId)) {
+            return;
+        }
+        ChatRoom room = chatRoomWriter.save(ChatRoom.createGroup(roomId));
+        LocalDateTime now = LocalDateTime.now(clock);
+        memberUserIds.forEach(userId ->
+                chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), userId, now)));
     }
 
     /**
@@ -99,10 +117,10 @@ public class ChatService {
     @Transactional
     public ChatMessageBroadcast sendMessage(Long chatRoomId, Long senderId, String content) {
         requireMember(chatRoomId, senderId);
-        Long recipientId = requireActivePartner(chatRoomId, senderId);
+        List<Long> recipientIds = recipientsFor(chatRoomId, senderId); // DIRECT=상대 1명, GROUP=나 제외 전원
         ChatMessage saved = chatMessageWriter.save(ChatMessage.create(chatRoomId, senderId, content));
         String senderNickname = profileService.getNickname(senderId);
-        eventPublisher.publishEvent(new ChatMessageSentEvent(chatRoomId, recipientId, senderNickname));
+        eventPublisher.publishEvent(new ChatMessageSentEvent(chatRoomId, recipientIds, senderNickname));
         return ChatMessageBroadcast.from(saved);
     }
 
@@ -119,15 +137,18 @@ public class ChatService {
 
     public ChatRoomDetailResponse getRoom(Long chatRoomId, Long userId) {
         requireMember(chatRoomId, userId);
-        Long partnerUserId = requireActivePartner(chatRoomId, userId);
         ChatRoom room = chatRoomReader.getById(chatRoomId);
-        return new ChatRoomDetailResponse(chatRoomId, toPartnerBrief(partnerUserId), room.createdAt());
+        if (room.type() == ChatRoomType.GROUP) {
+            return ChatRoomDetailResponse.group(chatRoomId, otherMemberBriefs(chatRoomId, userId), room.createdAt());
+        }
+        Long partnerUserId = requireActivePartner(chatRoomId, userId);
+        return ChatRoomDetailResponse.direct(chatRoomId, toPartnerBrief(partnerUserId), room.createdAt());
     }
 
     /** 과거 메시지(최신순 커서 페이지). 삭제된 메시지는 제외. */
     public MessagePageResponse getMessages(Long chatRoomId, Long userId, Long cursor, int size) {
         requireMember(chatRoomId, userId);
-        requireActivePartner(chatRoomId, userId);
+        requireActiveIfDirect(chatRoomId, userId);
         int limit = Math.min(Math.max(size, 1), MAX_MESSAGE_PAGE_SIZE);
         List<ChatMessage> messages = chatMessageReader.findPage(chatRoomId, cursor, limit);
         return MessagePageResponse.of(messages, limit);
@@ -137,7 +158,7 @@ public class ChatService {
     @Transactional
     public ReadResponse markRead(Long chatRoomId, Long userId, Long lastReadMessageId) {
         ChatRoomMember member = requireMember(chatRoomId, userId);
-        requireActivePartner(chatRoomId, userId);
+        requireActiveIfDirect(chatRoomId, userId);
         ChatRoomMember updated = chatRoomMemberWriter.save(member.readUpTo(lastReadMessageId));
         long unread = chatMessageReader.countUnread(chatRoomId, updated.lastReadMessageId(), userId);
         return new ReadResponse(chatRoomId, unread);
@@ -151,21 +172,60 @@ public class ChatService {
     }
 
     private ChatRoomsResponse.ChatRoomSummary toSummary(ChatRoomMember me, Long userId) {
-        Long partnerUserId = partnerUserId(me.chatRoomId(), userId);
-        // 탈퇴자는 프로필이 soft-delete되어 조회 시 404가 난다. 조회 전에 걸러야 목록 전체가 죽지 않는다(#255).
-        if (userService.isWithdrawn(partnerUserId)) {
-            return ChatRoomsResponse.ChatRoomSummary.withdrawn(me.chatRoomId());
+        Long chatRoomId = me.chatRoomId();
+        ChatRoom room = chatRoomReader.getById(chatRoomId);
+
+        // DIRECT 상대 탈퇴는 마지막 메시지 조회 전에 걸러야 목록 전체가 죽지 않는다(#255).
+        Long directPartnerUserId = null;
+        if (room.type() == ChatRoomType.DIRECT) {
+            directPartnerUserId = partnerUserId(chatRoomId, userId);
+            if (userService.isWithdrawn(directPartnerUserId)) {
+                return ChatRoomsResponse.ChatRoomSummary.withdrawn(chatRoomId);
+            }
         }
-        PartnerBrief partner = toPartnerBrief(partnerUserId);
-        Optional<ChatMessage> last = chatMessageReader.findLast(me.chatRoomId());
-        long unread = chatMessageReader.countUnread(me.chatRoomId(), me.lastReadMessageId(), userId);
-        return new ChatRoomsResponse.ChatRoomSummary(
-                me.chatRoomId(),
-                partner,
-                last.map(ChatMessage::content).orElse(null),
-                last.map(ChatMessage::createdAt).orElse(null),
-                unread,
-                false);
+
+        Optional<ChatMessage> last = chatMessageReader.findLast(chatRoomId);
+        long unread = chatMessageReader.countUnread(chatRoomId, me.lastReadMessageId(), userId);
+        String lastMessage = last.map(ChatMessage::content).orElse(null);
+        LocalDateTime lastMessageAt = last.map(ChatMessage::createdAt).orElse(null);
+
+        if (room.type() == ChatRoomType.GROUP) {
+            return ChatRoomsResponse.ChatRoomSummary.group(
+                    chatRoomId, otherMemberBriefs(chatRoomId, userId), lastMessage, lastMessageAt, unread);
+        }
+        return ChatRoomsResponse.ChatRoomSummary.direct(
+                chatRoomId, toPartnerBrief(directPartnerUserId), lastMessage, lastMessageAt, unread);
+    }
+
+    /** GROUP 채팅에서 나를 제외한 현재 참여자들의 경량 정보. 나간 멤버(leftAt)·탈퇴자는 제외한다(목록이 죽지 않게). */
+    private List<PartnerBrief> otherMemberBriefs(Long chatRoomId, Long userId) {
+        return chatRoomMemberReader.findByChatRoomId(chatRoomId).stream()
+                .filter(member -> !member.hasLeft())
+                .map(ChatRoomMember::userId)
+                .filter(id -> !id.equals(userId))
+                .filter(id -> !userService.isWithdrawn(id))
+                .map(this::toPartnerBrief)
+                .toList();
+    }
+
+    /** 발신자 제외 수신자 목록(푸시 대상). DIRECT=상대 1명, GROUP=나 제외 현재 참여자(나간 멤버 제외). */
+    private List<Long> recipientsFor(Long chatRoomId, Long senderId) {
+        ChatRoom room = chatRoomReader.getById(chatRoomId);
+        if (room.type() == ChatRoomType.GROUP) {
+            return chatRoomMemberReader.findByChatRoomId(chatRoomId).stream()
+                    .filter(member -> !member.hasLeft())
+                    .map(ChatRoomMember::userId)
+                    .filter(id -> !id.equals(senderId))
+                    .toList();
+        }
+        return List.of(requireActivePartner(chatRoomId, senderId));
+    }
+
+    /** DIRECT 방만 상대 탈퇴를 검사한다(GROUP은 상대 단수 개념이 없어 통과). */
+    private void requireActiveIfDirect(Long chatRoomId, Long userId) {
+        if (chatRoomReader.getById(chatRoomId).type() == ChatRoomType.DIRECT) {
+            requireActivePartner(chatRoomId, userId);
+        }
     }
 
     /** 상대 프로필에서 목록·헤더용 경량 정보를 뽑는다. 대표사진 = sorted_order 최소 이미지(없으면 null). */

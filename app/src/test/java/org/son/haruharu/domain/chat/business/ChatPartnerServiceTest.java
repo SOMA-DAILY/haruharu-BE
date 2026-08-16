@@ -14,6 +14,7 @@ import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
+import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
@@ -78,7 +79,7 @@ class ChatPartnerServiceTest {
     @Test
     @DisplayName("매칭 상대 카드는 프로필 + 영상(조회 순서 유지)을 slot_start 리스트로 조립해 반환한다")
     void givenMatchedPartner_whenGetPartner_thenAssemblesProfileAndVideos() {
-        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, MATCH, LocalDateTime.now()));
+        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, ChatRoomType.DIRECT, null, MATCH, LocalDateTime.now()));
         given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME)).willReturn(Optional.of(membership(ME, null)));
         given(matchResultService.resolvePartner(MATCH, ME))
                 .willReturn(new PartnerMemberRef(ROOM, PARTNER_MEMBER, PARTNER_USER));
@@ -103,7 +104,7 @@ class ChatPartnerServiceTest {
     @Test
     @DisplayName("영상이 없는 상대는 videos가 빈 리스트로 반환된다")
     void givenNoVideos_whenGetPartner_thenEmptyList() {
-        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, MATCH, LocalDateTime.now()));
+        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, ChatRoomType.DIRECT, null, MATCH, LocalDateTime.now()));
         given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME)).willReturn(Optional.of(membership(ME, null)));
         given(matchResultService.resolvePartner(MATCH, ME))
                 .willReturn(new PartnerMemberRef(ROOM, PARTNER_MEMBER, PARTNER_USER));
@@ -119,7 +120,7 @@ class ChatPartnerServiceTest {
     @Test
     @DisplayName("채팅방 참여자가 아니면 ChatNotMemberException(403)이 발생하고 상대 해석·조회를 하지 않는다")
     void givenNotMember_whenGetPartner_thenThrows() {
-        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, MATCH, LocalDateTime.now()));
+        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, ChatRoomType.DIRECT, null, MATCH, LocalDateTime.now()));
         given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getPartner(CHAT_ROOM, ME))
@@ -131,7 +132,7 @@ class ChatPartnerServiceTest {
     @Test
     @DisplayName("방을 나간 멤버가 조회 시 ChatNotMemberException(403)이 발생한다")
     void givenLeftMember_whenGetPartner_thenThrows() {
-        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, MATCH, LocalDateTime.now()));
+        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, ChatRoomType.DIRECT, null, MATCH, LocalDateTime.now()));
         given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME))
                 .willReturn(Optional.of(membership(ME, LocalDateTime.now())));
 
@@ -142,7 +143,7 @@ class ChatPartnerServiceTest {
     @Test
     @DisplayName("상대가 탈퇴했으면 프로필 카드를 조회할 수 없다")
     void givenWithdrawnPartner_whenGetPartner_thenThrowsForbidden() {
-        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, MATCH, LocalDateTime.now()));
+        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, ChatRoomType.DIRECT, null, MATCH, LocalDateTime.now()));
         given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME))
                 .willReturn(Optional.of(membership(ME, null)));
         given(matchResultService.resolvePartner(MATCH, ME))
