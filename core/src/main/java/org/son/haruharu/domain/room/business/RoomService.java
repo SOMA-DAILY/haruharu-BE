@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.command.CreateRoomCommand;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
 import org.son.haruharu.domain.room.business.exception.RoomAlreadyEndedException;
@@ -102,7 +101,7 @@ public class RoomService {
         LocalDateTime now = LocalDateTime.now(clock);
         return roomReader.findCurrent(candidateRoomIds(userId), now)
             .map(room -> RoomResponse.from(room, roomMemberReader.getByRoomId(room.id()),
-                    room.currentDayAt(now, UploadSlot.dayStartHour()), now));
+                    room.currentDayAt(now), now));
     }
 
     /** 종료되지 않은(PENDING/ACTIVE) 방 보유 여부. 매칭 큐 참가 차단 등 도메인 간 조율에 쓰인다. */
@@ -127,6 +126,6 @@ public class RoomService {
             .orElseThrow(RoomNotFoundException::new);
         List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
         LocalDateTime now = LocalDateTime.now(clock);
-        return RoomResponse.from(room, members, room.currentDayAt(now, UploadSlot.dayStartHour()), now);
+        return RoomResponse.from(room, members, room.currentDayAt(now), now);
     }
 }

@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Optional;
 
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
@@ -90,7 +89,7 @@ public class MatchResultService {
         if (room == null || room.startedAt() == null) {
             return Optional.empty();
         }
-        LocalDateTime announcedAt = room.announcedAt(UploadSlot.dayStartHour());
+        LocalDateTime announcedAt = room.announcedAt();
         if (LocalDateTime.now(clock).isBefore(announcedAt)) {
             return Optional.empty();
         }

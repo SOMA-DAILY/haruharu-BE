@@ -30,6 +30,18 @@ public record Room(
      */
     public static final int RESULT_ANNOUNCE_HOUR = 22;
 
+    /**
+     * 하루 경계 시각(시). 구 모델 방의 Day 앵커 기준(startedAt − DAY_START_HOUR)으로만 쓰인다.
+     * 새 모델(starts_at 상대)은 이 값을 쓰지 않는다. (구 UploadSlot.dayStartHour 대체 — 레거시 철거 L3)
+     */
+    public static final int DAY_START_HOUR = 9;
+
+    /**
+     * 구 모델 방의 최종선택 오픈 시각(마지막 날 시각). 구 UploadSlot Day3 마지막 슬롯 종료(18시) 대체.
+     * 새 모델 방은 어드민 입력 opens_at 을 쓰므로 쓰이지 않는다.
+     */
+    private static final int LEGACY_SELECTION_OPEN_HOUR = 18;
+
     /** 매칭 확정으로 방 생성: scheduledDate(확정일) 당일 시작 예정. 시작 전이므로 PENDING. (구 모델·보류) */
     public static Room create(LocalDate scheduledDate, int totalDays) {
         return new Room(null, RoomStatus.PENDING, scheduledDate, totalDays, null, null);
@@ -108,12 +120,11 @@ public record Room(
     }
 
     /**
-     * 현재 Day = min(totalDays, 1 + startedAt~now 경과일). 하루 경계 시각(dayStartHour, 예: 09:00)은
-     * business 계층이 UploadSlot.dayStartHour()에서 읽어 주입한다(room 도메인이 mission에 결합되지 않도록).
-     * 미시작(PENDING/startedAt 없음)이면 0. 별도 증분 잡 없이 시각에서 파생한다.
+     * 현재 Day = min(totalDays, 1 + startedAt~now 경과일). 미시작(PENDING/startedAt 없음)이면 0.
+     * 별도 증분 잡 없이 시각에서 파생한다. 하루 경계는 {@link #DAY_START_HOUR}(구 모델 전용).
      */
-    public int currentDayAt(LocalDateTime now, int dayStartHour) {
-        // 새 모델(#320): Day 는 starts_at 상대 24시간 단위. dayStartHour(09:00) 경계를 쓰지 않는다
+    public int currentDayAt(LocalDateTime now) {
+        // 새 모델(#320): Day 는 starts_at 상대 24시간 단위. DAY_START_HOUR(09:00) 경계를 쓰지 않는다
         // — 저녁 시작 방(예: 19:00)이 다음날 09:00에 Day2 가 되어버리는 문제를 없앤다.
         // 진행 중이 아닌 방(시작 전·종료·취소)은 구 모델과 동일하게 0.
         if (startsAt != null) {
@@ -126,51 +137,54 @@ public record Room(
         if (status != RoomStatus.ACTIVE || startedAt == null) {
             return 0;
         }
-        return (int) Math.min(totalDays, rawDayAt(now, dayStartHour));
+        return (int) Math.min(totalDays, rawDayAt(now));
     }
 
     /**
-     * 마지막 날(totalDays)이 지나 세션이 끝났는지. Day+1의 하루 경계(dayStartHour)를 넘긴 ACTIVE 방이 true.
-     * currentDayAt은 totalDays로 캡되어 "경과"를 구분할 수 없으므로 캡 이전 raw day로 판정한다.
+     * 마지막 날(totalDays)이 지나 세션이 끝났는지. Day+1의 하루 경계를 넘긴 ACTIVE 방이 true.
+     * currentDayAt은 totalDays로 캡되어 "경과"를 구분할 수 없으므로 캡 이전 raw day로 판정한다.(구 모델 전용)
      */
-    public boolean hasEndedBy(LocalDateTime now, int dayStartHour) {
+    public boolean hasEndedBy(LocalDateTime now) {
         if (status != RoomStatus.ACTIVE || startedAt == null) {
             return false;
         }
-        return rawDayAt(now, dayStartHour) > totalDays;
+        return rawDayAt(now) > totalDays;
     }
 
-    private long rawDayAt(LocalDateTime now, int dayStartHour) {
+    private long rawDayAt(LocalDateTime now) {
         long elapsedDays = ChronoUnit.DAYS.between(
-                dateOfDay(1, dayStartHour),
-                now.minusHours(dayStartHour).toLocalDate());
+                dateOfDay(1),
+                now.minusHours(DAY_START_HOUR).toLocalDate());
         return 1 + Math.max(0, elapsedDays);
     }
 
     /**
-     * Day N의 달력 날짜. currentDayAt과 같은 앵커(startedAt - dayStartHour)에서 파생해
+     * Day N의 달력 날짜. currentDayAt과 같은 앵커(startedAt − DAY_START_HOUR)에서 파생해
      * Day 판정과 특정 시각 판정(예: 최종선택 오픈)이 서로 다른 경계를 쓰지 않게 한다.
-     * ACTIVE + startedAt 존재를 전제한다(호출측이 currentDayAt 게이트로 보장).
      */
-    public LocalDate dateOfDay(int dayNumber, int dayStartHour) {
+    public LocalDate dateOfDay(int dayNumber) {
         // 새 모델(#320): Day 경계가 starts_at 상대 24시간이므로 날짜도 같은 앵커에서 파생한다.
         // startedAt 이 아직 비어 있는(전이 전) 방에서도 NPE 없이 계산돼야 한다 — 오늘 화면이 이 값을 쓴다.
         if (startsAt != null) {
             return startsAt.toLocalDate().plusDays(dayNumber - 1L);
         }
-        return startedAt.minusHours(dayStartHour).toLocalDate().plusDays(dayNumber - 1L);
+        return startedAt.minusHours(DAY_START_HOUR).toLocalDate().plusDays(dayNumber - 1L);
     }
 
     /**
-     * 결과 발표 시각 = 마지막 날(totalDays)의 RESULT_ANNOUNCE_HOUR. 최종선택 마감·미매칭 확정(위로 구름)·
-     * pending_result 노출이 모두 이 시각을 공유하므로 계산은 여기 한 곳에만 둔다.
-     * dateOfDay와 같은 앵커에서 파생하며 startedAt 존재를 전제한다(호출측이 보장).
+     * 구 모델 방의 최종선택 오픈 시각 = 마지막 날 마지막 슬롯 종료(Day3 18:00). 구 UploadSlot.ofDay(3).endHour() 대체.
+     * 새 모델 방은 어드민 입력 opens_at 을 쓰므로 이 값을 호출하지 않는다(FinalSelectionService 가 null 체크로 분기).
      */
-    public LocalDateTime announcedAt(int dayStartHour) {
+    public LocalDateTime legacySelectionOpensAt() {
+        return dateOfDay(totalDays).atStartOfDay().plusHours(LEGACY_SELECTION_OPEN_HOUR);
+    }
+
+    /** 결과 발표 시각 = 마지막 날(totalDays)의 RESULT_ANNOUNCE_HOUR. 구 모델 방의 최종선택 마감에도 쓰인다. */
+    public LocalDateTime announcedAt() {
         // 새 모델(#320): 발표 시각은 어드민이 입력한 result_at 그 자체다(마지막 날 22:00 고정이 아니다).
         if (resultAt != null) {
             return resultAt;
         }
-        return dateOfDay(totalDays, dayStartHour).atStartOfDay().plusHours(RESULT_ANNOUNCE_HOUR);
+        return dateOfDay(totalDays).atStartOfDay().plusHours(RESULT_ANNOUNCE_HOUR);
     }
 }

@@ -95,7 +95,7 @@ class SchedulerVirtualTimeGuardTest {
                 matchingExecutor, roomActivator, roomTerminator, consolationRewardService,
                 providerOf(new AdjustableClock(Clock.system(SEOUL))), new MatchingProperties(20L, false));
         withUnfixed.terminateSessions();
-        verify(roomTerminator).terminate(any(), anyInt());
+        verify(roomTerminator).terminate(any());
     }
 
     @Test

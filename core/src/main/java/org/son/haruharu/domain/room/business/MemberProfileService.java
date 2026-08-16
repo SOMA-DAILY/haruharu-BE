@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.profile.implement.ProfileField;
 import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
@@ -82,7 +81,7 @@ public class MemberProfileService {
                 .orElseThrow(RoomNotFoundException::new);
 
         boolean self = target.userId().equals(userId);
-        int currentDay = room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour());
+        int currentDay = room.currentDayAt(LocalDateTime.now(clock));
         UserProfile profile = userProfileReader.findByUserId(target.userId()).orElse(null);
 
         // 상호매칭은 영구 사실이라 룸 만료(currentDay=0) 이후에도 항목 공개가 유지된다. self는 단락평가로 isMatched 미호출.

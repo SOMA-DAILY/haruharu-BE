@@ -3,7 +3,6 @@ package org.son.haruharu.domain.room.business;
 import java.time.Clock;
 import java.time.LocalDateTime;
 
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
 import org.son.haruharu.domain.room.business.dto.MyFinalSelectionResponse;
 import org.son.haruharu.domain.room.business.event.MemberSelectedEvent;
@@ -36,9 +35,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class FinalSelectionService {
 
-    /** 최종선택이 열리는 Day. 기본 프로필 공개(PROFILE_REVEAL_DAY)와 동일 기준. */
-    private static final int FINAL_SELECTION_DAY = 3;
-
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
     private final FinalSelectionReader finalSelectionReader;
@@ -66,13 +62,7 @@ public class FinalSelectionService {
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
         LocalDateTime now = LocalDateTime.now(clock);
-        // Day 게이트는 구 모델 전용(#320). 새 모델은 어드민이 방마다 opens_at 을 직접 지정하고,
-        // 그 시각이 starts_at 기준 Day3 이 아닐 수 있다(예: 19:00 시작 방의 opens_at=이틀 뒤 18:00 → Day2).
-        // "두 시계 분리" 원칙대로 최종선택은 Day 가 아니라 시각으로만 판정한다.
-        if (room.startsAt() == null
-                && room.currentDayAt(now, UploadSlot.dayStartHour()) < FINAL_SELECTION_DAY) {
-            throw new NotFinalSelectionDayException();
-        }
+        // 최종선택은 Day 가 아니라 어드민이 방마다 입력한 시각(opens_at)으로만 판정한다("두 시계 분리", #320).
         if (now.isBefore(selectionOpensAt(room))) {
             throw new NotFinalSelectionDayException();
         }
@@ -126,29 +116,22 @@ public class FinalSelectionService {
     }
 
     /**
-     * 최종선택 오픈 시각 = 마지막 날 마지막 슬롯 종료 시각(Day3 18:00).
-     * 하루 경계가 09:00이라 Day3 심야(익일 00~09시)에도 열려 있어야 하므로 시(hour) 비교가 아닌 시각 비교로 판정한다.
-     * 선행 currentDayAt 게이트가 PENDING(startedAt null)을 걸러 dateOfDay 호출이 안전하다.
+     * 최종선택 오픈 시각 = 어드민이 방마다 입력한 opens_at(새 모델). 시(hour)가 아닌 시각으로 판정한다.
+     * DB에 잔존할 수 있는 구 모델 방(opens_at 미설정)은 마지막 날 마지막 슬롯 종료 시각(Day3 18:00)으로 방어 계산한다.
      */
     private LocalDateTime selectionOpensAt(Room room) {
-        // 새 모델(#320): 어드민이 방마다 입력한 시각이 곧 오픈 시각이다.
         if (room.finalSelectionOpensAt() != null) {
             return room.finalSelectionOpensAt();
         }
-        int opensHour = UploadSlot.ofDay(FINAL_SELECTION_DAY).getLast().endHour();
-        return room.dateOfDay(FINAL_SELECTION_DAY, UploadSlot.dayStartHour())
-                .atStartOfDay().plusHours(opensHour);
+        return room.legacySelectionOpensAt();
     }
 
-    /**
-     * 최종선택 마감. 새 모델(#320)은 어드민이 입력한 final_selection_closes_at,
-     * 구 모델은 결과 발표 시각(마지막 날 22:00 — 계산은 Room.announcedAt 한 곳으로 통일).
-     */
+    /** 최종선택 마감 = 어드민이 입력한 closes_at(새 모델). 구 모델 방은 결과 발표 시각(Room.announcedAt). */
     private LocalDateTime selectionClosesAt(Room room) {
         if (room.finalSelectionClosesAt() != null) {
             return room.finalSelectionClosesAt();
         }
-        return room.announcedAt(UploadSlot.dayStartHour());
+        return room.announcedAt();
     }
 
     /** 상대(selectedMemberId)도 나(meId)를 최종선택했는지. 상대가 기권(selectedMemberId=null)했으면 미성립. */

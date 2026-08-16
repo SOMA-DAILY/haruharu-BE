@@ -1,6 +1,5 @@
 package org.son.haruharu.domain.notification.business;
 
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -36,7 +35,7 @@ public class FinalSelectionOpenNotifier {
         // 초대코드 모델 방은 방마다 opens_at 이 달라 이 고정 cron(18:05)으로 맞출 수 없다 — getLegacyActive 가
         // 조회에서 걸러내고, 전이 시점 발송은 RoomStatusReconciler → FinalSelectionOpenedEvent 가 담당한다(#320).
         for (Room room : roomReader.getLegacyActive()) {
-            if (room.currentDayAt(now, UploadSlot.dayStartHour()) != room.totalDays()) {
+            if (room.currentDayAt(now) != room.totalDays()) {
                 continue;
             }
             List<Long> userIds = roomMemberReader.getByRoomId(room.id()).stream()

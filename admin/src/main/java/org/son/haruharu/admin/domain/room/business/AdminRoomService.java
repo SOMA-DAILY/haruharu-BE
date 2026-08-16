@@ -4,7 +4,6 @@ import org.son.haruharu.admin.common.PageResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomDetailResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomSummary;
 import org.son.haruharu.admin.domain.room.implement.AdminRoomReader;
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -50,9 +49,8 @@ public class AdminRoomService {
                 .collect(Collectors.groupingBy(RoomMember::roomId));
 
         LocalDateTime now = LocalDateTime.now(clock);
-        int dayStartHour = UploadSlot.dayStartHour();
         List<AdminRoomSummary> content = rooms.stream()
-                .map(room -> toSummary(room, membersByRoom.getOrDefault(room.id(), List.of()), now, dayStartHour))
+                .map(room -> toSummary(room, membersByRoom.getOrDefault(room.id(), List.of()), now))
                 .toList();
         return PageResponse.of(content, safePage, safeSize, total);
     }
@@ -60,7 +58,7 @@ public class AdminRoomService {
     public AdminRoomDetailResponse getRoom(Long roomId) {
         Room room = adminRoomReader.getById(roomId);
         List<RoomMember> members = adminRoomReader.membersOf(roomId);
-        int currentDay = room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour());
+        int currentDay = room.currentDayAt(LocalDateTime.now(clock));
 
         // 참여자 프로필(닉네임·지역)을 일괄 조회해 조인, 나이는 birthday에서 파생.
         Map<Long, UserProfile> profilesByUserId = adminRoomReader
@@ -86,9 +84,9 @@ public class AdminRoomService {
                 member.id(), member.userId(), member.gender(), member.joinedAt(), nickname, age, region);
     }
 
-    private AdminRoomSummary toSummary(Room room, List<RoomMember> members, LocalDateTime now, int dayStartHour) {
+    private AdminRoomSummary toSummary(Room room, List<RoomMember> members, LocalDateTime now) {
         return new AdminRoomSummary(
-                room.id(), room.statusAt(now), room.scheduledDate(), room.currentDayAt(now, dayStartHour),
+                room.id(), room.statusAt(now), room.scheduledDate(), room.currentDayAt(now),
                 members.size(), countGender(members, GENDER_FEMALE), countGender(members, GENDER_MALE),
                 startedAtOf(room));
     }

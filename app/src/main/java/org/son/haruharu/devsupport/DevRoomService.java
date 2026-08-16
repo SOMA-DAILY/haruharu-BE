@@ -12,7 +12,6 @@ import org.son.haruharu.devsupport.exception.InvalidDevMembersException;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.matching.business.MatchingExecutor;
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.ConsolationRewardService;
 import org.son.haruharu.domain.room.business.RoomActivator;
 import org.son.haruharu.domain.room.business.RoomService;
@@ -92,9 +91,9 @@ public class DevRoomService {
                 .toList();
 
         // (지금-9h)의 날짜가 Day{targetDay}가 되도록 시작일 역산 — 하루 경계 09:00과 동일한 앵커
-        LocalDate startDate = adjustableClock.realNow().minusHours(UploadSlot.dayStartHour())
+        LocalDate startDate = adjustableClock.realNow().minusHours(Room.DAY_START_HOUR)
                 .toLocalDate().minusDays(targetDay - 1L);
-        LocalDateTime startedAt = startDate.atTime(UploadSlot.dayStartHour(), 0);
+        LocalDateTime startedAt = startDate.atTime(Room.DAY_START_HOUR, 0);
         Room room = roomWriter.save(
                 new Room(null, RoomStatus.ACTIVE, startDate, TOTAL_DAYS, startedAt, null));
 
@@ -107,7 +106,7 @@ public class DevRoomService {
             adjustableClock.fix(virtualDateTime(room, targetDay, time));
         }
         return new DevRoomResponse(room.id(), room.scheduledDate(), room.startedAt(),
-                room.currentDayAt(LocalDateTime.now(adjustableClock), UploadSlot.dayStartHour()),
+                room.currentDayAt(LocalDateTime.now(adjustableClock)),
                 clockStatus());
     }
 
@@ -197,8 +196,8 @@ public class DevRoomService {
      * 09시 이전(새벽)은 해당 Day의 익일 달력 날짜에 속한다.
      */
     private LocalDateTime virtualDateTime(Room room, int day, LocalTime time) {
-        LocalDate base = room.dateOfDay(day, UploadSlot.dayStartHour());
-        return time.getHour() >= UploadSlot.dayStartHour()
+        LocalDate base = room.dateOfDay(day);
+        return time.getHour() >= Room.DAY_START_HOUR
                 ? base.atTime(time)
                 : base.plusDays(1).atTime(time);
     }

@@ -26,7 +26,6 @@ import static org.mockito.Mockito.times;
 @ExtendWith(MockitoExtension.class)
 class RoomTerminatorTest {
 
-    private static final int DAY_START_HOUR = 9;
     private static final LocalDate SCHEDULED = LocalDate.of(2026, 6, 24);
     private static final LocalDateTime STARTED_AT = LocalDateTime.of(2026, 6, 24, 9, 0);
 
@@ -55,7 +54,7 @@ class RoomTerminatorTest {
         given(roomReader.getLegacyActive()).willReturn(List.of(expired, ongoing));
 
         // when
-        int ended = roomTerminator.terminate(now, DAY_START_HOUR);
+        int ended = roomTerminator.terminate(now);
 
         // then
         assertThat(ended).isEqualTo(1);
@@ -75,7 +74,7 @@ class RoomTerminatorTest {
         given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom(1L)));
 
         // when
-        int ended = roomTerminator.terminate(now, DAY_START_HOUR);
+        int ended = roomTerminator.terminate(now);
 
         // then
         assertThat(ended).isZero();

@@ -77,21 +77,27 @@ class FinalSelectionServiceTest {
         return new RoomMember(id, memberRoomId, memberUserId, "FEMALE", null, LocalDateTime.now());
     }
 
-    // currentDay는 startedAt에서 파생된다. clock=2026-06-26 19:00(KST) 기준 방날짜에서 (currentDay-1)일 전 09:00 앵커.
-    private Room room(int currentDay) {
-        LocalDateTime startedAt = LocalDateTime.of(2026, 6, 26, 9, 0).minusDays(currentDay - 1L);
-        return new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), 3, startedAt, null);
+    // 새 모델(#320·#337): 최종선택 오픈/마감은 어드민이 방마다 입력한 시각으로 판정한다.
+    // 기존 시나리오를 보존해 opens=2026-06-26 18:00, closes=2026-06-26 22:00 KST 로 고정한다.
+    private static final LocalDateTime SELECTION_OPENS_AT = LocalDateTime.of(2026, 6, 26, 18, 0);
+    private static final LocalDateTime SELECTION_CLOSES_AT = LocalDateTime.of(2026, 6, 26, 22, 0);
+
+    private Room room() {
+        LocalDateTime startsAt = LocalDateTime.of(2026, 6, 24, 18, 0);
+        return new Room(roomId, RoomStatus.ACTIVE, startsAt.toLocalDate(), 3, startsAt, null,
+                startsAt, SELECTION_OPENS_AT, SELECTION_CLOSES_AT,
+                SELECTION_CLOSES_AT, startsAt.plusDays(3));
     }
 
-    private void stubMeAndRoom(int currentDay) {
+    private void stubMeAndRoom() {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, userId, roomId));
-        given(roomReader.findById(roomId)).willReturn(Optional.of(room(currentDay)));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(room()));
     }
 
     @Test
     @DisplayName("Day3에 상대가 아직 나를 선택하지 않았으면 저장만 하고 matched=false")
     void givenDay3AndNoMutual_whenSelect_thenSavedNotMatched() {
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
         given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
@@ -111,7 +117,7 @@ class FinalSelectionServiceTest {
     @Test
     @DisplayName("상대도 나를 선택했으면 즉시 매칭되고 MatchResult는 canonical 정렬(a<b)로 저장된다")
     void givenMutual_whenSelect_thenMatchedAndCanonicalSaved() {
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
         given(finalSelectionReader.findByRoomMemberId(selectedId))
@@ -137,11 +143,14 @@ class FinalSelectionServiceTest {
     }
 
     @Test
-    @DisplayName("Day3 이전이면 NotFinalSelectionDayException이 발생한다")
-    void givenBeforeDay3_whenSelect_thenThrows() {
-        stubMeAndRoom(2);
+    @DisplayName("최종선택 오픈(18:00) 전이면 NotFinalSelectionDayException이 발생한다")
+    void givenBeforeOpen_whenSelect_thenThrows() {
+        // 2026-06-26 17:00 KST — opens_at(18:00) 이전
+        FinalSelectionService beforeOpen = serviceWith(
+                Clock.fixed(Instant.parse("2026-06-26T08:00:00Z"), ZoneId.of("Asia/Seoul")));
+        stubMeAndRoom();
 
-        assertThatThrownBy(() -> service.select(roomId, selectedId, userId))
+        assertThatThrownBy(() -> beforeOpen.select(roomId, selectedId, userId))
                 .isInstanceOf(NotFinalSelectionDayException.class);
         then(finalSelectionWriter).should(never()).save(any());
     }
@@ -152,12 +161,31 @@ class FinalSelectionServiceTest {
     }
 
     @Test
+    @DisplayName("구 모델 방(opens_at 미설정)은 마지막 날 18:00 fallback으로 판정한다(NPE 없음)")
+    void givenLegacyRoomWithoutSchedule_whenSelect_thenUsesFallbackWindow() {
+        // 구 모델 방: startsAt·opens_at·closes_at 전부 null. startedAt 2026-06-24 09:00 → Day3=2026-06-26.
+        // 고정시각 19:00 KST 는 fallback opens(18:00)~closes(22:00) 사이라 선택 가능해야 한다.
+        LocalDateTime startedAt = LocalDateTime.of(2026, 6, 24, 9, 0);
+        Room legacy = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), 3, startedAt, null);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, userId, roomId));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(legacy));
+        given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
+        given(finalSelectionReader.hasSelected(meId)).willReturn(false);
+        given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
+
+        FinalSelectionResponse result = service.select(roomId, selectedId, userId);
+
+        assertThat(result.matched()).isFalse();
+        then(finalSelectionWriter).should().save(any(FinalSelection.class));
+    }
+
+    @Test
     @DisplayName("Day3라도 마지막 슬롯 종료(18:00) 전이면 NotFinalSelectionDayException이 발생한다")
     void givenDay3Before18_whenSelect_thenThrows() {
         // 2026-06-26 17:00 KST — Day3 slot3(15~18) 진행 중
         FinalSelectionService early = serviceWith(
                 Clock.fixed(Instant.parse("2026-06-26T08:00:00Z"), ZoneId.of("Asia/Seoul")));
-        stubMeAndRoom(3);
+        stubMeAndRoom();
 
         assertThatThrownBy(() -> early.select(roomId, selectedId, userId))
                 .isInstanceOf(NotFinalSelectionDayException.class);
@@ -169,7 +197,7 @@ class FinalSelectionServiceTest {
     void givenDay3At18_whenSelect_thenAllowed() {
         FinalSelectionService atOpen = serviceWith(
                 Clock.fixed(Instant.parse("2026-06-26T09:00:00Z"), ZoneId.of("Asia/Seoul")));
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
         given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
@@ -186,7 +214,7 @@ class FinalSelectionServiceTest {
         // 2026-06-27 02:00 KST — 하루 경계(09:00) 전이라 Day3이지만 22:00 마감을 지남
         FinalSelectionService lateNight = serviceWith(
                 Clock.fixed(Instant.parse("2026-06-26T17:00:00Z"), ZoneId.of("Asia/Seoul")));
-        stubMeAndRoom(3);
+        stubMeAndRoom();
 
         assertThatThrownBy(() -> lateNight.select(roomId, selectedId, userId))
                 .isInstanceOf(SelectionClosedException.class);
@@ -199,7 +227,7 @@ class FinalSelectionServiceTest {
         // 2026-06-26 21:59 KST
         FinalSelectionService beforeClose = serviceWith(
                 Clock.fixed(Instant.parse("2026-06-26T12:59:00Z"), ZoneId.of("Asia/Seoul")));
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
         given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
@@ -216,7 +244,7 @@ class FinalSelectionServiceTest {
         // 2026-06-26 22:00 KST — 결과 발표 시각(CONFIRM_HOUR)
         FinalSelectionService atClose = serviceWith(
                 Clock.fixed(Instant.parse("2026-06-26T13:00:00Z"), ZoneId.of("Asia/Seoul")));
-        stubMeAndRoom(3);
+        stubMeAndRoom();
 
         assertThatThrownBy(() -> atClose.select(roomId, selectedId, userId))
                 .isInstanceOf(SelectionClosedException.class);
@@ -228,7 +256,7 @@ class FinalSelectionServiceTest {
     void givenAfterClose_whenAbstain_thenClosed() {
         FinalSelectionService atClose = serviceWith(
                 Clock.fixed(Instant.parse("2026-06-26T13:00:00Z"), ZoneId.of("Asia/Seoul")));
-        stubMeAndRoom(3);
+        stubMeAndRoom();
 
         assertThatThrownBy(() -> atClose.select(roomId, null, userId))
                 .isInstanceOf(SelectionClosedException.class);
@@ -238,7 +266,7 @@ class FinalSelectionServiceTest {
     @Test
     @DisplayName("자기 자신을 선택하면 CannotSelectSelfException이 발생한다")
     void givenSelfSelection_whenSelect_thenThrows() {
-        stubMeAndRoom(3);
+        stubMeAndRoom();
 
         assertThatThrownBy(() -> service.select(roomId, meId, userId))
                 .isInstanceOf(CannotSelectSelfException.class);
@@ -247,7 +275,7 @@ class FinalSelectionServiceTest {
     @Test
     @DisplayName("이미 최종선택했으면 AlreadySelectedException이 발생한다(1회 확정)")
     void givenAlreadySelected_whenSelect_thenThrows() {
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(true);
 
@@ -259,7 +287,7 @@ class FinalSelectionServiceTest {
     @Test
     @DisplayName("다른 방 멤버를 선택하면 RoomMemberNotFoundException이 발생한다")
     void givenMemberInAnotherRoom_whenSelect_thenThrows() {
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, 99L));
 
         assertThatThrownBy(() -> service.select(roomId, selectedId, userId))
@@ -269,7 +297,7 @@ class FinalSelectionServiceTest {
     @Test
     @DisplayName("기권(selectedMemberId=null)하면 아무도 선택하지 않고 저장하며 matched=false·매칭·이벤트 없음")
     void givenAbstain_whenSelect_thenSavedWithNullAndNotMatched() {
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
 
         FinalSelectionResponse result = service.select(roomId, null, userId);
@@ -287,7 +315,7 @@ class FinalSelectionServiceTest {
     @Test
     @DisplayName("이미 최종선택(또는 기권)했으면 기권 요청도 AlreadySelectedException이 발생한다")
     void givenAlreadySelected_whenAbstain_thenThrows() {
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         given(finalSelectionReader.hasSelected(meId)).willReturn(true);
 
         assertThatThrownBy(() -> service.select(roomId, null, userId))
@@ -298,7 +326,7 @@ class FinalSelectionServiceTest {
     @Test
     @DisplayName("상대가 기권(selectedMemberId=null)했으면 내가 상대를 선택해도 NPE 없이 matched=false")
     void givenTargetAbstained_whenSelect_thenNotMatchedNoNpe() {
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
         // 상대는 기권(selectedMemberId=null)한 최종선택 행을 가짐
@@ -357,7 +385,7 @@ class FinalSelectionServiceTest {
     @Test
     @DisplayName("같은 방의 동성 멤버를 선택하면 CannotSelectSameGenderException이 발생하고 저장되지 않는다")
     void givenSameGenderTarget_whenSelect_thenThrows() {
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         // me(MALE)가 동성(MALE) 멤버를 선택
         given(roomMemberReader.getById(selectedId)).willReturn(member(selectedId, 2L, roomId));
 
@@ -370,7 +398,7 @@ class FinalSelectionServiceTest {
     @Test
     @DisplayName("성별 스냅샷이 null인 멤버가 섞여 있으면(구시드 데이터) 동성 검증을 건너뛰고 정상 처리된다")
     void givenNullGenderTarget_whenSelect_thenSkipsGenderCheck() {
-        stubMeAndRoom(3);
+        stubMeAndRoom();
         given(roomMemberReader.getById(selectedId))
                 .willReturn(new RoomMember(selectedId, roomId, 2L, null, null, LocalDateTime.now()));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);

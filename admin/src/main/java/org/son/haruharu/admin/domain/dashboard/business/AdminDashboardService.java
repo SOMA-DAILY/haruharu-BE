@@ -5,7 +5,6 @@ import org.son.haruharu.admin.domain.dashboard.business.dto.DashboardSummaryResp
 import org.son.haruharu.admin.domain.dashboard.business.exception.AdminDashboardInvalidRangeException;
 import org.son.haruharu.admin.domain.dashboard.implement.DashboardReader;
 import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.implement.Room;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -105,11 +104,10 @@ public class AdminDashboardService {
     private DashboardSummaryResponse.ActiveRooms activeRooms() {
         List<Room> rooms = dashboardReader.activeRooms();
         LocalDateTime now = LocalDateTime.now(clock);
-        int dayStartHour = UploadSlot.dayStartHour();
         // 방마다 현재 일차(1~totalDays, 최종=totalDays)를 파생해 집계한다.
         Map<Integer, Long> byDay = rooms.stream()
                 .collect(Collectors.groupingBy(
-                        room -> room.currentDayAt(now, dayStartHour),
+                        room -> room.currentDayAt(now),
                         TreeMap::new,
                         Collectors.counting()));
         return new DashboardSummaryResponse.ActiveRooms(rooms.size(), byDay);
