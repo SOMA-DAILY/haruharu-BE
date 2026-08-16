@@ -60,9 +60,6 @@ haruharu:
   payment:
     enabled: false  # 결제(IAP) 비활성(#309 피벗). webhook·상품 API off. 되살릴 때만 true
   room:
-    upload-reward:
-      # 업로드 보상 비활성(#309 피벗): 완주 보상 없음(amountFor→0→미지급). 되살릴 때 day별 값 채움.
-      daily-completion: {}
     consolation-reward:
       amount: 5
 

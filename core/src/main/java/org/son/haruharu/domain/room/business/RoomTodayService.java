@@ -7,10 +7,8 @@ import java.util.Set;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
-import org.son.haruharu.domain.room.business.dto.TodayResponse.RewardStatus;
 import org.son.haruharu.domain.room.business.dto.TodayResponse.TimerType;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
-import org.son.haruharu.domain.room.implement.DailyUploadRewardReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -29,18 +27,13 @@ public class RoomTodayService {
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
     private final VideoPostReader videoPostReader;
-    private final DailyUploadRewardReader dailyUploadRewardReader;
-    private final UploadRewardProperties uploadRewardProperties;
     private final Clock clock;
 
     public RoomTodayService(RoomReader roomReader, RoomMemberReader roomMemberReader,
-                            VideoPostReader videoPostReader, DailyUploadRewardReader dailyUploadRewardReader,
-                            UploadRewardProperties uploadRewardProperties, Clock clock) {
+                            VideoPostReader videoPostReader, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.videoPostReader = videoPostReader;
-        this.dailyUploadRewardReader = dailyUploadRewardReader;
-        this.uploadRewardProperties = uploadRewardProperties;
         this.clock = clock;
     }
 
@@ -50,7 +43,7 @@ public class RoomTodayService {
                 .orElseThrow(RoomNotFoundException::new);
 
         LocalDateTime now = LocalDateTime.now(clock);
-        // currentDay·reward는 폐기 예정 일일보상 호환용 vestigial(슬롯 로직 무관).
+        // currentDay는 방 진행 일차 표시용(room 레벨). L3에서 dayStartHour 파라미터 정리 예정.
         int currentDay = room.currentDayAt(now, UploadSlot.dayStartHour());
 
         // 노출 중인 슬롯 창(최근 3시간). 최종선택 이후 시작 슬롯은 업로드 불가라 제외. 촬영 가능한 '현재 슬롯'은 ACTIVE일 때만.
@@ -64,14 +57,10 @@ public class RoomTodayService {
                 ? Set.of()
                 : Set.copyOf(videoPostReader.getUploadedSlotStarts(member.id(), window));
 
-        long rewardAmount = uploadRewardProperties.amountFor(currentDay);
-        RewardStatus rewardStatus = dailyUploadRewardReader.isRewarded(member.id(), currentDay)
-                ? RewardStatus.EARNED : RewardStatus.LOCKED;
-
         TimerTarget timer = computeTimer(room, now);
 
         return TodayResponse.of(room, now, currentDay, window, currentSlotStart, uploadedSlots,
-                rewardAmount, rewardStatus, timer.at(), timer.type());
+                timer.at(), timer.type());
     }
 
     /** 헤더 타이머가 카운트다운할 다음 전환 시각과 라벨 종류. 대상이 없으면 (null, null). */

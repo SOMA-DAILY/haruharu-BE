@@ -94,8 +94,8 @@ public class RoomController {
     }
 
     @Operation(summary = "오늘 화면 조회",
-            description = "현재 Day의 업로드 슬롯(시간창·현재 열림 여부·내 업로드 여부 uploaded)과 내 업로드 진행(uploaded_count)·"
-                    + "완주 보상(reward_status)·헤더 타이머(timer_target_at, timer_type)를 반환한다. "
+            description = "현재 노출 중인 슬롯 창(시간창·현재 촬영 슬롯 open_now·내 업로드 여부 uploaded)과 내 업로드 진행(uploaded_count)·"
+                    + "헤더 타이머(timer_target_at, timer_type)를 반환한다. "
                     + "slots[].uploaded는 요청 유저 본인 기준이며, 지난 슬롯 + uploaded=false는 '놓침'으로 판정하면 된다. "
                     + "참여자가 아니면 403(ROOM_403_NOT_MEMBER), 방이 없으면 404(ROOM_404_NOT_FOUND).")
     @GetMapping("/{roomId}/today")

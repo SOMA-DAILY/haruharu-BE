@@ -22,7 +22,7 @@ import org.springframework.context.annotation.Import;
  * 방 생성·코드 발급은 이미 core 에 있는 도메인 로직(#311·#312)이라 중복 구현하지 않고 그대로 쓴다.
  * <p>
  * 패키지 스캔이 아니라 <b>필요한 빈만 명시적으로 열거</b>한다 — AdminApplication 의 EntityScan 과 같은 방침이다.
- * 스캔하면 이 기능과 무관한 MatchResult·FinalSelection·DailyUploadReward 협력자까지 어드민 컨텍스트에
+ * 스캔하면 이 기능과 무관한 MatchResult·FinalSelection 협력자까지 어드민 컨텍스트에
  * 딸려오고, 나중에 그쪽에 타 도메인 의존이 생기면 어드민이 조용히 깨진다.
  */
 @Configuration

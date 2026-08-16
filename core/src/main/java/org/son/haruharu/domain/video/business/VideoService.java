@@ -15,7 +15,6 @@ import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
 import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
-import org.son.haruharu.domain.video.business.event.VideoUploadedEvent;
 import org.son.haruharu.domain.video.business.dto.VideoUploadUrlResponse;
 import org.son.haruharu.domain.video.business.exception.DuplicateSlotUploadException;
 import org.son.haruharu.domain.video.business.exception.InvalidVideoExtensionException;
@@ -27,7 +26,6 @@ import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoPostWriter;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,20 +44,17 @@ public class VideoService {
     private final RoomMemberReader roomMemberReader;
     private final VideoPostReader videoPostReader;
     private final VideoPostWriter videoPostWriter;
-    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public VideoService(S3StoragePort s3StoragePort, RoomReader roomReader,
                         RoomMemberReader roomMemberReader,
                         VideoPostReader videoPostReader, VideoPostWriter videoPostWriter,
-                        ApplicationEventPublisher eventPublisher,
                         Clock clock) {
         this.s3StoragePort = s3StoragePort;
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.videoPostReader = videoPostReader;
         this.videoPostWriter = videoPostWriter;
-        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -98,14 +93,11 @@ public class VideoService {
             throw new DuplicateSlotUploadException();
         }
 
-        // dayNumber는 폐기 예정 일일보상 호환용 vestigial(슬롯 로직 무관). MVP: 미션 비활성화 — mission_id는 항상 null.
+        // dayNumber는 파트너 프로필 영상 일자별 그룹핑용(L2에서 slot_start 파생으로 대체 예정). MVP: 미션 비활성화 — mission_id는 항상 null.
         int dayNumber = room.currentDayAt(now, UploadSlot.dayStartHour());
         VideoPost saved = videoPostWriter.save(VideoPost.create(
                 member.id(), dayNumber, slotStart, null,
                 command.caption(), command.videoUrl(), command.thumbnailUrl(), now));
-
-        // 일일보상(폐기 예정) 트리거. video↔coin 직접 결합을 피해 이벤트로 위임(보상 amount 0이면 no-op).
-        eventPublisher.publishEvent(new VideoUploadedEvent(member.id(), dayNumber));
 
         // 비공개 영상은 서명 없이 접근 불가(403). 재생 가능한 presigned GET URL로 변환해 응답한다(#162).
         return VideoPostResponse.of(saved,

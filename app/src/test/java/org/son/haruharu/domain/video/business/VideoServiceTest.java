@@ -20,7 +20,6 @@ import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
 import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
-import org.son.haruharu.domain.video.business.event.VideoUploadedEvent;
 import org.son.haruharu.domain.video.business.exception.DuplicateSlotUploadException;
 import org.son.haruharu.domain.video.business.exception.InvalidVideoExtensionException;
 import org.son.haruharu.domain.video.business.exception.NotVideoOwnerException;
@@ -30,7 +29,6 @@ import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoPostWriter;
 import org.son.haruharu.infrastructure.s3.PresignedUpload;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
-import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -53,12 +51,11 @@ class VideoServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock VideoPostReader videoPostReader;
     @Mock VideoPostWriter videoPostWriter;
-    @Mock ApplicationEventPublisher eventPublisher;
 
     private VideoService serviceAt(int hour) {
         Clock clock = Clock.fixed(ZonedDateTime.of(2026, 6, 26, hour, 0, 0, 0, SEOUL).toInstant(), SEOUL);
         return new VideoService(s3StoragePort, roomReader, roomMemberReader,
-                videoPostReader, videoPostWriter, eventPublisher, clock);
+                videoPostReader, videoPostWriter, clock);
     }
 
     private RoomMember member(Long id, Long userId) {
@@ -121,8 +118,6 @@ class VideoServiceTest {
         assertThat(result.slotStart()).isEqualTo(SLOT_AT_12);
         assertThat(result.missionId()).isNull();
         assertThat(result.videoUrl()).isEqualTo("https://signed-get-url"); // 원본(url)이 아니라 서명 URL
-        // 폐기 예정 일일보상 트리거용 이벤트(dayNumber는 room에서 파생, currentDay=1)
-        then(eventPublisher).should().publishEvent(new VideoUploadedEvent(memberId, 1));
     }
 
     @Test
