@@ -10,9 +10,6 @@ public interface VideoPostRepository {
 
     Optional<VideoPost> findById(Long id);
 
-    /** 폐기 예정 일일보상 호환용(dayNumber 기준 완주 수). 슬롯 로직엔 쓰지 않는다. */
-    long countUploaded(Long roomMemberId, int dayNumber);
-
     /** 주어진 슬롯 창 중 이 멤버가 업로드(미삭제)한 slot_start들. 슬롯별 잠금 판정용 배치 조회. */
     List<LocalDateTime> findUploadedSlotStarts(Long roomMemberId, List<LocalDateTime> slotStarts);
 

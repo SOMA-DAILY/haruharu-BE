@@ -165,7 +165,7 @@ class VideoServiceTest {
         Long userId = 1L;
         Long postId = 1L;
         Long memberId = 30L;
-        VideoPost post = new VideoPost(postId, memberId, 1, SLOT_AT_12, null, null,
+        VideoPost post = new VideoPost(postId, memberId, SLOT_AT_12, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
 
         given(videoPostReader.getById(postId)).willReturn(post);
@@ -185,7 +185,7 @@ class VideoServiceTest {
         Long userId = 1L;
         Long postId = 1L;
         Long memberId = 31L;
-        VideoPost post = new VideoPost(postId, memberId, 1, SLOT_AT_12, null, null,
+        VideoPost post = new VideoPost(postId, memberId, SLOT_AT_12, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
 
         given(videoPostReader.getById(postId)).willReturn(post);

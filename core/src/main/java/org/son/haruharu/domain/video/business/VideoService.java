@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -58,7 +57,7 @@ public class VideoService {
         this.clock = clock;
     }
 
-    /** 한 방 멤버의 활성 영상 전체(Day·슬롯 오름차순). 매칭 상대 프로필 카드의 1~3일차 영상용. */
+    /** 한 방 멤버의 활성 영상 전체(slot_start 오름차순). 매칭 상대 프로필 카드의 영상 목록용. */
     public List<VideoPost> getMemberVideos(Long roomMemberId) {
         return videoPostReader.findActiveByRoomMember(roomMemberId);
     }
@@ -93,10 +92,9 @@ public class VideoService {
             throw new DuplicateSlotUploadException();
         }
 
-        // dayNumber는 파트너 프로필 영상 일자별 그룹핑용(L2에서 slot_start 파생으로 대체 예정). MVP: 미션 비활성화 — mission_id는 항상 null.
-        int dayNumber = room.currentDayAt(now, UploadSlot.dayStartHour());
+        // MVP: 미션 비활성화 — mission_id는 항상 null.
         VideoPost saved = videoPostWriter.save(VideoPost.create(
-                member.id(), dayNumber, slotStart, null,
+                member.id(), slotStart, null,
                 command.caption(), command.videoUrl(), command.thumbnailUrl(), now));
 
         // 비공개 영상은 서명 없이 접근 불가(403). 재생 가능한 presigned GET URL로 변환해 응답한다(#162).

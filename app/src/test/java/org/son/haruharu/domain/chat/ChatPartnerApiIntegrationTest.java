@@ -83,16 +83,16 @@ class ChatPartnerApiIntegrationTest {
     }
 
     private Long saveVideo(Long roomMemberId, int day, int slot) {
-        // slotStart는 day·slot로부터 유일하게 파생(day별 그룹핑 유지, slot_start 충돌 방지)
+        // slotStart는 day·slot로부터 유일하게 파생(slot_start 충돌 방지)
         LocalDateTime slotStart = LocalDateTime.of(2026, 6, 23 + day, 8 + slot, 0);
         return videoPostJpaRepository.save(VideoPostEntity.from(VideoPost.create(
-                roomMemberId, day, slotStart, null, "cap", "https://cdn/v-" + day + "-" + slot + ".mp4",
+                roomMemberId, slotStart, null, "cap", "https://cdn/v-" + day + "-" + slot + ".mp4",
                 "https://cdn/t-" + day + "-" + slot + ".jpg", LocalDateTime.of(2026, 6, 24, 10, 0)))).toDomain().id();
     }
 
     @Test
-    @DisplayName("매칭 상대 카드 조회 시 프로필 + videos_by_day(day별 영상)가 snake_case로 직렬화된다")
-    void givenMatchedPartner_whenGetPartner_thenReturnsProfileAndVideosByDay() throws Exception {
+    @DisplayName("매칭 상대 카드 조회 시 프로필 + videos(slot_start 오름차순 영상)가 snake_case로 직렬화된다")
+    void givenMatchedPartner_whenGetPartner_thenReturnsProfileAndVideos() throws Exception {
         Long meUser = saveUser(UserStatus.ACTIVE);
         Long partnerUser = saveUser(UserStatus.ACTIVE);
         LocalDate started = LocalDate.of(2026, 6, 24);
@@ -132,11 +132,10 @@ class ChatPartnerApiIntegrationTest {
                 // 프로필 블록(fields/value_answers) 구조 존재. 항목 값 공개는 매칭공개(#138)와 함께 동작.
                 .andExpect(jsonPath("$.data.profile.fields").isArray())
                 .andExpect(jsonPath("$.data.profile.fields[?(@.key == 'location')]").exists())
-                .andExpect(jsonPath("$.data.videos_by_day['1']", org.hamcrest.Matchers.hasSize(2)))
-                .andExpect(jsonPath("$.data.videos_by_day['1'][0].video_url").value("https://cdn/v-1-1.mp4"))
-                .andExpect(jsonPath("$.data.videos_by_day['1'][0].slot_start").value("2026-06-24T09:00:00"))
-                .andExpect(jsonPath("$.data.videos_by_day['2']", org.hamcrest.Matchers.hasSize(1)))
-                .andExpect(jsonPath("$.data.videos_by_day['3'][0].slot_start").value("2026-06-26T11:00:00"));
+                .andExpect(jsonPath("$.data.videos", org.hamcrest.Matchers.hasSize(4)))
+                .andExpect(jsonPath("$.data.videos[0].video_url").value("https://cdn/v-1-1.mp4"))
+                .andExpect(jsonPath("$.data.videos[0].slot_start").value("2026-06-24T09:00:00"))
+                .andExpect(jsonPath("$.data.videos[3].slot_start").value("2026-06-26T11:00:00"));
     }
 
     @Test

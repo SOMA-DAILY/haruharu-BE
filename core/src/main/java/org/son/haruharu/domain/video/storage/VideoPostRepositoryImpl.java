@@ -26,11 +26,6 @@ public class VideoPostRepositoryImpl implements VideoPostRepository {
     }
 
     @Override
-    public long countUploaded(Long roomMemberId, int dayNumber) {
-        return jpaRepository.countByRoomMemberIdAndDayNumberAndDeletedAtIsNull(roomMemberId, dayNumber);
-    }
-
-    @Override
     public List<LocalDateTime> findUploadedSlotStarts(Long roomMemberId, List<LocalDateTime> slotStarts) {
         if (slotStarts.isEmpty()) {
             return List.of();
