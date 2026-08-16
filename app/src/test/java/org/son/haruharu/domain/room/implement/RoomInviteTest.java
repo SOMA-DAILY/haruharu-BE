@@ -54,4 +54,19 @@ class RoomInviteTest {
         RoomInvite invite = new RoomInvite(1L, 1L, "C", RoomInviteStatus.ACTIVE, 6, 2, null, "admin");
         assertThat(invite.incrementUsed().usedCount()).isEqualTo(3);
     }
+
+    @Test
+    @DisplayName("expired는 상태를 EXPIRED로 바꾸고 나머지 필드는 보존한다 (#318 재발급)")
+    void givenActiveInvite_whenExpired_thenStatusExpiredAndFieldsKept() {
+        RoomInvite invite = new RoomInvite(1L, 7L, "C", RoomInviteStatus.ACTIVE, 6, 2, NOW, "admin");
+
+        RoomInvite expired = invite.expired();
+
+        assertThat(expired.status()).isEqualTo(RoomInviteStatus.EXPIRED);
+        assertThat(expired.id()).isEqualTo(1L);
+        assertThat(expired.roomId()).isEqualTo(7L);
+        assertThat(expired.code()).isEqualTo("C");
+        assertThat(expired.usedCount()).isEqualTo(2);
+        assertThat(expired.isUsable(NOW.minusDays(1))).isFalse();
+    }
 }
