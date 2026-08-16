@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.common.time.AdjustableClock;
 import org.son.haruharu.domain.matching.business.MatchingExecutor;
 import org.son.haruharu.domain.matching.business.MatchingProperties;
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.ConsolationRewardService;
 import org.son.haruharu.domain.room.business.RoomActivator;
 import org.son.haruharu.domain.room.business.RoomTerminator;
@@ -72,7 +71,7 @@ public class MatchingScheduler {
             log.error("위로 구름 회수 지급 실패", e);
         }
         try {
-            int ended = roomTerminator.terminate(LocalDateTime.now(SEOUL), UploadSlot.dayStartHour());
+            int ended = roomTerminator.terminate(LocalDateTime.now(SEOUL));
             log.info("세션 종료 배치 완료: {}개 방 종료", ended);
         } catch (Exception e) {
             log.error("세션 종료 배치 실패", e);

@@ -12,7 +12,6 @@ import org.son.haruharu.admin.domain.dashboard.business.dto.DashboardSummaryResp
 import org.son.haruharu.admin.domain.dashboard.business.exception.AdminDashboardInvalidRangeException;
 import org.son.haruharu.admin.domain.dashboard.implement.DashboardReader;
 import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.implement.Room;
 
 import java.time.Clock;
@@ -52,12 +51,11 @@ class AdminDashboardServiceTest {
     @DisplayName("진행중 방을 일차별로 집계하고, 매칭 대기 성비·오늘 가입 수를 요약으로 반환한다")
     void getSummary_aggregatesActiveRoomsByDayAndQueueAndSignups() {
         LocalDateTime now = LocalDateTime.now(clock);
-        int dayStartHour = UploadSlot.dayStartHour();
         Room dayA1 = activeRoom(now);
         Room dayA2 = activeRoom(now);
         Room dayB = activeRoom(now.minusDays(1));
-        int keyA = dayA1.currentDayAt(now, dayStartHour);
-        int keyB = dayB.currentDayAt(now, dayStartHour);
+        int keyA = dayA1.currentDayAt(now);
+        int keyB = dayB.currentDayAt(now);
 
         given(dashboardReader.activeRooms()).willReturn(List.of(dayA1, dayA2, dayB));
         given(dashboardReader.queuedCount()).willReturn(34L);

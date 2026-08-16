@@ -87,7 +87,9 @@ class FinalSelectionApiIntegrationTest {
         Long userId = 900L;
         // startedAt 2026-06-24 09:00 → 고정시각(2026-06-26 19:00)에 currentDay=3, 18:00 이후
         LocalDate started = LocalDate.of(2026, 6, 24);
-        Room room = new Room(null, RoomStatus.ACTIVE, started, 3, started.atTime(9, 0), null);
+        Room room = new Room(null, RoomStatus.ACTIVE, started, 3, started.atTime(9, 0), null,
+                started.atTime(9, 0), started.plusDays(2).atTime(18, 0), started.plusDays(2).atTime(22, 0),
+                started.plusDays(2).atTime(22, 0), started.plusDays(3).atTime(9, 0));
         Long roomId = roomJpaRepository.save(RoomEntity.from(room)).toDomain().id();
         Long memberId = roomMemberJpaRepository.save(RoomMemberEntity.from(
                 RoomMember.of(roomId, userId, "MALE", LocalDate.of(2000, 1, 1), started.atTime(9, 0)))).toDomain().id();
@@ -113,7 +115,9 @@ class FinalSelectionApiIntegrationTest {
         Long userA = 901L;
         Long userB = 902L;
         LocalDate started = LocalDate.of(2026, 6, 24);
-        Room room = new Room(null, RoomStatus.ACTIVE, started, 3, started.atTime(9, 0), null);
+        Room room = new Room(null, RoomStatus.ACTIVE, started, 3, started.atTime(9, 0), null,
+                started.atTime(9, 0), started.plusDays(2).atTime(18, 0), started.plusDays(2).atTime(22, 0),
+                started.plusDays(2).atTime(22, 0), started.plusDays(3).atTime(9, 0));
         Long roomId = roomJpaRepository.save(RoomEntity.from(room)).toDomain().id();
         Long memberA = roomMemberJpaRepository.save(RoomMemberEntity.from(
                 RoomMember.of(roomId, userA, "MALE", LocalDate.of(2000, 1, 1), started.atTime(9, 0)))).toDomain().id();
@@ -157,7 +161,9 @@ class FinalSelectionApiIntegrationTest {
     void givenNotSubmitted_whenGetFinalSelection_thenSubmittedFalse() throws Exception {
         Long userId = 903L;
         LocalDate started = LocalDate.of(2026, 6, 24);
-        Room room = new Room(null, RoomStatus.ACTIVE, started, 3, started.atTime(9, 0), null);
+        Room room = new Room(null, RoomStatus.ACTIVE, started, 3, started.atTime(9, 0), null,
+                started.atTime(9, 0), started.plusDays(2).atTime(18, 0), started.plusDays(2).atTime(22, 0),
+                started.plusDays(2).atTime(22, 0), started.plusDays(3).atTime(9, 0));
         Long roomId = roomJpaRepository.save(RoomEntity.from(room)).toDomain().id();
         roomMemberJpaRepository.save(RoomMemberEntity.from(
                 RoomMember.of(roomId, userId, "MALE", LocalDate.of(2000, 1, 1), started.atTime(9, 0))));
@@ -177,7 +183,9 @@ class FinalSelectionApiIntegrationTest {
         Long userA = 904L;
         Long userB = 905L;
         LocalDate started = LocalDate.of(2026, 6, 24);
-        Room room = new Room(null, RoomStatus.ACTIVE, started, 3, started.atTime(9, 0), null);
+        Room room = new Room(null, RoomStatus.ACTIVE, started, 3, started.atTime(9, 0), null,
+                started.atTime(9, 0), started.plusDays(2).atTime(18, 0), started.plusDays(2).atTime(22, 0),
+                started.plusDays(2).atTime(22, 0), started.plusDays(3).atTime(9, 0));
         Long roomId = roomJpaRepository.save(RoomEntity.from(room)).toDomain().id();
         roomMemberJpaRepository.save(RoomMemberEntity.from(
                 RoomMember.of(roomId, userA, "MALE", LocalDate.of(2000, 1, 1), started.atTime(9, 0))));

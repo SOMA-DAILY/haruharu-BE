@@ -7,7 +7,6 @@ import java.time.Period;
 import java.util.List;
 import java.util.Map;
 
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.profile.implement.ProfileField;
 import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
@@ -55,7 +54,7 @@ public class RoomMembersService {
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
         LocalDateTime now = LocalDateTime.now(clock);
-        int currentDay = room.currentDayAt(now, UploadSlot.dayStartHour());
+        int currentDay = room.currentDayAt(now);
 
         List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
         List<Long> userIds = members.stream().map(RoomMember::userId).toList();

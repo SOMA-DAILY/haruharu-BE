@@ -9,7 +9,7 @@ import org.son.haruharu.domain.matching.business.MatchingService;
 import org.son.haruharu.domain.matching.business.dto.LastApplyResultResponse;
 import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
 import org.son.haruharu.domain.matching.implement.MatchingQueue;
-import org.son.haruharu.domain.mission.implement.UploadSlot;
+import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.dto.PendingMatchResultResponse;
@@ -46,7 +46,7 @@ public class HomeService {
         LocalDateTime now = LocalDateTime.now(clock);
         return HomeResponse.of(now, pointBalance, queue, room, pendingResult, lastApplyResult,
                 nextAtHour(now, MatchingQueue.APPLY_DEADLINE_HOUR),
-                nextAtHour(now, MatchingQueue.CONFIRM_HOUR), UploadSlot.dayStartHour());
+                nextAtHour(now, MatchingQueue.CONFIRM_HOUR), Room.DAY_START_HOUR);
     }
 
     /** now 이후 가장 가까운 해당 시각(오늘 그 시각 전이면 오늘, 아니면 내일). 홈 카운트다운 기준. */

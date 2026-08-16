@@ -28,9 +28,9 @@ public class RoomTerminator {
      * 어드민이 입력한 ends_at 이고, 그 전이는 RoomStatusReconciler 가 담당한다.
      */
     @Transactional
-    public int terminate(LocalDateTime now, int dayStartHour) {
+    public int terminate(LocalDateTime now) {
         List<Room> expired = roomReader.getLegacyActive().stream()
-                .filter(room -> room.hasEndedBy(now, dayStartHour))
+                .filter(room -> room.hasEndedBy(now))
                 .toList();
         expired.forEach(room -> roomWriter.save(room.ended(now)));
         return expired.size();

@@ -120,7 +120,7 @@ class DevRoomServiceTest {
         assertThat(captor.getValue().startedAt()).isEqualTo(LocalDateTime.of(2026, 7, 8, 9, 0));
         assertThat(adjustableClock.fixedAt()).contains(LocalDateTime.of(2026, 7, 10, 19, 0));
         // 고정 시각 기준 currentDay가 요청한 day와 일치
-        assertThat(captor.getValue().currentDayAt(LocalDateTime.now(adjustableClock), 9)).isEqualTo(3);
+        assertThat(captor.getValue().currentDayAt(LocalDateTime.now(adjustableClock))).isEqualTo(3);
     }
 
     @Test

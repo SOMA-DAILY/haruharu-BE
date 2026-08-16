@@ -128,8 +128,8 @@ class RoomStatusReconcileIntegrationTest {
 
         Room reloaded = roomReader.findById(saved.id()).orElseThrow();
         assertThat(reloaded.startedAt()).isNotNull();
-        assertThatCode(() -> reloaded.dateOfDay(1, 9)).doesNotThrowAnyException();
-        assertThatCode(() -> reloaded.announcedAt(9)).doesNotThrowAnyException();
+        assertThatCode(() -> reloaded.dateOfDay(1)).doesNotThrowAnyException();
+        assertThatCode(() -> reloaded.announcedAt()).doesNotThrowAnyException();
     }
 
     // ── Codex 리뷰 반영: 배치 지연·장기 중단 구간의 경계 조건 (실 DB) ──

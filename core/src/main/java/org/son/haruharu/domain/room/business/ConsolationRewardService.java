@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.son.haruharu.domain.coin.business.CoinService;
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.event.MatchConsolationEvent;
 import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.Room;
@@ -70,9 +69,9 @@ public class ConsolationRewardService {
 
     /** 마지막 Day의 결과 발표 시각이 지났는지. 발표 시각 계산은 Room.announcedAt 한 곳으로 통일한다. */
     private boolean isResultAnnounced(Room room, LocalDateTime now) {
-        if (room.currentDayAt(now, UploadSlot.dayStartHour()) != room.totalDays()) {
+        if (room.currentDayAt(now) != room.totalDays()) {
             return false;
         }
-        return !now.isBefore(room.announcedAt(UploadSlot.dayStartHour()));
+        return !now.isBefore(room.announcedAt());
     }
 }

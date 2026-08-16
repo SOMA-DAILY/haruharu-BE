@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
-import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
 import org.son.haruharu.domain.room.business.dto.TodayResponse.TimerType;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
@@ -43,8 +42,8 @@ public class RoomTodayService {
                 .orElseThrow(RoomNotFoundException::new);
 
         LocalDateTime now = LocalDateTime.now(clock);
-        // currentDay는 방 진행 일차 표시용(room 레벨). L3에서 dayStartHour 파라미터 정리 예정.
-        int currentDay = room.currentDayAt(now, UploadSlot.dayStartHour());
+        // currentDay는 방 진행 일차 표시용(room 레벨).
+        int currentDay = room.currentDayAt(now);
 
         // 노출 중인 슬롯 창(최근 3시간). 최종선택 이후 시작 슬롯은 업로드 불가라 제외. 촬영 가능한 '현재 슬롯'은 ACTIVE일 때만.
         List<LocalDateTime> window = room.startsAt() == null
