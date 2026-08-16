@@ -56,3 +56,8 @@ local-kakao-test/
 docs/
 docker-compose.yml
 http/
+
+# 배포 스크래치(ECS task-def·ARN 등 민감 인프라 참조) — 절대 커밋 금지
+scratch-dd/
+# 로컬 전용 개발일지 스킬(개인 노션 연동)
+.claude/skills/daily-log/
