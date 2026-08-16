@@ -45,9 +45,3 @@ haruharu:
     enabled: true
   payment:
     enabled: true
-  room:
-    upload-reward:
-      daily-completion:
-        1: 5
-        2: 5
-        3: 5

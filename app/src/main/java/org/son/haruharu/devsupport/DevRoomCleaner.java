@@ -45,7 +45,7 @@ public class DevRoomCleaner {
         jdbcTemplate.update("""
                 DELETE FROM final_selections WHERE room_member_id IN (
                     SELECT id FROM room_members WHERE room_id = ?)""", roomId);
-        // 영상(리액션 → 포스트)·완주 보상 기록
+        // 영상(리액션 → 포스트)
         jdbcTemplate.update("""
                 DELETE FROM video_reactions WHERE video_post_id IN (
                     SELECT v.id FROM video_posts v
@@ -53,9 +53,6 @@ public class DevRoomCleaner {
                     WHERE m.room_id = ?)""", roomId);
         jdbcTemplate.update("""
                 DELETE FROM video_posts WHERE room_member_id IN (
-                    SELECT id FROM room_members WHERE room_id = ?)""", roomId);
-        jdbcTemplate.update("""
-                DELETE FROM daily_upload_reward WHERE room_member_id IN (
                     SELECT id FROM room_members WHERE room_id = ?)""", roomId);
         // 멤버 → 방
         jdbcTemplate.update("DELETE FROM room_members WHERE room_id = ?", roomId);

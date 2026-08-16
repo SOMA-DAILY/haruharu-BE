@@ -37,15 +37,6 @@ public record CoinCreditCommand(
     }
 
     /**
-     * 일일 업로드 완주 보상 적립. 리워드 버킷으로 적립한다. 멱등은 호출측(daily_upload_reward 테이블)이 보장한다.
-     * refId는 (roomMemberId, dayNumber) 조합.
-     */
-    public static CoinCreditCommand uploadCompletion(Long userId, long amount, Long roomMemberId, int dayNumber) {
-        return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.UPLOAD_COMPLETION_REWARD,
-                "UPLOAD_COMPLETION", roomMemberId + ":" + dayNumber);
-    }
-
-    /**
      * 세션 미매칭 위로 구름 적립(#143). 리워드 버킷으로 적립하고, refId(roomId)로 유저·방당 1회 멱등을 보장한다.
      */
     public static CoinCreditCommand matchConsolation(Long userId, long amount, Long roomId) {
