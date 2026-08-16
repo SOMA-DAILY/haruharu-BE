@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.room.storage;
 
+import java.util.List;
 import java.util.Optional;
 
 import lombok.RequiredArgsConstructor;
@@ -26,5 +27,12 @@ public class RoomInviteRepositoryImpl implements RoomInviteRepository {
     @Override
     public Optional<RoomInvite> findByCodeForUpdate(String code) {
         return jpaRepository.findByCodeForUpdate(code).map(RoomInviteEntity::toDomain);
+    }
+
+    @Override
+    public List<RoomInvite> findByRoomId(Long roomId) {
+        return jpaRepository.findByRoomIdOrderByIdDesc(roomId).stream()
+                .map(RoomInviteEntity::toDomain)
+                .toList();
     }
 }

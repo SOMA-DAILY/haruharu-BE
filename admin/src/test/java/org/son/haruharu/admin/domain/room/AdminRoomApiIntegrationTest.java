@@ -13,6 +13,7 @@ import org.son.haruharu.domain.room.storage.RoomMemberEntity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
@@ -25,6 +26,8 @@ import java.util.List;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -104,5 +107,167 @@ class AdminRoomApiIntegrationTest {
     void rooms_withoutAuth_returns401() throws Exception {
         mockMvc.perform(get("/api/v1/admin/rooms"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ── #318 방 생성·초대코드 발급·성별 부여 ──────────────────────────────────
+
+    private static UsernamePasswordAuthenticationToken csAuth() {
+        return new UsernamePasswordAuthenticationToken(2L, null, List.of(new SimpleGrantedAuthority("ROLE_CS")));
+    }
+
+    private static String createRoomBody(LocalDateTime startsAt) {
+        return """
+                {
+                  "starts_at": "%s",
+                  "final_selection_opens_at": "%s",
+                  "final_selection_closes_at": "%s",
+                  "result_at": "%s",
+                  "ends_at": "%s",
+                  "total_days": 3,
+                  "max_uses": 6
+                }
+                """.formatted(startsAt, startsAt.plusDays(2).withHour(18), startsAt.plusDays(2).withHour(21),
+                startsAt.plusDays(2).withHour(22), startsAt.plusDays(3).withHour(9));
+    }
+
+    @Test
+    @DisplayName("방 생성 시 PENDING 방과 6자리 초대코드가 함께 반환된다")
+    void createRoom_returnsRoomIdAndInviteCode() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createRoomBody(LocalDateTime.now().plusDays(1).withNano(0)))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.room_id").isNumber())
+                .andExpect(jsonPath("$.data.code").value(org.hamcrest.Matchers.matchesPattern(
+                        "[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}")));
+    }
+
+    @Test
+    @DisplayName("스케줄 시각 순서가 어긋나면 400 ROOM_INVALID_SCHEDULE")
+    void createRoom_invalidSchedule_returns400() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        String body = """
+                {
+                  "starts_at": "%s",
+                  "final_selection_opens_at": "%s",
+                  "final_selection_closes_at": "%s",
+                  "result_at": "%s",
+                  "ends_at": "%s",
+                  "total_days": 3,
+                  "max_uses": 6
+                }
+                """.formatted(startsAt, startsAt.minusHours(1), startsAt.plusDays(2),
+                startsAt.plusDays(2).plusHours(1), startsAt.plusDays(3));
+
+        mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON).content(body)
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("ROOM_INVALID_SCHEDULE"));
+    }
+
+    @Test
+    @DisplayName("코드 재발급 시 기존 코드는 EXPIRED가 되고 새 ACTIVE 코드가 반환된다")
+    void reissueInvite_expiresOldAndReturnsNew() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        String created = mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON).content(createRoomBody(startsAt))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long roomId = com.jayway.jsonpath.JsonPath.parse(created).read("$.data.room_id", Long.class);
+        String oldCode = com.jayway.jsonpath.JsonPath.parse(created).read("$.data.code", String.class);
+
+        mockMvc.perform(post("/api/v1/admin/rooms/{roomId}/invites", roomId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"max_uses\": 6}")
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.code").value(org.hamcrest.Matchers.not(oldCode)))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+
+        // 코드 이력은 최신 발급이 앞(id DESC) — [0]=새 ACTIVE 코드, [1]=닫힌 기존 코드.
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}/invites", roomId)
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data[1].code").value(oldCode))
+                .andExpect(jsonPath("$.data[1].status").value("EXPIRED"));
+    }
+
+    @Test
+    @DisplayName("멤버 성별 부여 시 gender가 갱신되고 방 상세 성비에 반영된다")
+    void assignGender_updatesMemberAndGenderCount() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        Long roomId = persistRoom(Room.create(LocalDate.now(), 3).started(now));
+        RoomMemberEntity member = RoomMemberEntity.from(RoomMember.of(roomId, 901L, null, null, now));
+        em.persist(member);
+        em.flush();
+        Long memberId = member.toDomain().id();
+
+        mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/members/{memberId}", roomId, memberId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"gender\": \"FEMALE\"}")
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.gender").value("FEMALE"));
+
+        em.flush();
+        em.clear();
+
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", roomId).with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.female_count").value(1))
+                .andExpect(jsonPath("$.data.members[0].gender").value("FEMALE"));
+    }
+
+    @Test
+    @DisplayName("MALE·FEMALE 이외의 성별 값이면 400 ROOM_MEMBER_INVALID_GENDER")
+    void assignGender_invalidValue_returns400() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        Long roomId = persistRoom(Room.create(LocalDate.now(), 3).started(now));
+        RoomMemberEntity member = RoomMemberEntity.from(RoomMember.of(roomId, 902L, null, null, now));
+        em.persist(member);
+        em.flush();
+
+        mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/members/{memberId}", roomId, member.toDomain().id())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"gender\": \"OTHER\"}")
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("ROOM_MEMBER_INVALID_GENDER"));
+    }
+
+    @Test
+    @DisplayName("CS 권한으로 방 생성·코드 발급·성별 부여 시 403")
+    void writeApis_withCsRole_return403() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createRoomBody(LocalDateTime.now().plusDays(1).withNano(0)))
+                        .with(authentication(csAuth())))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/v1/admin/rooms/{roomId}/invites", 1L)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"max_uses\": 6}")
+                        .with(authentication(csAuth())))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/members/{memberId}", 1L, 1L)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"gender\": \"MALE\"}")
+                        .with(authentication(csAuth())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("초대코드 조회도 CS 권한이면 403 — 코드는 인증 없이 입장 가능한 자격증명이다")
+    void listInvites_withCsRole_returns403() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}/invites", 1L).with(authentication(csAuth())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("CS 권한도 방 목록·상세 조회는 가능하다 (코드가 안 실리는 조회는 전체 허용)")
+    void readApis_withCsRole_stillAllowed() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/rooms").with(authentication(csAuth())))
+                .andExpect(status().isOk());
     }
 }

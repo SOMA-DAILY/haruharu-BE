@@ -18,7 +18,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * 엔티티 스캔은 admin 도메인 + 어드민이 실제로 조회하는 core 엔티티 패키지만 열거한다.
  * core 전체를 스캔하면 identity 등 core 전용 빈(CiDiCryptoConverter→IdentityCrypto)까지 끌어와
  * 컨텍스트를 오염시키므로, 필요한 패키지(대시보드: room/matching/user)만 추가한다.
- * 리포지토리 스캔은 admin 도메인 한정(core 데이터는 admin 자체 JPQL 쿼리로 읽는다).
+ * <p>
+ * 리포지토리 스캔은 admin 도메인 + core room.storage 한정이다. 나머지 core 데이터는 여전히
+ * admin 자체 JPQL 쿼리로 읽지만, 방 생성·초대코드 발급(#318)은 core 도메인 로직(#311·#312)을
+ * 그대로 쓰므로 그 저장소가 필요하다 — 배선 범위는 {@link org.son.haruharu.admin.config.AdminRoomDomainConfig} 참고.
  */
 @SpringBootApplication
 @EntityScan({
@@ -30,7 +33,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.coin.storage",
         "org.son.haruharu.domain.payment.storage"
 })
-@EnableJpaRepositories("org.son.haruharu.admin.domain")
+@EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.room.storage"})
 @Import({JpaConfig.class, ClockConfig.class, TimeZoneConfig.class})
 public class AdminApplication {
 

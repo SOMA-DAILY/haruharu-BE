@@ -37,4 +37,12 @@ public record RoomInvite(
     public RoomInvite incrementUsed() {
         return new RoomInvite(id, roomId, code, status, maxUses, usedCount + 1, expiresAt, createdBy);
     }
+
+    /**
+     * 코드 만료(#318). 재발급 시 기존 ACTIVE 코드를 닫아 방당 ACTIVE 코드 1개를 유지한다.
+     * 코드 문자열은 남겨 둔다 — 이미 배포된 코드로 들어온 입장 시도를 "만료"로 구분해 응답하기 위함.
+     */
+    public RoomInvite expired() {
+        return new RoomInvite(id, roomId, code, RoomInviteStatus.EXPIRED, maxUses, usedCount, expiresAt, createdBy);
+    }
 }

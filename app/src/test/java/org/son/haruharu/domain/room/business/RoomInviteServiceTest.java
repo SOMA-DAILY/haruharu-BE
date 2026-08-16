@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,7 @@ import org.son.haruharu.domain.room.business.dto.JoinRoomResponse;
 import org.son.haruharu.domain.room.business.exception.AlreadyJoinedRoomException;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotFoundException;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException;
+import org.son.haruharu.domain.room.implement.InviteCodeGenerator;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomInvite;
 import org.son.haruharu.domain.room.implement.RoomInviteReader;
@@ -32,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,6 +50,7 @@ class RoomInviteServiceTest {
     @Mock RoomReader roomReader;
     @Mock RoomService roomService;
     @Mock RoomMemberWriter roomMemberWriter;
+    @Mock InviteCodeGenerator inviteCodeGenerator;
 
     RoomInviteService service;
 
@@ -56,7 +60,7 @@ class RoomInviteServiceTest {
     @BeforeEach
     void setUp() {
         service = new RoomInviteService(roomInviteReader, roomInviteWriter, roomReader,
-                roomService, roomMemberWriter, clock);
+                roomService, roomMemberWriter, inviteCodeGenerator, clock);
     }
 
     private RoomInvite activeInvite() {
@@ -126,5 +130,59 @@ class RoomInviteServiceTest {
         assertThatThrownBy(() -> service.join(USER_ID, CODE))
                 .isInstanceOf(AlreadyJoinedRoomException.class);
         verify(roomMemberWriter, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("issueFor는 생성기가 만든 코드로 ACTIVE 코드를 발급한다 (#318)")
+    void givenRoom_whenIssueFor_thenGeneratesCodeAndSavesActive() {
+        given(inviteCodeGenerator.generate()).willReturn("K7M2QX");
+        given(roomInviteWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        RoomInvite issued = service.issueFor(ROOM_ID, 6, null, "admin:1");
+
+        assertThat(issued.code()).isEqualTo("K7M2QX");
+        assertThat(issued.status()).isEqualTo(RoomInviteStatus.ACTIVE);
+        assertThat(issued.roomId()).isEqualTo(ROOM_ID);
+        assertThat(issued.maxUses()).isEqualTo(6);
+        assertThat(issued.usedCount()).isZero();
+        assertThat(issued.createdBy()).isEqualTo("admin:1");
+    }
+
+    @Test
+    @DisplayName("reissueFor는 기존 ACTIVE 코드를 EXPIRED로 만들고 새 코드를 발급한다 (방당 ACTIVE 1개)")
+    void givenActiveInviteExists_whenReissueFor_thenExpiresOldAndIssuesNew() {
+        given(roomInviteReader.findByRoomId(ROOM_ID)).willReturn(List.of(activeInvite()));
+        given(inviteCodeGenerator.generate()).willReturn("NEWC0DE".substring(0, 6));
+        given(roomInviteWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        RoomInvite reissued = service.reissueFor(ROOM_ID, 6, null, "admin:1");
+
+        assertThat(reissued.status()).isEqualTo(RoomInviteStatus.ACTIVE);
+        assertThat(reissued.code()).isNotEqualTo(CODE);
+        verify(roomInviteWriter).save(argThat(i ->
+                CODE.equals(i.code()) && i.status() == RoomInviteStatus.EXPIRED));
+    }
+
+    @Test
+    @DisplayName("reissueFor는 기존 코드가 없어도 새 코드를 발급한다")
+    void givenNoInvite_whenReissueFor_thenIssuesNew() {
+        given(roomInviteReader.findByRoomId(ROOM_ID)).willReturn(List.of());
+        given(inviteCodeGenerator.generate()).willReturn("ZZZ999");
+        given(roomInviteWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.reissueFor(ROOM_ID, 6, null, "admin:1").code()).isEqualTo("ZZZ999");
+    }
+
+    @Test
+    @DisplayName("reissueFor는 이미 EXPIRED인 코드는 다시 저장하지 않는다")
+    void givenExpiredInvite_whenReissueFor_thenSavesOnlyNewCode() {
+        RoomInvite alreadyExpired = new RoomInvite(9L, ROOM_ID, "OLDCDE", RoomInviteStatus.EXPIRED, 6, 6, null, "admin");
+        given(roomInviteReader.findByRoomId(ROOM_ID)).willReturn(List.of(alreadyExpired));
+        given(inviteCodeGenerator.generate()).willReturn("ZZZ999");
+        given(roomInviteWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        service.reissueFor(ROOM_ID, 6, null, "admin:1");
+
+        verify(roomInviteWriter, times(1)).save(any());
     }
 }

@@ -93,6 +93,16 @@ public class AdminSecurityConfig {
                         .requestMatchers("/api/v1/admin/iap/products", "/api/v1/admin/iap/products/**").hasRole("SUPER")
                         // 어드민 계정 관리(생성·목록·역할/상태 변경)는 SUPER 전용.
                         .requestMatchers("/api/v1/admin/admins", "/api/v1/admin/admins/**").hasRole("SUPER")
+                        // 방 운영 쓰기(생성·코드 발급·성별 부여)는 SUPER·OPERATOR 전용(#318).
+                        // 방 목록·상세 조회는 CS 포함 전체 허용 — 아래 anyRequest().authenticated() 로 떨어진다.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/rooms", "/api/v1/admin/rooms/*/invites")
+                        .hasAnyRole("SUPER", "OPERATOR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/rooms/*/members/*")
+                        .hasAnyRole("SUPER", "OPERATOR")
+                        // 초대코드는 "인증 없이 방에 들어갈 수 있는 자격증명"이라 조회도 쓰기와 같은 권한으로 막는다.
+                        // 방 조회 권한(전체)에 코드 원문까지 딸려가면 CS 계정이 임의 방에 입장할 수 있다(#318 보안리뷰).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/admin/rooms/*/invites")
+                        .hasAnyRole("SUPER", "OPERATOR")
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         // 401·403 모두 ApiResponse 표준 포맷으로 응답(컨테이너 기본 에러 우회 방지).
