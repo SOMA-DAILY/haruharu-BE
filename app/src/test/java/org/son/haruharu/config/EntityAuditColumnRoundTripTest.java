@@ -40,7 +40,7 @@ class EntityAuditColumnRoundTripTest {
     @Test
     @DisplayName("UserEntity.from()은 createdAt을 복원한다")
     void givenUserWithCreatedAt_whenFromThenToDomain_thenCreatedAtSurvives() {
-        User user = new User(1L, UserStatus.ACTIVE, CREATED_AT, false);
+        User user = new User(1L, UserStatus.ACTIVE, CREATED_AT);
 
         User restored = UserEntity.from(user).toDomain();
 
@@ -92,7 +92,7 @@ class EntityAuditColumnRoundTripTest {
     @Test
     @DisplayName("createdAt이 null인 신규 도메인 객체도 변환에서 터지지 않는다 — INSERT 경로는 @PrePersist가 채운다")
     void givenNewDomainWithoutCreatedAt_whenFrom_thenNoFailure() {
-        User newUser = new User(null, UserStatus.ONBOARDING, null, false);
+        User newUser = new User(null, UserStatus.ONBOARDING, null);
         ChatMessage newMessage = ChatMessage.create(10L, 100L, "신규");
 
         assertThat(UserEntity.from(newUser).toDomain().createdAt()).isNull();

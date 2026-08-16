@@ -49,8 +49,8 @@ class UserProfileApiIntegrationTest {
         return new UsernamePasswordAuthenticationToken(userId, null, List.of());
     }
 
-    private Long saveUser(boolean demoMode) {
-        return userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null, demoMode)))
+    private Long saveUser() {
+        return userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null)))
                 .toDomain().id();
     }
 
@@ -61,25 +61,15 @@ class UserProfileApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("데모 계정이 내 정보 조회 시 demo_mode가 true로 반환된다")
-    void givenDemoUser_whenGetMyProfile_thenDemoModeTrue() throws Exception {
-        Long userId = saveUser(true);
+    @DisplayName("로그인한 유저가 내 정보 조회 시 user_id·프로필이 반환된다")
+    void givenLoggedInUser_whenGetMyProfile_thenReturnsProfile() throws Exception {
+        Long userId = saveUser();
         saveProfile(userId);
 
         mockMvc.perform(get("/api/v1/users/me").with(authentication(auth(userId))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
-                .andExpect(jsonPath("$.data.demo_mode").value(true));
-    }
-
-    @Test
-    @DisplayName("일반 계정이 내 정보 조회 시 demo_mode가 false로 반환된다")
-    void givenNormalUser_whenGetMyProfile_thenDemoModeFalse() throws Exception {
-        Long userId = saveUser(false);
-        saveProfile(userId);
-
-        mockMvc.perform(get("/api/v1/users/me").with(authentication(auth(userId))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.demo_mode").value(false));
+                .andExpect(jsonPath("$.data.user_id").value(userId))
+                .andExpect(jsonPath("$.data.profile.nickname").value("테스터"));
     }
 }

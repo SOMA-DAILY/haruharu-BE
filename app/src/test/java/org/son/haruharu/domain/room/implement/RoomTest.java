@@ -78,7 +78,7 @@ class RoomTest {
     @Test
     @DisplayName("materialized는 status를 바꾸고 스케줄 시각은 보존한다")
     void givenRoom_whenMaterialized_thenStatusChangedTimesKept() {
-        Room room = new Room(7L, RoomStatus.PENDING, SCHED_START.toLocalDate(), 3, null, null, false, null,
+        Room room = new Room(7L, RoomStatus.PENDING, SCHED_START.toLocalDate(), 3, null, null,
                 SCHED_START, SCHED_START.plusHours(4), SCHED_START.plusHours(6),
                 SCHED_START.plusHours(7), SCHED_START.plusHours(8));
 
@@ -112,7 +112,7 @@ class RoomTest {
     @DisplayName("materialized: 이미 앵커된 startedAt은 덮어쓰지 않는다")
     void givenAlreadyAnchored_whenMaterialized_thenKeepsOriginalAnchor() {
         LocalDateTime manualAnchor = SCHED_START.plusMinutes(7);
-        Room anchored = new Room(1L, RoomStatus.ACTIVE, SCHED_START.toLocalDate(), 3, manualAnchor, null, false, null,
+        Room anchored = new Room(1L, RoomStatus.ACTIVE, SCHED_START.toLocalDate(), 3, manualAnchor, null,
                 SCHED_START, SCHED_START.plusDays(2), SCHED_START.plusDays(2).plusHours(3),
                 SCHED_START.plusDays(2).plusHours(4), SCHED_START.plusDays(3));
 
@@ -165,7 +165,7 @@ class RoomTest {
     @DisplayName("currentDayAt: 저녁 시작 방이 14시간 만에 Day2가 되지 않는다 (9시 경계 회귀)")
     void givenEveningStart_whenNextMorning_thenStillDay1() {
         LocalDateTime eveningStart = LocalDateTime.of(2026, 8, 20, 19, 0);
-        Room room = new Room(1L, RoomStatus.ACTIVE, eveningStart.toLocalDate(), 3, null, null, false, null,
+        Room room = new Room(1L, RoomStatus.ACTIVE, eveningStart.toLocalDate(), 3, null, null,
                 eveningStart, eveningStart.plusDays(2).withHour(18), eveningStart.plusDays(2).withHour(21),
                 eveningStart.plusDays(2).withHour(22), eveningStart.plusDays(3).withHour(9));
 
@@ -176,7 +176,7 @@ class RoomTest {
 
     /** starts_at=2026-06-24 14:00 · opens +2일18시 · closes +2일21시 · result +2일22시 · ends +3일 */
     private Room threeDayRoom() {
-        return new Room(1L, RoomStatus.ACTIVE, SCHED_START.toLocalDate(), 3, null, null, false, null,
+        return new Room(1L, RoomStatus.ACTIVE, SCHED_START.toLocalDate(), 3, null, null,
                 SCHED_START, SCHED_START.plusDays(2).withHour(18), SCHED_START.plusDays(2).withHour(21),
                 SCHED_START.plusDays(2).withHour(22), SCHED_START.plusDays(3));
     }
@@ -285,32 +285,6 @@ class RoomTest {
         assertThat(result.endedAt()).isEqualTo(endedAt);
         assertThat(result.startedAt()).isEqualTo(STARTED_AT);
         assertThat(result.totalDays()).isEqualTo(3);
-    }
-
-    // ===================== 데모 방(#265) =====================
-
-    @Test
-    @DisplayName("데모 방은 실시간이 흘러도 currentDay를 저장된 demoDay로 고정한다")
-    void givenDemoRoom_whenCurrentDayAt_thenReturnsDemoDayRegardlessOfClock() {
-        Room demo = Room.createDemo(LocalDate.of(2026, 6, 24), 3, 2, STARTED_AT);
-        // 시작 한참 전(Day 파생이면 0)·한참 후(Day 파생이면 3)여도 demoDay=2 고정
-        assertThat(demo.currentDayAt(LocalDateTime.of(2026, 6, 24, 9, 0), DAY_START_HOUR)).isEqualTo(2);
-        assertThat(demo.currentDayAt(LocalDateTime.of(2026, 7, 1, 9, 0), DAY_START_HOUR)).isEqualTo(2);
-    }
-
-    @Test
-    @DisplayName("데모 방 Day 진행은 demoDay를 갱신하고 currentDay에 반영된다")
-    void givenDemoRoom_whenWithDemoDay_thenCurrentDayReflects() {
-        Room demo = Room.createDemo(LocalDate.of(2026, 6, 24), 3, 1, STARTED_AT);
-        Room advanced = demo.withDemoDay(3);
-        assertThat(advanced.currentDayAt(LocalDateTime.of(2026, 6, 24, 9, 0), DAY_START_HOUR)).isEqualTo(3);
-    }
-
-    @Test
-    @DisplayName("데모 방은 시각이 아무리 지나도 hasEndedBy가 false다(무만료)")
-    void givenDemoRoom_whenHasEndedBy_thenAlwaysFalse() {
-        Room demo = Room.createDemo(LocalDate.of(2026, 6, 24), 3, 3, STARTED_AT);
-        assertThat(demo.hasEndedBy(LocalDateTime.of(2026, 12, 31, 9, 0), DAY_START_HOUR)).isFalse();
     }
 
     // ── #320 리뷰 반영: 새 모델 방의 startedAt·dateOfDay·announcedAt ──

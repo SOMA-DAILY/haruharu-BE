@@ -21,8 +21,6 @@ import org.son.haruharu.domain.profile.implement.DrinkingStatus;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.user.business.dto.OnboardingStatusResponse;
 import org.son.haruharu.domain.user.business.dto.UserProfileResponse;
-import org.son.haruharu.domain.user.business.exception.DemoProvisionPurchaseExistsException;
-import org.son.haruharu.domain.user.business.exception.DemoProvisionVerifiedUserException;
 import org.son.haruharu.domain.user.business.exception.InactiveUserException;
 import org.son.haruharu.domain.user.business.exception.OnboardingIncompleteException;
 import org.son.haruharu.domain.value.business.ValueService;
@@ -82,7 +80,7 @@ class UserServiceTest {
             List.of(new ProfileResponse.ImageInfo(imageId, "https://image1.png", 0))
         );
 
-        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, null, false));
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, null));
         given(profileService.getProfile(userId)).willReturn(profileResponse);
         given(identityService.findVerified(userId))
             .willReturn(Optional.of(new VerifiedIdentity("MALE", LocalDate.of(1999, 6, 26))));
@@ -91,7 +89,6 @@ class UserServiceTest {
 
         assertThat(result.userId()).isEqualTo(userId);
         assertThat(result.userStatus()).isEqualTo("VERIFIED");
-        assertThat(result.demoMode()).isFalse();
         assertThat(result.profile().nickname()).isEqualTo("테스터");
         assertThat(result.profile().age()).isEqualTo(27);
         assertThat(result.images()).hasSize(1);
@@ -103,7 +100,7 @@ class UserServiceTest {
     @DisplayName("미인증 유저 조회 시 user_status가 UNVERIFIED로 반환된다")
     void givenUnverifiedUser_whenGetMyProfile_thenUserStatusUnverified() {
         Long userId = 1L;
-        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ONBOARDING, null, false));
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ONBOARDING, null));
         given(profileService.getProfile(userId)).willReturn(new ProfileResponse(
             "유저", "서울", "학생", 160, "ENFP", DrinkingStatus.NONE, SmokingStatus.NONE, List.of()));
         // 미인증: findVerified가 empty → user_status UNVERIFIED
@@ -111,19 +108,6 @@ class UserServiceTest {
         UserProfileResponse result = userService.getMyProfile(userId);
 
         assertThat(result.userStatus()).isEqualTo("UNVERIFIED");
-    }
-
-    @Test
-    @DisplayName("데모 계정(demo_mode=true) 조회 시 응답 demo_mode가 true로 반환된다")
-    void givenDemoUser_whenGetMyProfile_thenDemoModeTrue() {
-        Long userId = 1L;
-        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, null, true));
-        given(profileService.getProfile(userId)).willReturn(new ProfileResponse(
-            "데모", "서울", "직장인", 170, "INFP", DrinkingStatus.NONE, SmokingStatus.NONE, List.of()));
-
-        UserProfileResponse result = userService.getMyProfile(userId);
-
-        assertThat(result.demoMode()).isTrue();
     }
 
     // ===================== completeOnboarding =====================
@@ -268,83 +252,5 @@ class UserServiceTest {
         given(userReader.getById(1L)).willReturn(new User(1L, status, LocalDateTime.now()));
 
         assertThat(userService.isWithdrawn(1L)).isFalse();
-    }
-
-    // ===================== provisionDemo (#264) =====================
-
-    @Test
-    @DisplayName("일반 계정 데모 프로비저닝 시 demo_mode·ACTIVE 저장 + 본인인증 시드 + 구름 지급을 수행한다")
-    void givenNormalUser_whenProvisionDemo_thenSetsDemoAndSeedsAndGrants() {
-        Long userId = 1L;
-        LocalDate birthday = LocalDate.of(1995, 6, 15);
-        given(userReader.getById(userId))
-            .willReturn(new User(userId, UserStatus.ONBOARDING, LocalDateTime.of(2026, 6, 1, 0, 0), false));
-
-        userService.provisionDemo(userId, "MALE", birthday, 200L);
-
-        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
-        then(userWriter).should().save(captor.capture());
-        assertThat(captor.getValue().demoMode()).isTrue();
-        assertThat(captor.getValue().status()).isEqualTo(UserStatus.ACTIVE);
-        then(identityService).should().seedDemoIdentity(userId, "MALE", birthday);
-        then(coinService).should().grantDemoCoins(userId, 200L);
-    }
-
-    @Test
-    @DisplayName("본인인증을 마친 실사용자(demo_mode=false)는 데모 프로비저닝을 거부한다(오배포 오염 예방)")
-    void givenVerifiedRealUser_whenProvisionDemo_thenThrowsAndDoesNotMutate() {
-        Long userId = 1L;
-        given(userReader.getById(userId))
-            .willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.of(2026, 6, 1, 0, 0), false));
-        given(identityService.isVerified(userId)).willReturn(true);
-
-        assertThatThrownBy(() -> userService.provisionDemo(userId, "MALE", LocalDate.of(1995, 6, 15), 200L))
-            .isInstanceOf(DemoProvisionVerifiedUserException.class);
-        then(userWriter).should(never()).save(any());
-        then(identityService).should(never()).seedDemoIdentity(any(), any(), any());
-        then(coinService).should(never()).grantDemoCoins(any(), org.mockito.ArgumentMatchers.anyLong());
-    }
-
-    @Test
-    @DisplayName("실결제(IAP) 이력이 있는 계정은 데모 프로비저닝을 거부한다(#277)")
-    void givenPurchaseHistory_whenProvisionDemo_thenThrowsAndDoesNotMutate() {
-        Long userId = 1L;
-        given(userReader.getById(userId))
-            .willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.of(2026, 6, 1, 0, 0), false));
-        given(coinService.hasPurchaseHistory(userId)).willReturn(true);
-
-        assertThatThrownBy(() -> userService.provisionDemo(userId, "MALE", LocalDate.of(1995, 6, 15), 200L))
-            .isInstanceOf(DemoProvisionPurchaseExistsException.class);
-        then(userWriter).should(never()).save(any());
-        then(identityService).should(never()).seedDemoIdentity(any(), any(), any());
-        then(coinService).should(never()).grantDemoCoins(any(), org.mockito.ArgumentMatchers.anyLong());
-    }
-
-    @Test
-    @DisplayName("이미 데모·ACTIVE 계정이면 유저 재저장은 생략하고 시드·지급만 멱등 호출한다")
-    void givenAlreadyDemoActive_whenProvisionDemo_thenSkipsUserSave() {
-        Long userId = 1L;
-        LocalDate birthday = LocalDate.of(1995, 6, 15);
-        given(userReader.getById(userId))
-            .willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.of(2026, 6, 1, 0, 0), true));
-
-        userService.provisionDemo(userId, "MALE", birthday, 200L);
-
-        then(userWriter).should(never()).save(any());
-        then(identityService).should().seedDemoIdentity(userId, "MALE", birthday);
-        then(coinService).should().grantDemoCoins(userId, 200L);
-    }
-    @Test
-    @DisplayName("데모 가상 참여자 계정은 demo=true·ACTIVE로 생성되고 userId를 반환한다(#272)")
-    void givenNoAccount_whenCreateDemoVirtualAccount_thenSavesDemoActiveUser() {
-        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
-        given(userWriter.save(captor.capture()))
-            .willReturn(new User(500L, UserStatus.ACTIVE, LocalDateTime.now(clock), true));
-
-        Long id = userService.createDemoVirtualAccount();
-
-        assertThat(id).isEqualTo(500L);
-        assertThat(captor.getValue().demoMode()).isTrue();
-        assertThat(captor.getValue().status()).isEqualTo(UserStatus.ACTIVE);
     }
 }

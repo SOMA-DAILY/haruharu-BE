@@ -64,12 +64,4 @@ public class VideoPostRepositoryImpl implements VideoPostRepository {
                 .map(VideoPostEntity::toDomain)
                 .toList();
     }
-
-    @Override
-    public void deleteByRoomMemberIds(List<Long> roomMemberIds) {
-        if (roomMemberIds.isEmpty()) {
-            return;
-        }
-        jpaRepository.deleteByRoomMemberIdIn(roomMemberIds);
-    }
 }

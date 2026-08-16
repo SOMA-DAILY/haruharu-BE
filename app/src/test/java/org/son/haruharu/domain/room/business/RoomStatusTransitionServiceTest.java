@@ -41,7 +41,7 @@ class RoomStatusTransitionServiceTest {
     }
 
     private Room roomWith(RoomStatus stored) {
-        return new Room(1L, stored, STARTS_AT.toLocalDate(), 3, null, null, false, null,
+        return new Room(1L, stored, STARTS_AT.toLocalDate(), 3, null, null,
                 STARTS_AT, OPENS_AT, CLOSES_AT, RESULT_AT, ENDS_AT);
     }
 

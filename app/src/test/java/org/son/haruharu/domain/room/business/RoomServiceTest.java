@@ -64,7 +64,7 @@ class RoomServiceTest {
                 starts, starts.plusDays(2).withHour(20), starts.plusDays(2).withHour(22),
                 starts.plusDays(2).withHour(23), starts.plusDays(2).withHour(23).withMinute(30), 3);
         given(roomWriter.save(any())).willReturn(new Room(99L, RoomStatus.PENDING, starts.toLocalDate(), 3,
-                null, null, false, null, cmd.startsAt(), cmd.finalSelectionOpensAt(),
+                null, null, cmd.startsAt(), cmd.finalSelectionOpensAt(),
                 cmd.finalSelectionClosesAt(), cmd.resultAt(), cmd.endsAt()));
 
         Long id = roomService.createRoom(cmd);
@@ -105,7 +105,7 @@ class RoomServiceTest {
         CreateRoomCommand cmd = new CreateRoomCommand(
                 now, now.plusHours(4), now.plusHours(6), now.plusHours(7), now.plusHours(8), 3);
         given(roomWriter.save(any())).willReturn(new Room(101L, RoomStatus.PENDING, now.toLocalDate(), 3,
-                null, null, false, null, cmd.startsAt(), cmd.finalSelectionOpensAt(),
+                null, null, cmd.startsAt(), cmd.finalSelectionOpensAt(),
                 cmd.finalSelectionClosesAt(), cmd.resultAt(), cmd.endsAt()));
 
         assertThat(roomService.createRoom(cmd)).isEqualTo(101L);
@@ -117,7 +117,7 @@ class RoomServiceTest {
     @DisplayName("방 취소 시 CANCELLED로 저장되고 이후 statusAt도 CANCELLED다")
     void givenPendingRoom_whenCancel_thenCancelled() {
         LocalDateTime starts = LocalDateTime.of(2026, 6, 27, 19, 0);
-        Room room = new Room(77L, RoomStatus.PENDING, starts.toLocalDate(), 3, null, null, false, null,
+        Room room = new Room(77L, RoomStatus.PENDING, starts.toLocalDate(), 3, null, null,
                 starts, starts.plusDays(2), starts.plusDays(2).plusHours(3),
                 starts.plusDays(2).plusHours(4), starts.plusDays(3));
         given(roomReader.findById(77L)).willReturn(Optional.of(room));
@@ -133,7 +133,7 @@ class RoomServiceTest {
     @DisplayName("이미 종료된 방은 취소할 수 없다")
     void givenEndedRoom_whenCancel_thenThrows() {
         LocalDateTime starts = LocalDateTime.of(2026, 6, 20, 19, 0);
-        Room ended = new Room(78L, RoomStatus.ENDED, starts.toLocalDate(), 3, null, null, false, null,
+        Room ended = new Room(78L, RoomStatus.ENDED, starts.toLocalDate(), 3, null, null,
                 starts, starts.plusDays(2), starts.plusDays(2).plusHours(3),
                 starts.plusDays(2).plusHours(4), starts.plusDays(3));
         given(roomReader.findById(78L)).willReturn(Optional.of(ended));
@@ -253,7 +253,7 @@ class RoomServiceTest {
     /** ends_at 은 지났지만 저장 status 는 아직 ACTIVE 인 방 (5분 배치 전 / 배치 장애 구간) */
     private Room staleEndedRoom(Long roomId) {
         LocalDateTime starts = LocalDateTime.of(2026, 6, 20, 19, 0);
-        return new Room(roomId, RoomStatus.ACTIVE, starts.toLocalDate(), 3, starts, null, false, null,
+        return new Room(roomId, RoomStatus.ACTIVE, starts.toLocalDate(), 3, starts, null,
                 starts, starts.plusDays(2), starts.plusDays(2).plusHours(3),
                 starts.plusDays(2).plusHours(4), starts.plusDays(3)); // endsAt = 6/23 19:00 < now(6/26 12:00)
     }

@@ -52,13 +52,4 @@ public record CoinCreditCommand(
         return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.MATCH_CONSOLATION,
                 "ROOM", roomId.toString());
     }
-
-    /**
-     * 데모/심사 계정 구름 지급(#264). 리워드 버킷(환불 회수 무관)으로 적립하고,
-     * refType/refId(userId)로 유저당 1회 멱등을 보장한다.
-     */
-    public static CoinCreditCommand demoGrant(Long userId, long amount) {
-        return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.DEMO_GRANT,
-                "DEMO_GRANT", String.valueOf(userId));
-    }
 }

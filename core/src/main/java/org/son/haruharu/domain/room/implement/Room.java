@@ -11,8 +11,6 @@ public record Room(
         int totalDays,
         LocalDateTime startedAt,
         LocalDateTime endedAt,
-        boolean demo,
-        Integer demoDay,
         // 새 MVP(#311): 운영진/어드민이 방마다 직접 입력하는 스케줄 시각. 초대코드 모델 이전 방은 전부 null.
         LocalDateTime startsAt,
         LocalDateTime finalSelectionOpensAt,
@@ -20,16 +18,10 @@ public record Room(
         LocalDateTime resultAt,
         LocalDateTime endsAt
 ) {
-    /** 비데모 방 생성(기본). demo=false·demoDay=null — 기존 6-arg 호출부를 그대로 살린다. */
+    /** 6-arg 하위호환. 신규 스케줄 시각은 null default — 기존 6-arg 호출부/픽스처를 그대로 살린다. */
     public Room(Long id, RoomStatus status, LocalDate scheduledDate, int totalDays,
                 LocalDateTime startedAt, LocalDateTime endedAt) {
-        this(id, status, scheduledDate, totalDays, startedAt, endedAt, false, null);
-    }
-
-    /** 8-arg 하위호환(#311 이전 canonical). 신규 스케줄 시각은 null default — 기존 호출부/픽스처를 그대로 살린다. */
-    public Room(Long id, RoomStatus status, LocalDate scheduledDate, int totalDays,
-                LocalDateTime startedAt, LocalDateTime endedAt, boolean demo, Integer demoDay) {
-        this(id, status, scheduledDate, totalDays, startedAt, endedAt, demo, demoDay, null, null, null, null, null);
+        this(id, status, scheduledDate, totalDays, startedAt, endedAt, null, null, null, null, null);
     }
     /**
      * 세션 결과 발표(최종선택 마감·미매칭 확정) 시각. room 세션의 고유 개념으로,
@@ -51,7 +43,7 @@ public record Room(
     public static Room createScheduled(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
                                        LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt,
                                        LocalDateTime endsAt, int totalDays) {
-        return new Room(null, RoomStatus.PENDING, startsAt.toLocalDate(), totalDays, null, null, false, null,
+        return new Room(null, RoomStatus.PENDING, startsAt.toLocalDate(), totalDays, null, null,
                 startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
     }
 
@@ -93,40 +85,25 @@ public record Room(
     public Room materialized(RoomStatus derived) {
         boolean needsAnchor = startsAt != null && startedAt == null && derived != RoomStatus.PENDING;
         LocalDateTime anchor = needsAnchor ? startsAt : startedAt;
-        return new Room(id, derived, scheduledDate, totalDays, anchor, endedAt, demo, demoDay,
+        return new Room(id, derived, scheduledDate, totalDays, anchor, endedAt,
                 startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
     }
 
     /** 운영진 수동 취소(#311): → CANCELLED. sticky(이후 statusAt 도 CANCELLED). */
     public Room cancelled() {
-        return new Room(id, RoomStatus.CANCELLED, scheduledDate, totalDays, startedAt, endedAt, demo, demoDay,
+        return new Room(id, RoomStatus.CANCELLED, scheduledDate, totalDays, startedAt, endedAt,
                 startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
-    }
-
-    /**
-     * 데모 방(#265): 즉시 ACTIVE, demo=true, demoDay 고정. currentDay는 시각이 아니라 demoDay에서 파생하므로
-     * 배치(getLegacyActive/getScheduledPending demo=false)에서 격리되어 종료·자동진행되지 않는다.
-     * startedAt은 dateOfDay/announcedAt 계산이 안전하도록 세팅하되(currentDay는 demoDay 우선), 시각에 의존하지 않는다.
-     */
-    public static Room createDemo(LocalDate scheduledDate, int totalDays, int demoDay, LocalDateTime startedAt) {
-        return new Room(null, RoomStatus.ACTIVE, scheduledDate, totalDays, startedAt, null, true, demoDay);
     }
 
     /** 방 시작: PENDING → ACTIVE, startedAt 앵커. currentDay는 startedAt에서 파생하므로 저장하지 않는다. */
     public Room started(LocalDateTime startedAt) {
-        return new Room(id, RoomStatus.ACTIVE, scheduledDate, totalDays, startedAt, endedAt, demo, demoDay,
+        return new Room(id, RoomStatus.ACTIVE, scheduledDate, totalDays, startedAt, endedAt,
                 startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
     }
 
     /** 세션 종료: ACTIVE → ENDED, endedAt 앵커. 종료 후 getLegacyActive()·findCurrent 조회에서 제외된다. */
     public Room ended(LocalDateTime endedAt) {
-        return new Room(id, RoomStatus.ENDED, scheduledDate, totalDays, startedAt, endedAt, demo, demoDay,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
-    }
-
-    /** 데모 Day 진행(#265): demoDay를 새 값으로. 데모 방에만 의미 있다. */
-    public Room withDemoDay(int newDemoDay) {
-        return new Room(id, status, scheduledDate, totalDays, startedAt, endedAt, demo, newDemoDay,
+        return new Room(id, RoomStatus.ENDED, scheduledDate, totalDays, startedAt, endedAt,
                 startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
     }
 
@@ -136,11 +113,6 @@ public record Room(
      * 미시작(PENDING/startedAt 없음)이면 0. 별도 증분 잡 없이 시각에서 파생한다.
      */
     public int currentDayAt(LocalDateTime now, int dayStartHour) {
-        // 데모 방(#265): Day를 시각이 아니라 저장된 demoDay에서 파생 → 실시간이 흘러도 리뷰어 조작(advance-day)대로 고정.
-        // 이 분기 하나로 사진 단계공개·피드 열람·Day3 최종선택 게이트가 호출처 수정 없이 데모에서도 동작한다.
-        if (demo && demoDay != null) {
-            return (int) Math.min(totalDays, demoDay);
-        }
         // 새 모델(#320): Day 는 starts_at 상대 24시간 단위. dayStartHour(09:00) 경계를 쓰지 않는다
         // — 저녁 시작 방(예: 19:00)이 다음날 09:00에 Day2 가 되어버리는 문제를 없앤다.
         // 진행 중이 아닌 방(시작 전·종료·취소)은 구 모델과 동일하게 0.
@@ -162,10 +134,6 @@ public record Room(
      * currentDayAt은 totalDays로 캡되어 "경과"를 구분할 수 없으므로 캡 이전 raw day로 판정한다.
      */
     public boolean hasEndedBy(LocalDateTime now, int dayStartHour) {
-        // 데모 방은 시각 경과로 종료되지 않는다(배치에서 이미 격리되지만 도메인 차원에서도 방어).
-        if (demo) {
-            return false;
-        }
         if (status != RoomStatus.ACTIVE || startedAt == null) {
             return false;
         }

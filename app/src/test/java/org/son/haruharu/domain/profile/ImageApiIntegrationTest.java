@@ -99,7 +99,7 @@ class ImageApiIntegrationTest {
     @Test
     @DisplayName("마이페이지 조회 응답이 user_id·user_status·profile 중첩·images 객체배열(snake_case)로 직렬화되고 birthday는 노출되지 않는다")
     void givenProfile_whenGetMe_thenReturnsNestedSnakeCase() throws Exception {
-        // /users/me는 users 행을 요구하므로(demo_mode 조회, #264) 유저를 먼저 시드한다.
+        // /users/me는 users 행을 요구하므로 유저를 먼저 시드한다.
         Long userId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null))).toDomain().id();
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",

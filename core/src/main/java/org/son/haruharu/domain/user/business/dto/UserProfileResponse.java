@@ -10,7 +10,6 @@ import java.util.List;
 public record UserProfileResponse(
         @JsonProperty("user_id") Long userId,
         @JsonProperty("user_status") String userStatus,
-        @JsonProperty("demo_mode") boolean demoMode,
         ProfileSection profile,
         List<ProfileResponse.ImageInfo> images
 ) {
@@ -26,13 +25,12 @@ public record UserProfileResponse(
             @JsonProperty("smoking_status") SmokingStatus smokingStatus
     ) {}
 
-    /** gender·age는 프로필이 아니라 본인인증(identity)에서 수급한다. demoMode는 users 테이블 플래그(#264). */
+    /** gender·age는 프로필이 아니라 본인인증(identity)에서 수급한다. */
     public static UserProfileResponse from(Long userId, ProfileResponse profile,
-                                           String gender, Integer age, String userStatus, boolean demoMode) {
+                                           String gender, Integer age, String userStatus) {
         return new UserProfileResponse(
             userId,
             userStatus,
-            demoMode,
             new ProfileSection(
                 profile.nickname(), gender, age,
                 profile.location(), profile.affiliation(), profile.height(),

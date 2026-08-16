@@ -93,49 +93,6 @@ public class ChatService {
     }
 
     /**
-     * 데모 채팅 시드(#266). 리뷰어가 "미리 채워진 대화"를 보고 곧바로 답장까지 해볼 수 있도록,
-     * 실제 chat 테이블에 방·멤버·대화를 만든다(별도 데모 테이블 없음 → FE가 기존 채팅 화면 그대로 사용).
-     * <p>
-     * 기존 {@code createRoomFromMatch}는 AFTER_COMMIT 리스너용이라 REQUIRES_NEW로 새 트랜잭션을 여는데,
-     * 데모는 같은 트랜잭션에서 방금 만든 매칭 결과를 참조하므로 REQUIRED(기본)로 동작하는 별도 경로가 필요하다.
-     * 이미 방이 있으면 대화만 다시 채운다(멱등).
-     *
-     * @return 생성(또는 기존) 채팅방 id
-     */
-    @Transactional
-    public Long seedDemoChat(Long matchResultId, Long reviewerUserId, Long partnerUserId) {
-        LocalDateTime now = LocalDateTime.now(clock);
-        Long chatRoomId = chatRoomReader.findChatRoomIdByMatchResultId(matchResultId)
-                .orElseGet(() -> {
-                    ChatRoom room = chatRoomWriter.save(ChatRoom.create(matchResultId));
-                    chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), reviewerUserId, now));
-                    chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), partnerUserId, now));
-                    return room.id();
-                });
-
-        // 재시드 시 대화가 누적되지 않도록 기존 메시지를 물리 삭제하고 다시 채운다.
-        chatMessageWriter.hardDeleteByChatRoomId(chatRoomId);
-        for (DemoChatScript.Line line : DemoChatScript.LINES) {
-            Long senderId = line.fromPartner() ? partnerUserId : reviewerUserId;
-            chatMessageWriter.save(ChatMessage.create(chatRoomId, senderId, line.content()));
-        }
-        return chatRoomId;
-    }
-
-    /**
-     * 데모 채팅 정리(#266). 메시지 → 멤버 → 방 순서로 물리 삭제한다(FK 역순).
-     * 전역 soft-delete + UNIQUE(match_result_id) 때문에 soft 삭제로는 재시연 시 방 재생성이 막혀 하드삭제한다.
-     */
-    @Transactional
-    public void purgeDemoChat(Long matchResultId) {
-        chatRoomReader.findChatRoomIdByMatchResultId(matchResultId).ifPresent(chatRoomId -> {
-            chatMessageWriter.hardDeleteByChatRoomId(chatRoomId);
-            chatRoomMemberWriter.deleteByChatRoomId(chatRoomId);
-        });
-        chatRoomWriter.hardDeleteByMatchResultId(matchResultId);
-    }
-
-    /**
      * 메시지 전송(#60 STOMP). 발신자가 방 참여자인지 검증 후 저장하고, 브로드캐스트 payload를 반환한다.
      * 실제 브로드캐스트(convertAndSend)는 application 계층(ChatStompController)이 담당한다.
      */

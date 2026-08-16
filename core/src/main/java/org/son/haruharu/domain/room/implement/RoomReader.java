@@ -35,12 +35,12 @@ public class RoomReader {
     }
 
     /**
-     * 09:00 자동 시작 배치용. 데모 방은 제외(#265) — 데모 방은 즉시 ACTIVE로 생성되고 배치와 무관하다.
-     * 초대코드 모델 방(starts_at 보유)도 제외한다(#320) — scheduledDate 가 starts_at 의 날짜라 그대로 두면
+     * 09:00 자동 시작 배치용.
+     * 초대코드 모델 방(starts_at 보유)은 제외한다(#320) — scheduledDate 가 starts_at 의 날짜라 그대로 두면
      * 19:00 시작 예정 방이 09:00 에 조기 flip 된다. 그쪽 전이는 RoomStatusReconciler 담당.
      */
     public List<Room> getScheduledPending(LocalDate scheduledDate) {
-        return roomRepository.findAllByScheduledDateAndStatusAndDemoFalse(scheduledDate, RoomStatus.PENDING);
+        return roomRepository.findAllByScheduledDateAndStatus(scheduledDate, RoomStatus.PENDING);
     }
 
     /**
@@ -56,7 +56,6 @@ public class RoomReader {
 
     /**
      * status reconciler 대상(#320). 스케줄 시각을 가진 방 중 ENDED·CANCELLED(sticky 확정 상태)를 뺀 것.
-     * 데모 방은 제외한다(#265) — 시각이 아니라 demoDay 로 진행되므로 전이 대상이 아니다.
      */
     public List<Room> getReconcilable() {
         return roomRepository.findReconcilable();

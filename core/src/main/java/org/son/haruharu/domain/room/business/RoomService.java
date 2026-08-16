@@ -71,7 +71,6 @@ public class RoomService {
     /**
      * 시작 시각이 과거면 거부(#320). startsAt 하나만 본다 — 나머지 4개는 순서 규약상 startsAt 보다 뒤라
      * 자동으로 미래가 된다. 유예(grace)는 두지 않는다: 어드민은 방을 미리 만드는 게 정상 워크플로다.
-     * "지금 바로 시작"이 필요한 데모는 별도 경로(POST /demo/room, #265)를 쓴다.
      */
     private void validateNotInPast(CreateRoomCommand command, LocalDateTime now) {
         if (command.startsAt().isBefore(now)) {

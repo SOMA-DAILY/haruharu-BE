@@ -10,8 +10,6 @@ import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.user.business.dto.OnboardingStatusResponse;
 import org.son.haruharu.domain.user.business.dto.UserProfileResponse;
-import org.son.haruharu.domain.user.business.exception.DemoProvisionPurchaseExistsException;
-import org.son.haruharu.domain.user.business.exception.DemoProvisionVerifiedUserException;
 import org.son.haruharu.domain.user.business.exception.InactiveUserException;
 import org.son.haruharu.domain.user.business.exception.OnboardingIncompleteException;
 import org.son.haruharu.domain.user.implement.User;
@@ -65,25 +63,8 @@ public class UserService {
         this.clock = clock;
     }
 
-    /**
-     * 데모 방 가상 참여자용 계정 생성(#272). demo=true·ACTIVE로 생성하되 자격증명(user_credentials)이 없어 로그인/API 호출은 불가하다.
-     * 생성된 userId를 반환해 프로필·이미지 시드에 사용한다.
-     */
-    @Transactional
-    public Long createDemoVirtualAccount() {
-        Long userId = userWriter.save(new User(null, UserStatus.ACTIVE, null, true)).id();
-        // 잔액 변경 경로가 지갑 존재를 전제하므로 유저 생성 경로는 모두 지갑을 만든다(#298).
-        coinService.createWallet(userId);
-        return userId;
-    }
-
-    /** 데모 계정 여부. 데모 전용 파괴적 조작(리셋 등) 호출부의 이중 방어 가드용(#267). */
-    public boolean isDemoAccount(Long userId) {
-        return userReader.getById(userId).demoMode();
-    }
-
     public UserProfileResponse getMyProfile(Long userId) {
-        User user = userReader.getById(userId);
+        userReader.getById(userId); // 존재 검증(없으면 404) — 프로필 응답 전 유저 존재 보장. (구 demoMode 소비는 #323로 제거)
         ProfileResponse profile = profileService.getProfile(userId);
         Optional<VerifiedIdentity> verified = identityService.findVerified(userId);
         String gender = verified.map(VerifiedIdentity::gender).orElse(null);
@@ -91,7 +72,7 @@ public class UserService {
             .map(birthday -> Period.between(birthday, LocalDate.now(clock)).getYears())
             .orElse(null);
         VerificationStatus status = VerificationStatus.of(verified.isPresent());
-        return UserProfileResponse.from(userId, profile, gender, age, status.name(), user.demoMode());  
+        return UserProfileResponse.from(userId, profile, gender, age, status.name());
     }
 
     /**
@@ -117,7 +98,7 @@ public class UserService {
             if (!profileService.hasCompletedProfile(userId) || !valueService.hasAnswered(userId)) {
                 throw new OnboardingIncompleteException();
             }
-            userWriter.save(new User(userId, UserStatus.ACTIVE, user.createdAt(), user.demoMode()));
+            userWriter.save(new User(userId, UserStatus.ACTIVE, user.createdAt()));
         }
         boolean verified = identityService.findVerified(userId).isPresent();
         String status = verified ? VerificationStatus.VERIFIED.name() : UserStatus.ACTIVE.name();
@@ -141,41 +122,6 @@ public class UserService {
         coinService.deleteWallet(userId);
         identityService.deleteIdentity(userId);
         authService.deleteCredentials(userId);
-        userWriter.save(new User(userId, UserStatus.DELETED, user.createdAt(), user.demoMode()));
-    }
-
-    /**
-     * 데모/심사 계정 프로비저닝(#264). demo_mode·ACTIVE 전이 + 본인인증 시드(PASS 우회) + 구름 지급을
-     * 한 트랜잭션으로 조율한다(withdraw·completeOnboarding과 동일한 business 조율 위치). 각 단계 멱등.
-     * env(DEMO_PROVISION_USER_IDS) 오배포로 실사용자 id가 섞이면 가짜 인증·권한·구름이 부여되는 민감 조작이라,
-     * 배포 후 로그 점검으로 조기 발견할 수 있도록 대상 userId를 WARN으로 남긴다.
-     */
-    @Transactional
-    public void provisionDemo(Long userId, String gender, LocalDate birthday, long coins) {
-        User user = userReader.getById(userId);
-        // 예방 가드 1(#277): 실결제(IAP) 이력이 있으면 무조건 실사용자로 보고 데모 전환을 시작조차 하지 않는다.
-        // env 오배포·demo_mode 오설정과 무관하게 결제 원장을 보호한다(데모 리셋의 원장 하드삭제로부터).
-        // 정상 데모 계정은 결제 이력이 없어 이 가드를 통과하므로 재실행 멱등성은 유지된다.
-        if (coinService.hasPurchaseHistory(userId)) {
-            // 대상 userId는 예외 메시지가 아니라 로그로 남긴다(예외는 코드·메시지 고정).
-            log.warn("데모 프로비저닝 거부: 실결제 이력 존재 userId={}", userId);
-            throw new DemoProvisionPurchaseExistsException();
-        }
-        // 예방 가드 2: 데모가 아닌데 이미 본인인증을 마친 계정 = 실사용자. env 오배포로 실계정이 섞인 것으로 보고
-        // 상태 전이·구름 지급을 아예 시작하지 않는다(가짜 인증 유저는 seedDemoIdentity가 멱등 skip으로 이미 보호).
-        // 이미 프로비저닝된 데모 계정(demo_mode=true)은 이 가드를 통과해 재실행이 멱등으로 동작한다.
-        if (!user.demoMode() && identityService.isVerified(userId)) {
-            log.warn("데모 프로비저닝 거부: 본인인증을 마친 실사용자 userId={}", userId);
-            throw new DemoProvisionVerifiedUserException();
-        }
-        log.warn("데모 계정 프로비저닝: userId={} — demo_mode·ACTIVE 전이 + 본인인증 시드 + 구름 {} 지급(실계정 오염 주의)",
-            userId, coins);
-        if (!user.demoMode() || user.status() != UserStatus.ACTIVE) {
-            userWriter.save(new User(user.id(), UserStatus.ACTIVE, user.createdAt(), true));
-        }
-        identityService.seedDemoIdentity(userId, gender, birthday);
-        // env로 받은 대상 유저가 지갑 없이 존재할 수 있어(백필 이전 가입자 등) 지급 전에 보장한다(#298).
-        coinService.createWallet(userId);
-        coinService.grantDemoCoins(userId, coins);
+        userWriter.save(new User(userId, UserStatus.DELETED, user.createdAt()));
     }
 }

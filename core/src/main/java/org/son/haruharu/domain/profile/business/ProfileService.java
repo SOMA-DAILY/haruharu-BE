@@ -9,8 +9,6 @@ import org.son.haruharu.domain.profile.business.exception.ImageInvalidExtensionE
 import org.son.haruharu.domain.profile.business.exception.ImageInvalidUrlException;
 import org.son.haruharu.domain.profile.business.exception.ImageMaxExceededException;
 import org.son.haruharu.domain.profile.business.exception.ImageMinLimitException;
-import org.son.haruharu.domain.profile.implement.DrinkingStatus;
-import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserImage;
 import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserImageWriter;
@@ -94,19 +92,6 @@ public class ProfileService {
     public void deleteProfileAndImages(Long userId) {
         deleteAllImages(userId);
         userProfileWriter.deleteByUserId(userId);
-    }
-
-    /**
-     * 데모 방 가상 참여자 프로필·대표사진 시드(#272). 방 상세가 user_profiles·user_images를 조회해 렌더하므로 필요하다.
-     * 데모 전용이라 updateImages의 own-bucket URL 검증(ImageInvalidUrlException)을 적용하지 않고 외부 플레이스홀더 URL을 허용한다 —
-     * 이 우회 권한은 profile 도메인이 스스로 열어준다(외부 도메인이 Writer를 직접 잡아 우회하지 않도록).
-     */
-    @Transactional
-    public void seedDemoProfile(Long userId, String nickname, String location, String photoUrl) {
-        userProfileWriter.save(new UserProfile(
-            null, userId, location, "직장인", null, "INFP", nickname,
-            DrinkingStatus.SOMETIMES, SmokingStatus.NONE));
-        userImageWriter.save(new UserImage(null, userId, photoUrl, 0));
     }
 
     @Transactional
