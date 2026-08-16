@@ -11,7 +11,8 @@ import java.util.List;
  */
 public record FeedResponse(List<SlotStatus> slots, List<FeedItem> posts) {
 
-    public record SlotStatus(LocalDateTime slotStart, boolean locked) {}
+    /** locked=내가 이 슬롯을 안 올려 타인 영상 열람 불가. current=지금 촬영 가능한 현재 슬롯(dots의 촬영 CTA 대상). */
+    public record SlotStatus(LocalDateTime slotStart, boolean locked, boolean current) {}
 
     public record FeedItem(
             Long videoPostId,

@@ -91,6 +91,11 @@ class RoomFeedServiceTest {
                 .map(SlotStatus::locked).findFirst().orElseThrow();
     }
 
+    private boolean currentOf(FeedResponse r, LocalDateTime slotStart) {
+        return r.slots().stream().filter(s -> s.slotStart().equals(slotStart))
+                .map(SlotStatus::current).findFirst().orElseThrow();
+    }
+
     private FeedItem itemOf(FeedResponse r, Long postId) {
         return r.posts().stream().filter(p -> p.videoPostId().equals(postId)).findFirst().orElseThrow();
     }
@@ -106,6 +111,10 @@ class RoomFeedServiceTest {
 
         assertThat(result.slots()).extracting(SlotStatus::slotStart).containsExactly(S20, S21, S22);
         assertThat(result.slots()).allMatch(SlotStatus::locked);
+        // ACTIVE 방의 현재 슬롯(22:00)만 촬영 CTA 대상(current), 과거 슬롯은 아님 — 미업로드여도 마킹된다
+        assertThat(currentOf(result, S22)).isTrue();
+        assertThat(currentOf(result, S21)).isFalse();
+        assertThat(currentOf(result, S20)).isFalse();
         assertThat(result.posts()).isEmpty();
         then(videoPostReader).should(never()).getFeed(anyList(), anyList());
         then(videoReactionReader).shouldHaveNoInteractions();
@@ -160,6 +169,22 @@ class RoomFeedServiceTest {
 
         then(videoReactionReader).should(times(1)).getReactionCounts(anyList());
         then(videoReactionReader).should(times(1)).getMyReactions(anyList(), eq(1L));
+    }
+
+    @Test
+    @DisplayName("SELECTING(최종선택 진행 중) 방은 촬영 불가라 모든 슬롯 current=false다")
+    void givenSelecting_whenFeed_thenNoCurrentSlot() {
+        given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
+        // opensAt 22:00 → now(22:10)엔 SELECTING. 창은 최종선택 오픈 이전 슬롯(20:00·21:00)만
+        Room selecting = new Room(10L, RoomStatus.ACTIVE, DATE, 3, STARTS, null,
+                STARTS, S22, DATE.atTime(22, 15), DATE.atTime(22, 30), DATE.atTime(23, 0));
+        given(roomReader.findById(10L)).willReturn(Optional.of(selecting));
+        given(videoPostReader.getUploadedSlotStarts(eq(20L), anyList())).willReturn(List.of());
+
+        FeedResponse result = service.getFeed(10L, 1L);
+
+        assertThat(result.slots()).extracting(SlotStatus::slotStart).containsExactly(S20, S21);
+        assertThat(result.slots()).noneMatch(SlotStatus::current);
     }
 
     @Test
