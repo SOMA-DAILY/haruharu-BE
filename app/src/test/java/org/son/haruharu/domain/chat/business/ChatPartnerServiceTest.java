@@ -69,15 +69,15 @@ class ChatPartnerServiceTest {
     }
 
     private VideoPost video(Long id, int day, int slot) {
-        // slotStart는 day·slot로부터 유일하게 파생(day별 그룹핑 의미 유지, slot_start 충돌 방지)
-        return new VideoPost(id, PARTNER_MEMBER, day, LocalDateTime.of(2026, 6, 23 + day, 8 + slot, 0), null, "cap" + id,
+        // slotStart는 day·slot로부터 유일하게 파생(조회 정렬 확인용, slot_start 충돌 방지)
+        return new VideoPost(id, PARTNER_MEMBER, LocalDateTime.of(2026, 6, 23 + day, 8 + slot, 0), null, "cap" + id,
                 "https://cdn/v" + id + ".mp4", "https://cdn/t" + id + ".jpg", false, null, null,
                 LocalDateTime.of(2026, 6, 24, 10, 0));
     }
 
     @Test
-    @DisplayName("매칭 상대 카드는 프로필 + day별 영상(슬롯 순서 유지)을 조립해 반환한다")
-    void givenMatchedPartner_whenGetPartner_thenAssemblesProfileAndVideosByDay() {
+    @DisplayName("매칭 상대 카드는 프로필 + 영상(조회 순서 유지)을 slot_start 리스트로 조립해 반환한다")
+    void givenMatchedPartner_whenGetPartner_thenAssemblesProfileAndVideos() {
         given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, MATCH, LocalDateTime.now()));
         given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME)).willReturn(Optional.of(membership(ME, null)));
         given(matchResultService.resolvePartner(MATCH, ME))
@@ -85,7 +85,7 @@ class ChatPartnerServiceTest {
         MemberProfileResponse profile = new MemberProfileResponse(
                 PARTNER_MEMBER, "이나경", "FEMALE", "https://cdn/rep.jpg", true, List.of(), List.of());
         given(memberProfileService.getMemberProfile(ROOM, PARTNER_MEMBER, ME)).willReturn(profile);
-        // day1 slot2·slot1(정렬 확인용), day2, day3
+        // getMemberVideos는 slot_start 오름차순으로 반환(스토리지 정렬). 서비스는 그 순서를 그대로 리스트로 노출한다.
         given(videoService.getMemberVideos(PARTNER_MEMBER)).willReturn(List.of(
                 video(11L, 1, 1), video(12L, 1, 2), video(20L, 2, 1), video(30L, 3, 3)));
 
@@ -93,16 +93,16 @@ class ChatPartnerServiceTest {
 
         assertThat(result.userId()).isEqualTo(PARTNER_USER);
         assertThat(result.profile()).isSameAs(profile);
-        assertThat(result.videosByDay().keySet()).containsExactly(1, 2, 3); // TreeMap: day 오름차순
-        assertThat(result.videosByDay().get(1)).extracting(PartnerProfileResponse.PartnerVideo::videoPostId)
-                .containsExactly(11L, 12L);
-        assertThat(result.videosByDay().get(1).get(0).videoUrl()).isEqualTo("signed:https://cdn/v11.mp4");
-        assertThat(result.videosByDay().get(3).get(0).slotStart()).isEqualTo(LocalDateTime.of(2026, 6, 26, 11, 0));
+        assertThat(result.videos()).extracting(PartnerProfileResponse.PartnerVideo::videoPostId)
+                .containsExactly(11L, 12L, 20L, 30L);
+        assertThat(result.videos().get(0).videoUrl()).isEqualTo("signed:https://cdn/v11.mp4");
+        assertThat(result.videos().get(0).slotStart()).isEqualTo(LocalDateTime.of(2026, 6, 24, 9, 0));
+        assertThat(result.videos().get(3).slotStart()).isEqualTo(LocalDateTime.of(2026, 6, 26, 11, 0));
     }
 
     @Test
-    @DisplayName("영상이 없는 상대는 videosByDay가 빈 맵으로 반환된다")
-    void givenNoVideos_whenGetPartner_thenEmptyMap() {
+    @DisplayName("영상이 없는 상대는 videos가 빈 리스트로 반환된다")
+    void givenNoVideos_whenGetPartner_thenEmptyList() {
         given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, MATCH, LocalDateTime.now()));
         given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME)).willReturn(Optional.of(membership(ME, null)));
         given(matchResultService.resolvePartner(MATCH, ME))
@@ -113,7 +113,7 @@ class ChatPartnerServiceTest {
 
         PartnerProfileResponse result = service.getPartner(CHAT_ROOM, ME);
 
-        assertThat(result.videosByDay()).isEmpty();
+        assertThat(result.videos()).isEmpty();
     }
 
     @Test

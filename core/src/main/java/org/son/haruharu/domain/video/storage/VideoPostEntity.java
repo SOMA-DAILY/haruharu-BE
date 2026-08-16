@@ -32,9 +32,6 @@ public class VideoPostEntity {
     @Column(nullable = false)
     private Long roomMemberId;
 
-    @Column(nullable = false)
-    private int dayNumber;
-
     /** 슬롯 식별자 = room.starts_at 상대 정시(SlotClock). (room_member_id, slot_start) 슬롯당 1업로드. */
     @Column(nullable = false)
     private LocalDateTime slotStart;
@@ -67,7 +64,6 @@ public class VideoPostEntity {
         VideoPostEntity entity = new VideoPostEntity();
         entity.id = post.id();
         entity.roomMemberId = post.roomMemberId();
-        entity.dayNumber = post.dayNumber();
         entity.slotStart = post.slotStart();
         entity.missionId = post.missionId();
         entity.caption = post.caption();
@@ -81,7 +77,7 @@ public class VideoPostEntity {
     }
 
     public VideoPost toDomain() {
-        return new VideoPost(id, roomMemberId, dayNumber, slotStart, missionId, caption, videoUrl,
+        return new VideoPost(id, roomMemberId, slotStart, missionId, caption, videoUrl,
                 thumbnailUrl, isHidden, hiddenReason, deletedAt, createdAt);
     }
 }

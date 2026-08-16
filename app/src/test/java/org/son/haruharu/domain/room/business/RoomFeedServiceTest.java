@@ -82,7 +82,7 @@ class RoomFeedServiceTest {
     }
 
     private VideoPost post(Long postId, Long memberId, LocalDateTime slotStart, String url) {
-        return new VideoPost(postId, memberId, 1, slotStart, null, null, url, null, false, null, null,
+        return new VideoPost(postId, memberId, slotStart, null, null, url, null, false, null, null,
                 LocalDateTime.now());
     }
 
