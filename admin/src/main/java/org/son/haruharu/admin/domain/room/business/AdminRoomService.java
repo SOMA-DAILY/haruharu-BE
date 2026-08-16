@@ -72,8 +72,9 @@ public class AdminRoomService {
                 .map(m -> toMemberView(m, profilesByUserId.get(m.userId()), today))
                 .toList();
         return new AdminRoomDetailResponse(
-                room.id(), room.status(), room.scheduledDate(), room.totalDays(), currentDay,
-                room.startedAt(), room.endedAt(), members.size(),
+                // 표시 status 는 파생값 — 저장 컬럼은 reconciler 가 맞추는 materialized 값이라 배치 지연에 노출된다(#320).
+                room.id(), room.statusAt(LocalDateTime.now(clock)), room.scheduledDate(), room.totalDays(), currentDay,
+                startedAtOf(room), room.endedAt(), members.size(),
                 countGender(members, GENDER_FEMALE), countGender(members, GENDER_MALE), memberViews);
     }
 
@@ -87,9 +88,14 @@ public class AdminRoomService {
 
     private AdminRoomSummary toSummary(Room room, List<RoomMember> members, LocalDateTime now, int dayStartHour) {
         return new AdminRoomSummary(
-                room.id(), room.status(), room.scheduledDate(), room.currentDayAt(now, dayStartHour),
+                room.id(), room.statusAt(now), room.scheduledDate(), room.currentDayAt(now, dayStartHour),
                 members.size(), countGender(members, GENDER_FEMALE), countGender(members, GENDER_MALE),
-                room.startedAt());
+                startedAtOf(room));
+    }
+
+    /** 새 모델 방은 전이 전까지 startedAt 이 비어 있으므로 예정 시각(starts_at)을 노출한다(#320). */
+    private LocalDateTime startedAtOf(Room room) {
+        return room.startsAt() != null ? room.startsAt() : room.startedAt();
     }
 
     private int countGender(List<RoomMember> members, String gender) {

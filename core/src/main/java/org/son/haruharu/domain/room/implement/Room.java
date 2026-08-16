@@ -80,6 +80,23 @@ public record Room(
         return RoomStatus.ACTIVE;
     }
 
+    /**
+     * reconciler 가 파생 상태를 저장 컬럼에 materialize 할 때 쓴다(#320).
+     * <p>
+     * 새 모델 방이 <b>진행 이후 상태</b>로 가면 startedAt 을 startsAt 으로 앵커한다. 평소엔
+     * PENDING→ACTIVE 를 거치며 채워지지만, 배치가 오래 멈췄다 살아나면 PENDING→SELECTING/ENDED 로
+     * <b>직행</b>할 수 있다. 그때 앵커가 비면 startedAt 을 전제하는 계산(dateOfDay·announcedAt)과
+     * MatchResultService 의 "미시작" 가드가 깨져 결과 발표가 영영 숨는다.
+     * <p>
+     * 이미 앵커가 있으면 덮어쓰지 않고, 구 모델 방(startsAt=null)은 건드리지 않는다.
+     */
+    public Room materialized(RoomStatus derived) {
+        boolean needsAnchor = startsAt != null && startedAt == null && derived != RoomStatus.PENDING;
+        LocalDateTime anchor = needsAnchor ? startsAt : startedAt;
+        return new Room(id, derived, scheduledDate, totalDays, anchor, endedAt, demo, demoDay,
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+    }
+
     /** 운영진 수동 취소(#311): → CANCELLED. sticky(이후 statusAt 도 CANCELLED). */
     public Room cancelled() {
         return new Room(id, RoomStatus.CANCELLED, scheduledDate, totalDays, startedAt, endedAt, demo, demoDay,
@@ -88,7 +105,7 @@ public record Room(
 
     /**
      * 데모 방(#265): 즉시 ACTIVE, demo=true, demoDay 고정. currentDay는 시각이 아니라 demoDay에서 파생하므로
-     * 배치(getActive/getScheduledPending demo=false)에서 격리되어 종료·자동진행되지 않는다.
+     * 배치(getLegacyActive/getScheduledPending demo=false)에서 격리되어 종료·자동진행되지 않는다.
      * startedAt은 dateOfDay/announcedAt 계산이 안전하도록 세팅하되(currentDay는 demoDay 우선), 시각에 의존하지 않는다.
      */
     public static Room createDemo(LocalDate scheduledDate, int totalDays, int demoDay, LocalDateTime startedAt) {
@@ -101,7 +118,7 @@ public record Room(
                 startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
     }
 
-    /** 세션 종료: ACTIVE → ENDED, endedAt 앵커. 종료 후 getActive()·findCurrent 조회에서 제외된다. */
+    /** 세션 종료: ACTIVE → ENDED, endedAt 앵커. 종료 후 getLegacyActive()·findCurrent 조회에서 제외된다. */
     public Room ended(LocalDateTime endedAt) {
         return new Room(id, RoomStatus.ENDED, scheduledDate, totalDays, startedAt, endedAt, demo, demoDay,
                 startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
@@ -123,6 +140,16 @@ public record Room(
         // 이 분기 하나로 사진 단계공개·피드 열람·Day3 최종선택 게이트가 호출처 수정 없이 데모에서도 동작한다.
         if (demo && demoDay != null) {
             return (int) Math.min(totalDays, demoDay);
+        }
+        // 새 모델(#320): Day 는 starts_at 상대 24시간 단위. dayStartHour(09:00) 경계를 쓰지 않는다
+        // — 저녁 시작 방(예: 19:00)이 다음날 09:00에 Day2 가 되어버리는 문제를 없앤다.
+        // 진행 중이 아닌 방(시작 전·종료·취소)은 구 모델과 동일하게 0.
+        if (startsAt != null) {
+            RoomStatus derived = statusAt(now);
+            if (derived == RoomStatus.PENDING || derived == RoomStatus.ENDED || derived == RoomStatus.CANCELLED) {
+                return 0;
+            }
+            return (int) Math.min(totalDays, 1 + ChronoUnit.DAYS.between(startsAt, now));
         }
         if (status != RoomStatus.ACTIVE || startedAt == null) {
             return 0;
@@ -158,6 +185,11 @@ public record Room(
      * ACTIVE + startedAt 존재를 전제한다(호출측이 currentDayAt 게이트로 보장).
      */
     public LocalDate dateOfDay(int dayNumber, int dayStartHour) {
+        // 새 모델(#320): Day 경계가 starts_at 상대 24시간이므로 날짜도 같은 앵커에서 파생한다.
+        // startedAt 이 아직 비어 있는(전이 전) 방에서도 NPE 없이 계산돼야 한다 — 오늘 화면이 이 값을 쓴다.
+        if (startsAt != null) {
+            return startsAt.toLocalDate().plusDays(dayNumber - 1L);
+        }
         return startedAt.minusHours(dayStartHour).toLocalDate().plusDays(dayNumber - 1L);
     }
 
@@ -167,6 +199,10 @@ public record Room(
      * dateOfDay와 같은 앵커에서 파생하며 startedAt 존재를 전제한다(호출측이 보장).
      */
     public LocalDateTime announcedAt(int dayStartHour) {
+        // 새 모델(#320): 발표 시각은 어드민이 입력한 result_at 그 자체다(마지막 날 22:00 고정이 아니다).
+        if (resultAt != null) {
+            return resultAt;
+        }
         return dateOfDay(totalDays, dayStartHour).atStartOfDay().plusHours(RESULT_ANNOUNCE_HOUR);
     }
 }

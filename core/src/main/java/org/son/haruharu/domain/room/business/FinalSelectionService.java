@@ -66,7 +66,11 @@ public class FinalSelectionService {
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
         LocalDateTime now = LocalDateTime.now(clock);
-        if (room.currentDayAt(now, UploadSlot.dayStartHour()) < FINAL_SELECTION_DAY) {
+        // Day 게이트는 구 모델 전용(#320). 새 모델은 어드민이 방마다 opens_at 을 직접 지정하고,
+        // 그 시각이 starts_at 기준 Day3 이 아닐 수 있다(예: 19:00 시작 방의 opens_at=이틀 뒤 18:00 → Day2).
+        // "두 시계 분리" 원칙대로 최종선택은 Day 가 아니라 시각으로만 판정한다.
+        if (room.startsAt() == null
+                && room.currentDayAt(now, UploadSlot.dayStartHour()) < FINAL_SELECTION_DAY) {
             throw new NotFinalSelectionDayException();
         }
         if (now.isBefore(selectionOpensAt(room))) {
@@ -127,13 +131,23 @@ public class FinalSelectionService {
      * 선행 currentDayAt 게이트가 PENDING(startedAt null)을 걸러 dateOfDay 호출이 안전하다.
      */
     private LocalDateTime selectionOpensAt(Room room) {
+        // 새 모델(#320): 어드민이 방마다 입력한 시각이 곧 오픈 시각이다.
+        if (room.finalSelectionOpensAt() != null) {
+            return room.finalSelectionOpensAt();
+        }
         int opensHour = UploadSlot.ofDay(FINAL_SELECTION_DAY).getLast().endHour();
         return room.dateOfDay(FINAL_SELECTION_DAY, UploadSlot.dayStartHour())
                 .atStartOfDay().plusHours(opensHour);
     }
 
-    /** 최종선택 마감 = 결과 발표 시각(마지막 날 22:00). 계산은 Room.announcedAt 한 곳으로 통일한다. */
+    /**
+     * 최종선택 마감. 새 모델(#320)은 어드민이 입력한 final_selection_closes_at,
+     * 구 모델은 결과 발표 시각(마지막 날 22:00 — 계산은 Room.announcedAt 한 곳으로 통일).
+     */
     private LocalDateTime selectionClosesAt(Room room) {
+        if (room.finalSelectionClosesAt() != null) {
+            return room.finalSelectionClosesAt();
+        }
         return room.announcedAt(UploadSlot.dayStartHour());
     }
 

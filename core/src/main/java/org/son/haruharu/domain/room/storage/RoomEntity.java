@@ -10,6 +10,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 import org.hibernate.annotations.ColumnDefault;
@@ -21,7 +22,12 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "rooms")
+// 5분 주기 reconciler 가 (starts_at IS NOT NULL, status NOT IN(...), demo=false) 로 훑으므로
+// 방이 늘어도 풀스캔하지 않도록 복합 인덱스를 명시한다(#320).
+@Table(name = "rooms", indexes = {
+        @Index(name = "idx_rooms_reconcile", columnList = "starts_at, status, demo"),
+        @Index(name = "idx_rooms_status_demo", columnList = "status, demo")
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RoomEntity extends BaseEntity {
 
@@ -45,7 +51,7 @@ public class RoomEntity extends BaseEntity {
     @Column
     private LocalDateTime endedAt;
 
-    // 데모 방 여부(#265). 데모 방은 시각이 아니라 demoDay로 Day를 고정하고 배치(getActive 등)에서 격리된다.
+    // 데모 방 여부(#265). 데모 방은 시각이 아니라 demoDay로 Day를 고정하고 배치(getLegacyActive 등)에서 격리된다.
     // 기존 행 마이그레이션 안전을 위해 @ColumnDefault("false").
     @ColumnDefault("false")
     @Column(nullable = false)

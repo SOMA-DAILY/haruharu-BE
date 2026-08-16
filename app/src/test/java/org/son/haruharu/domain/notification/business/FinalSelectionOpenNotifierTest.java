@@ -55,7 +55,7 @@ class FinalSelectionOpenNotifierTest {
     void givenLastDay_whenNotify_thenPushesToAllMembers() {
         // Day3 09:05 (startedAt Day1 09:00 → 이틀 경과 → currentDay=3=totalDays)
         LocalDateTime now = DAY1.plusDays(2).atTime(9, 5);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L), member(101L, 2L)));
 
         int notified = notifier.notifyFinalSelectionOpen(now);
@@ -69,7 +69,7 @@ class FinalSelectionOpenNotifierTest {
     @DisplayName("아직 마지막 날이 아니면(Day2) 발송하지 않는다")
     void givenNotLastDay_whenNotify_thenSkips() {
         LocalDateTime now = DAY1.plusDays(1).atTime(9, 5); // currentDay=2 != totalDays 3
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
 
         int notified = notifier.notifyFinalSelectionOpen(now);
 

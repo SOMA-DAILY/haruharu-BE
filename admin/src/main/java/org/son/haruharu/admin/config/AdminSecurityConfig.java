@@ -95,7 +95,8 @@ public class AdminSecurityConfig {
                         .requestMatchers("/api/v1/admin/admins", "/api/v1/admin/admins/**").hasRole("SUPER")
                         // 방 운영 쓰기(생성·코드 발급·성별 부여)는 SUPER·OPERATOR 전용(#318).
                         // 방 목록·상세 조회는 CS 포함 전체 허용 — 아래 anyRequest().authenticated() 로 떨어진다.
-                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/rooms", "/api/v1/admin/rooms/*/invites")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/rooms",
+                                "/api/v1/admin/rooms/*/invites", "/api/v1/admin/rooms/*/cancel")
                         .hasAnyRole("SUPER", "OPERATOR")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/rooms/*/members/*")
                         .hasAnyRole("SUPER", "OPERATOR")

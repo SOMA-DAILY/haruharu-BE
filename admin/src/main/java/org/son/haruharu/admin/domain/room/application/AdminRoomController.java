@@ -90,6 +90,16 @@ public class AdminRoomController {
         return ApiResponse.ok(adminRoomCommandService.reissueInvite(roomId, maxUses, expiresAt, adminId));
     }
 
+    @Operation(summary = "방 취소",
+            description = "모집 미달·오생성 방을 CANCELLED로 못박는다(sticky). 이후 status 전이 배치·초대코드 입장에서 "
+                    + "모두 제외된다. 이미 종료(ENDED)된 방은 400. SUPER·OPERATOR 전용.")
+    @PostMapping("/rooms/{roomId}/cancel")
+    public ApiResponse<Void> cancelRoom(
+            @Parameter(description = "방 id", example = "1") @PathVariable Long roomId) {
+        adminRoomCommandService.cancelRoom(roomId);
+        return ApiResponse.ok(null);
+    }
+
     @Operation(summary = "초대코드 목록", description = "해당 방의 코드 이력(최신순). 없는 방은 404.")
     @GetMapping("/rooms/{roomId}/invites")
     public ApiResponse<List<AdminRoomInviteResponse>> invites(

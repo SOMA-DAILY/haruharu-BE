@@ -61,7 +61,7 @@ class ConsolationRewardServiceTest {
     @Test
     @DisplayName("Day3 22:00에 미매칭 멤버 전원에게 위로 구름을 지급하고 이벤트를 발행한다")
     void givenAnnouncedRoom_whenGrant_thenUnmatchedGetConsolation() {
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
                 member(20L, 1L), member(21L, 2L), member(22L, 3L)));
         given(matchResultReader.hasMatch(20L)).willReturn(true);  // 매칭 성사자
@@ -86,7 +86,7 @@ class ConsolationRewardServiceTest {
     @Test
     @DisplayName("결과 발표(22:00) 전에는 지급하지 않는다")
     void givenBeforeAnnounce_whenGrant_thenNothing() {
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
 
         int granted = service.grantForAnnouncedRooms(LocalDateTime.of(2026, 6, 26, 21, 59));
 
@@ -100,7 +100,7 @@ class ConsolationRewardServiceTest {
     void givenNotFinalDay_whenGrant_thenNothing() {
         Room day2Room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 25), 3,
                 LocalDateTime.of(2026, 6, 25, 9, 0), null); // Day2 진행 중(2026-06-26 기준)
-        given(roomReader.getActive()).willReturn(List.of(day2Room));
+        given(roomReader.getLegacyActive()).willReturn(List.of(day2Room));
 
         int granted = service.grantForAnnouncedRooms(LocalDateTime.of(2026, 6, 26, 22, 0));
 
@@ -111,7 +111,7 @@ class ConsolationRewardServiceTest {
     @Test
     @DisplayName("22:00 실행을 놓쳐도 익일 종료 배치 시각(08:59)에 회수 지급된다")
     void givenMissedRun_whenGrantNextMorning_thenRecovered() {
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(member(20L, 1L)));
         given(matchResultReader.hasMatch(20L)).willReturn(false);
         given(coinService.grantMatchConsolation(anyLong(), anyLong(), anyLong())).willReturn(true);
@@ -126,7 +126,7 @@ class ConsolationRewardServiceTest {
     @Test
     @DisplayName("이미 지급된 멤버(원장 존재)는 이벤트 대상에서도 제외된다(멱등)")
     void givenAlreadyGranted_whenGrant_thenSkippedAndNoEvent() {
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(member(20L, 1L)));
         given(matchResultReader.hasMatch(20L)).willReturn(false);
         given(coinService.grantMatchConsolation(1L, roomId, AMOUNT)).willReturn(false); // 기지급
@@ -141,7 +141,7 @@ class ConsolationRewardServiceTest {
     @DisplayName("시작 전(PENDING) 방은 지급 대상이 아니다")
     void givenPendingRoom_whenGrant_thenNothing() {
         Room pending = new Room(roomId, RoomStatus.PENDING, LocalDate.of(2026, 6, 27), 3, null, null);
-        given(roomReader.getActive()).willReturn(List.of(pending));
+        given(roomReader.getLegacyActive()).willReturn(List.of(pending));
 
         int granted = service.grantForAnnouncedRooms(LocalDateTime.of(2026, 6, 26, 22, 0));
 

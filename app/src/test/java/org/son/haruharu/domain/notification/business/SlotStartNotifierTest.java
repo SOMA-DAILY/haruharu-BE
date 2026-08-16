@@ -55,7 +55,7 @@ class SlotStartNotifierTest {
     void givenSlotOpening_whenNotify_thenPushesToAllMembers() {
         // Day1 12:00 — DAY1_SLOT2(12~15시) 시작
         LocalDateTime now = DAY1.atTime(12, 0);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L), member(101L, 2L)));
 
         int notified = notifier.notifyOpeningSlots(now);
@@ -70,7 +70,7 @@ class SlotStartNotifierTest {
     void givenDay2FirstSlotOpening_whenNotify_thenPushes() {
         // Day2 09:00 — DAY2_SLOT1(9~12시) 시작 (startedAt Day1 09:00 → 하루 경과 → currentDay=2)
         LocalDateTime now = DAY1.plusDays(1).atTime(9, 0);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L)));
 
         int notified = notifier.notifyOpeningSlots(now);
@@ -85,7 +85,7 @@ class SlotStartNotifierTest {
     void givenNoOpeningSlot_whenNotify_thenSkips() {
         // 13:00 — 시작 시각이 13시인 슬롯 없음
         LocalDateTime now = DAY1.atTime(13, 0);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
 
         int notified = notifier.notifyOpeningSlots(now);
 
@@ -99,7 +99,7 @@ class SlotStartNotifierTest {
         // startedAt Day1 09:00, totalDays=3 → Day4(+3일) 09:00은 마지막 날 경과(hasEndedBy).
         // terminate 배치가 아직 ENDED로 전환하기 전(같은 09:00 tick)이라도 발송하면 안 된다.
         LocalDateTime now = DAY1.plusDays(3).atTime(9, 0);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
 
         int notified = notifier.notifyOpeningSlots(now);
 

@@ -38,14 +38,24 @@ public class RoomRepositoryImpl implements RoomRepository {
 
     @Override
     public List<Room> findAllByScheduledDateAndStatusAndDemoFalse(LocalDate scheduledDate, RoomStatus status) {
-        return jpaRepository.findAllByScheduledDateAndStatusAndDemoFalse(scheduledDate, status).stream()
+        return jpaRepository.findAllByScheduledDateAndStatusAndStartsAtIsNullAndDemoFalse(scheduledDate, status).stream()
                 .map(RoomEntity::toDomain)
                 .toList();
     }
 
     @Override
-    public List<Room> findAllByStatusAndDemoFalse(RoomStatus status) {
-        return jpaRepository.findAllByStatusAndDemoFalse(status).stream()
+    public List<Room> findReconcilable() {
+        return jpaRepository
+                .findAllByStartsAtIsNotNullAndStatusNotInAndDemoFalse(
+                        List.of(RoomStatus.ENDED, RoomStatus.CANCELLED))
+                .stream()
+                .map(RoomEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Room> findLegacyActive() {
+        return jpaRepository.findAllByStatusAndStartsAtIsNullAndDemoFalse(RoomStatus.ACTIVE).stream()
                 .map(RoomEntity::toDomain)
                 .toList();
     }

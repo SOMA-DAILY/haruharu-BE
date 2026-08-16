@@ -33,7 +33,9 @@ public class FinalSelectionOpenNotifier {
     /** 반환값은 알림 보낸 방 수(모니터링 로그용). */
     public int notifyFinalSelectionOpen(LocalDateTime now) {
         int notified = 0;
-        for (Room room : roomReader.getActive()) {
+        // 초대코드 모델 방은 방마다 opens_at 이 달라 이 고정 cron(18:05)으로 맞출 수 없다 — getLegacyActive 가
+        // 조회에서 걸러내고, 전이 시점 발송은 RoomStatusReconciler → FinalSelectionOpenedEvent 가 담당한다(#320).
+        for (Room room : roomReader.getLegacyActive()) {
             if (room.currentDayAt(now, UploadSlot.dayStartHour()) != room.totalDays()) {
                 continue;
             }

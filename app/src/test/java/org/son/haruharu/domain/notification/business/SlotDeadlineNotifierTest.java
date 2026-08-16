@@ -57,7 +57,7 @@ class SlotDeadlineNotifierTest {
     void givenSlotClosingSoon_whenNotify_thenPushesOnlyToNonUploaders() {
         // Day1 11:30 — DAY1_SLOT1(9~12시) 마감 30분 전
         LocalDateTime now = DAY1.atTime(11, 30);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L), member(101L, 2L)));
         given(videoPostReader.hasActiveUpload(100L, 1, 1)).willReturn(true);
         given(videoPostReader.hasActiveUpload(101L, 1, 1)).willReturn(false);
@@ -73,7 +73,7 @@ class SlotDeadlineNotifierTest {
     @DisplayName("모든 멤버가 업로드했으면 발송하지 않는다")
     void givenAllUploaded_whenNotify_thenNoPush() {
         LocalDateTime now = DAY1.atTime(11, 30);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L)));
         given(videoPostReader.hasActiveUpload(100L, 1, 1)).willReturn(true);
 
@@ -88,7 +88,7 @@ class SlotDeadlineNotifierTest {
     void givenNoClosingSlot_whenNotify_thenSkips() {
         // 10:30 — 11시에 끝나는 슬롯 없음
         LocalDateTime now = DAY1.atTime(10, 30);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
 
         int notified = notifier.notifyClosingSlots(now);
 
@@ -101,7 +101,7 @@ class SlotDeadlineNotifierTest {
     void givenMidSlotTime_whenNotify_thenSkips() {
         // Day2 22:30 — 열려 있는 슬롯(21~24시)은 있지만 30분 내 마감이 아님
         LocalDateTime now = DAY1.plusDays(1).atTime(22, 30);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
 
         int notified = notifier.notifyClosingSlots(now);
 
@@ -113,7 +113,7 @@ class SlotDeadlineNotifierTest {
     @DisplayName("Day3 17:30이면 마지막 슬롯(15~18시) 미업로드 멤버에게 발송한다")
     void givenLastSlotClosing_whenNotify_thenPushes() {
         LocalDateTime now = DAY1.plusDays(2).atTime(17, 30);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L)));
         given(videoPostReader.hasActiveUpload(100L, 3, 3)).willReturn(false);
 
@@ -128,7 +128,7 @@ class SlotDeadlineNotifierTest {
     @DisplayName("Day3 23:30은 최종선택 시간이라 마감 임박 슬롯이 없어 발송하지 않는다")
     void givenDay3AfterSlots_whenNotify_thenSkips() {
         LocalDateTime now = DAY1.plusDays(2).atTime(23, 30);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom()));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
 
         int notified = notifier.notifyClosingSlots(now);
 

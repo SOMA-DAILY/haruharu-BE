@@ -29,7 +29,7 @@ import org.springframework.context.annotation.Profile;
 
 /**
  * 데모 방 라이프사이클(#265·#272). 시간에 의존하지 않도록 방을 실제 rooms 테이블에 demo=true·demo_day로 만들고,
- * 배치(getActive/getScheduledPending demo=false)에서 격리해 무만료·무진행을 보장한다.
+ * 배치(getLegacyActive/getScheduledPending demo=false)에서 격리해 무만료·무진행을 보장한다.
  * 방 생성 시 호출자 본인 + 가상 참여자 5명(총 6명)을 멤버로 구성한다 — 가상 참여자 계정·프로필은
  * 소유 도메인 서비스(UserService·ProfileService)를 경유해 시드한다(Service-to-Service 조율). 피드 영상은 후속.
  */

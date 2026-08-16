@@ -100,8 +100,8 @@ class DemoRoomApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("데모 방은 배치 진입점 getActive()에서 제외되고, 일반 ACTIVE 방은 포함된다(배치 격리)")
-    void givenDemoRoom_whenGetActive_thenExcludedButNormalIncluded() throws Exception {
+    @DisplayName("데모 방은 배치 진입점 getLegacyActive()에서 제외되고, 일반 ACTIVE 방은 포함된다(배치 격리)")
+    void givenDemoRoom_whenGetLegacyActive_thenExcludedButNormalIncluded() throws Exception {
         Long userId = saveDemoUser();
         // 데모 방 생성
         mockMvc.perform(post("/api/v1/demo/room").with(authentication(auth(userId)))).andExpect(status().isOk());
@@ -109,7 +109,7 @@ class DemoRoomApiIntegrationTest {
         Long normalRoomId = roomJpaRepository.save(RoomEntity.from(
                 Room.create(LocalDate.now(), 3).started(LocalDateTime.now()))).toDomain().id();
 
-        List<Room> active = roomReader.getActive();
+        List<Room> active = roomReader.getLegacyActive();
 
         assertThat(active).extracting(Room::id).contains(normalRoomId);
         assertThat(active).allMatch(r -> !r.demo()); // 데모 방은 하나도 없음

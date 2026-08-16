@@ -49,7 +49,7 @@ public class ConsolationRewardService {
     @Transactional
     public int grantForAnnouncedRooms(LocalDateTime now) {
         int granted = 0;
-        for (Room room : roomReader.getActive()) {
+        for (Room room : roomReader.getLegacyActive()) {
             if (!isResultAnnounced(room, now)) {
                 continue;
             }
