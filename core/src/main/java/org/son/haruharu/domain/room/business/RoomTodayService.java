@@ -1,11 +1,8 @@
 package org.son.haruharu.domain.room.business;
 
 import java.time.Clock;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import org.son.haruharu.domain.mission.implement.UploadSlot;
@@ -18,11 +15,13 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.implement.RoomStatus;
+import org.son.haruharu.domain.video.implement.SlotClock;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 오늘 화면 조회. 슬롯 시간창의 "현재 열림" 판정에 Clock(Asia/Seoul)을 사용한다. */
+/** 오늘 화면 조회. 현재 노출 중인 슬롯 창(slot_start 상대, SlotClock)과 다음 전환 시각을 파생한다. */
 @Service
 @Transactional(readOnly = true)
 public class RoomTodayService {
@@ -50,21 +49,29 @@ public class RoomTodayService {
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
 
-        // 단일 now 기준으로 currentDay·슬롯 열림·타이머를 파생해 초/일 경계에서의 내부 불일치를 방지한다.
         LocalDateTime now = LocalDateTime.now(clock);
+        // currentDay·reward는 폐기 예정 일일보상 호환용 vestigial(슬롯 로직 무관).
         int currentDay = room.currentDayAt(now, UploadSlot.dayStartHour());
-        List<UploadSlot> slots = UploadSlot.ofDay(currentDay);
-        // 슬롯별 uploaded(개인화)와 uploaded_count를 같은 조회에서 파생해 정합을 보장한다(#209)
-        Set<Integer> uploadedSlots = Set.copyOf(videoPostReader.getUploadedSlotIndexes(member.id(), currentDay));
+
+        // 노출 중인 슬롯 창(최근 3시간). 최종선택 이후 시작 슬롯은 업로드 불가라 제외. 촬영 가능한 '현재 슬롯'은 ACTIVE일 때만.
+        List<LocalDateTime> window = room.startsAt() == null
+                ? List.of()
+                : SlotClock.visibleSlotStarts(room.startsAt(), now, room.finalSelectionOpensAt());
+        LocalDateTime currentSlotStart = (room.startsAt() != null && room.statusAt(now) == RoomStatus.ACTIVE)
+                ? SlotClock.currentSlotStart(room.startsAt(), now)
+                : null;
+        Set<LocalDateTime> uploadedSlots = window.isEmpty()
+                ? Set.of()
+                : Set.copyOf(videoPostReader.getUploadedSlotStarts(member.id(), window));
 
         long rewardAmount = uploadRewardProperties.amountFor(currentDay);
         RewardStatus rewardStatus = dailyUploadRewardReader.isRewarded(member.id(), currentDay)
                 ? RewardStatus.EARNED : RewardStatus.LOCKED;
 
-        TimerTarget timer = computeTimer(room, currentDay, slots, now);
+        TimerTarget timer = computeTimer(room, now);
 
-        return TodayResponse.of(room, now, currentDay, slots, uploadedSlots, rewardAmount, rewardStatus,
-                timer.at(), timer.type());
+        return TodayResponse.of(room, now, currentDay, window, currentSlotStart, uploadedSlots,
+                rewardAmount, rewardStatus, timer.at(), timer.type());
     }
 
     /** 헤더 타이머가 카운트다운할 다음 전환 시각과 라벨 종류. 대상이 없으면 (null, null). */
@@ -73,42 +80,30 @@ public class RoomTodayService {
     }
 
     /**
-     * 다음 전환 시각 계산(절대시각, KST). 규칙:
-     * - 오늘 남은 슬롯이 있으면 그 시작시각(NEXT_SLOT)
-     * - 오늘 슬롯이 끝났고 마지막 Day가 아니면 다음 날 첫 슬롯(익일 dayStartHour, NEXT_SLOT)
-     * - 마지막 Day 꼬리: 마지막 슬롯 종료(=최종선택 오픈) 전이면 그 시각(DEADLINE),
-     *   최종선택 진행 중이면 결과 발표(RESULT_ANNOUNCE_HOUR, DEADLINE), 발표 후면 대상 없음
-     * PENDING(currentDay=0) 등 슬롯이 없는 상태면 대상 없음.
+     * 다음 전환 시각 계산(절대시각). 새 모델(starts_at 상대·어드민 시각) 규칙:
+     * - ACTIVE: 다음 슬롯 시작(NEXT_SLOT). 단 다음 슬롯이 최종선택 오픈 이후면 최종선택 오픈(DEADLINE)
+     * - SELECTING: 결과 발표(없으면 최종선택 마감) 시각(DEADLINE), 이미 지났으면 대상 없음
+     * - PENDING/ENDED/CANCELLED·구 모델(starts_at null): 대상 없음
      */
-    private TimerTarget computeTimer(Room room, int currentDay, List<UploadSlot> slots, LocalDateTime now) {
-        if (slots.isEmpty()) {
+    private TimerTarget computeTimer(Room room, LocalDateTime now) {
+        if (room.startsAt() == null) {
+            return TimerTarget.NONE; // 구 모델 방(후속 레거시 철거에서 정리)
+        }
+        RoomStatus status = room.statusAt(now);
+        if (status == RoomStatus.ACTIVE) {
+            LocalDateTime nextSlot = SlotClock.nextSlotStart(room.startsAt(), now);
+            LocalDateTime opensAt = room.finalSelectionOpensAt();
+            if (opensAt != null && !nextSlot.isBefore(opensAt)) {
+                return new TimerTarget(opensAt, TimerType.DEADLINE);
+            }
+            return new TimerTarget(nextSlot, TimerType.NEXT_SLOT);
+        }
+        if (status == RoomStatus.SELECTING) {
+            LocalDateTime deadline = room.resultAt() != null ? room.resultAt() : room.finalSelectionClosesAt();
+            if (deadline != null && now.isBefore(deadline)) {
+                return new TimerTarget(deadline, TimerType.DEADLINE);
+            }
             return TimerTarget.NONE;
-        }
-        int dayStartHour = UploadSlot.dayStartHour();
-        LocalDate dayDate = room.dateOfDay(currentDay, dayStartHour);
-
-        Optional<LocalDateTime> nextSlotToday = slots.stream()
-                .map(s -> dayDate.atTime(s.startHour(), 0))
-                .filter(now::isBefore)
-                .min(Comparator.naturalOrder());
-        if (nextSlotToday.isPresent()) {
-            return new TimerTarget(nextSlotToday.get(), TimerType.NEXT_SLOT);
-        }
-
-        if (currentDay < room.totalDays()) {
-            LocalDateTime nextDayFirstSlot = room.dateOfDay(currentDay + 1, dayStartHour)
-                    .atTime(dayStartHour, 0);
-            return new TimerTarget(nextDayFirstSlot, TimerType.NEXT_SLOT);
-        }
-
-        // 마지막 Day 꼬리: 최종선택 오픈(마지막 슬롯 종료) → 결과 발표 순으로 마감을 가리킨다.
-        LocalDateTime selectionOpensAt = dayDate.atTime(slots.getLast().endHour(), 0);
-        LocalDateTime resultAt = room.announcedAt(dayStartHour);
-        if (now.isBefore(selectionOpensAt)) {
-            return new TimerTarget(selectionOpensAt, TimerType.DEADLINE);
-        }
-        if (now.isBefore(resultAt)) {
-            return new TimerTarget(resultAt, TimerType.DEADLINE);
         }
         return TimerTarget.NONE;
     }

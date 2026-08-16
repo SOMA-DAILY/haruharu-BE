@@ -45,12 +45,11 @@ public class VideoController {
         return ApiResponse.ok(videoService.createPresignUrl(userId, request.filename()));
     }
 
-    @Operation(summary = "영상 업로드(슬롯 제출)",
-            description = "presign으로 올린 영상을 특정 방의 오늘 슬롯(slot_index)에 제출한다. "
-                    + "body 필드는 slot_index(오늘 슬롯 번호), video_url(본인 업로드 경로여야 함), thumbnail_url, caption(최대 20자). "
-                    + "에러: 방 멤버가 아니면 인가 실패, 방 없음 ROOM_NOT_FOUND(404), 진행 중이 아닌 방 VIDEO_ROOM_NOT_ACTIVE(409), "
-                    + "오늘 슬롯이 아니면 VIDEO_SLOT_NOT_TODAY(400), 업로드 시간이 아니면 VIDEO_SLOT_WINDOW_CLOSED(400), "
-                    + "본인 경로가 아닌 video_url이면 VIDEO_INVALID_URL(400), 이미 해당 슬롯에 올렸으면 VIDEO_SLOT_ALREADY_UPLOADED(409).")
+    @Operation(summary = "영상 업로드(현재 슬롯 제출)",
+            description = "presign으로 올린 영상을 특정 방의 현재 슬롯에 제출한다. 슬롯은 서버가 방 시작 상대 정시(slot_start)로 자동 판정하므로 "
+                    + "클라는 슬롯을 지정하지 않는다. body 필드는 video_url(본인 업로드 경로여야 함), thumbnail_url, caption(최대 20자). "
+                    + "에러: 방 멤버가 아니면 인가 실패, 방 없음 ROOM_NOT_FOUND(404), 진행 중(ACTIVE)이 아닌 방 VIDEO_ROOM_NOT_ACTIVE(409), "
+                    + "본인 경로가 아닌 video_url이면 VIDEO_INVALID_URL(400), 이미 현재 슬롯에 올렸으면 VIDEO_SLOT_ALREADY_UPLOADED(409).")
     @PostMapping("/rooms/{roomId}/video-posts")
     public ApiResponse<VideoPostResponse> upload(
             @Parameter(description = "영상을 올릴 방 id", example = "1") @PathVariable Long roomId,

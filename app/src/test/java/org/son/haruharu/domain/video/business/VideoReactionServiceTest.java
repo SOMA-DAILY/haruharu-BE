@@ -53,7 +53,7 @@ class VideoReactionServiceTest {
     private void stubPostAndMembership(Long postId, Long userId) {
         Long authorMemberId = 40L;
         Long roomId = 50L;
-        VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
+        VideoPost post = new VideoPost(postId, authorMemberId, 1, LocalDateTime.of(2026, 6, 26, 20, 0), null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
@@ -134,7 +134,7 @@ class VideoReactionServiceTest {
         Long postId = 100L;
         Long authorMemberId = 40L;
         Long roomId = 50L;
-        VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
+        VideoPost post = new VideoPost(postId, authorMemberId, 1, LocalDateTime.of(2026, 6, 26, 20, 0), null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
@@ -167,7 +167,7 @@ class VideoReactionServiceTest {
         Long postId = 1L;
         Long authorMemberId = 41L;
         Long roomId = 51L;
-        VideoPost post = new VideoPost(postId, authorMemberId, 1, 1, null, null,
+        VideoPost post = new VideoPost(postId, authorMemberId, 1, LocalDateTime.of(2026, 6, 26, 20, 0), null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))

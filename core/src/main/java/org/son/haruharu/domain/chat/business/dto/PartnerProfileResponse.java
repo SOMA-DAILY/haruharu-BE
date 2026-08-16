@@ -21,7 +21,7 @@ public record PartnerProfileResponse(
 ) {
     public record PartnerVideo(
             @Schema(description = "영상 id", example = "1001") Long videoPostId,
-            @Schema(description = "업로드 슬롯 index", example = "1") int slotIndex,
+            @Schema(description = "업로드 슬롯 시작 시각(slot_start)") LocalDateTime slotStart,
             @Schema(description = "재생용 presigned GET URL(단기 만료, 만료 시 재조회)") String videoUrl,
             @Schema(description = "썸네일 presigned GET URL(없으면 null)") String thumbnailUrl,
             @Schema(description = "캡션") String caption,

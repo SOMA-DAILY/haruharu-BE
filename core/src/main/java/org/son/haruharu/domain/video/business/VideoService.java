@@ -2,7 +2,6 @@ package org.son.haruharu.domain.video.business;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -23,8 +22,7 @@ import org.son.haruharu.domain.video.business.exception.InvalidVideoExtensionExc
 import org.son.haruharu.domain.video.business.exception.InvalidVideoUrlException;
 import org.son.haruharu.domain.video.business.exception.NotVideoOwnerException;
 import org.son.haruharu.domain.video.business.exception.RoomNotActiveException;
-import org.son.haruharu.domain.video.business.exception.SlotNotInCurrentDayException;
-import org.son.haruharu.domain.video.business.exception.SlotWindowClosedException;
+import org.son.haruharu.domain.video.implement.SlotClock;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoPostWriter;
@@ -86,30 +84,28 @@ public class VideoService {
         RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
-        if (room.status() != RoomStatus.ACTIVE) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        // 시각 파생 상태로 판정(저장 status는 배치 지연될 수 있음). 새 모델(starts_at) 방만 업로드 대상.
+        if (room.startsAt() == null || room.statusAt(now) != RoomStatus.ACTIVE) {
             throw new RoomNotActiveException();
         }
 
-        UploadSlot slot = UploadSlot.of(
-                        room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour()), command.slotIndex())
-                .orElseThrow(SlotNotInCurrentDayException::new);
-        int nowHour = LocalTime.now(clock).getHour();
-        if (!slot.isOpenAt(nowHour)) {
-            throw new SlotWindowClosedException();
-        }
+        // 슬롯은 서버가 판정하는 "현재 슬롯"(starts_at 상대 정시). 클라는 슬롯을 지정하지 않는다.
+        LocalDateTime slotStart = SlotClock.currentSlotStart(room.startsAt(), now);
         validateOwnUrl(userId, command.videoUrl());
 
-        if (videoPostReader.hasActiveUpload(member.id(), slot.dayNumber(), slot.slotIndex())) {
+        if (videoPostReader.hasActiveUpload(member.id(), slotStart)) {
             throw new DuplicateSlotUploadException();
         }
 
-        // MVP: 미션 비활성화 — mission_id는 항상 null. 세션 재화(열쇠) 제거됨.
+        // dayNumber는 폐기 예정 일일보상 호환용 vestigial(슬롯 로직 무관). MVP: 미션 비활성화 — mission_id는 항상 null.
+        int dayNumber = room.currentDayAt(now, UploadSlot.dayStartHour());
         VideoPost saved = videoPostWriter.save(VideoPost.create(
-                member.id(), slot.dayNumber(), slot.slotIndex(), null,
-                command.caption(), command.videoUrl(), command.thumbnailUrl(), LocalDateTime.now(clock)));
+                member.id(), dayNumber, slotStart, null,
+                command.caption(), command.videoUrl(), command.thumbnailUrl(), now));
 
-        // 완주(그 Day 슬롯 전부 채움) 시 구름 보상 지급 트리거. video↔coin 직접 결합을 피해 이벤트로 위임.
-        eventPublisher.publishEvent(new VideoUploadedEvent(member.id(), slot.dayNumber()));
+        // 일일보상(폐기 예정) 트리거. video↔coin 직접 결합을 피해 이벤트로 위임(보상 amount 0이면 no-op).
+        eventPublisher.publishEvent(new VideoUploadedEvent(member.id(), dayNumber));
 
         // 비공개 영상은 서명 없이 접근 불가(403). 재생 가능한 presigned GET URL로 변환해 응답한다(#162).
         return VideoPostResponse.of(saved,

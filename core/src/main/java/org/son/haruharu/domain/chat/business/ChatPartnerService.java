@@ -78,7 +78,7 @@ public class ChatPartnerService {
                 VideoPost::dayNumber,
                 TreeMap::new,
                 Collectors.mapping(v -> new PartnerVideo(
-                        v.id(), v.slotIndex(),
+                        v.id(), v.slotStart(),
                         s3StoragePort.createPresignedGetUrl(v.videoUrl()),
                         s3StoragePort.createPresignedGetUrl(v.thumbnailUrl()),
                         v.caption(), v.createdAt()),

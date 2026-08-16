@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -17,7 +18,10 @@ import java.time.LocalDateTime;
  * JPA/H2 DDL로는 생성되지 않는다. 멱등성 보장은 #40 업로드 로직(앱 레벨 중복검사)에서 처리한다.
  */
 @Entity
-@Table(name = "video_posts")
+@Table(name = "video_posts", indexes = {
+        // 슬롯 잠금 판정·중복검사·피드가 (room_member_id, slot_start)로 조회한다.
+        @Index(name = "idx_video_posts_member_slot", columnList = "roomMemberId, slotStart")
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VideoPostEntity {
 
@@ -31,8 +35,9 @@ public class VideoPostEntity {
     @Column(nullable = false)
     private int dayNumber;
 
+    /** 슬롯 식별자 = room.starts_at 상대 정시(SlotClock). (room_member_id, slot_start) 슬롯당 1업로드. */
     @Column(nullable = false)
-    private int slotIndex;
+    private LocalDateTime slotStart;
 
     @Column
     private Long missionId;
@@ -63,7 +68,7 @@ public class VideoPostEntity {
         entity.id = post.id();
         entity.roomMemberId = post.roomMemberId();
         entity.dayNumber = post.dayNumber();
-        entity.slotIndex = post.slotIndex();
+        entity.slotStart = post.slotStart();
         entity.missionId = post.missionId();
         entity.caption = post.caption();
         entity.videoUrl = post.videoUrl();
@@ -76,7 +81,7 @@ public class VideoPostEntity {
     }
 
     public VideoPost toDomain() {
-        return new VideoPost(id, roomMemberId, dayNumber, slotIndex, missionId, caption, videoUrl,
+        return new VideoPost(id, roomMemberId, dayNumber, slotStart, missionId, caption, videoUrl,
                 thumbnailUrl, isHidden, hiddenReason, deletedAt, createdAt);
     }
 }
