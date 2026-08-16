@@ -8,12 +8,15 @@ import java.util.Optional;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.command.CreateRoomCommand;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
+import org.son.haruharu.domain.room.business.exception.RoomAlreadyEndedException;
 import org.son.haruharu.domain.room.business.exception.RoomInvalidScheduleException;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
+import org.son.haruharu.domain.room.business.exception.RoomStartsAtInPastException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +46,7 @@ public class RoomService {
     @Transactional
     public Long createRoom(CreateRoomCommand command) {
         validateSchedule(command);
+        validateNotInPast(command, LocalDateTime.now(clock));
         Room saved = roomWriter.save(Room.createScheduled(
                 command.startsAt(), command.finalSelectionOpensAt(), command.finalSelectionClosesAt(),
                 command.resultAt(), command.endsAt(), command.totalDays()));
@@ -64,15 +68,42 @@ public class RoomService {
         }
     }
 
+    /**
+     * 시작 시각이 과거면 거부(#320). startsAt 하나만 본다 — 나머지 4개는 순서 규약상 startsAt 보다 뒤라
+     * 자동으로 미래가 된다. 유예(grace)는 두지 않는다: 어드민은 방을 미리 만드는 게 정상 워크플로다.
+     * "지금 바로 시작"이 필요한 데모는 별도 경로(POST /demo/room, #265)를 쓴다.
+     */
+    private void validateNotInPast(CreateRoomCommand command, LocalDateTime now) {
+        if (command.startsAt().isBefore(now)) {
+            throw new RoomStartsAtInPastException();
+        }
+    }
+
+    /**
+     * 운영진 방 취소(#320). status 를 CANCELLED 로 못박아 statusAt 파생과 무관하게 sticky 하게 만든다
+     * — 취소된 방은 reconciler 전이·초대코드 입장에서 모두 제외된다.
+     * 이미 종료(ENDED)된 방은 되돌리지 않는다.
+     */
+    @Transactional
+    public void cancel(Long roomId) {
+        Room room = roomReader.findById(roomId)
+                .orElseThrow(RoomNotFoundException::new);
+        if (room.statusAt(LocalDateTime.now(clock)) == RoomStatus.ENDED) {
+            throw new RoomAlreadyEndedException();
+        }
+        roomWriter.save(room.cancelled());
+    }
+
     public RoomResponse getMyRoom(Long userId) {
         return findMyRoom(userId).orElseThrow(RoomNotFoundException::new);
     }
 
     /** 종료되지 않은 내 방(없으면 empty). 홈 화면 등 도메인 간 집계에서 404 대신 부재로 다루기 위한 변형. */
     public Optional<RoomResponse> findMyRoom(Long userId) {
-        return roomReader.findCurrent(candidateRoomIds(userId))
+        LocalDateTime now = LocalDateTime.now(clock);
+        return roomReader.findCurrent(candidateRoomIds(userId), now)
             .map(room -> RoomResponse.from(room, roomMemberReader.getByRoomId(room.id()),
-                    room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour())));
+                    room.currentDayAt(now, UploadSlot.dayStartHour()), now));
     }
 
     /** 종료되지 않은(PENDING/ACTIVE) 방 보유 여부. 매칭 큐 참가 차단 등 도메인 간 조율에 쓰인다. */
@@ -81,7 +112,7 @@ public class RoomService {
         if (candidateRoomIds.isEmpty()) {
             return false;
         }
-        return roomReader.findCurrent(candidateRoomIds).isPresent();
+        return roomReader.findCurrent(candidateRoomIds, LocalDateTime.now(clock)).isPresent();
     }
 
     /** 유저는 과거 방 이력(재매칭 방지용 보존)을 가질 수 있으므로, 후보 방 id를 모아 종료되지 않은 방을 한 번에 조회한다. */
@@ -96,7 +127,7 @@ public class RoomService {
         Room room = roomReader.findById(roomId)
             .orElseThrow(RoomNotFoundException::new);
         List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
-        return RoomResponse.from(room, members,
-                room.currentDayAt(LocalDateTime.now(clock), UploadSlot.dayStartHour()));
+        LocalDateTime now = LocalDateTime.now(clock);
+        return RoomResponse.from(room, members, room.currentDayAt(now, UploadSlot.dayStartHour()), now);
     }
 }

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 class RoomTest {
 
@@ -70,6 +71,114 @@ class RoomTest {
     void givenLegacyRoomNoTimes_whenStatusAt_thenStoredStatus() {
         Room legacy = new Room(1L, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), 3, STARTED_AT, null);
         assertThat(legacy.statusAt(LocalDateTime.of(2026, 6, 24, 12, 0))).isEqualTo(RoomStatus.ACTIVE);
+    }
+
+    // ── #320 withStatus: reconciler 가 쓰는 status 전이 ──
+
+    @Test
+    @DisplayName("materialized는 status를 바꾸고 스케줄 시각은 보존한다")
+    void givenRoom_whenMaterialized_thenStatusChangedTimesKept() {
+        Room room = new Room(7L, RoomStatus.PENDING, SCHED_START.toLocalDate(), 3, null, null, false, null,
+                SCHED_START, SCHED_START.plusHours(4), SCHED_START.plusHours(6),
+                SCHED_START.plusHours(7), SCHED_START.plusHours(8));
+
+        Room active = room.materialized(RoomStatus.ACTIVE);
+
+        assertThat(active.status()).isEqualTo(RoomStatus.ACTIVE);
+        assertThat(active.id()).isEqualTo(7L);
+        assertThat(active.startsAt()).isEqualTo(SCHED_START);
+        assertThat(active.finalSelectionOpensAt()).isEqualTo(SCHED_START.plusHours(4));
+        assertThat(active.endsAt()).isEqualTo(SCHED_START.plusHours(8));
+    }
+
+    @Test
+    @DisplayName("materialized로 SELECTING 전이가 가능하다 (started/ended로는 갈 수 없던 상태)")
+    void givenActiveRoom_whenMaterializedSelecting_thenSelecting() {
+        Room room = scheduledRoom().materialized(RoomStatus.ACTIVE);
+        assertThat(room.materialized(RoomStatus.SELECTING).status()).isEqualTo(RoomStatus.SELECTING);
+    }
+
+    @Test
+    @DisplayName("materialized: PENDING에서 SELECTING·ENDED로 직행해도 startedAt이 앵커된다 (배치 장기 중단 복구)")
+    void givenPendingSkippingActive_whenMaterialized_thenStartedAtStillAnchored() {
+        Room pending = threeDayRoom().materialized(RoomStatus.PENDING);
+        assertThat(pending.startedAt()).isNull();
+
+        assertThat(pending.materialized(RoomStatus.SELECTING).startedAt()).isEqualTo(SCHED_START);
+        assertThat(pending.materialized(RoomStatus.ENDED).startedAt()).isEqualTo(SCHED_START);
+    }
+
+    @Test
+    @DisplayName("materialized: 이미 앵커된 startedAt은 덮어쓰지 않는다")
+    void givenAlreadyAnchored_whenMaterialized_thenKeepsOriginalAnchor() {
+        LocalDateTime manualAnchor = SCHED_START.plusMinutes(7);
+        Room anchored = new Room(1L, RoomStatus.ACTIVE, SCHED_START.toLocalDate(), 3, manualAnchor, null, false, null,
+                SCHED_START, SCHED_START.plusDays(2), SCHED_START.plusDays(2).plusHours(3),
+                SCHED_START.plusDays(2).plusHours(4), SCHED_START.plusDays(3));
+
+        assertThat(anchored.materialized(RoomStatus.SELECTING).startedAt()).isEqualTo(manualAnchor);
+    }
+
+    @Test
+    @DisplayName("materialized: 구 모델 방은 startedAt을 건드리지 않는다")
+    void givenLegacyRoom_whenMaterialized_thenStartedAtUntouched() {
+        Room legacy = new Room(1L, RoomStatus.PENDING, LocalDate.of(2026, 6, 24), 3, null, null);
+        assertThat(legacy.materialized(RoomStatus.ACTIVE).startedAt()).isNull();
+    }
+
+    // ── #320 currentDayAt: 새 모델은 starts_at 상대 24시간 ──
+
+    @Test
+    @DisplayName("currentDayAt: 새 모델은 starts_at 기준 24시간 단위로 Day가 넘어간다 (9시 경계 아님)")
+    void givenScheduledRoom_whenCurrentDayAt_thenDerivedFromStartsAt() {
+        // starts_at = 2026-06-24 14:00, totalDays = 3
+        Room room = threeDayRoom();
+
+        assertThat(room.currentDayAt(SCHED_START, DAY_START_HOUR)).isEqualTo(1);
+        assertThat(room.currentDayAt(SCHED_START.plusHours(23), DAY_START_HOUR)).isEqualTo(1);
+        assertThat(room.currentDayAt(SCHED_START.plusDays(1), DAY_START_HOUR)).isEqualTo(2);
+        assertThat(room.currentDayAt(SCHED_START.plusDays(2), DAY_START_HOUR)).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("currentDayAt: 새 모델은 totalDays로 캡된다")
+    void givenScheduledRoom_whenPastLastDay_thenCappedAtTotalDays() {
+        assertThat(threeDayRoom().currentDayAt(SCHED_START.plusDays(2).plusHours(12), DAY_START_HOUR)).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("currentDayAt: 시작 전(PENDING)이면 0")
+    void givenBeforeStart_whenCurrentDayAt_thenZero() {
+        assertThat(threeDayRoom().currentDayAt(SCHED_START.minusMinutes(1), DAY_START_HOUR)).isZero();
+    }
+
+    @Test
+    @DisplayName("currentDayAt: 종료·취소된 방이면 0")
+    void givenEndedOrCancelled_whenCurrentDayAt_thenZero() {
+        Room room = threeDayRoom();
+        // endsAt = starts + 3일
+        assertThat(room.currentDayAt(SCHED_START.plusDays(3).plusMinutes(1), DAY_START_HOUR)).isZero();
+        assertThat(room.cancelled().currentDayAt(SCHED_START.plusDays(1), DAY_START_HOUR)).isZero();
+    }
+
+    @Test
+    @DisplayName("currentDayAt: 저녁 시작 방이 14시간 만에 Day2가 되지 않는다 (9시 경계 회귀)")
+    void givenEveningStart_whenNextMorning_thenStillDay1() {
+        LocalDateTime eveningStart = LocalDateTime.of(2026, 8, 20, 19, 0);
+        Room room = new Room(1L, RoomStatus.ACTIVE, eveningStart.toLocalDate(), 3, null, null, false, null,
+                eveningStart, eveningStart.plusDays(2).withHour(18), eveningStart.plusDays(2).withHour(21),
+                eveningStart.plusDays(2).withHour(22), eveningStart.plusDays(3).withHour(9));
+
+        // 다음날 09:00 — 구 로직(9시 경계)이라면 Day2, 새 로직(24h)이라면 아직 Day1
+        assertThat(room.currentDayAt(LocalDateTime.of(2026, 8, 21, 9, 0), DAY_START_HOUR)).isEqualTo(1);
+        assertThat(room.currentDayAt(LocalDateTime.of(2026, 8, 21, 19, 0), DAY_START_HOUR)).isEqualTo(2);
+    }
+
+    /** starts_at=2026-06-24 14:00 · opens +2일18시 · closes +2일21시 · result +2일22시 · ends +3일 */
+    private Room threeDayRoom() {
+        return new Room(1L, RoomStatus.ACTIVE, SCHED_START.toLocalDate(), 3, null, null, false, null,
+                SCHED_START, SCHED_START.plusDays(2).withHour(18), SCHED_START.plusDays(2).withHour(21),
+                SCHED_START.plusDays(2).withHour(22), SCHED_START.plusDays(3));
     }
 
     @Test
@@ -202,5 +311,53 @@ class RoomTest {
     void givenDemoRoom_whenHasEndedBy_thenAlwaysFalse() {
         Room demo = Room.createDemo(LocalDate.of(2026, 6, 24), 3, 3, STARTED_AT);
         assertThat(demo.hasEndedBy(LocalDateTime.of(2026, 12, 31, 9, 0), DAY_START_HOUR)).isFalse();
+    }
+
+    // ── #320 리뷰 반영: 새 모델 방의 startedAt·dateOfDay·announcedAt ──
+
+    @Test
+    @DisplayName("materialized(ACTIVE)는 startedAt을 starts_at으로 앵커한다")
+    void givenScheduledPending_whenMaterializedActive_thenStartedAtAnchored() {
+        Room room = threeDayRoom().materialized(RoomStatus.PENDING);
+
+        Room active = room.materialized(RoomStatus.ACTIVE);
+
+        assertThat(active.status()).isEqualTo(RoomStatus.ACTIVE);
+        assertThat(active.startedAt()).isEqualTo(SCHED_START);
+        assertThat(active.startsAt()).isEqualTo(SCHED_START);
+    }
+
+    @Test
+    @DisplayName("dateOfDay: 새 모델은 starts_at 날짜 기준으로 Day N의 날짜를 준다 (9시 경계 아님)")
+    void givenScheduledRoom_whenDateOfDay_thenDerivedFromStartsAt() {
+        Room room = threeDayRoom();
+        assertThat(room.dateOfDay(1, DAY_START_HOUR)).isEqualTo(SCHED_START.toLocalDate());
+        assertThat(room.dateOfDay(3, DAY_START_HOUR)).isEqualTo(SCHED_START.toLocalDate().plusDays(2));
+    }
+
+    @Test
+    @DisplayName("dateOfDay: 새 모델 방은 startedAt이 null이어도 NPE가 나지 않는다 (오늘 화면 500 회귀)")
+    void givenScheduledRoomWithoutStartedAt_whenDateOfDay_thenNoNpe() {
+        Room room = threeDayRoom();
+        assertThat(room.startedAt()).isNull();
+        assertThatCode(() -> room.dateOfDay(1, DAY_START_HOUR)).doesNotThrowAnyException();
+        assertThatCode(() -> room.announcedAt(DAY_START_HOUR)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("announcedAt: 새 모델은 어드민이 입력한 result_at 을 그대로 발표 시각으로 쓴다")
+    void givenScheduledRoom_whenAnnouncedAt_thenResultAt() {
+        Room room = threeDayRoom();
+        assertThat(room.announcedAt(DAY_START_HOUR)).isEqualTo(SCHED_START.plusDays(2).withHour(22));
+    }
+
+    @Test
+    @DisplayName("dateOfDay·announcedAt: 구 모델은 기존 9시 경계 계산을 그대로 유지한다 (회귀 방지)")
+    void givenLegacyRoom_whenDateOfDayAndAnnouncedAt_thenLegacyCalculation() {
+        Room legacy = activeRoom(3, STARTED_AT); // startedAt = 2026-06-24 09:00
+        assertThat(legacy.dateOfDay(1, DAY_START_HOUR)).isEqualTo(LocalDate.of(2026, 6, 24));
+        assertThat(legacy.dateOfDay(3, DAY_START_HOUR)).isEqualTo(LocalDate.of(2026, 6, 26));
+        assertThat(legacy.announcedAt(DAY_START_HOUR))
+                .isEqualTo(LocalDateTime.of(2026, 6, 26, 22, 0));
     }
 }

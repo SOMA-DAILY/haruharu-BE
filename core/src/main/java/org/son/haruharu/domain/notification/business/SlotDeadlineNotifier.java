@@ -38,7 +38,7 @@ public class SlotDeadlineNotifier {
     /** 반환값은 푸시 대상 멤버 수(모니터링 로그용). */
     public int notifyClosingSlots(LocalDateTime now) {
         int notified = 0;
-        for (Room room : roomReader.getActive()) {
+        for (Room room : roomReader.getLegacyActive()) {
             notified += notifyRoom(room, now);
         }
         return notified;

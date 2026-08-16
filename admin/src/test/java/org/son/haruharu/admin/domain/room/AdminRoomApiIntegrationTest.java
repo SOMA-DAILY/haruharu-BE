@@ -258,6 +258,46 @@ class AdminRoomApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("방 취소 시 CANCELLED 로 바뀌고 그 코드로는 입장할 수 없다")
+    void cancelRoom_marksCancelled() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        String created = mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON).content(createRoomBody(startsAt))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long roomId = com.jayway.jsonpath.JsonPath.parse(created).read("$.data.room_id", Long.class);
+
+        mockMvc.perform(post("/api/v1/admin/rooms/{roomId}/cancel", roomId)
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isOk());
+
+        em.flush();
+        em.clear();
+
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", roomId).with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+    }
+
+    @Test
+    @DisplayName("없는 방을 취소하면 404")
+    void cancelRoom_notFound_returns404() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/rooms/{roomId}/cancel", 999999L)
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("ADMIN_ROOM_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("CS 권한으로 방 취소 시 403")
+    void cancelRoom_withCsRole_returns403() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/rooms/{roomId}/cancel", 1L)
+                        .with(authentication(csAuth())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("초대코드 조회도 CS 권한이면 403 — 코드는 인증 없이 입장 가능한 자격증명이다")
     void listInvites_withCsRole_returns403() throws Exception {
         mockMvc.perform(get("/api/v1/admin/rooms/{roomId}/invites", 1L).with(authentication(csAuth())))

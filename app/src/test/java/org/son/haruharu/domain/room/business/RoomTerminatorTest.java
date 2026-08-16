@@ -52,7 +52,7 @@ class RoomTerminatorTest {
         Room expired = activeRoom(1L);
         Room ongoing = new Room(2L, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26),
                 3, LocalDateTime.of(2026, 6, 26, 9, 0), null);
-        given(roomReader.getActive()).willReturn(List.of(expired, ongoing));
+        given(roomReader.getLegacyActive()).willReturn(List.of(expired, ongoing));
 
         // when
         int ended = roomTerminator.terminate(now, DAY_START_HOUR);
@@ -72,7 +72,7 @@ class RoomTerminatorTest {
     void givenNoExpiredRooms_whenTerminate_thenDoesNothing() {
         // given: Day3(마지막 날) 진행 중 방만 있음
         LocalDateTime now = LocalDateTime.of(2026, 6, 26, 12, 0);
-        given(roomReader.getActive()).willReturn(List.of(activeRoom(1L)));
+        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom(1L)));
 
         // when
         int ended = roomTerminator.terminate(now, DAY_START_HOUR);

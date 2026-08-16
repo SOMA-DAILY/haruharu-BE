@@ -169,6 +169,26 @@ class AdminRoomCommandServiceTest {
     }
 
     @Test
+    @DisplayName("방 취소는 방 존재 확인 후 core RoomService.cancel 에 위임한다")
+    void givenExistingRoom_whenCancelRoom_thenDelegatesToCore() {
+        given(adminRoomReader.getById(ROOM_ID)).willReturn(room());
+
+        service.cancelRoom(ROOM_ID);
+
+        verify(roomService).cancel(ROOM_ID);
+    }
+
+    @Test
+    @DisplayName("없는 방을 취소하면 AdminRoomNotFoundException — core 는 호출되지 않는다")
+    void givenUnknownRoom_whenCancelRoom_thenNotFound() {
+        given(adminRoomReader.getById(ROOM_ID)).willThrow(new AdminRoomNotFoundException());
+
+        assertThatThrownBy(() -> service.cancelRoom(ROOM_ID))
+                .isInstanceOf(AdminRoomNotFoundException.class);
+        verify(roomService, never()).cancel(any());
+    }
+
+    @Test
     @DisplayName("코드 목록 조회는 방 존재 확인 후 해당 방의 코드를 반환한다")
     void givenRoomWithInvites_whenGetInvites_thenReturnsList() {
         given(adminRoomReader.getById(ROOM_ID)).willReturn(room());

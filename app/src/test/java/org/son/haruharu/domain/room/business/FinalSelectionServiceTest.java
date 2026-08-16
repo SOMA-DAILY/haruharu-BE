@@ -390,4 +390,64 @@ class FinalSelectionServiceTest {
         assertThatThrownBy(() -> service.getMySelection(roomId, userId))
                 .isInstanceOf(NotRoomMemberException.class);
     }
+
+    // ── #320 ③ 새 모델: 어드민이 입력한 시각을 따르고 Day 게이트를 타지 않는다 ──
+
+    /** starts_at=2026-06-24 19:00 · opens=2026-06-26 18:00(= starts 기준 Day2) · closes=21:00 · result=22:00 · ends=익일 09:00 */
+    private Room scheduledRoom() {
+        LocalDateTime starts = LocalDateTime.of(2026, 6, 24, 19, 0);
+        return new Room(roomId, RoomStatus.SELECTING, starts.toLocalDate(), 3, null, null, false, null,
+                starts,
+                LocalDateTime.of(2026, 6, 26, 18, 0),
+                LocalDateTime.of(2026, 6, 26, 21, 0),
+                LocalDateTime.of(2026, 6, 26, 22, 0),
+                LocalDateTime.of(2026, 6, 27, 9, 0));
+    }
+
+    private void stubMeAndScheduledRoom() {
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, userId, roomId));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(scheduledRoom()));
+    }
+
+    @Test
+    @DisplayName("새 모델: 어드민이 지정한 opens_at 이후면 Day가 3이 아니어도 선택할 수 있다")
+    void givenScheduledRoomAfterOpensAt_whenSelect_thenAllowed() {
+        // 2026-06-26 18:30 KST — starts_at(6/24 19:00) 기준으로는 아직 Day2 다
+        FinalSelectionService svc = serviceWith(
+                Clock.fixed(Instant.parse("2026-06-26T09:30:00Z"), ZoneId.of("Asia/Seoul")));
+        stubMeAndScheduledRoom();
+        given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
+        given(finalSelectionReader.hasSelected(meId)).willReturn(false);
+        given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
+
+        svc.select(roomId, selectedId, userId);
+
+        then(finalSelectionWriter).should().save(any());
+    }
+
+    @Test
+    @DisplayName("새 모델: opens_at 이전이면 NotFinalSelectionDayException")
+    void givenScheduledRoomBeforeOpensAt_whenSelect_thenThrows() {
+        // 2026-06-26 17:59 KST
+        FinalSelectionService svc = serviceWith(
+                Clock.fixed(Instant.parse("2026-06-26T08:59:00Z"), ZoneId.of("Asia/Seoul")));
+        stubMeAndScheduledRoom();
+
+        assertThatThrownBy(() -> svc.select(roomId, selectedId, userId))
+                .isInstanceOf(NotFinalSelectionDayException.class);
+        then(finalSelectionWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("새 모델: closes_at 이후면 SelectionClosedException (구 모델의 22:00 고정이 아니다)")
+    void givenScheduledRoomAfterClosesAt_whenSelect_thenClosed() {
+        // 2026-06-26 21:01 KST — 어드민이 지정한 마감(21:00) 직후. 구 로직(22:00)이라면 아직 열려 있다.
+        FinalSelectionService svc = serviceWith(
+                Clock.fixed(Instant.parse("2026-06-26T12:01:00Z"), ZoneId.of("Asia/Seoul")));
+        stubMeAndScheduledRoom();
+
+        assertThatThrownBy(() -> svc.select(roomId, selectedId, userId))
+                .isInstanceOf(SelectionClosedException.class);
+        then(finalSelectionWriter).should(never()).save(any());
+    }
 }

@@ -63,6 +63,16 @@ public class AdminRoomCommandService {
                 roomInviteService.reissueFor(roomId, maxUses, expiresAt, createdBy(adminId)));
     }
 
+    /**
+     * 방 취소(#320). 모집이 안 차서 접거나 잘못 만든 방을 치울 때. CANCELLED 는 sticky 라
+     * 이후 reconciler 전이·초대코드 입장에서 모두 제외된다. 이미 종료된 방은 core 가 거부한다.
+     */
+    @Transactional
+    public void cancelRoom(Long roomId) {
+        adminRoomReader.getById(roomId); // 존재 확인 게이트 — 없는 방은 ADMIN_ROOM_NOT_FOUND(404)
+        roomService.cancel(roomId);
+    }
+
     /** 방의 코드 이력(최신순). 없는 방이면 404. */
     public List<AdminRoomInviteResponse> getInvites(Long roomId) {
         adminRoomReader.getById(roomId); // 존재 확인 게이트
