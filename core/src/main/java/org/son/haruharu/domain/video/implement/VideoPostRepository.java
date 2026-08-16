@@ -26,7 +26,4 @@ public interface VideoPostRepository {
 
     /** 한 멤버의 활성 영상 전체(Day·슬롯 오름차순). 매칭 상대 카드의 1~3일차 영상용. */
     List<VideoPost> findActiveByRoomMember(Long roomMemberId);
-
-    /** 데모 리셋 전용 하드삭제(#267). 지정 멤버들의 영상을 물리 삭제한다(soft-delete 계약 밖). */
-    void deleteByRoomMemberIds(List<Long> roomMemberIds);
 }

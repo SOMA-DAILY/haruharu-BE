@@ -221,60 +221,6 @@ class CoinServiceTest {
     }
 
     @Test
-    @DisplayName("데모 지급 미이력이면 REWARD 버킷에 DEMO_GRANT로 지정 수량을 적립한다")
-    void givenNoDemoGrant_whenGrantDemoCoins_thenCreditsReward() {
-        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)).willReturn(false);
-        given(coinWalletReader.getByUserIdForUpdate(userId)).willReturn(CoinWallet.init(userId));
-
-        coinService.grantDemoCoins(userId, 200L);
-
-        ArgumentCaptor<CoinLedger> captor = ArgumentCaptor.forClass(CoinLedger.class);
-        verify(coinLedgerWriter).append(captor.capture());
-        assertThat(captor.getValue().reason()).isEqualTo(CoinLedgerReason.DEMO_GRANT);
-        assertThat(captor.getValue().bucket()).isEqualTo(CoinBucket.REWARD);
-        assertThat(captor.getValue().delta()).isEqualTo(200L);
-        verify(coinWalletWriter).save(any());
-    }
-
-    @Test
-    @DisplayName("이미 데모 지급을 받은 계정이면 재지급하지 않는다(멱등)")
-    void givenAlreadyDemoGranted_whenGrantDemoCoins_thenSkips() {
-        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)).willReturn(true);
-
-        coinService.grantDemoCoins(userId, 200L);
-
-        verify(coinWalletWriter, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("데모 지갑 리셋은 원장을 비우고 지갑 잔액을 0으로 되돌린 뒤 구름을 재지급한다(#267)")
-    void givenSpentDemoWallet_whenReset_thenClearsLedgerAndReseeds() {
-        // 기존 지갑(리워드 50)이 있는 상태. 원장을 비웠으므로 멱등 가드를 통과해 재지급된다.
-        CoinWallet existing = new CoinWallet(9L, userId, 0L, 50L, null);
-        // createWallet의 존재 확인(soft-delete 포함) → 초기화 대상 조회 → 재지급 시 락 조회 순으로 쓰인다(#298).
-        given(coinWalletReader.existsIncludingDeleted(userId)).willReturn(true);
-        given(coinWalletReader.getByUserId(userId)).willReturn(existing);
-        given(coinWalletReader.getByUserIdForUpdate(userId)).willReturn(existing.resetToZero());
-        given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)).willReturn(false);
-
-        coinService.resetDemoWallet(userId, 200L);
-
-        // 원장은 비우되, 지갑은 삭제하지 않는다(soft-delete+user_id 유니크라 재삽입 불가).
-        verify(coinLedgerWriter).deleteByUserId(userId);
-        verify(coinWalletWriter, never()).deleteByUserId(userId);
-        // 잔액을 0으로 되돌리는 저장이 일어난다(식별자 유지).
-        ArgumentCaptor<CoinWallet> walletCaptor = ArgumentCaptor.forClass(CoinWallet.class);
-        verify(coinWalletWriter, times(2)).save(walletCaptor.capture());
-        assertThat(walletCaptor.getAllValues().get(0).id()).isEqualTo(9L);
-        assertThat(walletCaptor.getAllValues().get(0).totalBalance()).isEqualTo(0L);
-        // DEMO_GRANT로 재지급된다.
-        ArgumentCaptor<CoinLedger> ledgerCaptor = ArgumentCaptor.forClass(CoinLedger.class);
-        verify(coinLedgerWriter).append(ledgerCaptor.capture());
-        assertThat(ledgerCaptor.getValue().reason()).isEqualTo(CoinLedgerReason.DEMO_GRANT);
-        assertThat(ledgerCaptor.getValue().delta()).isEqualTo(200L);
-    }
-
-    @Test
     @DisplayName("PURCHASE 원장이 있으면 결제 이력 있음으로 판정한다(#277)")
     void givenPurchaseLedger_whenHasPurchaseHistory_thenTrue() {
         given(coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.PURCHASE)).willReturn(true);

@@ -49,61 +49,25 @@ public class VideoService {
     private final VideoPostReader videoPostReader;
     private final VideoPostWriter videoPostWriter;
     private final ApplicationEventPublisher eventPublisher;
-    private final DemoFeedProperties demoFeedProperties;
     private final Clock clock;
 
     public VideoService(S3StoragePort s3StoragePort, RoomReader roomReader,
                         RoomMemberReader roomMemberReader,
                         VideoPostReader videoPostReader, VideoPostWriter videoPostWriter,
                         ApplicationEventPublisher eventPublisher,
-                        DemoFeedProperties demoFeedProperties, Clock clock) {
+                        Clock clock) {
         this.s3StoragePort = s3StoragePort;
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.videoPostReader = videoPostReader;
         this.videoPostWriter = videoPostWriter;
         this.eventPublisher = eventPublisher;
-        this.demoFeedProperties = demoFeedProperties;
         this.clock = clock;
     }
 
     /** 한 방 멤버의 활성 영상 전체(Day·슬롯 오름차순). 매칭 상대 프로필 카드의 1~3일차 영상용. */
     public List<VideoPost> getMemberVideos(Long roomMemberId) {
         return videoPostReader.findActiveByRoomMember(roomMemberId);
-    }
-
-    /**
-     * 데모 방 피드 시드(#274). 지정 Day의 모든 슬롯에 대해 넘겨받은 각 멤버에게 플레이스홀더 영상을 1개씩 넣는다.
-     * 누구를 시드할지는 호출자(DemoRoomService)가 정한다 — #282부터 데모 계정 본인은 제외하고 가상 참여자만 시드해,
-     * 리뷰어가 직접 업로드해야 피드 게이트("본인이 업로드한 슬롯만 열람")가 열리는 앱 본연의 흐름을 시연한다.
-     * 정상 업로드 경로(시간창·중복·소유권 검증)를 우회하는 데모 전용 시드이므로 video 도메인이 스스로 소유한다.
-     * <p>
-     * 플레이스홀더 URL은 하드코딩이 아니라 설정({@link DemoFeedProperties})에서 주입한다(#280) — 외부 URL이 죽어도
-     * 코드 재배포 없이 env로 교체할 수 있다. 우리 버킷 URL이면 presign 서명, 외부 URL이면 그대로 통과된다.
-     */
-    @Transactional
-    public void seedDemoFeed(List<Long> roomMemberIds, int dayNumber) {
-        LocalDateTime now = LocalDateTime.now(clock);
-        List<UploadSlot> slots = UploadSlot.ofDay(dayNumber);
-        for (Long roomMemberId : roomMemberIds) {
-            for (UploadSlot slot : slots) {
-                videoPostWriter.save(VideoPost.create(
-                        roomMemberId, dayNumber, slot.slotIndex(), null,
-                        "데모 일상", demoFeedProperties.videoUrl(), demoFeedProperties.thumbnailUrl(), now));
-            }
-        }
-    }
-
-    /**
-     * 데모 리셋 전용 피드 재설정(#267·#282). deleteMemberIds의 기존 영상을 전부 하드삭제한 뒤,
-     * seedMemberIds에만 지정 Day 피드를 시드한다. 삭제·시드 대상을 분리한 이유(#282):
-     * 리셋은 리뷰어 테스트 업로드분까지 전원 삭제해야 하지만, 재시드는 가상 참여자만 해야 하기 때문
-     * (데모 계정 본인 슬롯은 비워둬 리뷰어가 직접 업로드해 게이트를 여는 흐름을 시연).
-     */
-    @Transactional
-    public void resetDemoFeed(List<Long> deleteMemberIds, List<Long> seedMemberIds, int dayNumber) {
-        videoPostWriter.deleteByRoomMemberIds(deleteMemberIds);
-        seedDemoFeed(seedMemberIds, dayNumber);
     }
 
     /** 영상 업로드용 presigned PUT URL 발급. 영상은 비공개 prefix(users/{id}/videos/). */

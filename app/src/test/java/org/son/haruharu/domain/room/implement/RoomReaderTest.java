@@ -49,7 +49,7 @@ class RoomReaderTest {
     void givenStaleEndedRoom_whenFindCurrent_thenEmpty() {
         RoomReader reader = new RoomReader(roomRepository);
         LocalDateTime starts = NOW.minusDays(5);
-        Room staleEnded = new Room(10L, RoomStatus.ACTIVE, starts.toLocalDate(), 3, starts, null, false, null,
+        Room staleEnded = new Room(10L, RoomStatus.ACTIVE, starts.toLocalDate(), 3, starts, null,
                 starts, starts.plusDays(2), starts.plusDays(2).plusHours(3),
                 starts.plusDays(2).plusHours(4), starts.plusDays(3)); // endsAt < NOW
         given(roomRepository.findByIdInAndStatusNot(List.of(10L), RoomStatus.ENDED))
@@ -63,7 +63,7 @@ class RoomReaderTest {
     void givenScheduledPendingRoom_whenFindCurrent_thenPresent() {
         RoomReader reader = new RoomReader(roomRepository);
         LocalDateTime starts = NOW.plusDays(1);
-        Room pending = new Room(10L, RoomStatus.PENDING, starts.toLocalDate(), 3, null, null, false, null,
+        Room pending = new Room(10L, RoomStatus.PENDING, starts.toLocalDate(), 3, null, null,
                 starts, starts.plusDays(2), starts.plusDays(2).plusHours(3),
                 starts.plusDays(2).plusHours(4), starts.plusDays(3));
         given(roomRepository.findByIdInAndStatusNot(List.of(10L), RoomStatus.ENDED))

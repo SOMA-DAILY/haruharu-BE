@@ -396,7 +396,7 @@ class FinalSelectionServiceTest {
     /** starts_at=2026-06-24 19:00 · opens=2026-06-26 18:00(= starts 기준 Day2) · closes=21:00 · result=22:00 · ends=익일 09:00 */
     private Room scheduledRoom() {
         LocalDateTime starts = LocalDateTime.of(2026, 6, 24, 19, 0);
-        return new Room(roomId, RoomStatus.SELECTING, starts.toLocalDate(), 3, null, null, false, null,
+        return new Room(roomId, RoomStatus.SELECTING, starts.toLocalDate(), 3, null, null,
                 starts,
                 LocalDateTime.of(2026, 6, 26, 18, 0),
                 LocalDateTime.of(2026, 6, 26, 21, 0),

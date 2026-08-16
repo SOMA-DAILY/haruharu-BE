@@ -8,7 +8,7 @@ package org.son.haruharu.domain.room.implement;
  * ENDED     = 종료(읽기전용 아카이브).
  * CANCELLED = 운영진 수동 취소. timestamp 파생과 무관하게 sticky.
  *
- * 설계 문서의 RECRUITING/ONGOING 은 각각 PENDING/ACTIVE 와 동일 개념 — 개명은 admin·demo·테스트 광범위
+ * 설계 문서의 RECRUITING/ONGOING 은 각각 PENDING/ACTIVE 와 동일 개념 — 개명은 admin·테스트 광범위
  * 영향이라 보류하고 의미만 매핑한다([[mvp-pivot-invite-code]]).
  */
 public enum RoomStatus {

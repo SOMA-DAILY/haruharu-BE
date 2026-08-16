@@ -95,41 +95,7 @@ public class CoinService {
     }
 
     /**
-     * 데모/심사 계정 구름 지급(#264). 유저당 1회만 지급하며(원장에 DEMO_GRANT 존재 시 skip), 재부팅·재실행에도 중복 지급되지 않는다.
-     */
-    @Transactional
-    public void grantDemoCoins(Long userId, long amount) {
-        if (coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.DEMO_GRANT)) {
-            return;
-        }
-        credit(CoinCreditCommand.demoGrant(userId, amount));
-    }
-
-    /**
-     * 데모 리셋 전용 지갑 초기화(#267). 원장을 비우고 지갑 잔액을 0으로 되돌린 뒤 데모 구름을 재지급해 잔액을 amount로 만든다.
-     * <p>
-     * 지갑은 전역 soft-delete + user_id 유니크라 "삭제 후 재생성"이 불가하다(soft-delete된 행이 유니크를 점유).
-     * 따라서 기존 지갑 행을 재사용해 잔액만 0으로 초기화한다. 원장을 먼저 비워야 {@link #grantDemoCoins}의
-     * 멱등 가드(DEMO_GRANT 존재 시 skip)를 통과해 재지급된다. 원장 삭제는 결제 감사 이력을 지우므로
-     * 반드시 데모 계정에만 호출해야 한다(호출부 DemoRoomService가 demo_mode 확인).
-     */
-    @Transactional
-    public void resetDemoWallet(Long userId, long amount) {
-        long balanceBefore = coinWalletReader.findByUserId(userId).map(CoinWallet::totalBalance).orElse(0L);
-        int deletedRows = coinLedgerWriter.deleteByUserId(userId);
-        // 원장 하드삭제는 결제 감사 이력을 지우는 파괴적 조작이라 반드시 흔적을 남긴다(#300).
-        // 실사용자에게 잘못 호출됐을 때 사후 확인의 유일한 근거가 된다 — 그래서 warn이다.
-        log.warn("coin demo-reset userId={} deletedLedgerRows={} balanceBefore={} reseedAmount={}",
-                userId, deletedRows, balanceBefore, amount);
-        // 지갑이 없던 계정(백필 이전 가입자 등)도 리셋 대상이 될 수 있어 먼저 보장한다(#298).
-        createWallet(userId);
-        coinWalletWriter.save(coinWalletReader.getByUserId(userId).resetToZero());
-        grantDemoCoins(userId, amount);
-    }
-
-    /**
-     * 실결제(IAP 구매) 이력 존재 여부(#277). 데모 프로비저닝 대상 판별용 — 결제 원장이 있는 계정은
-     * 실사용자로 보고 데모 전환(및 이후 리셋의 원장 하드삭제)을 코드 레벨에서 차단하기 위함이다.
+     * 실결제(IAP 구매) 이력 존재 여부(#277). 결제 원장이 있는 계정은 실사용자로 판별하기 위함이다.
      */
     public boolean hasPurchaseHistory(Long userId) {
         return coinLedgerReader.existsByUserIdAndReason(userId, CoinLedgerReason.PURCHASE);

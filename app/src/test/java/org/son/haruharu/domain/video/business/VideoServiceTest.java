@@ -45,8 +45,6 @@ class VideoServiceTest {
     private static final String BASE = "https://bucket.s3.ap-northeast-2.amazonaws.com/";
     // Day1 slot2 = 12-15 시간창 (UploadSlot.DAY1_SLOT2)
     private static final int SLOT_INDEX = 2;
-    private static final String DEMO_VIDEO = BASE + "demo/placeholder.mp4";
-    private static final String DEMO_THUMB = "https://picsum.photos/seed/haruharu-demo-feed/600/800";
 
     @Mock S3StoragePort s3StoragePort;
     @Mock RoomReader roomReader;
@@ -58,8 +56,7 @@ class VideoServiceTest {
     private VideoService serviceAt(int hour) {
         Clock clock = Clock.fixed(ZonedDateTime.of(2026, 6, 26, hour, 0, 0, 0, SEOUL).toInstant(), SEOUL);
         return new VideoService(s3StoragePort, roomReader, roomMemberReader,
-                videoPostReader, videoPostWriter, eventPublisher,
-                new org.son.haruharu.domain.video.business.DemoFeedProperties(DEMO_VIDEO, DEMO_THUMB), clock);
+                videoPostReader, videoPostWriter, eventPublisher, clock);
     }
 
     private RoomMember member(Long id, Long userId) {
@@ -195,33 +192,5 @@ class VideoServiceTest {
 
         assertThatThrownBy(() -> serviceAt(12).delete(userId, postId))
             .isInstanceOf(NotVideoOwnerException.class);
-    }
-
-    @Test
-    @DisplayName("데모 피드 시드는 Day의 모든 슬롯에 각 멤버 영상을 1개씩 저장한다(#274)")
-    void givenMembers_whenSeedDemoFeed_thenSavesPerSlotPerMember() {
-        given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
-
-        // Day1 = 5슬롯, 멤버 2명 → 10개 저장
-        serviceAt(12).seedDemoFeed(java.util.List.of(10L, 20L), 1);
-
-        ArgumentCaptor<VideoPost> captor = ArgumentCaptor.forClass(VideoPost.class);
-        org.mockito.Mockito.verify(videoPostWriter, org.mockito.Mockito.times(10)).save(captor.capture());
-        // 하드코딩이 아니라 설정(DemoFeedProperties)에서 온 URL로 저장된다(#280)
-        assertThat(captor.getValue().videoUrl()).isEqualTo(DEMO_VIDEO);
-        assertThat(captor.getValue().thumbnailUrl()).isEqualTo(DEMO_THUMB);
-    }
-
-    @Test
-    @DisplayName("데모 피드 리셋은 삭제 대상 전원을 하드삭제하고 시드 대상만 재시드한다(#267·#282)")
-    void givenSplitLists_whenResetDemoFeed_thenDeletesAllSeedsSubset() {
-        given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
-
-        // 삭제 대상: 본인 포함 3명(10,20,30) / 시드 대상: 가상 2명(20,30)만
-        serviceAt(12).resetDemoFeed(java.util.List.of(10L, 20L, 30L), java.util.List.of(20L, 30L), 1);
-
-        then(videoPostWriter).should().deleteByRoomMemberIds(java.util.List.of(10L, 20L, 30L));
-        // 재시드는 2명 × 5슬롯 = 10개 (삭제 대상 3명이 아니라 시드 대상 2명 기준)
-        org.mockito.Mockito.verify(videoPostWriter, org.mockito.Mockito.times(10)).save(any());
     }
 }
