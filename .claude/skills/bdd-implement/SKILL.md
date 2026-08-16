@@ -91,7 +91,13 @@ Agent: security-reviewer
 입력: 변경된 파일 경로 목록
 ```
 
-FAIL/CRITICAL 항목은 즉시 수정 후 재검증.
+**병행: Codex 교차 리뷰** (`openai/codex-plugin-cc` 플러그인)
+위 에이전트와 별개로 Codex에게도 같은 변경을 리뷰시켜 크로스-프로바이더로 교차검증한다.
+- `/codex:review` — 표준 리뷰 (uncommitted 변경 또는 develop 대비 브랜치 비교)
+- OAuth2·JWT·Security 코드가 포함되면 `/codex:adversarial-review` 로 설계·가정까지 반박 검토
+- 플러그인 미설치/미인증(`/codex:setup`)이면 이 병행 단계는 **skip** 하고 java/security-reviewer 결과만으로 진행 (완료 보고에 "생략(미설치)" 표기)
+
+java-reviewer · security-reviewer · Codex 중 **하나라도 FAIL/CRITICAL** 이면 즉시 수정 후 재검증.
 
 **단순 수정 (메서드 추가, 버그 픽스 등):**
 리뷰 에이전트 생략, 바로 Step 7로.
@@ -118,6 +124,7 @@ OAuth2·JWT·PASS 인증 관련 코드라면 `security-reviewer` 에이전트 �
 | 실제 API 검증 | PASS/FAIL/미실행 | curl 요청/응답 본문 |
 | 코드 리뷰 | PASS/FAIL/생략(단순수정) | java-reviewer 판정 |
 | 보안 리뷰 | PASS/FAIL/해당없음 | security-reviewer 판정 |
+| Codex 교차 리뷰 | PASS/FAIL/생략(미설치) | /codex:review 판정 |
 | 시크릿 체크 | PASS | 확인 항목 |
 
 변경 파일: [목록]
