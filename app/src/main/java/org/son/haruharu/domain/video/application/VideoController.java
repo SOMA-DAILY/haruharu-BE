@@ -73,7 +73,7 @@ public class VideoController {
     }
 
     @Operation(summary = "영상 반응 토글",
-            description = "타인 영상에 reaction_type(LIKE/CURIOUS/EMPATHY) 반응을 토글한다. "
+            description = "타인 영상에 reaction_type(LIKE 👍/HEART ❤️/LOVE 😍/LAUGH 😂/WOW 😮/FIRE 🔥) 반응을 토글한다. "
                     + "유저당 영상당 1개: 없으면 생성, 같은 타입 재요청이면 해제, 다른 타입이면 교체한다. "
                     + "에러: 존재하지 않거나 삭제된 영상이면 VIDEO_404_NOT_FOUND(404), 자기 영상에 반응하면 CANNOT_REACT_OWN_VIDEO(400), "
                     + "해당 방 멤버가 아니면 인가 실패.")

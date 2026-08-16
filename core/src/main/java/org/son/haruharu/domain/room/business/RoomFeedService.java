@@ -3,7 +3,7 @@ package org.son.haruharu.domain.room.business;
 import org.son.haruharu.domain.mission.implement.UploadSlot;
 import org.son.haruharu.domain.room.business.dto.FeedResponse;
 import org.son.haruharu.domain.room.business.dto.FeedResponse.FeedItem;
-import org.son.haruharu.domain.room.business.dto.FeedResponse.ReactionCounts;
+import org.son.haruharu.domain.room.business.dto.FeedResponse.ReactionTally;
 import org.son.haruharu.domain.room.business.dto.FeedResponse.SlotStatus;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -16,6 +16,7 @@ import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +66,7 @@ public class RoomFeedService {
                 .toList();
 
         List<Long> postIds = visible.stream().map(VideoPost::id).toList();
-        Map<Long, ReactionCounts> countsByPost = aggregateCounts(videoReactionReader.getReactionCounts(postIds));
+        Map<Long, List<ReactionTally>> countsByPost = aggregateCounts(videoReactionReader.getReactionCounts(postIds));
         Map<Long, String> myReactionByPost = videoReactionReader.getMyReactions(postIds, userId);
 
         // 비공개 영상은 재생 가능한 presigned GET URL로 변환해 내려준다(#162).
@@ -77,28 +78,33 @@ public class RoomFeedService {
                         s3StoragePort.createPresignedGetUrl(p.videoUrl()),
                         s3StoragePort.createPresignedGetUrl(p.thumbnailUrl()),
                         p.caption(), p.createdAt(),
-                        countsByPost.getOrDefault(p.id(), ReactionCounts.zero()),
+                        countsByPost.getOrDefault(p.id(), List.of()),
                         myReactionByPost.get(p.id())))
                 .toList();
         return new FeedResponse(slots, posts);
     }
 
-    private Map<Long, ReactionCounts> aggregateCounts(List<ReactionCount> rows) {
-        Map<Long, long[]> acc = new HashMap<>(); // [like, curious, empathy]
+    /**
+     * 영상별 반응 집계를 이모지 타입별 리스트로 변환한다. 0인 타입은 담지 않고, EnumMap으로 모아 enum 선언 순서로 정렬한다.
+     * 고정 이모지 세트라 타입이 늘어도(집계 배열 인덱스 없이) 그대로 확장된다.
+     */
+    private Map<Long, List<ReactionTally>> aggregateCounts(List<ReactionCount> rows) {
+        Map<Long, EnumMap<ReactionType, Long>> acc = new HashMap<>();
         for (ReactionCount row : rows) {
             ReactionType type = ReactionType.parse(row.reactionType());
             if (type == null) {
                 continue; // DB에 저장된 알 수 없는 값 방어(토글 API가 enum으로 제한)
             }
-            long[] c = acc.computeIfAbsent(row.videoPostId(), k -> new long[3]);
-            switch (type) {
-                case LIKE -> c[0] = row.count();
-                case CURIOUS -> c[1] = row.count();
-                case EMPATHY -> c[2] = row.count();
-            }
+            acc.computeIfAbsent(row.videoPostId(), k -> new EnumMap<>(ReactionType.class))
+                    .put(type, row.count());
         }
-        Map<Long, ReactionCounts> result = new HashMap<>();
-        acc.forEach((postId, c) -> result.put(postId, new ReactionCounts(c[0], c[1], c[2])));
+        Map<Long, List<ReactionTally>> result = new HashMap<>();
+        acc.forEach((postId, byType) -> {
+            List<ReactionTally> tallies = byType.entrySet().stream()
+                    .map(e -> new ReactionTally(e.getKey().name(), e.getKey().emoji(), e.getValue()))
+                    .toList();
+            result.put(postId, tallies);
+        });
         return result;
     }
 }

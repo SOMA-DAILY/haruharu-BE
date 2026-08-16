@@ -26,12 +26,15 @@ public class VideoReactedEventListener {
                 event.reactorNickname(), reactionVerb(event.reactionType()));
     }
 
-    /** ReactionType.name() → 푸시 본문 동사(피그마 3-1a 카피). 새 반응 유형 추가 시 여기도 함께 갱신한다. */
+    /** ReactionType.name() → 푸시 본문 동사(카피: "회원님의 영상을 %s"). 새 반응 유형 추가 시 여기도 함께 갱신한다. */
     private static String reactionVerb(String reactionType) {
         return switch (reactionType) {
             case "LIKE" -> "좋아해요";
-            case "CURIOUS" -> "궁금해해요";
-            case "EMPATHY" -> "공감해요";
+            case "HEART" -> "마음에 들어해요";
+            case "LOVE" -> "사랑해요";
+            case "LAUGH" -> "재밌어해요";
+            case "WOW" -> "놀라워해요";
+            case "FIRE" -> "열광해요";
             default -> "확인했어요";
         };
     }
