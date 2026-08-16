@@ -69,7 +69,8 @@ class ChatPartnerServiceTest {
     }
 
     private VideoPost video(Long id, int day, int slot) {
-        return new VideoPost(id, PARTNER_MEMBER, day, slot, null, "cap" + id,
+        // slotStart는 day·slot로부터 유일하게 파생(day별 그룹핑 의미 유지, slot_start 충돌 방지)
+        return new VideoPost(id, PARTNER_MEMBER, day, LocalDateTime.of(2026, 6, 23 + day, 8 + slot, 0), null, "cap" + id,
                 "https://cdn/v" + id + ".mp4", "https://cdn/t" + id + ".jpg", false, null, null,
                 LocalDateTime.of(2026, 6, 24, 10, 0));
     }
@@ -96,7 +97,7 @@ class ChatPartnerServiceTest {
         assertThat(result.videosByDay().get(1)).extracting(PartnerProfileResponse.PartnerVideo::videoPostId)
                 .containsExactly(11L, 12L);
         assertThat(result.videosByDay().get(1).get(0).videoUrl()).isEqualTo("signed:https://cdn/v11.mp4");
-        assertThat(result.videosByDay().get(3).get(0).slotIndex()).isEqualTo(3);
+        assertThat(result.videosByDay().get(3).get(0).slotStart()).isEqualTo(LocalDateTime.of(2026, 6, 26, 11, 0));
     }
 
     @Test

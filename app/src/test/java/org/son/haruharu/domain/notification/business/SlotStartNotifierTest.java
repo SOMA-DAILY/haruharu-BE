@@ -1,6 +1,5 @@
 package org.son.haruharu.domain.notification.business;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +28,8 @@ import static org.mockito.Mockito.never;
 @ExtendWith(MockitoExtension.class)
 class SlotStartNotifierTest {
 
-    private static final LocalDate DAY1 = LocalDate.of(2026, 7, 4);
+    // 방 시작 20:00(정시). 슬롯 경계는 20:00·21:00·22:00…(starts_at 상대 정시).
+    private static final LocalDateTime STARTS = LocalDateTime.of(2026, 7, 4, 20, 0);
 
     @Mock RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
@@ -42,20 +42,30 @@ class SlotStartNotifierTest {
         notifier = new SlotStartNotifier(roomReader, roomMemberReader, pushSendService);
     }
 
+    /** startsAt 상대 스케줄이 있는 새 모델 ACTIVE 방(최종선택 2일 뒤, 종료 3일 뒤). */
     private Room activeRoom() {
-        return new Room(7L, RoomStatus.ACTIVE, DAY1, 3, DAY1.atTime(9, 0), null);
+        return new Room(7L, RoomStatus.ACTIVE, STARTS.toLocalDate(), 3, STARTS, null,
+                STARTS, STARTS.plusDays(2), STARTS.plusDays(2).plusHours(2),
+                STARTS.plusDays(2).plusHours(3), STARTS.plusDays(3));
+    }
+
+    /** 시작 전(PENDING) 방 — startsAt 미래. */
+    private Room pendingRoom() {
+        LocalDateTime starts = STARTS.plusDays(1);
+        return new Room(8L, RoomStatus.PENDING, starts.toLocalDate(), 3, null, null,
+                starts, starts.plusDays(2), starts.plusDays(2).plusHours(2),
+                starts.plusDays(2).plusHours(3), starts.plusDays(3));
     }
 
     private RoomMember member(Long memberId, Long userId) {
-        return new RoomMember(memberId, 7L, userId, "MALE", null, DAY1.atTime(0, 0));
+        return new RoomMember(memberId, 7L, userId, "MALE", null, STARTS);
     }
 
     @Test
-    @DisplayName("슬롯 시작 정시(12시), 업로드 여부와 무관하게 방 전 멤버에게 SLOT_START를 발송한다")
-    void givenSlotOpening_whenNotify_thenPushesToAllMembers() {
-        // Day1 12:00 — DAY1_SLOT2(12~15시) 시작
-        LocalDateTime now = DAY1.atTime(12, 0);
-        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
+    @DisplayName("슬롯 시작 정각(slot_start==now)이면 업로드 여부와 무관하게 방 전 멤버에게 SLOT_START를 발송한다")
+    void givenSlotBoundary_whenNotify_thenPushesToAllMembers() {
+        LocalDateTime now = STARTS.plusHours(3); // 23:00 = starts_at+3h 슬롯 경계
+        given(roomReader.getReconcilable()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L), member(101L, 2L)));
 
         int notified = notifier.notifyOpeningSlots(now);
@@ -66,14 +76,12 @@ class SlotStartNotifierTest {
     }
 
     @Test
-    @DisplayName("Day2 09시 첫 슬롯 시작 시 방 멤버에게 SLOT_START를 발송한다")
-    void givenDay2FirstSlotOpening_whenNotify_thenPushes() {
-        // Day2 09:00 — DAY2_SLOT1(9~12시) 시작 (startedAt Day1 09:00 → 하루 경과 → currentDay=2)
-        LocalDateTime now = DAY1.plusDays(1).atTime(9, 0);
-        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
+    @DisplayName("첫 슬롯 시작(now==starts_at)에도 발송한다")
+    void givenFirstSlot_whenNotify_thenPushes() {
+        given(roomReader.getReconcilable()).willReturn(List.of(activeRoom()));
         given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L)));
 
-        int notified = notifier.notifyOpeningSlots(now);
+        int notified = notifier.notifyOpeningSlots(STARTS);
 
         assertThat(notified).isEqualTo(1);
         then(pushSendService).should().sendToUsers(
@@ -81,11 +89,10 @@ class SlotStartNotifierTest {
     }
 
     @Test
-    @DisplayName("정시에 시작하는 슬롯이 없으면 아무것도 하지 않는다")
-    void givenNoOpeningSlot_whenNotify_thenSkips() {
-        // 13:00 — 시작 시각이 13시인 슬롯 없음
-        LocalDateTime now = DAY1.atTime(13, 0);
-        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
+    @DisplayName("슬롯 경계 정각이 아니면(예: :30) 아무것도 하지 않는다")
+    void givenNotBoundary_whenNotify_thenSkips() {
+        LocalDateTime now = STARTS.plusHours(2).plusMinutes(30);
+        given(roomReader.getReconcilable()).willReturn(List.of(activeRoom()));
 
         int notified = notifier.notifyOpeningSlots(now);
 
@@ -94,14 +101,12 @@ class SlotStartNotifierTest {
     }
 
     @Test
-    @DisplayName("세션 종료(마지막 날 경과) 방은 아직 ACTIVE여도 09시 SLOT_START 대상에서 제외된다")
-    void givenSessionEndedRoom_whenNotify_thenExcludedBeforeMemberLookup() {
-        // startedAt Day1 09:00, totalDays=3 → Day4(+3일) 09:00은 마지막 날 경과(hasEndedBy).
-        // terminate 배치가 아직 ENDED로 전환하기 전(같은 09:00 tick)이라도 발송하면 안 된다.
-        LocalDateTime now = DAY1.plusDays(3).atTime(9, 0);
-        given(roomReader.getLegacyActive()).willReturn(List.of(activeRoom()));
+    @DisplayName("아직 시작 전(PENDING) 방은 멤버 조회 전에 제외된다")
+    void givenPendingRoom_whenNotify_thenExcludedBeforeMemberLookup() {
+        // now는 pendingRoom의 startsAt 이전 → statusAt=PENDING
+        given(roomReader.getReconcilable()).willReturn(List.of(pendingRoom()));
 
-        int notified = notifier.notifyOpeningSlots(now);
+        int notified = notifier.notifyOpeningSlots(STARTS);
 
         assertThat(notified).isZero();
         then(roomMemberReader).should(never()).getByRoomId(any());

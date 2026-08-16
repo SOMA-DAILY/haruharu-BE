@@ -10,10 +10,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 /**
- * 슬롯 경계 정시(9·12·15·18·21시)에 방의 전 멤버에게 SLOT_START를 트리거한다
- * (서로의 하루 확인 + 다음 하루 남기기 유도).
- * Day1 09시는 방 활성화 시점이라 ROOM_STARTED와 SLOT_START가 함께 나간다(슬롯 시작 안내는 매일 필요).
- * 21~24시 슬롯은 자정 깨우기 회피로 트리거하지 않는다(다음 슬롯 시작이 없음).
+ * 매시 정각에 SLOT_START 트리거를 스캔한다. 슬롯은 방마다 starts_at 상대 정시(slot_start)라 방마다 경계 시각이
+ * 다르므로, 매시 돌며 지금이 각 방의 슬롯 시작 정각(slot_start==now)인 방에만 발송한다(SlotStartNotifier).
+ * (starts_at 은 어드민이 정시로 입력하는 전제.)
  */
 @Slf4j
 @Component
@@ -24,7 +23,7 @@ public class SlotBoundaryScheduler {
 
     private final SlotStartNotifier slotStartNotifier;
 
-    @Scheduled(cron = "0 0 9,12,15,18,21 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
     public void onSlotBoundary() {
         LocalDateTime now = LocalDateTime.now(SEOUL);
         try {

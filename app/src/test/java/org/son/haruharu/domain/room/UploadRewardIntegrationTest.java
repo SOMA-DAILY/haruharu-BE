@@ -48,8 +48,10 @@ class UploadRewardIntegrationTest {
     }
 
     private void seedUpload(Long memberId, int day, int slot) {
+        // 같은 day 안에서 slot마다 다른 slotStart를 부여해 여러 슬롯 업로드를 표현(slot_start 충돌 방지)
+        LocalDateTime slotStart = LocalDateTime.of(2026, 6, 23 + day, 8 + slot, 0);
         videoPostJpaRepository.save(VideoPostEntity.from(VideoPost.create(
-                memberId, day, slot, null, null, "https://cdn/v" + slot + ".mp4", null, LocalDateTime.now())));
+                memberId, day, slotStart, null, null, "https://cdn/v" + slot + ".mp4", null, LocalDateTime.now())));
     }
 
     @Test

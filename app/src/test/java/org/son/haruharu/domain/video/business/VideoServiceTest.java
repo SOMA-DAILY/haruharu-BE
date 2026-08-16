@@ -24,7 +24,7 @@ import org.son.haruharu.domain.video.business.event.VideoUploadedEvent;
 import org.son.haruharu.domain.video.business.exception.DuplicateSlotUploadException;
 import org.son.haruharu.domain.video.business.exception.InvalidVideoExtensionException;
 import org.son.haruharu.domain.video.business.exception.NotVideoOwnerException;
-import org.son.haruharu.domain.video.business.exception.SlotWindowClosedException;
+import org.son.haruharu.domain.video.business.exception.RoomNotActiveException;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoPostWriter;
@@ -43,8 +43,10 @@ class VideoServiceTest {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final String BASE = "https://bucket.s3.ap-northeast-2.amazonaws.com/";
-    // Day1 slot2 = 12-15 시간창 (UploadSlot.DAY1_SLOT2)
-    private static final int SLOT_INDEX = 2;
+    private static final LocalDate DATE = LocalDate.of(2026, 6, 26);
+    private static final LocalDateTime STARTS = DATE.atTime(9, 0);
+    // serviceAt(12) 기준 현재 슬롯 = starts_at(09:00) + 3h = 12:00
+    private static final LocalDateTime SLOT_AT_12 = DATE.atTime(12, 0);
 
     @Mock S3StoragePort s3StoragePort;
     @Mock RoomReader roomReader;
@@ -63,10 +65,11 @@ class VideoServiceTest {
         return new RoomMember(id, 999L, userId, "MALE", null, LocalDateTime.now());
     }
 
-    // startedAt=당일 09:00 앵커 → serviceAt(9/12) 기준 currentDay=1로 파생된다.
-    private Room activeDay1(Long roomId) {
-        return new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 26), 3,
-                LocalDateTime.of(2026, 6, 26, 9, 0), null);
+    /** starts_at 09:00 새 모델 ACTIVE 방(최종선택 2일 뒤, 종료 3일 뒤). */
+    private Room activeRoom(Long roomId) {
+        return new Room(roomId, RoomStatus.ACTIVE, DATE, 3, STARTS, null,
+                STARTS, STARTS.plusDays(2), STARTS.plusDays(2).plusHours(2),
+                STARTS.plusDays(2).plusHours(3), STARTS.plusDays(3));
     }
 
     // ── presign ──────────────────────────────────────────────
@@ -97,60 +100,63 @@ class VideoServiceTest {
     // ── upload ───────────────────────────────────────────────
 
     @Test
-    @DisplayName("정상 업로드 시 현재 Day·슬롯으로 저장된다(미션·열쇠 없음)")
-    void givenValidUpload_whenUpload_thenSaves() {
+    @DisplayName("정상 업로드 시 서버가 판정한 현재 slot_start로 저장된다(미션·열쇠 없음)")
+    void givenValidUpload_whenUpload_thenSavesAtCurrentSlot() {
         Long userId = 1L;
         Long roomId = 10L;
         Long memberId = 20L;
         RoomMember me = member(memberId, userId);
         String url = BASE + "users/" + userId + "/videos/v.mp4";
-        var command = new VideoUploadCommand(SLOT_INDEX, url, null, "안녕");
+        var command = new VideoUploadCommand(url, null, "안녕");
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
-        given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom(roomId)));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
-        given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(false);
+        given(videoPostReader.hasActiveUpload(memberId, SLOT_AT_12)).willReturn(false);
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
-        // 비공개 원본 대신 재생 가능한 presigned GET URL을 응답에 담는다(#162)
         given(s3StoragePort.createPresignedGetUrl(url)).willReturn("https://signed-get-url");
 
         VideoPostResponse result = serviceAt(12).upload(userId, roomId, command);
 
-        assertThat(result.dayNumber()).isEqualTo(1);
-        assertThat(result.slotIndex()).isEqualTo(SLOT_INDEX);
+        assertThat(result.slotStart()).isEqualTo(SLOT_AT_12);
         assertThat(result.missionId()).isNull();
         assertThat(result.videoUrl()).isEqualTo("https://signed-get-url"); // 원본(url)이 아니라 서명 URL
-        // 완주 보상 트리거용 업로드 이벤트가 발행된다
+        // 폐기 예정 일일보상 트리거용 이벤트(dayNumber는 room에서 파생, currentDay=1)
         then(eventPublisher).should().publishEvent(new VideoUploadedEvent(memberId, 1));
     }
 
     @Test
-    @DisplayName("슬롯 시간창 밖(09시, 슬롯 12-15)에서 업로드 시 SlotWindowClosedException")
-    void givenOutsideWindow_whenUpload_thenThrows() {
+    @DisplayName("statusAt이 ACTIVE가 아닌 방(시작 전 PENDING)에 업로드 시 RoomNotActiveException")
+    void givenNotActiveRoom_whenUpload_thenThrows() {
         Long userId = 1L;
         Long roomId = 11L;
-        var command = new VideoUploadCommand(SLOT_INDEX, BASE + "x", null, null);
+        var command = new VideoUploadCommand(BASE + "x", null, null);
+        // starts_at 20:00 → serviceAt(12)에선 아직 시작 전 → statusAt=PENDING
+        LocalDateTime starts = DATE.atTime(20, 0);
+        Room pending = new Room(roomId, RoomStatus.PENDING, DATE, 3, null, null,
+                starts, starts.plusDays(2), starts.plusDays(2).plusHours(2),
+                starts.plusDays(2).plusHours(3), starts.plusDays(3));
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(500L, userId));
-        given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(pending));
 
-        assertThatThrownBy(() -> serviceAt(9).upload(userId, roomId, command))
-            .isInstanceOf(SlotWindowClosedException.class);
+        assertThatThrownBy(() -> serviceAt(12).upload(userId, roomId, command))
+            .isInstanceOf(RoomNotActiveException.class);
     }
 
     @Test
-    @DisplayName("슬롯에 활성 영상이 이미 있으면 DuplicateSlotUploadException")
+    @DisplayName("현재 슬롯에 활성 영상이 이미 있으면 DuplicateSlotUploadException")
     void givenActiveExists_whenUpload_thenThrows() {
         Long userId = 1L;
         Long roomId = 12L;
         Long memberId = 21L;
         String url = BASE + "users/" + userId + "/videos/v.mp4";
-        var command = new VideoUploadCommand(SLOT_INDEX, url, null, null);
+        var command = new VideoUploadCommand(url, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId));
-        given(roomReader.findById(roomId)).willReturn(Optional.of(activeDay1(roomId)));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom(roomId)));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
-        given(videoPostReader.hasActiveUpload(memberId, 1, SLOT_INDEX)).willReturn(true);
+        given(videoPostReader.hasActiveUpload(memberId, SLOT_AT_12)).willReturn(true);
 
         assertThatThrownBy(() -> serviceAt(12).upload(userId, roomId, command))
             .isInstanceOf(DuplicateSlotUploadException.class);
@@ -164,7 +170,7 @@ class VideoServiceTest {
         Long userId = 1L;
         Long postId = 1L;
         Long memberId = 30L;
-        VideoPost post = new VideoPost(postId, memberId, 1, 1, null, null,
+        VideoPost post = new VideoPost(postId, memberId, 1, SLOT_AT_12, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
 
         given(videoPostReader.getById(postId)).willReturn(post);
@@ -184,7 +190,7 @@ class VideoServiceTest {
         Long userId = 1L;
         Long postId = 1L;
         Long memberId = 31L;
-        VideoPost post = new VideoPost(postId, memberId, 1, 1, null, null,
+        VideoPost post = new VideoPost(postId, memberId, 1, SLOT_AT_12, null, null,
                 "url", null, false, null, null, LocalDateTime.now());
 
         given(videoPostReader.getById(postId)).willReturn(post);

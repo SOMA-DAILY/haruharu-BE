@@ -5,6 +5,7 @@ import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,36 +31,32 @@ public class VideoPostRepositoryImpl implements VideoPostRepository {
     }
 
     @Override
-    public List<Integer> findUploadedSlotIndexes(Long roomMemberId, int dayNumber) {
-        return jpaRepository.findUploadedSlotIndexes(roomMemberId, dayNumber);
-    }
-
-    @Override
-    public boolean existsActiveBySlot(Long roomMemberId, int dayNumber, int slotIndex) {
-        return jpaRepository.existsByRoomMemberIdAndDayNumberAndSlotIndexAndDeletedAtIsNull(
-                roomMemberId, dayNumber, slotIndex);
-    }
-
-    @Override
-    public boolean existsMissionUploadBySlot(Long roomMemberId, int dayNumber, int slotIndex) {
-        return jpaRepository.existsByRoomMemberIdAndDayNumberAndSlotIndexAndMissionIdIsNotNull(
-                roomMemberId, dayNumber, slotIndex);
-    }
-
-    @Override
-    public List<VideoPost> findFeed(List<Long> roomMemberIds, int dayNumber) {
-        if (roomMemberIds.isEmpty()) {
+    public List<LocalDateTime> findUploadedSlotStarts(Long roomMemberId, List<LocalDateTime> slotStarts) {
+        if (slotStarts.isEmpty()) {
             return List.of();
         }
-        return jpaRepository.findByRoomMemberIdInAndDayNumberAndDeletedAtIsNullAndIsHiddenFalse(
-                        roomMemberIds, dayNumber).stream()
+        return jpaRepository.findUploadedSlotStarts(roomMemberId, slotStarts);
+    }
+
+    @Override
+    public boolean existsActiveBySlotStart(Long roomMemberId, LocalDateTime slotStart) {
+        return jpaRepository.existsByRoomMemberIdAndSlotStartAndDeletedAtIsNull(roomMemberId, slotStart);
+    }
+
+    @Override
+    public List<VideoPost> findFeed(List<Long> roomMemberIds, List<LocalDateTime> slotStarts) {
+        if (roomMemberIds.isEmpty() || slotStarts.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findByRoomMemberIdInAndSlotStartInAndDeletedAtIsNullAndIsHiddenFalse(
+                        roomMemberIds, slotStarts).stream()
                 .map(VideoPostEntity::toDomain)
                 .toList();
     }
 
     @Override
     public List<VideoPost> findActiveByRoomMember(Long roomMemberId) {
-        return jpaRepository.findByRoomMemberIdAndDeletedAtIsNullAndIsHiddenFalseOrderByDayNumberAscSlotIndexAsc(
+        return jpaRepository.findByRoomMemberIdAndDeletedAtIsNullAndIsHiddenFalseOrderBySlotStartAsc(
                         roomMemberId).stream()
                 .map(VideoPostEntity::toDomain)
                 .toList();

@@ -83,8 +83,10 @@ class ChatPartnerApiIntegrationTest {
     }
 
     private Long saveVideo(Long roomMemberId, int day, int slot) {
+        // slotStart는 day·slot로부터 유일하게 파생(day별 그룹핑 유지, slot_start 충돌 방지)
+        LocalDateTime slotStart = LocalDateTime.of(2026, 6, 23 + day, 8 + slot, 0);
         return videoPostJpaRepository.save(VideoPostEntity.from(VideoPost.create(
-                roomMemberId, day, slot, null, "cap", "https://cdn/v-" + day + "-" + slot + ".mp4",
+                roomMemberId, day, slotStart, null, "cap", "https://cdn/v-" + day + "-" + slot + ".mp4",
                 "https://cdn/t-" + day + "-" + slot + ".jpg", LocalDateTime.of(2026, 6, 24, 10, 0)))).toDomain().id();
     }
 
@@ -132,9 +134,9 @@ class ChatPartnerApiIntegrationTest {
                 .andExpect(jsonPath("$.data.profile.fields[?(@.key == 'location')]").exists())
                 .andExpect(jsonPath("$.data.videos_by_day['1']", org.hamcrest.Matchers.hasSize(2)))
                 .andExpect(jsonPath("$.data.videos_by_day['1'][0].video_url").value("https://cdn/v-1-1.mp4"))
-                .andExpect(jsonPath("$.data.videos_by_day['1'][0].slot_index").value(1))
+                .andExpect(jsonPath("$.data.videos_by_day['1'][0].slot_start").value("2026-06-24T09:00:00"))
                 .andExpect(jsonPath("$.data.videos_by_day['2']", org.hamcrest.Matchers.hasSize(1)))
-                .andExpect(jsonPath("$.data.videos_by_day['3'][0].slot_index").value(3));
+                .andExpect(jsonPath("$.data.videos_by_day['3'][0].slot_start").value("2026-06-26T11:00:00"));
     }
 
     @Test

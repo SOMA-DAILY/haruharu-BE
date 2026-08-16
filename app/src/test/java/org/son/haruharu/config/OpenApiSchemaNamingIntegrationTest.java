@@ -29,9 +29,8 @@ class OpenApiSchemaNamingIntegrationTest {
     void givenSnakeCaseStrategy_whenApiDocs_thenRequestFieldsAreSnakeCase() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.components.schemas.VideoUploadRequest.properties.slot_index").exists())
                 .andExpect(jsonPath("$.components.schemas.VideoUploadRequest.properties.video_url").exists())
-                .andExpect(jsonPath("$.components.schemas.VideoUploadRequest.properties.slotIndex").doesNotExist());
+                .andExpect(jsonPath("$.components.schemas.VideoUploadRequest.properties.videoUrl").doesNotExist());
     }
 
     @Test

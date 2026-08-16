@@ -9,8 +9,7 @@ import org.son.haruharu.domain.video.implement.VideoPost;
  */
 public record VideoPostResponse(
         Long videoPostId,
-        int dayNumber,
-        int slotIndex,
+        LocalDateTime slotStart,
         Long missionId,
         String videoUrl,
         String thumbnailUrl,
@@ -20,7 +19,7 @@ public record VideoPostResponse(
     /** videoUrl·thumbnailUrl은 비공개 원본이 아니라 재생 가능한 presigned GET URL을 전달한다(#162). */
     public static VideoPostResponse of(VideoPost post, String videoUrl, String thumbnailUrl) {
         return new VideoPostResponse(
-                post.id(), post.dayNumber(), post.slotIndex(), post.missionId(), videoUrl,
+                post.id(), post.slotStart(), post.missionId(), videoUrl,
                 thumbnailUrl, post.caption(), post.createdAt());
     }
 }
