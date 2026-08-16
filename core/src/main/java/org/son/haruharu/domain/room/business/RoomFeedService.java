@@ -9,6 +9,7 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.implement.ReactionCount;
 import org.son.haruharu.domain.video.implement.ReactionType;
 import org.son.haruharu.domain.video.implement.SlotClock;
@@ -70,9 +71,14 @@ public class RoomFeedService {
             return new FeedResponse(List.of(), List.of()); // 시작 전·최종선택 이후 등 노출 슬롯 없음
         }
 
+        // 촬영 CTA 대상인 현재 슬롯은 ACTIVE일 때만(오늘 화면 openNow와 동일 규칙).
+        LocalDateTime currentSlotStart = room.statusAt(now) == RoomStatus.ACTIVE
+                ? SlotClock.currentSlotStart(room.startsAt(), now)
+                : null;
         Set<LocalDateTime> mySlots = Set.copyOf(videoPostReader.getUploadedSlotStarts(me.id(), window));
         List<SlotStatus> slots = window.stream()
-                .map(slotStart -> new SlotStatus(slotStart, !mySlots.contains(slotStart)))
+                .map(slotStart -> new SlotStatus(slotStart, !mySlots.contains(slotStart),
+                        slotStart.equals(currentSlotStart)))
                 .toList();
 
         if (mySlots.isEmpty()) {
