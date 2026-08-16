@@ -24,6 +24,7 @@ import org.son.haruharu.infrastructure.s3.S3StoragePort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -98,10 +99,10 @@ class RoomFeedServiceTest {
                 post(102L, 30L, 2, "other-s2"),
                 post(103L, 30L, 3, "other-s3") // 잠긴 슬롯 → 필터링, 반응 조회 대상에서도 제외
         ));
-        // 반응 집계: post 101에 LIKE 3, CURIOUS 1
+        // 반응 집계: post 101에 LIKE 3, HEART 1
         given(videoReactionReader.getReactionCounts(anyList())).willReturn(List.of(
                 new ReactionCount(101L, "LIKE", 3),
-                new ReactionCount(101L, "CURIOUS", 1)
+                new ReactionCount(101L, "HEART", 1)
         ));
         // 내 반응: post 101에 LIKE
         given(videoReactionReader.getMyReactions(anyList(), eq(1L))).willReturn(Map.of(101L, "LIKE"));
@@ -124,22 +125,20 @@ class RoomFeedServiceTest {
         // 비공개 원본이 아니라 서명된 재생 URL이 내려간다(#162)
         assertThat(itemOf(result, 101L).videoUrl()).isEqualTo("signed:other-s1");
 
-        // post 101: 집계 + 내 반응
+        // post 101: 집계(0인 타입 생략·enum 순서) + 내 반응
         FeedItem p101 = itemOf(result, 101L);
         assertThat(p101.reactionCounts()).extracting(
-                FeedResponse.ReactionCounts::like,
-                FeedResponse.ReactionCounts::curious,
-                FeedResponse.ReactionCounts::empathy)
-                .containsExactly(3L, 1L, 0L);
+                FeedResponse.ReactionTally::type,
+                FeedResponse.ReactionTally::emoji,
+                FeedResponse.ReactionTally::count)
+                .containsExactly(
+                        tuple("LIKE", "👍", 3L),
+                        tuple("HEART", "❤️", 1L));
         assertThat(p101.myReaction()).isEqualTo("LIKE");
 
-        // 반응 없는 post: 전부 0, my_reaction null
+        // 반응 없는 post: 빈 목록, my_reaction null
         FeedItem p100 = itemOf(result, 100L);
-        assertThat(p100.reactionCounts()).extracting(
-                FeedResponse.ReactionCounts::like,
-                FeedResponse.ReactionCounts::curious,
-                FeedResponse.ReactionCounts::empathy)
-                .containsExactly(0L, 0L, 0L);
+        assertThat(p100.reactionCounts()).isEmpty();
         assertThat(p100.myReaction()).isNull();
 
         // 배치: 반응 집계 1회 + 내 반응 1회 (post별 반복 없음)

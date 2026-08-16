@@ -105,10 +105,10 @@ class VideoReactionServiceTest {
         given(videoReactionReader.findMine(postId, userId))
                 .willReturn(Optional.of(new VideoReaction(reactionId, postId, userId, "LIKE", LocalDateTime.now())));
 
-        ReactionResponse result = service().toggle(userId, postId, ReactionType.CURIOUS);
+        ReactionResponse result = service().toggle(userId, postId, ReactionType.HEART);
 
         assertThat(result.reacted()).isTrue();
-        assertThat(result.reactionType()).isEqualTo(ReactionType.CURIOUS);
+        assertThat(result.reactionType()).isEqualTo(ReactionType.HEART);
         then(videoReactionWriter).should().save(any());
         then(videoReactionWriter).should(never()).delete(any());
     }
