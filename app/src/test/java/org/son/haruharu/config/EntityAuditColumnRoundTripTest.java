@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
+import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.storage.ChatMessageEntity;
 import org.son.haruharu.domain.chat.storage.ChatRoomEntity;
 import org.son.haruharu.domain.notification.implement.NotificationHistory;
@@ -50,7 +51,7 @@ class EntityAuditColumnRoundTripTest {
     @Test
     @DisplayName("ChatRoomEntity.from()은 createdAt을 복원한다")
     void givenChatRoomWithCreatedAt_whenFromThenToDomain_thenCreatedAtSurvives() {
-        ChatRoom chatRoom = new ChatRoom(1L, 10L, CREATED_AT);
+        ChatRoom chatRoom = new ChatRoom(1L, ChatRoomType.DIRECT, null, 10L, CREATED_AT);
 
         ChatRoom restored = ChatRoomEntity.from(chatRoom).toDomain();
 

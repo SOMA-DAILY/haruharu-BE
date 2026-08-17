@@ -20,19 +20,17 @@ public class DevRoomCleaner {
     }
 
     public void deleteRoomCascade(Long roomId) {
-        // 채팅(매치결과 → 채팅방 → 멤버·메시지)
-        jdbcTemplate.update("""
-                DELETE FROM chat_messages WHERE chat_room_id IN (
-                    SELECT cr.id FROM chat_rooms cr
+        // 채팅방(DIRECT=매치결과 경유, GROUP=room_id 직결) → 멤버·메시지. 두 유형을 모두 chat_rooms.id로 모아 정리한다.
+        String chatRoomIds = """
+                SELECT id FROM chat_rooms WHERE room_id = ?
+                UNION
+                SELECT cr.id FROM chat_rooms cr
                     JOIN match_results mr ON mr.id = cr.match_result_id
                     JOIN room_members m ON m.id IN (mr.member_a_id, mr.member_b_id)
-                    WHERE m.room_id = ?)""", roomId);
-        jdbcTemplate.update("""
-                DELETE FROM chat_room_members WHERE chat_room_id IN (
-                    SELECT cr.id FROM chat_rooms cr
-                    JOIN match_results mr ON mr.id = cr.match_result_id
-                    JOIN room_members m ON m.id IN (mr.member_a_id, mr.member_b_id)
-                    WHERE m.room_id = ?)""", roomId);
+                    WHERE m.room_id = ?""";
+        jdbcTemplate.update("DELETE FROM chat_messages WHERE chat_room_id IN (" + chatRoomIds + ")", roomId, roomId);
+        jdbcTemplate.update("DELETE FROM chat_room_members WHERE chat_room_id IN (" + chatRoomIds + ")", roomId, roomId);
+        jdbcTemplate.update("DELETE FROM chat_rooms WHERE room_id = ?", roomId);
         jdbcTemplate.update("""
                 DELETE FROM chat_rooms WHERE match_result_id IN (
                     SELECT mr.id FROM match_results mr
