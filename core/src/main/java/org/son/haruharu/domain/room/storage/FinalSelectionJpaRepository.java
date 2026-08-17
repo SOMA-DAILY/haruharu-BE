@@ -2,6 +2,7 @@ package org.son.haruharu.domain.room.storage;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface FinalSelectionJpaRepository extends JpaRepository<FinalSelectionEntity, Long> {
@@ -9,4 +10,6 @@ public interface FinalSelectionJpaRepository extends JpaRepository<FinalSelectio
     Optional<FinalSelectionEntity> findByRoomMemberId(Long roomMemberId);
 
     boolean existsByRoomMemberId(Long roomMemberId);
+
+    List<FinalSelectionEntity> findByRoomMemberIdIn(List<Long> roomMemberIds);
 }

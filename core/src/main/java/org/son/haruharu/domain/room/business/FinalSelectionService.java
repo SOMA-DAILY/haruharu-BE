@@ -5,8 +5,6 @@ import java.time.LocalDateTime;
 
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
 import org.son.haruharu.domain.room.business.dto.MyFinalSelectionResponse;
-import org.son.haruharu.domain.room.business.event.MemberSelectedEvent;
-import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.business.exception.AlreadySelectedException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSameGenderException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSelfException;
@@ -16,20 +14,17 @@ import org.son.haruharu.domain.room.business.exception.SelectionClosedException;
 import org.son.haruharu.domain.room.implement.FinalSelection;
 import org.son.haruharu.domain.room.implement.FinalSelectionReader;
 import org.son.haruharu.domain.room.implement.FinalSelectionWriter;
-import org.son.haruharu.domain.room.implement.MatchResult;
-import org.son.haruharu.domain.room.implement.MatchResultWriter;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Day3 최종선택. 멤버당 1회 확정(변경 불가)이며, 상대도 나를 선택했으면
- * 즉시 상호매칭(MatchResult, canonical ordering 1쌍 1행)을 성사시킨다.
+ * Day3 최종선택 제출. 멤버당 1회 확정(변경 불가). 동시공개(#343)라 제출 시점엔 매칭을 성사시키지 않고
+ * 선택만 저장하며, 상호매칭 판정은 result_at 도달 시 {@link FinalSelectionResolver}가 일괄 처리한다.
  */
 @Service
 @Transactional(readOnly = true)
@@ -39,20 +34,15 @@ public class FinalSelectionService {
     private final RoomMemberReader roomMemberReader;
     private final FinalSelectionReader finalSelectionReader;
     private final FinalSelectionWriter finalSelectionWriter;
-    private final MatchResultWriter matchResultWriter;
-    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public FinalSelectionService(RoomReader roomReader, RoomMemberReader roomMemberReader,
                                  FinalSelectionReader finalSelectionReader, FinalSelectionWriter finalSelectionWriter,
-                                 MatchResultWriter matchResultWriter, ApplicationEventPublisher eventPublisher,
                                  Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.finalSelectionReader = finalSelectionReader;
         this.finalSelectionWriter = finalSelectionWriter;
-        this.matchResultWriter = matchResultWriter;
-        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -76,7 +66,7 @@ public class FinalSelectionService {
                 throw new AlreadySelectedException(); // 1회 확정
             }
             finalSelectionWriter.save(FinalSelection.of(me.id(), null, now));
-            return new FinalSelectionResponse(null, false);
+            return FinalSelectionResponse.abstained();
         }
         if (selectedMemberId.equals(me.id())) {
             throw new CannotSelectSelfException();
@@ -93,18 +83,10 @@ public class FinalSelectionService {
             throw new AlreadySelectedException(); // 1회 확정
         }
 
+        // 동시공개(#343): 선택만 저장한다. 상호매칭 판정·MatchResult 생성·MutualMatchEvent 발행은
+        // result_at 도달 시 FinalSelectionResolver 가 방 전체를 일괄 resolve 하며 처리한다(조기 노출 방지).
         finalSelectionWriter.save(FinalSelection.of(me.id(), selectedMemberId, now));
-
-        boolean matched = isMutual(selectedMemberId, me.id());
-        if (matched) {
-            MatchResult savedMatch = matchResultWriter.save(MatchResult.of(me.id(), selectedMemberId, now));
-            eventPublisher.publishEvent(
-                    new MutualMatchEvent(roomId, savedMatch.id(), me.userId(), selected.userId()));
-        } else {
-            eventPublisher.publishEvent(new MemberSelectedEvent(roomId, selected.userId()));
-        }
-
-        return new FinalSelectionResponse(selectedMemberId, matched);
+        return FinalSelectionResponse.submitted(selectedMemberId);
     }
 
     /** 내 최종선택 제출 상태 조회(방 재진입 시 복원용). 미제출은 예외가 아니라 submitted=false로 응답한다. */
@@ -132,13 +114,5 @@ public class FinalSelectionService {
             return room.finalSelectionClosesAt();
         }
         return room.announcedAt();
-    }
-
-    /** 상대(selectedMemberId)도 나(meId)를 최종선택했는지. 상대가 기권(selectedMemberId=null)했으면 미성립. */
-    private boolean isMutual(Long selectedMemberId, Long meId) {
-        return finalSelectionReader.findByRoomMemberId(selectedMemberId)
-                .map(theirSelection -> theirSelection.selectedMemberId() != null
-                        && theirSelection.selectedMemberId().equals(meId))
-                .orElse(false);
     }
 }

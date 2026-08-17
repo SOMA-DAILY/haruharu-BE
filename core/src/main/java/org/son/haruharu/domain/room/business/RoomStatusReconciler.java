@@ -29,10 +29,13 @@ public class RoomStatusReconciler {
 
     private final RoomReader roomReader;
     private final RoomStatusTransitionService transitionService;
+    private final FinalSelectionResolver finalSelectionResolver;
 
-    public RoomStatusReconciler(RoomReader roomReader, RoomStatusTransitionService transitionService) {
+    public RoomStatusReconciler(RoomReader roomReader, RoomStatusTransitionService transitionService,
+                                FinalSelectionResolver finalSelectionResolver) {
         this.roomReader = roomReader;
         this.transitionService = transitionService;
+        this.finalSelectionResolver = finalSelectionResolver;
     }
 
     /** 전이가 일어난 방 수를 반환한다(모니터링 로그용). */
@@ -48,7 +51,21 @@ public class RoomStatusReconciler {
             } catch (RuntimeException e) {
                 log.error("방 status 전이 실패: roomId={}", room.id(), e);
             }
+            // 동시공개(#343): result_at 도달 방은 최종선택을 일괄 resolve 한다(멱등이라 매 sweep 안전).
+            resolveIfDue(room, now);
         }
         return changed;
+    }
+
+    /** result_at 이 지났으면 방 최종선택을 resolve. resolveForRoom 이 자체 트랜잭션·멱등이라 여기선 시각 게이트만 본다. */
+    private void resolveIfDue(Room room, LocalDateTime now) {
+        if (room.resultAt() == null || now.isBefore(room.resultAt())) {
+            return;
+        }
+        try {
+            finalSelectionResolver.resolveForRoom(room.id(), now);
+        } catch (RuntimeException e) {
+            log.error("최종선택 resolve 실패: roomId={}", room.id(), e);
+        }
     }
 }

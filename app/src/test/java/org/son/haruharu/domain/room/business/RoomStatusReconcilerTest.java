@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
 /**
@@ -31,16 +32,25 @@ class RoomStatusReconcilerTest {
 
     @Mock RoomReader roomReader;
     @Mock RoomStatusTransitionService transitionService;
+    @Mock FinalSelectionResolver finalSelectionResolver;
 
     RoomStatusReconciler reconciler;
 
     @BeforeEach
     void setUp() {
-        reconciler = new RoomStatusReconciler(roomReader, transitionService);
+        reconciler = new RoomStatusReconciler(roomReader, transitionService, finalSelectionResolver);
     }
 
+    /** resultAt 없는 방(구 모델/미도달) — resolve 대상 아님. */
     private Room room(Long id) {
         return new Room(id, RoomStatus.PENDING, NOW.toLocalDate(), 3, null, null);
+    }
+
+    /** resultAt 이 지난 방 — resolve 대상. */
+    private Room roomWithPastResultAt(Long id) {
+        LocalDateTime startsAt = NOW.minusDays(3);
+        return new Room(id, RoomStatus.PENDING, startsAt.toLocalDate(), 3, startsAt, null,
+                startsAt, startsAt.plusDays(2), NOW.minusHours(2), NOW.minusHours(1), NOW.plusHours(1));
     }
 
     @Test
@@ -71,5 +81,16 @@ class RoomStatusReconcilerTest {
         given(roomReader.getReconcilable()).willReturn(List.of());
 
         assertThat(reconciler.reconcile(NOW)).isZero();
+    }
+
+    @Test
+    @DisplayName("result_at이 지난 방은 최종선택 resolve를 호출하고, 미도달 방은 호출하지 않는다")
+    void givenPastResultAt_whenReconcile_thenResolvesOnlyDueRooms() {
+        given(roomReader.getReconcilable()).willReturn(List.of(room(1L), roomWithPastResultAt(2L)));
+
+        reconciler.reconcile(NOW);
+
+        then(finalSelectionResolver).should().resolveForRoom(eq(2L), eq(NOW));
+        then(finalSelectionResolver).should(never()).resolveForRoom(eq(1L), any());
     }
 }

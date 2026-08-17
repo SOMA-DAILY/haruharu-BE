@@ -34,6 +34,7 @@ import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 
 @ExtendWith(MockitoExtension.class)
 class MatchResultServiceTest {
@@ -45,6 +46,7 @@ class MatchResultServiceTest {
     @Mock UserImageReader userImageReader;
     @Mock S3StoragePort s3StoragePort;
     @Mock RoomReader roomReader;
+    @Mock FinalSelectionResolver finalSelectionResolver;
 
     MatchResultService service;
 
@@ -65,7 +67,7 @@ class MatchResultServiceTest {
 
     private MatchResultService serviceAt(Clock fixedClock) {
         return new MatchResultService(roomMemberReader, matchResultReader, chatRoomReader,
-                userProfileReader, userImageReader, s3StoragePort, roomReader, fixedClock);
+                userProfileReader, userImageReader, s3StoragePort, roomReader, finalSelectionResolver, fixedClock);
     }
 
     /** started 2026-07-10 09:00, totalDays 3 → Day3=2026-07-12, 발표 시각 2026-07-12 22:00 */
@@ -90,9 +92,10 @@ class MatchResultServiceTest {
     @DisplayName("매칭이 있으면 상대 멤버 id와 함께 chatRoomId·상대 프로필 요약(닉네임·대표사진)을 반환한다")
     void givenMatched_whenGet_thenReturnsPartnerWithChatRoomAndProfile() {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me());
-        // me가 memberB인 케이스
-        given(matchResultReader.getByMember(meId))
-                .willReturn(new MatchResult(matchResultId, partnerId, meId, LocalDateTime.now()));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom())); // result_at 게이트 통과(구모델 resultAt=null)
+        // me가 memberB인 케이스. 이미 매칭돼 있으면 lazy resolve 없이 바로 반환한다.
+        given(matchResultReader.findByMember(meId))
+                .willReturn(Optional.of(new MatchResult(matchResultId, partnerId, meId, LocalDateTime.now())));
         given(roomMemberReader.getById(partnerId)).willReturn(partner());
         given(chatRoomReader.findChatRoomIdByMatchResultId(matchResultId)).willReturn(Optional.of(77L));
         given(userProfileReader.findByUserId(partnerUserId)).willReturn(Optional.of(profileOf("하늘")));
@@ -112,8 +115,9 @@ class MatchResultServiceTest {
     @DisplayName("상대 대표사진·채팅방이 아직 없으면 해당 필드는 null로 반환한다")
     void givenNoImageOrChatRoom_whenGet_thenNullFields() {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me());
-        given(matchResultReader.getByMember(meId))
-                .willReturn(new MatchResult(matchResultId, meId, partnerId, LocalDateTime.now()));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom()));
+        given(matchResultReader.findByMember(meId))
+                .willReturn(Optional.of(new MatchResult(matchResultId, meId, partnerId, LocalDateTime.now())));
         given(roomMemberReader.getById(partnerId)).willReturn(partner());
         given(chatRoomReader.findChatRoomIdByMatchResultId(matchResultId)).willReturn(Optional.empty());
         given(userProfileReader.findByUserId(partnerUserId)).willReturn(Optional.of(profileOf("하늘")));
@@ -127,11 +131,31 @@ class MatchResultServiceTest {
     }
 
     @Test
-    @DisplayName("매칭이 없으면 MatchResultNotFoundException(404)이 발생한다")
-    void givenNoMatch_whenGet_thenThrows() {
+    @DisplayName("발표 후 lazy resolve 해도 매칭이 없으면(짝사랑) MatchResultNotFoundException(404)이 발생한다")
+    void givenNoMatchAfterResolve_whenGet_thenThrows() {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me());
-        given(matchResultReader.getByMember(meId)).willThrow(new MatchResultNotFoundException());
+        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom()));
+        // resolve 전·후 모두 매칭 없음 → 즉시 resolve 시도 후에도 없으면 404
+        given(matchResultReader.findByMember(meId)).willReturn(Optional.empty());
 
+        assertThatThrownBy(() -> service.getMatchResult(roomId, userId))
+                .isInstanceOf(MatchResultNotFoundException.class);
+        then(finalSelectionResolver).should().resolveForRoom(roomId, LocalDateTime.of(2026, 7, 12, 23, 0));
+    }
+
+    @Test
+    @DisplayName("result_at(발표) 이전이면 결과를 숨겨 MatchResultNotFoundException(404)을 던진다(동시공개)")
+    void givenBeforeResultAt_whenGet_thenHiddenWith404() {
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me());
+        // result_at 이 고정 시각(07-12 23:00)보다 미래인 새 모델 방
+        LocalDateTime starts = LocalDateTime.of(2026, 7, 10, 19, 0);
+        Room notYet = new Room(roomId, RoomStatus.ACTIVE, starts.toLocalDate(), 3, starts, null,
+                starts, starts.plusDays(2), starts.plusDays(2).plusHours(1),
+                LocalDateTime.of(2026, 7, 13, 20, 0), starts.plusDays(3));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(notYet));
+
+        // matchResultReader.getByMember 를 스텁하지 않았으므로(strict stubs), 발표 전 게이트가 조회 전에
+        // 예외를 던져야 통과한다 — 게이트가 매칭 조회를 앞선다는 것을 이 자체로 검증한다.
         assertThatThrownBy(() -> service.getMatchResult(roomId, userId))
                 .isInstanceOf(MatchResultNotFoundException.class);
     }
