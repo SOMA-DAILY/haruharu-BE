@@ -11,6 +11,10 @@ import org.son.haruharu.domain.room.application.dto.JoinRoomRequest;
 import org.son.haruharu.domain.room.business.FinalSelectionService;
 import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.MemberProfileService;
+import java.util.List;
+
+import org.son.haruharu.domain.mission.business.RoomMissionService;
+import org.son.haruharu.domain.mission.business.dto.RoomMissionResponse;
 import org.son.haruharu.domain.room.business.RoomFeedService;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomMembersService;
@@ -47,12 +51,14 @@ public class RoomController {
     private final FinalSelectionService finalSelectionService;
     private final MatchResultService matchResultService;
     private final RoomFeedService roomFeedService;
+    private final RoomMissionService roomMissionService;
 
     public RoomController(RoomService roomService, RoomInviteService roomInviteService,
                           RoomTodayService roomTodayService,
                           RoomMembersService roomMembersService, MemberProfileService memberProfileService,
                           FinalSelectionService finalSelectionService,
-                          MatchResultService matchResultService, RoomFeedService roomFeedService) {
+                          MatchResultService matchResultService, RoomFeedService roomFeedService,
+                          RoomMissionService roomMissionService) {
         this.roomService = roomService;
         this.roomInviteService = roomInviteService;
         this.roomTodayService = roomTodayService;
@@ -61,6 +67,7 @@ public class RoomController {
         this.finalSelectionService = finalSelectionService;
         this.matchResultService = matchResultService;
         this.roomFeedService = roomFeedService;
+        this.roomMissionService = roomMissionService;
     }
 
     @Operation(summary = "초대코드로 방 입장",
@@ -178,5 +185,17 @@ public class RoomController {
                                              Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(roomFeedService.getFeed(roomId, userId));
+    }
+
+    @Operation(summary = "현재 열린 미션 카드 조회",
+            description = "지금 열려 있는(opens_at ≤ now < closes_at) 방 미션 카드 목록을 sequence 오름차순으로 반환한다. "
+                    + "미션은 방 시작 시 자동 배정되며, 아직 열리지 않았거나 마감된 미션은 제외된다. 영상 업로드와 독립 카드다. "
+                    + "참여자가 아니면 403(ROOM_403_NOT_MEMBER).")
+    @GetMapping("/{roomId}/missions")
+    public ApiResponse<List<RoomMissionResponse>> getMissions(
+            @Parameter(description = "소개팅방 id", example = "1") @PathVariable Long roomId,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(roomMissionService.getOpenMissions(roomId, userId));
     }
 }

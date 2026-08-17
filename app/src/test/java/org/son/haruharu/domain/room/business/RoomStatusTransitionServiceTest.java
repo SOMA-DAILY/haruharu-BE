@@ -72,8 +72,8 @@ class RoomStatusTransitionServiceTest {
     }
 
     @Test
-    @DisplayName("PENDING → SELECTING 직행(배치 장기 중단)에도 startedAt이 앵커된다")
-    void givenPendingSkippingActive_whenTransition_thenStartedAtAnchored() {
+    @DisplayName("PENDING → SELECTING 직행(배치 장기 중단)에도 startedAt 앵커·ROOM_STARTED·최종선택 오픈 이벤트가 모두 발행된다")
+    void givenPendingSkippingActive_whenTransition_thenStartedAtAnchoredAndEvents() {
         service.transition(roomWith(RoomStatus.PENDING), OPENS_AT.plusMinutes(1));
 
         ArgumentCaptor<Room> captor = ArgumentCaptor.forClass(Room.class);
@@ -81,17 +81,21 @@ class RoomStatusTransitionServiceTest {
         assertThat(captor.getValue().status()).isEqualTo(RoomStatus.SELECTING);
         // startedAt 이 비면 MatchResultService 가 "미시작"으로 보고 결과 발표를 숨긴다.
         assertThat(captor.getValue().startedAt()).isEqualTo(STARTS_AT);
+        // ACTIVE 를 건너뛰어도 "방 시작"은 한 번 발행돼야 GROUP 채팅·미션이 생성된다.
+        then(eventPublisher).should().publishEvent(new RoomStartedEvent(1L));
+        then(eventPublisher).should().publishEvent(new FinalSelectionOpenedEvent(1L));
     }
 
     @Test
-    @DisplayName("PENDING → ENDED 직행에도 startedAt이 앵커된다")
-    void givenPendingSkippingToEnded_whenTransition_thenStartedAtAnchored() {
+    @DisplayName("PENDING → ENDED 직행에도 startedAt 앵커·ROOM_STARTED가 발행된다(채팅·미션 누락 방지)")
+    void givenPendingSkippingToEnded_whenTransition_thenStartedAtAnchoredAndRoomStarted() {
         service.transition(roomWith(RoomStatus.PENDING), ENDS_AT.plusHours(1));
 
         ArgumentCaptor<Room> captor = ArgumentCaptor.forClass(Room.class);
         then(roomWriter).should().save(captor.capture());
         assertThat(captor.getValue().status()).isEqualTo(RoomStatus.ENDED);
         assertThat(captor.getValue().startedAt()).isEqualTo(STARTS_AT);
+        then(eventPublisher).should().publishEvent(new RoomStartedEvent(1L));
     }
 
     @Test

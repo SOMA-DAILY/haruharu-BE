@@ -1,0 +1,34 @@
+package org.son.haruharu.domain.mission.storage;
+
+import lombok.RequiredArgsConstructor;
+import org.son.haruharu.domain.mission.implement.RoomMission;
+import org.son.haruharu.domain.mission.implement.RoomMissionRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+@RequiredArgsConstructor
+public class RoomMissionRepositoryImpl implements RoomMissionRepository {
+
+    private final RoomMissionJpaRepository jpaRepository;
+
+    @Override
+    public List<RoomMission> saveAll(List<RoomMission> roomMissions) {
+        return jpaRepository.saveAll(roomMissions.stream().map(RoomMissionEntity::from).toList()).stream()
+                .map(RoomMissionEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public boolean existsByRoomId(Long roomId) {
+        return jpaRepository.existsByRoomId(roomId);
+    }
+
+    @Override
+    public List<RoomMission> findByRoomId(Long roomId) {
+        return jpaRepository.findByRoomIdOrderBySequenceAsc(roomId).stream()
+                .map(RoomMissionEntity::toDomain)
+                .toList();
+    }
+}
