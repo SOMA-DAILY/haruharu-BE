@@ -153,11 +153,13 @@ class RoomServiceTest {
     }
 
     @Test
-    @DisplayName("종료되지 않은 방에 속한 유저가 조회 시 방 정보와 멤버 수를 반환한다")
+    @DisplayName("종료되지 않은 방에 속한 유저가 조회 시 방 정보와 멤버 수를 반환한다(구 모델 방은 starts_at·ends_at을 scheduledDate로 보정)")
     void givenActiveRoom_whenGetMyRoom_thenReturnsRoom() {
         Long userId = 1L;
         Long roomId = 10L;
-        Room room = new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, LocalDateTime.now(), null);
+        // 구 모델 방(6-arg): starts_at·ends_at 미설정 → scheduledDate 기반 09:00 보정으로 non-null 노출
+        LocalDate scheduled = LocalDate.of(2026, 6, 25);
+        Room room = new Room(roomId, RoomStatus.ACTIVE, scheduled, 3, LocalDateTime.now(), null);
 
         given(roomMemberReader.findByUserId(userId))
             .willReturn(List.of(new RoomMember(51L, roomId, userId, "MALE", null, LocalDateTime.now())));
@@ -172,6 +174,32 @@ class RoomServiceTest {
         assertThat(result.roomId()).isEqualTo(roomId);
         assertThat(result.status()).isEqualTo("ACTIVE");
         assertThat(result.memberCount()).isEqualTo(2);
+        // 구 모델 fallback: scheduledDate 09:00 시작, +3일 09:00 종료(홈 카운트다운 회귀 방지)
+        assertThat(result.startsAt()).isEqualTo(scheduled.atTime(9, 0));
+        assertThat(result.endsAt()).isEqualTo(scheduled.plusDays(3).atTime(9, 0));
+    }
+
+    @Test
+    @DisplayName("새 모델 방은 어드민이 입력한 starts_at·ends_at을 그대로 노출한다")
+    void givenScheduledRoom_whenGetMyRoom_thenExposesAdminTimes() {
+        Long userId = 1L;
+        Long roomId = 12L;
+        LocalDateTime startsAt = LocalDateTime.of(2026, 6, 26, 19, 0);
+        LocalDateTime endsAt = LocalDateTime.of(2026, 6, 29, 9, 0);
+        Room room = new Room(roomId, RoomStatus.ACTIVE, startsAt.toLocalDate(), 3, startsAt, null,
+            startsAt, startsAt.plusDays(2), startsAt.plusDays(2).plusHours(2),
+            startsAt.plusDays(2).plusHours(3), endsAt);
+
+        given(roomMemberReader.findByUserId(userId))
+            .willReturn(List.of(new RoomMember(60L, roomId, userId, "MALE", null, LocalDateTime.now())));
+        given(roomReader.findCurrent(List.of(roomId), LocalDateTime.of(2026, 6, 26, 12, 0))).willReturn(Optional.of(room));
+        given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
+            new RoomMember(60L, roomId, userId, "MALE", null, LocalDateTime.now())));
+
+        RoomResponse result = roomService.getMyRoom(userId);
+
+        assertThat(result.startsAt()).isEqualTo(startsAt);
+        assertThat(result.endsAt()).isEqualTo(endsAt);
     }
 
     @Test

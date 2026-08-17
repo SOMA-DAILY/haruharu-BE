@@ -22,8 +22,9 @@ public class HomeController {
     }
 
     @Operation(summary = "메인 홈 조회",
-            description = "메인 홈 집계를 반환한다. 포인트 잔액, 매칭 대기 상태, 진행 중인 소개팅방, "
-                    + "다음 신청 마감·매칭 확정 시각 등 홈 카운트다운 기준값을 포함한다.")
+            description = "메인 홈 집계를 반환한다. 참여 중인 소개팅방(active_room: room_id·status·current_day·starts_at·ends_at, "
+                    + "없으면 null → 초대코드 입력 유도)과 발표(result_at) 이후 매칭 결과(pending_result, 없으면 null)를 포함한다. "
+                    + "now는 클라 카운트다운의 기기 시계 오차 보정 기준.")
     @GetMapping
     public ApiResponse<HomeResponse> getHome(Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
