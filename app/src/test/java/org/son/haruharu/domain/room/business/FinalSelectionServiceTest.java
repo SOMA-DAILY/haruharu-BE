@@ -24,18 +24,13 @@ import org.son.haruharu.domain.room.business.exception.SelectionClosedException;
 import org.son.haruharu.domain.room.implement.FinalSelection;
 import org.son.haruharu.domain.room.implement.FinalSelectionReader;
 import org.son.haruharu.domain.room.implement.FinalSelectionWriter;
-import org.son.haruharu.domain.room.implement.MatchResult;
-import org.son.haruharu.domain.room.implement.MatchResultWriter;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
-import org.son.haruharu.domain.room.business.event.MemberSelectedEvent;
-import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
-import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -51,8 +46,6 @@ class FinalSelectionServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock FinalSelectionReader finalSelectionReader;
     @Mock FinalSelectionWriter finalSelectionWriter;
-    @Mock MatchResultWriter matchResultWriter;
-    @Mock ApplicationEventPublisher eventPublisher;
 
     FinalSelectionService service;
 
@@ -66,7 +59,7 @@ class FinalSelectionServiceTest {
     @BeforeEach
     void setUp() {
         service = new FinalSelectionService(roomReader, roomMemberReader, finalSelectionReader,
-                finalSelectionWriter, matchResultWriter, eventPublisher, clock);
+                finalSelectionWriter, clock);
     }
 
     private RoomMember member(Long id, Long memberUserId, Long memberRoomId) {
@@ -95,51 +88,17 @@ class FinalSelectionServiceTest {
     }
 
     @Test
-    @DisplayName("Day3에 상대가 아직 나를 선택하지 않았으면 저장만 하고 matched=false")
-    void givenDay3AndNoMutual_whenSelect_thenSavedNotMatched() {
+    @DisplayName("Day3에 최종선택을 제출하면 선택이 저장되고 submitted=true로 응답한다(동시공개라 매칭 판정 없음)")
+    void givenDay3_whenSelect_thenSavedAndSubmitted() {
         stubMeAndRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
-        given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
 
         FinalSelectionResponse result = service.select(roomId, selectedId, userId);
 
-        assertThat(result.matched()).isFalse();
+        assertThat(result.submitted()).isTrue();
+        assertThat(result.selectedMemberId()).isEqualTo(selectedId);
         then(finalSelectionWriter).should().save(any(FinalSelection.class));
-        then(matchResultWriter).should(never()).save(any());
-
-        ArgumentCaptor<MemberSelectedEvent> captor = ArgumentCaptor.forClass(MemberSelectedEvent.class);
-        then(eventPublisher).should().publishEvent(captor.capture());
-        assertThat(captor.getValue().roomId()).isEqualTo(roomId);
-        assertThat(captor.getValue().selectedUserId()).isEqualTo(2L); // 선택받은 멤버의 userId
-    }
-
-    @Test
-    @DisplayName("상대도 나를 선택했으면 즉시 매칭되고 MatchResult는 canonical 정렬(a<b)로 저장된다")
-    void givenMutual_whenSelect_thenMatchedAndCanonicalSaved() {
-        stubMeAndRoom();
-        given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
-        given(finalSelectionReader.hasSelected(meId)).willReturn(false);
-        given(finalSelectionReader.findByRoomMemberId(selectedId))
-                .willReturn(Optional.of(new FinalSelection(40L, selectedId, meId, LocalDateTime.now())));
-        given(matchResultWriter.save(any()))
-                .willReturn(new MatchResult(500L, meId, selectedId, LocalDateTime.now()));
-
-        FinalSelectionResponse result = service.select(roomId, selectedId, userId);
-
-        assertThat(result.matched()).isTrue();
-        ArgumentCaptor<MatchResult> captor = ArgumentCaptor.forClass(MatchResult.class);
-        then(matchResultWriter).should().save(captor.capture());
-        MatchResult saved = captor.getValue();
-        assertThat(saved.memberAId().compareTo(saved.memberBId())).isLessThan(0);
-
-        ArgumentCaptor<MutualMatchEvent> eventCaptor = ArgumentCaptor.forClass(MutualMatchEvent.class);
-        then(eventPublisher).should().publishEvent(eventCaptor.capture());
-        MutualMatchEvent event = eventCaptor.getValue();
-        assertThat(event.roomId()).isEqualTo(roomId);
-        assertThat(event.matchResultId()).isEqualTo(500L); // 저장된 MatchResult id가 이벤트에 실림(#61 방 자동생성용)
-        assertThat(event.userIdA()).isEqualTo(userId);   // 나
-        assertThat(event.userIdB()).isEqualTo(2L);        // 상대
     }
 
     @Test
@@ -157,7 +116,7 @@ class FinalSelectionServiceTest {
 
     private FinalSelectionService serviceWith(Clock fixedClock) {
         return new FinalSelectionService(roomReader, roomMemberReader, finalSelectionReader,
-                finalSelectionWriter, matchResultWriter, eventPublisher, fixedClock);
+                finalSelectionWriter, fixedClock);
     }
 
     @Test
@@ -171,11 +130,11 @@ class FinalSelectionServiceTest {
         given(roomReader.findById(roomId)).willReturn(Optional.of(legacy));
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
-        given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
 
         FinalSelectionResponse result = service.select(roomId, selectedId, userId);
 
-        assertThat(result.matched()).isFalse();
+        assertThat(result.submitted()).isTrue();
+        assertThat(result.selectedMemberId()).isEqualTo(selectedId);
         then(finalSelectionWriter).should().save(any(FinalSelection.class));
     }
 
@@ -200,11 +159,11 @@ class FinalSelectionServiceTest {
         stubMeAndRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
-        given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
 
         FinalSelectionResponse result = atOpen.select(roomId, selectedId, userId);
 
-        assertThat(result.matched()).isFalse();
+        assertThat(result.submitted()).isTrue();
+        assertThat(result.selectedMemberId()).isEqualTo(selectedId);
         then(finalSelectionWriter).should().save(any(FinalSelection.class));
     }
 
@@ -230,11 +189,11 @@ class FinalSelectionServiceTest {
         stubMeAndRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
-        given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
 
         FinalSelectionResponse result = beforeClose.select(roomId, selectedId, userId);
 
-        assertThat(result.matched()).isFalse();
+        assertThat(result.submitted()).isTrue();
+        assertThat(result.selectedMemberId()).isEqualTo(selectedId);
         then(finalSelectionWriter).should().save(any(FinalSelection.class));
     }
 
@@ -295,21 +254,19 @@ class FinalSelectionServiceTest {
     }
 
     @Test
-    @DisplayName("기권(selectedMemberId=null)하면 아무도 선택하지 않고 저장하며 matched=false·매칭·이벤트 없음")
-    void givenAbstain_whenSelect_thenSavedWithNullAndNotMatched() {
+    @DisplayName("기권(selectedMemberId=null)하면 selected_member_id=null로 저장하고 submitted=true로 응답한다")
+    void givenAbstain_whenSelect_thenSavedWithNullAndSubmitted() {
         stubMeAndRoom();
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
 
         FinalSelectionResponse result = service.select(roomId, null, userId);
 
         assertThat(result.selectedMemberId()).isNull();
-        assertThat(result.matched()).isFalse();
+        assertThat(result.submitted()).isTrue();
 
         ArgumentCaptor<FinalSelection> captor = ArgumentCaptor.forClass(FinalSelection.class);
         then(finalSelectionWriter).should().save(captor.capture());
         assertThat(captor.getValue().selectedMemberId()).isNull();
-        then(matchResultWriter).should(never()).save(any());
-        then(eventPublisher).should(never()).publishEvent(any());
     }
 
     @Test
@@ -321,22 +278,6 @@ class FinalSelectionServiceTest {
         assertThatThrownBy(() -> service.select(roomId, null, userId))
                 .isInstanceOf(AlreadySelectedException.class);
         then(finalSelectionWriter).should(never()).save(any());
-    }
-
-    @Test
-    @DisplayName("상대가 기권(selectedMemberId=null)했으면 내가 상대를 선택해도 NPE 없이 matched=false")
-    void givenTargetAbstained_whenSelect_thenNotMatchedNoNpe() {
-        stubMeAndRoom();
-        given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
-        given(finalSelectionReader.hasSelected(meId)).willReturn(false);
-        // 상대는 기권(selectedMemberId=null)한 최종선택 행을 가짐
-        given(finalSelectionReader.findByRoomMemberId(selectedId))
-                .willReturn(Optional.of(new FinalSelection(40L, selectedId, null, LocalDateTime.now())));
-
-        FinalSelectionResponse result = service.select(roomId, selectedId, userId);
-
-        assertThat(result.matched()).isFalse();
-        then(matchResultWriter).should(never()).save(any());
     }
 
     @Test
@@ -392,7 +333,6 @@ class FinalSelectionServiceTest {
         assertThatThrownBy(() -> service.select(roomId, selectedId, userId))
                 .isInstanceOf(CannotSelectSameGenderException.class);
         then(finalSelectionWriter).should(never()).save(any());
-        then(matchResultWriter).should(never()).save(any());
     }
 
     @Test
@@ -402,11 +342,11 @@ class FinalSelectionServiceTest {
         given(roomMemberReader.getById(selectedId))
                 .willReturn(new RoomMember(selectedId, roomId, 2L, null, null, LocalDateTime.now()));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
-        given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
 
         FinalSelectionResponse result = service.select(roomId, selectedId, userId);
 
-        assertThat(result.matched()).isFalse();
+        assertThat(result.submitted()).isTrue();
+        assertThat(result.selectedMemberId()).isEqualTo(selectedId);
         then(finalSelectionWriter).should().save(any(FinalSelection.class));
     }
 
@@ -446,7 +386,6 @@ class FinalSelectionServiceTest {
         stubMeAndScheduledRoom();
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
-        given(finalSelectionReader.findByRoomMemberId(selectedId)).willReturn(Optional.empty());
 
         svc.select(roomId, selectedId, userId);
 

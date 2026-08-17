@@ -25,7 +25,7 @@ public class FinalSelectionEventListener {
                 NotificationType.MUTUAL_MATCH, Map.of("roomId", event.roomId().toString()));
     }
 
-    // SELECTED_BY_SOMEONE(누가 널 선택함) 실시간 푸시는 제거(#310) — 새 모델은 result_at 동시공개라
-    // 조기 노출을 막는다. MemberSelectedEvent 발행부는 최종선택 재설계(#311)에서 함께 정리.
+    // SELECTED_BY_SOMEONE(누가 널 선택함) 실시간 푸시는 제거(#310) — 동시공개(#343)라 result_at 전엔 조기 노출을
+    // 막는다. MemberSelectedEvent 는 발행부·구독부가 모두 사라져 클래스도 제거했다(#343).
     // enum 상수 SELECTED_BY_SOMEONE 은 dormant 로 보존.
 }

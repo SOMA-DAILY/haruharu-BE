@@ -4,6 +4,7 @@ import org.son.haruharu.domain.room.implement.FinalSelection;
 import org.son.haruharu.domain.room.implement.FinalSelectionRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -23,6 +24,16 @@ public class FinalSelectionRepositoryImpl implements FinalSelectionRepository {
     @Override
     public boolean existsByRoomMemberId(Long roomMemberId) {
         return finalSelectionJpaRepository.existsByRoomMemberId(roomMemberId);
+    }
+
+    @Override
+    public List<FinalSelection> findByRoomMemberIdIn(List<Long> roomMemberIds) {
+        if (roomMemberIds.isEmpty()) {
+            return List.of();
+        }
+        return finalSelectionJpaRepository.findByRoomMemberIdIn(roomMemberIds).stream()
+                .map(FinalSelectionEntity::toDomain)
+                .toList();
     }
 
     @Override

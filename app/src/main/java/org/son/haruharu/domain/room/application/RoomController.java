@@ -136,8 +136,9 @@ public class RoomController {
     }
 
     @Operation(summary = "Day3 최종선택",
-            description = "마지막 날(Day3) 마지막 슬롯 종료 후 최종선택을 확정한다. 멤버당 1회만 가능(변경 불가)이며, "
-                    + "상대도 나를 선택했으면 즉시 상호매칭이 성사된다. 요청 body의 selected_member_id가 null이면 기권 처리된다. "
+            description = "마지막 날(Day3) 최종선택을 확정한다. 멤버당 1회만 가능(변경 불가)이며, 동시공개라 제출 시점엔 "
+                    + "매칭 성사 여부를 알 수 없다(응답 submitted=true만 반환) — 결과는 result_at 이후 매칭 결과 조회로 공개된다. "
+                    + "요청 body의 selected_member_id가 null이면 기권 처리된다. "
                     + "최종선택 시간 전이면 409(ROOM_409_NOT_FINAL_DAY), 자기 자신 선택은 400(ROOM_400_CANNOT_SELECT_SELF), "
                     + "동성 멤버 선택은 400(ROOM_400_CANNOT_SELECT_SAME_GENDER), "
                     + "이미 선택했으면 409(ROOM_409_ALREADY_SELECTED), 대상이 같은 방 멤버가 아니면 404(ROOM_MEMBER_404_NOT_FOUND), "

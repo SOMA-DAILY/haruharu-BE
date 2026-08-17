@@ -19,7 +19,9 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
+import org.son.haruharu.domain.room.storage.exception.MatchResultNotFoundException;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,12 +38,13 @@ public class MatchResultService {
     private final UserImageReader userImageReader;
     private final S3StoragePort s3StoragePort;
     private final RoomReader roomReader;
+    private final FinalSelectionResolver finalSelectionResolver;
     private final Clock clock;
 
     public MatchResultService(RoomMemberReader roomMemberReader, MatchResultReader matchResultReader,
                               ChatRoomReader chatRoomReader, UserProfileReader userProfileReader,
                               UserImageReader userImageReader, S3StoragePort s3StoragePort,
-                              RoomReader roomReader, Clock clock) {
+                              RoomReader roomReader, FinalSelectionResolver finalSelectionResolver, Clock clock) {
         this.roomMemberReader = roomMemberReader;
         this.matchResultReader = matchResultReader;
         this.chatRoomReader = chatRoomReader;
@@ -49,12 +52,19 @@ public class MatchResultService {
         this.userImageReader = userImageReader;
         this.s3StoragePort = s3StoragePort;
         this.roomReader = roomReader;
+        this.finalSelectionResolver = finalSelectionResolver;
         this.clock = clock;
     }
 
     public MatchResultResponse getMatchResult(Long roomId, Long userId) {
         RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
-        MatchResult match = matchResultReader.getByMember(me.id());
+        // 동시공개(#343): result_at 이전엔 결과를 공개하지 않는다(발표 전 조기 노출 방지).
+        Room room = roomReader.findById(roomId).orElseThrow(RoomNotFoundException::new);
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (room.resultAt() != null && now.isBefore(room.resultAt())) {
+            throw new MatchResultNotFoundException();
+        }
+        MatchResult match = resolveThenGet(roomId, me.id(), now);
 
         Long partnerMemberId = match.memberAId().equals(me.id()) ? match.memberBId() : match.memberAId();
         RoomMember partner = roomMemberReader.getById(partnerMemberId);
@@ -89,13 +99,37 @@ public class MatchResultService {
         if (room == null || room.startedAt() == null) {
             return Optional.empty();
         }
+        LocalDateTime now = LocalDateTime.now(clock);
         LocalDateTime announcedAt = room.announcedAt();
-        if (LocalDateTime.now(clock).isBefore(announcedAt)) {
+        if (now.isBefore(announcedAt)) {
             return Optional.empty();
         }
-        return Optional.of(matchResultReader.findByMember(me.id())
-                .map(match -> matchedResult(room.id(), me, match, announcedAt))
-                .orElseGet(() -> PendingMatchResultResponse.failed(room.id(), announcedAt)));
+        // 발표 시각 도달: sweep 을 기다리지 않고 결과를 확정한다(멱등 resolve). MATCHED/FAILED 판정이
+        // 배치 지연으로 잘못 나오지 않게 조회 직전에 보장한다.
+        MatchResult match = resolveThenFind(room.id(), me.id(), now).orElse(null);
+        if (match == null) {
+            return Optional.of(PendingMatchResultResponse.failed(room.id(), announcedAt));
+        }
+        return Optional.of(matchedResult(room.id(), me, match, announcedAt));
+    }
+
+    /**
+     * 매칭이 아직 없으면 최종선택을 즉시 resolve 한 뒤 다시 조회한다. reconciler sweep(최대 5분 지연)이나
+     * 구 모델 방(sweep 대상 아님)에서도 발표 시각 조회에 결과가 보장되게 하는 lazy 경로다.
+     * 이미 매칭된 유저는 resolve 를 건너뛴다(빠른 경로). resolveForRoom 은 자체 트랜잭션·멱등이다.
+     */
+    private MatchResult resolveThenGet(Long roomId, Long memberId, LocalDateTime now) {
+        return resolveThenFind(roomId, memberId, now)
+                .orElseThrow(MatchResultNotFoundException::new);
+    }
+
+    private Optional<MatchResult> resolveThenFind(Long roomId, Long memberId, LocalDateTime now) {
+        Optional<MatchResult> found = matchResultReader.findByMember(memberId);
+        if (found.isPresent()) {
+            return found;
+        }
+        finalSelectionResolver.resolveForRoom(roomId, now);
+        return matchResultReader.findByMember(memberId);
     }
 
     private PendingMatchResultResponse matchedResult(Long roomId, RoomMember me, MatchResult match,
