@@ -16,6 +16,8 @@ public record RoomResponse(
         @JsonProperty("total_days") int totalDays,
         @JsonProperty("current_day") int currentDay,
         @JsonProperty("started_at") LocalDateTime startedAt,
+        @JsonProperty("starts_at") LocalDateTime startsAt,
+        @JsonProperty("ends_at") LocalDateTime endsAt,
         @JsonProperty("member_count") int memberCount
 ) {
     /**
@@ -25,12 +27,26 @@ public record RoomResponse(
     public static RoomResponse from(Room room, List<RoomMember> members, int currentDay, LocalDateTime now) {
         return new RoomResponse(
             room.id(), room.statusAt(now).name(), room.scheduledDate(),
-            room.totalDays(), currentDay, startedAtOf(room), members.size()
+            room.totalDays(), currentDay, startedAtOf(room), startsAtOf(room), endsAtOf(room), members.size()
         );
     }
 
     /** 새 모델 방은 startedAt 앵커를 쓰지 않으므로(전이는 시각 기준) starts_at 을 시작 시각으로 노출한다. */
     private static LocalDateTime startedAtOf(Room room) {
         return room.startsAt() != null ? room.startsAt() : room.startedAt();
+    }
+
+    /** 방 시작 시각. 구 모델 방(starts_at 미설정)은 scheduledDate 의 하루 시작(09:00)으로 보정한다. */
+    private static LocalDateTime startsAtOf(Room room) {
+        return room.startsAt() != null
+                ? room.startsAt()
+                : room.scheduledDate().atTime(Room.DAY_START_HOUR, 0);
+    }
+
+    /** 방 종료 시각. 구 모델 방은 마지막 날(scheduledDate + totalDays)의 하루 시작으로 보정한다. */
+    private static LocalDateTime endsAtOf(Room room) {
+        return room.endsAt() != null
+                ? room.endsAt()
+                : room.scheduledDate().plusDays(room.totalDays()).atTime(Room.DAY_START_HOUR, 0);
     }
 }

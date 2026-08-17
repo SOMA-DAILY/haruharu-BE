@@ -12,12 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.son.haruharu.domain.coin.business.CoinService;
-import org.son.haruharu.domain.coin.business.dto.WalletResponse;
 import org.son.haruharu.domain.home.business.dto.HomeResponse;
-import org.son.haruharu.domain.matching.business.MatchingService;
-import org.son.haruharu.domain.matching.business.dto.LastApplyResultResponse;
-import org.son.haruharu.domain.matching.business.dto.QueueStatusResponse;
 import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.dto.PendingMatchResultResponse;
@@ -31,166 +26,88 @@ import static org.mockito.BDDMockito.given;
 class HomeServiceTest {
 
     @Mock RoomService roomService;
-    @Mock MatchingService matchingService;
-    @Mock CoinService coinService;
     @Mock MatchResultService matchResultService;
 
     private final Long userId = 1L;
 
     private HomeService serviceAt(String instant) {
         Clock clock = Clock.fixed(Instant.parse(instant), ZoneId.of("Asia/Seoul"));
-        return new HomeService(roomService, matchingService, coinService, matchResultService, clock);
+        return new HomeService(roomService, matchResultService, clock);
     }
 
-    private void stubDefaults(long balance, QueueStatusResponse queue, RoomResponse room) {
-        given(coinService.getWallet(userId))
-                .willReturn(new WalletResponse(balance, balance, 0, LocalDateTime.now()));
-        given(matchingService.getQueueStatus(userId)).willReturn(queue);
-        given(matchingService.getLastApplyResult(userId)).willReturn(Optional.empty());
+    private void stub(RoomResponse room, PendingMatchResultResponse pending) {
         given(roomService.findMyRoom(userId)).willReturn(Optional.ofNullable(room));
-        given(matchResultService.findPendingResult(userId)).willReturn(Optional.empty());
+        given(matchResultService.findPendingResult(userId)).willReturn(Optional.ofNullable(pending));
     }
 
-    @Test
-    @DisplayName("큐도 방도 없으면 status NONE, 잔액과 오늘 22:00 확정 시각이 반환된다")
-    void givenNothing_whenGetHome_thenNoneWithTodayConfirmAt() {
-        // 2026-07-05 10:00 KST
-        HomeService service = serviceAt("2026-07-05T01:00:00Z");
-        stubDefaults(12L, QueueStatusResponse.none(), null);
-
-        HomeResponse result = service.getHome(userId);
-
-        assertThat(result.pointBalance()).isEqualTo(12L);
-        assertThat(result.matching().status()).isEqualTo("NONE");
-        assertThat(result.matching().applyDeadlineAt())
-                .isEqualTo(LocalDateTime.of(2026, 7, 5, 21, 0));
-        assertThat(result.matching().confirmAt())
-                .isEqualTo(LocalDateTime.of(2026, 7, 5, 22, 0));
-        assertThat(result.activeRoom()).isNull();
-    }
-
-    @Test
-    @DisplayName("22:00 이후에는 다음 날 22:00이 확정 시각으로 반환된다")
-    void givenAfterConfirmHour_whenGetHome_thenTomorrowConfirmAt() {
-        // 2026-07-05 23:00 KST
-        HomeService service = serviceAt("2026-07-05T14:00:00Z");
-        stubDefaults(0L, QueueStatusResponse.none(), null);
-
-        HomeResponse result = service.getHome(userId);
-
-        // 23:00은 21:00 마감을 지났으므로 신청 마감은 다음날 21:00
-        assertThat(result.matching().applyDeadlineAt())
-                .isEqualTo(LocalDateTime.of(2026, 7, 6, 21, 0));
-        assertThat(result.matching().confirmAt())
-                .isEqualTo(LocalDateTime.of(2026, 7, 6, 22, 0));
-    }
-
-    @Test
-    @DisplayName("큐 대기 중이면 QUEUED 상태와 queued_at이 그대로 노출된다")
-    void givenQueued_whenGetHome_thenQueuedStatus() {
-        HomeService service = serviceAt("2026-07-05T01:00:00Z");
-        LocalDateTime queuedAt = LocalDateTime.of(2026, 7, 5, 9, 30);
-        stubDefaults(7L, new QueueStatusResponse("QUEUED", queuedAt), null);
-
-        HomeResponse result = service.getHome(userId);
-
-        assertThat(result.matching().status()).isEqualTo("QUEUED");
-        assertThat(result.matching().queuedAt()).isEqualTo(queuedAt);
-        assertThat(result.activeRoom()).isNull();
-    }
-
-    @Test
-    @DisplayName("진행 중(ACTIVE) 방이 있으면 방 요약과 시작·종료 시각(09:00 경계)이 반환된다")
-    void givenActiveRoom_whenGetHome_thenRoomSummaryWithBoundaries() {
-        HomeService service = serviceAt("2026-07-05T01:00:00Z");
+    private RoomResponse activeRoom() {
         LocalDate scheduled = LocalDate.of(2026, 7, 4);
-        RoomResponse room = new RoomResponse(10L, "ACTIVE", scheduled, 3, 2,
-                scheduled.atTime(9, 0), 6);
-        stubDefaults(3L, QueueStatusResponse.none(), room);
+        return new RoomResponse(10L, "ACTIVE", scheduled, 3, 2,
+                scheduled.atTime(19, 0), scheduled.atTime(19, 0), scheduled.plusDays(3).atTime(9, 0), 6);
+    }
+
+    @Test
+    @DisplayName("참여 중인 방이 없으면 activeRoom은 null이다(초대코드 입력 유도)")
+    void givenNoRoom_whenGetHome_thenActiveRoomNull() {
+        HomeService service = serviceAt("2026-07-05T01:00:00Z");
+        stub(null, null);
+
+        HomeResponse result = service.getHome(userId);
+
+        assertThat(result.activeRoom()).isNull();
+        assertThat(result.pendingResult()).isNull();
+    }
+
+    @Test
+    @DisplayName("진행 중(ACTIVE) 방이 있으면 방 요약과 starts_at·ends_at이 반환된다")
+    void givenActiveRoom_whenGetHome_thenRoomSummary() {
+        HomeService service = serviceAt("2026-07-05T01:00:00Z");
+        stub(activeRoom(), null);
 
         HomeResponse result = service.getHome(userId);
 
         assertThat(result.activeRoom().roomId()).isEqualTo(10L);
         assertThat(result.activeRoom().status()).isEqualTo("ACTIVE");
         assertThat(result.activeRoom().currentDay()).isEqualTo(2);
-        assertThat(result.activeRoom().startsAt()).isEqualTo(LocalDateTime.of(2026, 7, 4, 9, 0));
+        assertThat(result.activeRoom().startsAt()).isEqualTo(LocalDateTime.of(2026, 7, 4, 19, 0));
         assertThat(result.activeRoom().endsAt()).isEqualTo(LocalDateTime.of(2026, 7, 7, 9, 0));
     }
 
     @Test
-    @DisplayName("확정 후 시작 전(PENDING) 방은 currentDay 0과 시작 예정 시각으로 반환된다")
-    void givenPendingRoom_whenGetHome_thenPendingSummary() {
-        HomeService service = serviceAt("2026-07-05T14:00:00Z");
-        LocalDate scheduled = LocalDate.of(2026, 7, 6);
-        RoomResponse room = new RoomResponse(11L, "PENDING", scheduled, 3, 0, null, 6);
-        stubDefaults(0L, QueueStatusResponse.none(), room);
+    @DisplayName("발표 후 매칭 결과가 있으면 pendingResult로 그대로 내려간다")
+    void givenPendingResult_whenGetHome_thenExposed() {
+        HomeService service = serviceAt("2026-07-05T01:00:00Z");
+        PendingMatchResultResponse pending = new PendingMatchResultResponse(
+                12L, Outcome.MATCHED, 34L, "하루", LocalDateTime.of(2026, 7, 4, 22, 0));
+        stub(null, pending);
 
         HomeResponse result = service.getHome(userId);
 
-        assertThat(result.activeRoom().status()).isEqualTo("PENDING");
-        assertThat(result.activeRoom().currentDay()).isZero();
-        assertThat(result.activeRoom().startsAt()).isEqualTo(LocalDateTime.of(2026, 7, 6, 9, 0));
+        assertThat(result.pendingResult()).isEqualTo(pending);
     }
 
     @Test
-    @DisplayName("응답 now는 주입된 Clock 기준 시각이다(dev 가상 시계 반영, 카운트다운 기준점)")
-    void givenFixedClock_whenGetHome_thenNowFromClock() {
-        // 2026-07-05 10:00 KST
+    @DisplayName("방과 발표 결과가 함께 있으면 둘 다 노출된다")
+    void givenRoomAndResult_whenGetHome_thenBoth() {
         HomeService service = serviceAt("2026-07-05T01:00:00Z");
-        stubDefaults(0L, QueueStatusResponse.none(), null);
+        PendingMatchResultResponse pending = new PendingMatchResultResponse(
+                12L, Outcome.FAILED, null, null, LocalDateTime.of(2026, 7, 4, 22, 0));
+        stub(activeRoom(), pending);
+
+        HomeResponse result = service.getHome(userId);
+
+        assertThat(result.activeRoom().roomId()).isEqualTo(10L);
+        assertThat(result.pendingResult().outcome()).isEqualTo(Outcome.FAILED);
+    }
+
+    @Test
+    @DisplayName("응답 now는 주입된 Clock 기준 시각이다(dev 가상 시계 반영)")
+    void givenFixedClock_whenGetHome_thenNowFromClock() {
+        HomeService service = serviceAt("2026-07-05T01:00:00Z"); // 10:00 KST
+        stub(null, null);
 
         HomeResponse result = service.getHome(userId);
 
         assertThat(result.now()).isEqualTo(LocalDateTime.of(2026, 7, 5, 10, 0));
-    }
-
-    @Test
-    @DisplayName("확인 대기 중인 매칭 결과가 있으면 matching.pending_result로 그대로 내려간다")
-    void givenPendingResult_whenGetHome_thenExposedInMatching() {
-        HomeService service = serviceAt("2026-07-05T01:00:00Z");
-        stubDefaults(0L, QueueStatusResponse.none(), null);
-        PendingMatchResultResponse pending = new PendingMatchResultResponse(
-                12L, Outcome.MATCHED, 34L, "하루", LocalDateTime.of(2026, 7, 4, 22, 0));
-        given(matchResultService.findPendingResult(userId)).willReturn(Optional.of(pending));
-
-        HomeResponse result = service.getHome(userId);
-
-        assertThat(result.matching().pendingResult()).isEqualTo(pending);
-    }
-
-    @Test
-    @DisplayName("확인 대기 결과가 없으면 pending_result는 null이다")
-    void givenNoPendingResult_whenGetHome_thenNullPendingResult() {
-        HomeService service = serviceAt("2026-07-05T01:00:00Z");
-        stubDefaults(0L, QueueStatusResponse.none(), null);
-
-        HomeResponse result = service.getHome(userId);
-
-        assertThat(result.matching().pendingResult()).isNull();
-    }
-
-    @Test
-    @DisplayName("직전 신청이 불발(EXPIRED)이면 matching.last_apply_result로 그대로 내려간다")
-    void givenExpiredLastApply_whenGetHome_thenExposedInMatching() {
-        HomeService service = serviceAt("2026-07-15T01:00:00Z");
-        stubDefaults(5L, QueueStatusResponse.none(), null);
-        LastApplyResultResponse lastApply = new LastApplyResultResponse(
-                "EXPIRED", LocalDateTime.of(2026, 7, 14, 22, 0), 5L);
-        given(matchingService.getLastApplyResult(userId)).willReturn(Optional.of(lastApply));
-
-        HomeResponse result = service.getHome(userId);
-
-        assertThat(result.matching().lastApplyResult()).isEqualTo(lastApply);
-    }
-
-    @Test
-    @DisplayName("직전 불발 결과가 없으면 last_apply_result는 null이다")
-    void givenNoLastApply_whenGetHome_thenNullLastApplyResult() {
-        HomeService service = serviceAt("2026-07-05T01:00:00Z");
-        stubDefaults(0L, QueueStatusResponse.none(), null);
-
-        HomeResponse result = service.getHome(userId);
-
-        assertThat(result.matching().lastApplyResult()).isNull();
     }
 }

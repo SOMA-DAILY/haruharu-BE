@@ -7,11 +7,11 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.son.haruharu.domain.matching.implement.MatchingQueue;
-import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
-import org.son.haruharu.domain.matching.storage.MatchingQueueEntity;
-import org.son.haruharu.domain.matching.storage.MatchingQueueJpaRepository;
+import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomMember;
+import org.son.haruharu.domain.room.storage.RoomEntity;
 import org.son.haruharu.domain.room.storage.RoomJpaRepository;
+import org.son.haruharu.domain.room.storage.RoomMemberEntity;
 import org.son.haruharu.domain.room.storage.RoomMemberJpaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,7 +19,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -35,17 +34,13 @@ class HomeApiIntegrationTest {
     @Autowired MockMvc mockMvc;
     @Autowired RoomMemberJpaRepository roomMemberJpaRepository;
     @Autowired RoomJpaRepository roomJpaRepository;
-    @Autowired MatchingQueueJpaRepository matchingQueueJpaRepository;
-    @Autowired TransactionTemplate transactionTemplate;
 
     // "user 900은 어느 방에도 없다"는 전제를 스스로 보장한다(#166) — 같은 900을 쓰는
-    // RoomToday/FinalSelection 통합 테스트가 실행 후 ACTIVE room을 남겨 active_room 단언이 깨졌다.
-    // 큐도 매 테스트 초기화해 직전 신청 결과(last_apply_result) 단언이 다른 테스트에 오염되지 않게 한다.
+    // RoomToday/FinalSelection 통합 테스트가 실행 후 ACTIVE room을 남겨 active_room 단언이 깨질 수 있다.
     @BeforeEach
     void clean() {
         roomMemberJpaRepository.deleteAll();
         roomJpaRepository.deleteAll();
-        matchingQueueJpaRepository.deleteAll();
     }
 
     private static UsernamePasswordAuthenticationToken auth(Long userId) {
@@ -53,41 +48,34 @@ class HomeApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("홈 조회 응답이 point_balance·matching·active_room(snake_case)으로 직렬화된다")
-    void givenNewUser_whenGetHome_thenReturnsAggregatedSnakeCase() throws Exception {
+    @DisplayName("참여 방 없는 유저의 홈은 active_room·pending_result가 null로 직렬화된다(초대코드 입력 유도)")
+    void givenNoRoom_whenGetHome_thenNullFields() throws Exception {
         mockMvc.perform(get("/api/v1/home").with(authentication(auth(900L))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
-                .andExpect(jsonPath("$.data.point_balance").value(0))
-                .andExpect(jsonPath("$.data.matching.status").value("NONE"))
-                .andExpect(jsonPath("$.data.matching.confirm_at").exists())
-                .andExpect(jsonPath("$.data.matching.queued_at").value(nullValue()))
-                .andExpect(jsonPath("$.data.matching.last_apply_result").value(nullValue()))
-                .andExpect(jsonPath("$.data.active_room").value(nullValue()));
+                .andExpect(jsonPath("$.data.now").exists())
+                .andExpect(jsonPath("$.data.active_room").value(nullValue()))
+                .andExpect(jsonPath("$.data.pending_result").value(nullValue()));
     }
 
     @Test
-    @DisplayName("직전 신청이 EXPIRED면 matching.last_apply_result에 outcome·expired_at·refund_amount가 내려간다")
-    void givenExpiredQueue_whenGetHome_thenLastApplyResultExposed() throws Exception {
-        // given: user 900이 신청(QUEUED) 후 22:00 배치에서 미매칭되어 EXPIRED로 전이·환불된 상태를
-        //        프로덕션과 동일 경로(transitionStatus로 status=EXPIRED, updated_at=만료시각)로 재현한다.
-        LocalDateTime queuedAt = LocalDateTime.of(2026, 7, 14, 12, 0);
-        LocalDateTime expiredAt = LocalDateTime.of(2026, 7, 14, 22, 0);
-        MatchingQueueEntity saved = matchingQueueJpaRepository.save(MatchingQueueEntity.from(
-                MatchingQueue.join(900L, "MALE", LocalDate.of(1997, 5, 20), queuedAt)));
-        Long queueId = saved.toDomain().id();
-        // @Modifying 전이는 트랜잭션이 필요하다(프로덕션은 @Transactional 서비스가 감쌈).
-        Integer updated = transactionTemplate.execute(s -> matchingQueueJpaRepository.transitionStatus(
-                queueId, MatchingQueueStatus.QUEUED, MatchingQueueStatus.EXPIRED, expiredAt));
-        org.assertj.core.api.Assertions.assertThat(updated).isEqualTo(1);
+    @DisplayName("참여 중인 방이 있으면 active_room에 room_id·status·starts_at·ends_at(snake_case)이 내려간다")
+    void givenActiveRoom_whenGetHome_thenActiveRoomExposed() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().minusHours(2);
+        Room room = new Room(null, org.son.haruharu.domain.room.implement.RoomStatus.ACTIVE,
+                startsAt.toLocalDate(), 3, startsAt, null,
+                startsAt, startsAt.plusDays(2), startsAt.plusDays(2).plusHours(1),
+                startsAt.plusDays(2).plusHours(2), startsAt.plusDays(3));
+        Long roomId = roomJpaRepository.save(RoomEntity.from(room)).toDomain().id();
+        roomMemberJpaRepository.save(RoomMemberEntity.from(
+                RoomMember.of(roomId, 900L, "MALE", LocalDate.of(2000, 1, 1), startsAt)));
 
-        // when & then
         mockMvc.perform(get("/api/v1/home").with(authentication(auth(900L))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.matching.status").value("NONE"))
-                .andExpect(jsonPath("$.data.matching.last_apply_result.outcome").value("EXPIRED"))
-                .andExpect(jsonPath("$.data.matching.last_apply_result.expired_at").value("2026-07-14T22:00:00"))
-                .andExpect(jsonPath("$.data.matching.last_apply_result.refund_amount").value(20));
+                .andExpect(jsonPath("$.data.active_room.room_id").value(roomId.intValue()))
+                .andExpect(jsonPath("$.data.active_room.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.active_room.starts_at").exists())
+                .andExpect(jsonPath("$.data.active_room.ends_at").exists());
     }
 
     @Test
