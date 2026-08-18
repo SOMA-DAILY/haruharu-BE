@@ -22,7 +22,9 @@ public class MissionEntity extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 500)
+    // unique: 어드민 카탈로그가 문구 중복을 막는 방어망(TOCTOU 방지). 서비스의 existsByDescription
+    // check-then-act과 별개로 DB가 최종 방어 — 동시 생성 레이스 시 AdminExceptionHandler가 409로 매핑.
+    @Column(nullable = false, unique = true, length = 500)
     private String description;
 
     @Column(nullable = false)
