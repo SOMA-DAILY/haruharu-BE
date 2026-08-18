@@ -75,4 +75,35 @@ public final class SlotClock {
         }
         return base.stream().filter(slotStart -> slotStart.isBefore(uploadableUntil)).toList();
     }
+
+    /**
+     * {@code before} 슬롯보다 과거의 슬롯 시작 시각들을 최대 {@code size}개(오름차순). 과거 회고 페이지네이션(#350)용.
+     * <ul>
+     *   <li>{@code startsAt} 미만은 제외 — 방 시작 이전 슬롯은 없다.</li>
+     *   <li>{@code uploadableUntil} 이상은 제외 — 업로드 불가였던 구간(방이 ACTIVE 아님).</li>
+     *   <li>{@code before}가 startsAt 이하이거나 size≤0이면 빈 목록.</li>
+     * </ul>
+     * before는 그리드에 정렬돼 있지 않아도 된다(before "미만"의 슬롯을 그리드에서 고른다).
+     * 반환 목록의 첫 원소(가장 과거)가 다음 페이지 커서 후보다 — 그게 startsAt이면 더 과거가 없다.
+     */
+    public static List<LocalDateTime> pastSlotStarts(LocalDateTime startsAt, LocalDateTime before,
+                                                     int size, LocalDateTime uploadableUntil) {
+        // 페이지 시작점을 상한(업로드 불가 구간) 이전으로 당긴다. 안 그러면 before가 상한보다 뒤일 때
+        // 첫 페이지가 통째로 잘려 "더 과거 없음"으로 조기 종료된다(상한 이전 유효 슬롯에 도달 못 함, #350 리뷰).
+        LocalDateTime effectiveBefore = (uploadableUntil != null && uploadableUntil.isBefore(before))
+                ? uploadableUntil : before;
+        if (size <= 0 || !effectiveBefore.isAfter(startsAt)) {
+            return List.of();
+        }
+        // effectiveBefore 바로 아래 슬롯 인덱스 = ceil((effectiveBefore-startsAt)/1h) - 1. 그리드 위면 (m-1), 아니면 floor.
+        long minutes = Duration.between(startsAt, effectiveBefore).toMinutes();
+        long justBelow = (minutes + 59) / 60 - 1;
+        long low = Math.max(0, justBelow - size + 1);
+        List<LocalDateTime> result = new ArrayList<>();
+        for (long i = low; i <= justBelow; i++) {
+            // effectiveBefore ≤ uploadableUntil 라 모든 candidate 는 항상 상한 이내다(별도 필터 불필요).
+            result.add(startsAt.plusHours(i));
+        }
+        return result;
+    }
 }

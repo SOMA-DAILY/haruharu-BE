@@ -83,4 +83,54 @@ class SlotClockTest {
         assertThat(SlotClock.visibleSlotStarts(startsAt, at(21, 30), null))
                 .containsExactly(at(19, 0), at(20, 0), at(21, 0));
     }
+
+    // ── pastSlotStarts: 과거 회고 페이지네이션(#350) ──────────────────────────
+
+    @Test
+    @DisplayName("before 이전 슬롯을 최대 size개 오름차순으로, starts_at 미만은 제외한다")
+    void givenBefore_whenPastSlotStarts_thenOlderSlotsAscending() {
+        LocalDateTime startsAt = at(10, 0);
+        // before=20:00, size=3 → 바로 아래 19:00부터 3개(17·18·19)
+        assertThat(SlotClock.pastSlotStarts(startsAt, at(20, 0), 3, null))
+                .containsExactly(at(17, 0), at(18, 0), at(19, 0));
+    }
+
+    @Test
+    @DisplayName("과거로 방 시작에 닿으면 starts_at 이전은 잘려 개수가 줄어든다")
+    void givenReachStart_whenPastSlotStarts_thenClampedAtStart() {
+        LocalDateTime startsAt = at(18, 0);
+        // before=20:00, size=6 → [18,19]만(17:00 이하는 starts_at 이전)
+        assertThat(SlotClock.pastSlotStarts(startsAt, at(20, 0), 6, null))
+                .containsExactly(at(18, 0), at(19, 0));
+    }
+
+    @Test
+    @DisplayName("before가 정시가 아니어도 그리드 위 '그보다 과거' 슬롯을 고른다")
+    void givenOffGridBefore_whenPastSlotStarts_thenGridAligned() {
+        LocalDateTime startsAt = at(10, 0);
+        // before=20:30 → 20:00은 before 미만이라 포함, 위에서부터 18·19·20
+        assertThat(SlotClock.pastSlotStarts(startsAt, at(20, 30), 3, null))
+                .containsExactly(at(18, 0), at(19, 0), at(20, 0));
+    }
+
+    @Test
+    @DisplayName("before가 starts_at 이하거나 size≤0이면 빈 목록이다")
+    void givenBoundary_whenPastSlotStarts_thenEmpty() {
+        LocalDateTime startsAt = at(19, 0);
+        assertThat(SlotClock.pastSlotStarts(startsAt, at(19, 0), 6, null)).isEmpty(); // before==startsAt
+        assertThat(SlotClock.pastSlotStarts(startsAt, at(18, 0), 6, null)).isEmpty(); // before<startsAt
+        assertThat(SlotClock.pastSlotStarts(startsAt, at(22, 0), 0, null)).isEmpty(); // size 0
+    }
+
+    @Test
+    @DisplayName("before가 상한(최종선택 오픈)보다 뒤면 상한 직전부터 size개를 꽉 채워 시작한다(빈 페이지 조기 종료 방지)")
+    void givenBeforeBeyondCutoff_whenPastSlotStarts_thenStartsFromCutoff() {
+        LocalDateTime startsAt = at(10, 0);
+        // before=23:00, opensAt=17:00, size=3 → 상한 직전(16:00)부터 [14,15,16]. clamp 없으면 [20,21,22]가 전부 잘려 빈 목록
+        assertThat(SlotClock.pastSlotStarts(startsAt, at(23, 0), 3, at(17, 0)))
+                .containsExactly(at(14, 0), at(15, 0), at(16, 0));
+        // size=6이면 상한 직전 6개를 채운다 → [11..16] (clamp 전엔 filter로 3개만 남던 자리)
+        assertThat(SlotClock.pastSlotStarts(startsAt, at(20, 0), 6, at(17, 0)))
+                .containsExactly(at(11, 0), at(12, 0), at(13, 0), at(14, 0), at(15, 0), at(16, 0));
+    }
 }
