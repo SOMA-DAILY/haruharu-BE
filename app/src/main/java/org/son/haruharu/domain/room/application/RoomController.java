@@ -11,6 +11,7 @@ import org.son.haruharu.domain.room.application.dto.JoinRoomRequest;
 import org.son.haruharu.domain.room.business.FinalSelectionService;
 import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.MemberProfileService;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.son.haruharu.domain.mission.business.RoomMissionService;
@@ -29,6 +30,7 @@ import org.son.haruharu.domain.room.business.dto.MembersResponse;
 import org.son.haruharu.domain.room.business.dto.MyFinalSelectionResponse;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -183,9 +185,18 @@ public class RoomController {
                     + "내 반응(my_reaction, 없으면 null)을 함께 담는다. 참여자가 아니면 403(ROOM_403_NOT_MEMBER).")
     @GetMapping("/{roomId}/feed")
     public ApiResponse<FeedResponse> getFeed(@Parameter(description = "소개팅방 id", example = "1") @PathVariable Long roomId,
+                                             @Parameter(description = "과거 회고 커서(#350). 이 slot_start 이전 슬롯을 조회한다. "
+                                                     + "생략 시 현재 노출 창(최근 3시간). 응답의 next_cursor 를 넣어 이어 조회한다.",
+                                                     example = "2026-06-26T20:00:00")
+                                             @RequestParam(required = false)
+                                             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime before,
+                                             @Parameter(description = "과거 페이지 슬롯 수(기본 6, 최대 24). before 지정 시에만 적용.", example = "6")
+                                             @RequestParam(defaultValue = "6") int size,
                                              Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
-        return ApiResponse.ok(roomFeedService.getFeed(roomId, userId));
+        return ApiResponse.ok(before == null
+                ? roomFeedService.getFeed(roomId, userId)
+                : roomFeedService.getFeedBefore(roomId, userId, before, size));
     }
 
     @Operation(summary = "현재 열린 미션 카드 조회",
