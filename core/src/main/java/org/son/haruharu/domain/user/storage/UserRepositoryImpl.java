@@ -22,6 +22,12 @@ public class UserRepositoryImpl implements UserRepository {
     }
 
     @Override
+    public Optional<User> findByIdForUpdate(Long id) {
+        return userJpaRepository.findByIdForUpdate(id)
+                .map(UserEntity::toDomain);
+    }
+
+    @Override
     public User save(User user) {
         return userJpaRepository.save(UserEntity.from(user)).toDomain();
     }

@@ -27,12 +27,14 @@ import org.son.haruharu.domain.room.implement.RoomInviteWriter;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
+import org.son.haruharu.domain.user.implement.UserReader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -51,6 +53,7 @@ class RoomInviteServiceTest {
     @Mock RoomService roomService;
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock InviteCodeGenerator inviteCodeGenerator;
+    @Mock UserReader userReader;
 
     RoomInviteService service;
 
@@ -60,7 +63,7 @@ class RoomInviteServiceTest {
     @BeforeEach
     void setUp() {
         service = new RoomInviteService(roomInviteReader, roomInviteWriter, roomReader,
-                roomService, roomMemberWriter, inviteCodeGenerator, clock);
+                roomService, roomMemberWriter, inviteCodeGenerator, userReader, clock);
     }
 
     private RoomInvite activeInvite() {
@@ -130,6 +133,22 @@ class RoomInviteServiceTest {
         assertThatThrownBy(() -> service.join(USER_ID, CODE))
                 .isInstanceOf(AlreadyJoinedRoomException.class);
         verify(roomMemberWriter, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("입장 시 hasCurrentRoom 검사 전에 유저 행을 먼저 잠근다(#321 동시성 직렬화)")
+    void givenValidCode_whenJoin_thenLocksUserBeforeCurrentRoomCheck() {
+        given(roomInviteReader.findByCodeForUpdate(CODE)).willReturn(Optional.of(activeInvite()));
+        given(roomReader.findById(ROOM_ID)).willReturn(Optional.of(roomWithStatus(RoomStatus.PENDING)));
+        given(roomService.hasCurrentRoom(USER_ID)).willReturn(false);
+
+        service.join(USER_ID, CODE);
+
+        // 락이 검사보다 먼저여야 뒤이은 hasCurrentRoom read 가 락 뒤에 온다.
+        var order = inOrder(userReader, roomService, roomMemberWriter);
+        order.verify(userReader).lockById(USER_ID);
+        order.verify(roomService).hasCurrentRoom(USER_ID);
+        order.verify(roomMemberWriter).save(any());
     }
 
     @Test

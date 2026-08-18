@@ -12,6 +12,8 @@ import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.son.haruharu.domain.room.storage.RoomInviteRepositoryImpl;
 import org.son.haruharu.domain.room.storage.RoomMemberRepositoryImpl;
 import org.son.haruharu.domain.room.storage.RoomRepositoryImpl;
+import org.son.haruharu.domain.user.implement.UserReader;
+import org.son.haruharu.domain.user.storage.UserRepositoryImpl;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
@@ -38,10 +40,14 @@ import org.springframework.context.annotation.Import;
         RoomInviteReader.class,
         RoomInviteWriter.class,
         InviteCodeGenerator.class,
+        // RoomInviteService.join 이 유저 행 비관적 락(#321)을 걸어 UserReader 에 의존한다. admin 은 join 을
+        // 호출하지 않지만 생성자 주입이라 빈이 있어야 컨텍스트가 뜬다 → UserReader·포트 구현체를 함께 배선.
+        UserReader.class,
         // storage — 위 협력자가 의존하는 포트 구현체(JpaRepository 는 AdminApplication 의 EnableJpaRepositories).
         RoomRepositoryImpl.class,
         RoomMemberRepositoryImpl.class,
-        RoomInviteRepositoryImpl.class
+        RoomInviteRepositoryImpl.class,
+        UserRepositoryImpl.class
 })
 public class AdminRoomDomainConfig {
 }
