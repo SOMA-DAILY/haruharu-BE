@@ -34,7 +34,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.payment.storage",
         "org.son.haruharu.domain.mission.storage"
 })
-@EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.room.storage"})
+@EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.room.storage",
+        // #321: RoomInviteService.join 의 유저 행 비관적 락(UserRepositoryImpl→UserJpaRepository) 배선.
+        "org.son.haruharu.domain.user.storage"})
 @Import({JpaConfig.class, ClockConfig.class, TimeZoneConfig.class})
 public class AdminApplication {
 

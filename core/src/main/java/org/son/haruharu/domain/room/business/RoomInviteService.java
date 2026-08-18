@@ -19,6 +19,7 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
+import org.son.haruharu.domain.user.implement.UserReader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,18 +33,20 @@ public class RoomInviteService {
     private final RoomService roomService;
     private final RoomMemberWriter roomMemberWriter;
     private final InviteCodeGenerator inviteCodeGenerator;
+    private final UserReader userReader;
     private final Clock clock;
 
     public RoomInviteService(RoomInviteReader roomInviteReader, RoomInviteWriter roomInviteWriter,
                              RoomReader roomReader, RoomService roomService,
                              RoomMemberWriter roomMemberWriter, InviteCodeGenerator inviteCodeGenerator,
-                             Clock clock) {
+                             UserReader userReader, Clock clock) {
         this.roomInviteReader = roomInviteReader;
         this.roomInviteWriter = roomInviteWriter;
         this.roomReader = roomReader;
         this.roomService = roomService;
         this.roomMemberWriter = roomMemberWriter;
         this.inviteCodeGenerator = inviteCodeGenerator;
+        this.userReader = userReader;
         this.clock = clock;
     }
 
@@ -66,6 +69,10 @@ public class RoomInviteService {
         if (status == RoomStatus.ENDED || status == RoomStatus.CANCELLED) {
             throw new InviteCodeNotUsableException(); // 종료·취소된 방은 입장 불가
         }
+        // 유저 행 비관적 락(#321): 서로 다른 코드로 동시에 들어오면 코드 행 락(위)이 안 겹쳐
+        // hasCurrentRoom 검사~save 사이가 경쟁한다. 유저 행을 잠가 같은 유저의 입장을 직렬화한다
+        // (다른 유저·다른 방은 각자 다른 행이라 막지 않는다). 검사 직전에 잠가야 뒤이은 read가 락 뒤에 온다.
+        userReader.lockById(userId);
         // 유저는 동시에 활성 방 1개만 — 이미 참여 중인(종료 안 된) 방이 있으면 거부(대상 방 포함).
         if (roomService.hasCurrentRoom(userId)) {
             throw new AlreadyJoinedRoomException();
