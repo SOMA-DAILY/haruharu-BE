@@ -97,7 +97,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String method = request.getMethod();
         // 로그인/갱신/로그아웃은 자체적으로 상태를 관리하므로(AuthService) 여기서 강제하지 않는다.
-        if (path.startsWith("/api/v1/auth/")) {
+        // 데모 로그인(#352)도 익명 진입점이라 강제 대상이 아니다 — 클라가 남은 non-active 토큰을 붙여 보내도
+        // 데모 로그인 자체는 막지 않는다(그 토큰은 사용하지 않고 새 데모 세션을 발급한다).
+        if (path.startsWith("/api/v1/auth/") || path.startsWith("/api/v1/demo/")) {
             return true;
         }
         UserStatus status;
