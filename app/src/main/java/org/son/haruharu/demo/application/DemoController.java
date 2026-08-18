@@ -31,13 +31,25 @@ public class DemoController {
     }
 
     @Operation(summary = "데모 로그인",
-            description = "어드민이 설정한 접근 코드가 맞으면 고정 데모 계정의 JWT(access/refresh)를 발급한다. "
-                    + "계정이 없으면 그 자리에서 생성(lazy·멱등). 코드가 없거나 틀리면 401. OAuth 불필요.")
+            description = "어드민이 설정한 접근 코드가 맞으면 고정 데모 계정의 JWT(access/refresh)를 발급하고, "
+                    + "그 순간 신선한 데모 방(유령 5명·GROUP 채팅·미션)을 세운다. 코드가 없거나 틀리면 401. OAuth 불필요.")
     @PostMapping("/login")
     public ApiResponse<AuthTokenResponse> login(@RequestBody @Valid DemoLoginRequest request,
                                                 HttpServletRequest servletRequest) {
         // 남용 모니터링용 — 인증 없는 공개 엔드포인트라 호출 흔적(IP·시각)을 남긴다(성공/실패 무관, 코드값은 로깅하지 않음).
         log.info("demo login attempt ip={}", servletRequest.getRemoteAddr());
         return ApiResponse.ok(demoAccountService.login(request.code()));
+    }
+
+    @Operation(summary = "데모 데이터 리셋",
+            description = "접근 코드가 맞으면 데모 방과 그 안의 모든 데이터(영상·반응·채팅·미션)를 물리 삭제한다. "
+                    + "다음 로그인이 새로 세운다. 코드가 없거나 틀리면 401.")
+    @PostMapping("/reset")
+    public ApiResponse<Void> reset(@RequestBody @Valid DemoLoginRequest request,
+                                   HttpServletRequest servletRequest) {
+        // 파괴적(물리삭제) 공개 엔드포인트 — 로그인과 대칭으로 호출 흔적(IP·시각)을 남긴다(코드값 미로깅).
+        log.info("demo reset attempt ip={}", servletRequest.getRemoteAddr());
+        demoAccountService.reset(request.code());
+        return ApiResponse.ok(null);
     }
 }

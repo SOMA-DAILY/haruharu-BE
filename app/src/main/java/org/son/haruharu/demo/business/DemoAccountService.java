@@ -39,6 +39,7 @@ public class DemoAccountService {
     private final DemoAccessCodeReader demoAccessCodeReader;
     private final UserCredentialReader userCredentialReader;
     private final DemoUserProvisioner demoUserProvisioner;
+    private final DemoRoomService demoRoomService;
     private final RefreshTokenWriter refreshTokenWriter;
     private final JwtProvider jwtProvider;
     private final String demoProviderId;
@@ -46,23 +47,33 @@ public class DemoAccountService {
     public DemoAccountService(DemoAccessCodeReader demoAccessCodeReader,
                               UserCredentialReader userCredentialReader,
                               DemoUserProvisioner demoUserProvisioner,
+                              DemoRoomService demoRoomService,
                               RefreshTokenWriter refreshTokenWriter,
                               JwtProvider jwtProvider,
                               @Value("${demo.provider-id:haruharu-demo}") String demoProviderId) {
         this.demoAccessCodeReader = demoAccessCodeReader;
         this.userCredentialReader = userCredentialReader;
         this.demoUserProvisioner = demoUserProvisioner;
+        this.demoRoomService = demoRoomService;
         this.refreshTokenWriter = refreshTokenWriter;
         this.jwtProvider = jwtProvider;
         this.demoProviderId = demoProviderId;
     }
 
-    /** 접근 코드를 검증하고, 통과 시 데모 계정을(없으면 생성해) 확보한 뒤 JWT 를 발급한다. */
+    /** 접근 코드를 검증하고, 통과 시 데모 계정을(없으면 생성해) 확보하고 신선한 방을 세운 뒤 JWT 를 발급한다. */
     @Transactional
     public AuthTokenResponse login(String submittedCode) {
         verifyAccessCode(submittedCode);
         Long userId = ensureDemoUserId();
+        demoRoomService.rebuildIfStale(userId); // 리뷰어가 접속하는 그 순간 활동 중인 방을 보게 한다
         return issueTokens(userId);
+    }
+
+    /** 접근 코드를 검증하고, 데모 계정이 있으면 그 방을 리셋한다(수동). 계정이 없으면 지울 게 없으므로 no-op. */
+    @Transactional
+    public void reset(String submittedCode) {
+        verifyAccessCode(submittedCode);
+        findDemoCredential().ifPresent(credential -> demoRoomService.reset(credential.userId()));
     }
 
     /**
