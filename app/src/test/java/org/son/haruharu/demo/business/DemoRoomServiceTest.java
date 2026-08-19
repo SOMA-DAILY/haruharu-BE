@@ -47,6 +47,7 @@ class DemoRoomServiceTest {
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock DemoGhostProvisioner demoGhostProvisioner;
     @Mock DemoRoomCleaner demoRoomCleaner;
+    @Mock DemoVideoSeeder demoVideoSeeder;
     @Mock ApplicationEventPublisher eventPublisher;
 
     DemoRoomService service;
@@ -57,7 +58,7 @@ class DemoRoomServiceTest {
     @BeforeEach
     void setUp() {
         service = new DemoRoomService(userReader, roomReader, roomMemberReader, roomWriter, roomMemberWriter,
-                demoGhostProvisioner, demoRoomCleaner, eventPublisher, clock);
+                demoGhostProvisioner, demoRoomCleaner, demoVideoSeeder, eventPublisher, clock);
     }
 
     private RoomMember memberInRoom(Long roomId) {
@@ -72,6 +73,7 @@ class DemoRoomServiceTest {
 
     private void stubBuild() {
         given(roomWriter.save(any())).willReturn(anyRoom());
+        given(roomMemberWriter.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0)); // 저장된 멤버를 시더로 전달
         given(demoGhostProvisioner.ensureGhosts()).willReturn(List.of(
                 new DemoGhost(2L, "MALE"), new DemoGhost(3L, "MALE"),
                 new DemoGhost(4L, "FEMALE"), new DemoGhost(5L, "FEMALE"), new DemoGhost(6L, "FEMALE")));
@@ -88,6 +90,7 @@ class DemoRoomServiceTest {
         verify(userReader).lockById(DEMO_USER_ID); // 직렬화 락
         verify(roomWriter, never()).save(any());
         verify(demoRoomCleaner, never()).deleteRoomCascade(any());
+        verify(demoVideoSeeder, never()).seed(anyList(), any(), any());
         verify(eventPublisher, never()).publishEvent(any());
     }
 
@@ -109,6 +112,8 @@ class DemoRoomServiceTest {
         ArgumentCaptor<RoomStartedEvent> eventCaptor = ArgumentCaptor.forClass(RoomStartedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().roomId()).isEqualTo(100L);
+
+        verify(demoVideoSeeder).seed(anyList(), any(), any()); // 피드 영상 시드
     }
 
     @Test

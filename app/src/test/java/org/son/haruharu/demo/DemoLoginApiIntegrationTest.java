@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.json.JsonMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -29,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 데모 로그인 API end-to-end(#352 PR1). 어드민 코드 게이트 + JWT 발급 + 계정 lazy 생성을 실 HTTP로 검증한다.
  * 데모 계정은 설계상 영구 싱글턴(리셋은 방만 삭제)이라 테스트 간 클린 없이 멱등 재사용을 그대로 검증한다.
  */
-@SpringBootTest
+@SpringBootTest(properties = "demo.feed.video-url=https://demo-bucket.s3.ap-northeast-2.amazonaws.com/demo/placeholder.mp4")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class DemoLoginApiIntegrationTest {
@@ -84,6 +85,11 @@ class DemoLoginApiIntegrationTest {
         assertThat(roomMemberReader.getByRoomId(roomId)).extracting(RoomMember::gender)
                 .filteredOn("MALE"::equals).hasSize(3); // 3:3 구성
         assertThat(roomMissionJpaRepository.existsByRoomId(roomId)).isTrue();
+
+        // 데모 토큰으로 피드를 열면 과거 슬롯에 심어진 영상이 보인다(데모도 그 슬롯을 올려 게이트 통과).
+        mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId).header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.posts").isNotEmpty());
     }
 
     @Test
