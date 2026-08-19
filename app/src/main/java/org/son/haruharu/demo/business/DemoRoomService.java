@@ -5,8 +5,13 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
+import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.business.event.RoomStartedEvent;
+import org.son.haruharu.domain.room.implement.MatchResult;
+import org.son.haruharu.domain.room.implement.MatchResultReader;
+import org.son.haruharu.domain.room.implement.MatchResultWriter;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -42,6 +47,8 @@ public class DemoRoomService {
     private final DemoGhostProvisioner demoGhostProvisioner;
     private final DemoRoomCleaner demoRoomCleaner;
     private final DemoVideoSeeder demoVideoSeeder;
+    private final MatchResultReader matchResultReader;
+    private final MatchResultWriter matchResultWriter;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -49,6 +56,7 @@ public class DemoRoomService {
                            RoomWriter roomWriter, RoomMemberWriter roomMemberWriter,
                            DemoGhostProvisioner demoGhostProvisioner, DemoRoomCleaner demoRoomCleaner,
                            DemoVideoSeeder demoVideoSeeder,
+                           MatchResultReader matchResultReader, MatchResultWriter matchResultWriter,
                            ApplicationEventPublisher eventPublisher, Clock clock) {
         this.userReader = userReader;
         this.roomReader = roomReader;
@@ -58,6 +66,8 @@ public class DemoRoomService {
         this.demoGhostProvisioner = demoGhostProvisioner;
         this.demoRoomCleaner = demoRoomCleaner;
         this.demoVideoSeeder = demoVideoSeeder;
+        this.matchResultReader = matchResultReader;
+        this.matchResultWriter = matchResultWriter;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -81,6 +91,39 @@ public class DemoRoomService {
     public void reset(Long demoUserId) {
         userReader.lockById(demoUserId);
         demoRoomIds(demoUserId).forEach(demoRoomCleaner::deleteRoomCascade);
+    }
+
+    /**
+     * 데모 계정과 반대 성별 유령 하나를 즉시 상호 성사시킨다(#352 PR4). 최종선택 타이밍을 기다리지 않고
+     * "성사 → 1:1(DIRECT) 채팅"을 시연한다. {@code MutualMatchEvent} 를 발행해 기존 DIRECT 채팅·매칭 푸시 파이프라인을
+     * 그대로 탄다(FinalSelectionResolver 와 동일). 이미 성사됐으면(멱등) 아무 것도 하지 않는다.
+     */
+    @Transactional
+    public void forceMatch(Long demoUserId) {
+        userReader.lockById(demoUserId);
+        LocalDateTime now = LocalDateTime.now(clock);
+
+        List<Long> roomIds = demoRoomIds(demoUserId);
+        Optional<Room> current = roomIds.isEmpty() ? Optional.empty() : roomReader.findCurrent(roomIds, now);
+        if (current.isEmpty()) {
+            return; // 방이 없으면 성사할 대상이 없다(로그인이 먼저 방을 세운다)
+        }
+        Long roomId = current.get().id();
+        List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
+        RoomMember me = members.stream().filter(m -> demoUserId.equals(m.userId())).findFirst().orElse(null);
+        if (me == null) {
+            return;
+        }
+        RoomMember partner = members.stream()
+                .filter(m -> !demoUserId.equals(m.userId()))
+                .filter(m -> !me.gender().equals(m.gender())) // 반대 성별(최종선택 대상)
+                .findFirst().orElse(null);
+        if (partner == null || matchResultReader.isMatched(me.id(), partner.id())) {
+            return; // 상대 없음 또는 이미 성사(멱등)
+        }
+        MatchResult saved = matchResultWriter.save(MatchResult.of(me.id(), partner.id(), now));
+        // 커밋 후 ChatRoomAutoCreateListener 가 DIRECT 1:1 채팅을 연다.
+        eventPublisher.publishEvent(new MutualMatchEvent(roomId, saved.id(), demoUserId, partner.userId()));
     }
 
     private List<Long> demoRoomIds(Long demoUserId) {

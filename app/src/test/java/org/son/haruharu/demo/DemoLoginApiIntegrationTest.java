@@ -7,7 +7,10 @@ import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.demoaccess.implement.DemoAccessCode;
 import org.son.haruharu.domain.demoaccess.storage.DemoAccessCodeEntity;
 import org.son.haruharu.domain.demoaccess.storage.DemoAccessCodeJpaRepository;
+import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.mission.storage.RoomMissionJpaRepository;
+import org.son.haruharu.domain.room.implement.MatchResult;
+import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.utils.JwtProvider;
@@ -44,6 +47,8 @@ class DemoLoginApiIntegrationTest {
     @Autowired DemoAccessCodeJpaRepository demoAccessCodeJpaRepository;
     @Autowired RoomMemberReader roomMemberReader;
     @Autowired RoomMissionJpaRepository roomMissionJpaRepository;
+    @Autowired MatchResultReader matchResultReader;
+    @Autowired ChatRoomReader chatRoomReader;
 
     @BeforeEach
     void setCode() {
@@ -90,6 +95,14 @@ class DemoLoginApiIntegrationTest {
         mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId).header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.posts").isNotEmpty());
+
+        // 매칭 즉시 성사 → 데모 멤버에 match_result가 생기고 DIRECT 1:1 채팅이 열린다.
+        mockMvc.perform(post("/api/v1/demo/match-result")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + CODE + "\"}"))
+                .andExpect(status().isOk());
+        Long demoMemberId = roomMemberReader.getByRoomIdAndUserId(roomId, demoUserId).id();
+        MatchResult match = matchResultReader.findByMember(demoMemberId).orElseThrow();
+        assertThat(chatRoomReader.existsByMatchResultId(match.id())).isTrue();
     }
 
     @Test

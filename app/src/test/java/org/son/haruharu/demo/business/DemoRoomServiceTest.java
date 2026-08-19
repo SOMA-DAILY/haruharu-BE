@@ -15,7 +15,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.business.event.RoomStartedEvent;
+import org.son.haruharu.domain.room.implement.MatchResult;
+import org.son.haruharu.domain.room.implement.MatchResultReader;
+import org.son.haruharu.domain.room.implement.MatchResultWriter;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -29,6 +33,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -48,6 +53,8 @@ class DemoRoomServiceTest {
     @Mock DemoGhostProvisioner demoGhostProvisioner;
     @Mock DemoRoomCleaner demoRoomCleaner;
     @Mock DemoVideoSeeder demoVideoSeeder;
+    @Mock MatchResultReader matchResultReader;
+    @Mock MatchResultWriter matchResultWriter;
     @Mock ApplicationEventPublisher eventPublisher;
 
     DemoRoomService service;
@@ -58,7 +65,8 @@ class DemoRoomServiceTest {
     @BeforeEach
     void setUp() {
         service = new DemoRoomService(userReader, roomReader, roomMemberReader, roomWriter, roomMemberWriter,
-                demoGhostProvisioner, demoRoomCleaner, demoVideoSeeder, eventPublisher, clock);
+                demoGhostProvisioner, demoRoomCleaner, demoVideoSeeder, matchResultReader, matchResultWriter,
+                eventPublisher, clock);
     }
 
     private RoomMember memberInRoom(Long roomId) {
@@ -141,5 +149,66 @@ class DemoRoomServiceTest {
         verify(demoRoomCleaner).deleteRoomCascade(50L);
         verify(demoRoomCleaner).deleteRoomCascade(51L);
         verify(roomWriter, never()).save(any());
+    }
+
+    // ── forceMatch (PR4) ────────────────────────────────────────────────────
+
+    private RoomMember demoMember() {
+        return new RoomMember(9L, 50L, DEMO_USER_ID, "MALE", null, LocalDateTime.now());
+    }
+
+    private RoomMember ghostMember(Long memberId, Long userId, String gender) {
+        return new RoomMember(memberId, 50L, userId, gender, null, LocalDateTime.now());
+    }
+
+    private void stubCurrentRoomWithMembers(List<RoomMember> members) {
+        given(roomMemberReader.findByUserId(DEMO_USER_ID)).willReturn(List.of(memberInRoom(50L)));
+        given(roomReader.findCurrent(eq(List.of(50L)), any())).willReturn(Optional.of(anyRoom()));
+        given(roomMemberReader.getByRoomId(100L)).willReturn(members);
+    }
+
+    @Test
+    @DisplayName("반대 성별 유령과 상호 성사시켜 MatchResult 저장·MutualMatchEvent를 발행한다")
+    void givenNotMatched_whenForceMatch_thenSavesAndPublishes() {
+        stubCurrentRoomWithMembers(List.of(demoMember(),
+                ghostMember(2L, 20L, "MALE"), ghostMember(3L, 30L, "FEMALE")));
+        given(matchResultReader.isMatched(9L, 3L)).willReturn(false);
+        given(matchResultWriter.save(any())).willAnswer(inv -> {
+            MatchResult mr = inv.getArgument(0);
+            return new MatchResult(500L, mr.memberAId(), mr.memberBId(), mr.matchedAt());
+        });
+
+        service.forceMatch(DEMO_USER_ID);
+
+        // 반대 성별(FEMALE, memberId 3) 과 성사
+        verify(matchResultWriter).save(argThat(
+                mr -> (mr.memberAId() == 3L || mr.memberBId() == 3L) && (mr.memberAId() == 9L || mr.memberBId() == 9L)));
+        var captor = ArgumentCaptor.forClass(MutualMatchEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().userIdA()).isEqualTo(DEMO_USER_ID);
+        assertThat(captor.getValue().userIdB()).isEqualTo(30L);
+    }
+
+    @Test
+    @DisplayName("이미 성사됐으면 아무 것도 하지 않는다(멱등)")
+    void givenAlreadyMatched_whenForceMatch_thenNoOp() {
+        stubCurrentRoomWithMembers(List.of(demoMember(), ghostMember(3L, 30L, "FEMALE")));
+        given(matchResultReader.isMatched(9L, 3L)).willReturn(true);
+
+        service.forceMatch(DEMO_USER_ID);
+
+        verify(matchResultWriter, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("현재 방이 없으면 no-op")
+    void givenNoRoom_whenForceMatch_thenNoOp() {
+        given(roomMemberReader.findByUserId(DEMO_USER_ID)).willReturn(List.of());
+
+        service.forceMatch(DEMO_USER_ID);
+
+        verify(matchResultWriter, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 }

@@ -52,4 +52,15 @@ public class DemoController {
         demoAccountService.reset(request.code());
         return ApiResponse.ok(null);
     }
+
+    @Operation(summary = "데모 매칭 즉시 성사",
+            description = "접근 코드가 맞으면 데모 계정을 반대 성별 유령과 상호 성사시켜 1:1(DIRECT) 채팅을 연다. "
+                    + "최종선택 타이밍을 기다리지 않고 매칭 페이오프를 시연한다. 이미 성사됐으면 멱등. 코드 없으면 401.")
+    @PostMapping("/match-result")
+    public ApiResponse<Void> matchResult(@RequestBody @Valid DemoLoginRequest request,
+                                         HttpServletRequest servletRequest) {
+        log.info("demo match attempt ip={}", servletRequest.getRemoteAddr());
+        demoAccountService.matchNow(request.code());
+        return ApiResponse.ok(null);
+    }
 }
