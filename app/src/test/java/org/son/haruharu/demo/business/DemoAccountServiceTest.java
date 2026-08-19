@@ -36,6 +36,7 @@ class DemoAccountServiceTest {
     @Mock DemoAccessCodeReader demoAccessCodeReader;
     @Mock UserCredentialReader userCredentialReader;
     @Mock DemoUserProvisioner demoUserProvisioner;
+    @Mock DemoRoomService demoRoomService;
     @Mock RefreshTokenWriter refreshTokenWriter;
     @Mock JwtProvider jwtProvider;
 
@@ -44,7 +45,7 @@ class DemoAccountServiceTest {
     @BeforeEach
     void setUp() {
         service = new DemoAccountService(demoAccessCodeReader, userCredentialReader, demoUserProvisioner,
-                refreshTokenWriter, jwtProvider, PROVIDER_ID);
+                demoRoomService, refreshTokenWriter, jwtProvider, PROVIDER_ID);
         lenient().when(jwtProvider.generateAccessToken(any())).thenReturn("access");
         lenient().when(jwtProvider.generateRefreshToken(any())).thenReturn("refresh");
         lenient().when(jwtProvider.getRefreshTokenExpiryMs()).thenReturn(1_000_000L);
@@ -68,6 +69,7 @@ class DemoAccountServiceTest {
         AuthTokenResponse result = service.login(CODE);
 
         verify(demoUserProvisioner).create(PROVIDER_ID);
+        verify(demoRoomService).rebuildIfStale(DEMO_USER_ID); // 로그인 시 방을 세운다
         verify(refreshTokenWriter).save(any());
         assertThat(result.accessToken()).isEqualTo("access");
         assertThat(result.userStatus()).isEqualTo("ACTIVE");
@@ -81,7 +83,30 @@ class DemoAccountServiceTest {
         assertThatThrownBy(() -> service.login("WRONG"))
                 .isInstanceOf(DemoAccessDeniedException.class);
         verify(demoUserProvisioner, never()).create(any());
+        verify(demoRoomService, never()).rebuildIfStale(any());
         verify(refreshTokenWriter, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("코드가 맞으면 데모 방을 리셋한다(계정이 있을 때)")
+    void givenValidCode_whenReset_thenResetsDemoRoom() {
+        codeConfigured();
+        given(userCredentialReader.findByProviderTypeAndProviderId("DEMO", PROVIDER_ID))
+                .willReturn(Optional.of(demoCredential()));
+
+        service.reset(CODE);
+
+        verify(demoRoomService).reset(DEMO_USER_ID);
+    }
+
+    @Test
+    @DisplayName("리셋도 코드가 틀리면 DemoAccessDeniedException")
+    void givenWrongCode_whenReset_thenDenied() {
+        codeConfigured();
+
+        assertThatThrownBy(() -> service.reset("WRONG"))
+                .isInstanceOf(DemoAccessDeniedException.class);
+        verify(demoRoomService, never()).reset(any());
     }
 
     @Test

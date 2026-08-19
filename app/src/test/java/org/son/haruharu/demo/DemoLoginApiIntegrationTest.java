@@ -7,6 +7,9 @@ import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.demoaccess.implement.DemoAccessCode;
 import org.son.haruharu.domain.demoaccess.storage.DemoAccessCodeEntity;
 import org.son.haruharu.domain.demoaccess.storage.DemoAccessCodeJpaRepository;
+import org.son.haruharu.domain.mission.storage.RoomMissionJpaRepository;
+import org.son.haruharu.domain.room.implement.RoomMember;
+import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.utils.JwtProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,6 +41,8 @@ class DemoLoginApiIntegrationTest {
     @Autowired JwtProvider jwtProvider;
     @Autowired UserCredentialReader userCredentialReader;
     @Autowired DemoAccessCodeJpaRepository demoAccessCodeJpaRepository;
+    @Autowired RoomMemberReader roomMemberReader;
+    @Autowired RoomMissionJpaRepository roomMissionJpaRepository;
 
     @BeforeEach
     void setCode() {
@@ -66,11 +71,19 @@ class DemoLoginApiIntegrationTest {
                 .get("data").get("access_token").asString();
         assertThat(jwtProvider.isAccessToken(accessToken)).isTrue();
 
+        Long demoUserId = userIdOf(result);
         assertThat(userCredentialReader.findByProviderTypeAndProviderId("DEMO", "haruharu-demo"))
                 .isPresent()
                 .get()
                 .extracting("userId")
-                .isEqualTo(userIdOf(result));
+                .isEqualTo(demoUserId);
+
+        // 로그인이 방을 세웠다: 데모+유령 6인, 그리고 RoomStartedEvent로 미션이 자동 배정됐다(이벤트 파이프라인 검증).
+        Long roomId = roomMemberReader.findByUserId(demoUserId).get(0).roomId();
+        assertThat(roomMemberReader.getByRoomId(roomId)).hasSize(6);
+        assertThat(roomMemberReader.getByRoomId(roomId)).extracting(RoomMember::gender)
+                .filteredOn("MALE"::equals).hasSize(3); // 3:3 구성
+        assertThat(roomMissionJpaRepository.existsByRoomId(roomId)).isTrue();
     }
 
     @Test
