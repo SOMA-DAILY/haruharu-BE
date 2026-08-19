@@ -76,6 +76,13 @@ public class DemoAccountService {
         findDemoCredential().ifPresent(credential -> demoRoomService.reset(credential.userId()));
     }
 
+    /** 접근 코드를 검증하고, 데모 계정을 반대 성별 유령과 즉시 상호 성사시킨다(→ DIRECT 1:1 채팅). */
+    @Transactional
+    public void matchNow(String submittedCode) {
+        verifyAccessCode(submittedCode);
+        findDemoCredential().ifPresent(credential -> demoRoomService.forceMatch(credential.userId()));
+    }
+
     /**
      * 어드민이 설정한 현재 코드와 대조한다. 미설정이면 로그인은 닫힌 것으로 본다. 코드 비교는 타이밍 공격 방어로 상수 시간.
      */

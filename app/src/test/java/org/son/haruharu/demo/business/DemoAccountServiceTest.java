@@ -110,6 +110,28 @@ class DemoAccountServiceTest {
     }
 
     @Test
+    @DisplayName("코드가 맞으면 데모 계정을 즉시 매칭 성사시킨다(계정이 있을 때)")
+    void givenValidCode_whenMatchNow_thenForcesMatch() {
+        codeConfigured();
+        given(userCredentialReader.findByProviderTypeAndProviderId("DEMO", PROVIDER_ID))
+                .willReturn(Optional.of(demoCredential()));
+
+        service.matchNow(CODE);
+
+        verify(demoRoomService).forceMatch(DEMO_USER_ID);
+    }
+
+    @Test
+    @DisplayName("매칭도 코드가 틀리면 DemoAccessDeniedException")
+    void givenWrongCode_whenMatchNow_thenDenied() {
+        codeConfigured();
+
+        assertThatThrownBy(() -> service.matchNow("WRONG"))
+                .isInstanceOf(DemoAccessDeniedException.class);
+        verify(demoRoomService, never()).forceMatch(any());
+    }
+
+    @Test
     @DisplayName("코드가 미설정(닫힘)이면 어떤 값을 넣어도 DemoAccessDeniedException")
     void givenNoCodeConfigured_whenLogin_thenDenied() {
         given(demoAccessCodeReader.findCurrent()).willReturn(Optional.empty());
