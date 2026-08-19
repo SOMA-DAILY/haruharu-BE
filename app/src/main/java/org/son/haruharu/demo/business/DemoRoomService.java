@@ -41,12 +41,14 @@ public class DemoRoomService {
     private final RoomMemberWriter roomMemberWriter;
     private final DemoGhostProvisioner demoGhostProvisioner;
     private final DemoRoomCleaner demoRoomCleaner;
+    private final DemoVideoSeeder demoVideoSeeder;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public DemoRoomService(UserReader userReader, RoomReader roomReader, RoomMemberReader roomMemberReader,
                            RoomWriter roomWriter, RoomMemberWriter roomMemberWriter,
                            DemoGhostProvisioner demoGhostProvisioner, DemoRoomCleaner demoRoomCleaner,
+                           DemoVideoSeeder demoVideoSeeder,
                            ApplicationEventPublisher eventPublisher, Clock clock) {
         this.userReader = userReader;
         this.roomReader = roomReader;
@@ -55,6 +57,7 @@ public class DemoRoomService {
         this.roomMemberWriter = roomMemberWriter;
         this.demoGhostProvisioner = demoGhostProvisioner;
         this.demoRoomCleaner = demoRoomCleaner;
+        this.demoVideoSeeder = demoVideoSeeder;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -98,7 +101,10 @@ public class DemoRoomService {
         for (DemoGhost ghost : demoGhostProvisioner.ensureGhosts()) {
             members.add(RoomMember.of(room.id(), ghost.userId(), ghost.gender(), null, now));
         }
-        roomMemberWriter.saveAll(members);
+        List<RoomMember> saved = roomMemberWriter.saveAll(members);
+
+        // 과거 슬롯에 전원의 영상을 심어 피드를 채운다(현재 슬롯은 리뷰어 촬영용으로 비움).
+        demoVideoSeeder.seed(saved, startsAt, now);
 
         // 멤버 커밋 후(AFTER_COMMIT) GroupChatAutoCreateListener·MissionAutoAssignListener 가 채팅·미션을 자동 생성한다.
         eventPublisher.publishEvent(new RoomStartedEvent(room.id()));
