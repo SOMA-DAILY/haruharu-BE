@@ -22,6 +22,13 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
     open-in-view: false
 
+  # Spring Batch(#357) — 스케줄러를 배치 잡으로 전환. JDBC JobRepository=공유 RDS(멱등·이력의 좌표계).
+  # BATCH_* 스키마 생성·JDBC JobRepository 배선은 BatchInfraConfig 에서 명시적으로 한다
+  # (Boot 4.1 spring-boot-batch 모듈은 구 spring.batch.jdbc.* 스키마 자동 초기화를 제공하지 않음).
+  batch:
+    job:
+      enabled: false              # 부팅 시 자동 실행 금지 — @Scheduled 런처가 유일한 트리거
+
   # JSON 네이밍 snake_case (API 명세 계약). DTO 필드는 camelCase 유지, @JsonProperty 명시 필드 우선.
   jackson:
     property-naming-strategy: SNAKE_CASE

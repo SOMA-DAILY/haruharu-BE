@@ -76,7 +76,8 @@ app/src/main/java/org/son/haruharu/
 │               └── {Action}Request.java      # toCommand() 포함
 ├── config/                                   # Security·WebSocket·Scheduling·필터·OpenApi
 ├── handler/                                  # @RestControllerAdvice (GlobalExceptionHandler)
-├── infrastructure/scheduler/                 # cron (매칭 확정 등)
+├── infrastructure/scheduler/                 # cron (아직 배치 미전환분 잔존)
+├── batch/                                    # Spring Batch(#357). config/=공용 인프라(JDBC JobRepository·스키마), {job}/=Tasklet·JobConfig·@Scheduled 런처
 ├── demo/                                     # 심사용 데모(#352). prod 노출 O — 어드민 접근 코드로 게이트(@Profile 제한 두지 말 것)
 └── devsupport/                               # 개발 편의 API (운영 제외)
 
@@ -95,6 +96,7 @@ admin/src/main/java/org/son/haruharu/admin/
 | Service·Command·Response·Reader·Writer·Entity·Repository | `core/domain/{domain}/` |
 | 외부 시스템 어댑터(OAuth·S3·FCM…) | `core/infrastructure/` |
 | 필터·스케줄러·SecurityConfig·WebSocketConfig | `app/config/`, `app/infrastructure/scheduler/` |
+| 배치 잡(Tasklet·JobConfig·런처)·배치 공용 인프라 | `app/batch/{job}/`, `app/batch/config/` |
 | 어드민 전용 조회·관리 기능 | `admin/domain/{domain}/` 4계층 전부 |
 
 **어드민 전용 도메인 규칙:** `admin/`은 core 도메인 객체·Entity를 읽어 조인 조회하는 것을 허용한다
