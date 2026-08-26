@@ -1,0 +1,54 @@
+{
+  "description": "Haruharu project policy and verification hooks for Codex.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/config_protection.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking protected verification files"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.claude/hooks/block-bypass.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking verification bypass policy"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/post_edit.py\"",
+            "timeout": 10,
+            "statusMessage": "Recording edited files and scanning secrets"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/stop_gate.py\"",
+            "timeout": 600,
+            "statusMessage": "Compiling changed Java sources"
+          }
+        ]
+      }
+    ]
+  }
+}
