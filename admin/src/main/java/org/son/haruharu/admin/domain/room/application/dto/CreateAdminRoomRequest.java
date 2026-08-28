@@ -1,11 +1,15 @@
 package org.son.haruharu.admin.domain.room.application.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import org.son.haruharu.admin.domain.room.business.command.CreateAdminRoomCommand;
+import org.son.haruharu.domain.mission.business.command.CreateRoomMissionSlotCommand;
+import org.son.haruharu.domain.mission.implement.MissionPeriod;
 
 /**
  * 방 생성 요청(#318). 시각 5개는 운영진이 방마다 직접 입력한다(9시 고정 폐기).
@@ -27,10 +31,28 @@ public record CreateAdminRoomRequest(
         @Schema(description = "초대코드 정원(3:3이면 6, null이면 무제한)", example = "6", nullable = true)
         Integer maxUses,
         @Schema(description = "초대코드 만료 시각(null이면 무기한)", nullable = true)
-        LocalDateTime inviteExpiresAt
+        LocalDateTime inviteExpiresAt,
+        @Schema(description = "Day별 오전·오후 미션 슬롯. total_days × 2개를 전달한다.")
+        @NotNull List<@NotNull @Valid MissionSlotRequest> missionSlots
 ) {
     public CreateAdminRoomCommand toCommand() {
         return new CreateAdminRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
-                resultAt, endsAt, totalDays, maxUses, inviteExpiresAt);
+                resultAt, endsAt, totalDays, maxUses, inviteExpiresAt,
+                missionSlots == null ? null : missionSlots.stream().map(MissionSlotRequest::toCommand).toList());
+    }
+
+    public record MissionSlotRequest(
+            @Schema(description = "방 진행 일차", example = "1")
+            @Positive int dayNumber,
+            @Schema(description = "일차 내 시간대", example = "MORNING")
+            @NotNull MissionPeriod period,
+            @Schema(description = "카드 노출 시작", example = "2026-08-20T21:00:00")
+            @NotNull LocalDateTime opensAt,
+            @Schema(description = "카드 노출 종료", example = "2026-08-21T02:00:00")
+            @NotNull LocalDateTime closesAt
+    ) {
+        public CreateRoomMissionSlotCommand toCommand() {
+            return new CreateRoomMissionSlotCommand(dayNumber, period, opensAt, closesAt);
+        }
     }
 }

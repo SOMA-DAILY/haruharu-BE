@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.business.event.RoomStartedEvent;
+import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.room.implement.MatchResult;
 import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.MatchResultWriter;
@@ -49,6 +50,7 @@ public class DemoRoomService {
     private final DemoVideoSeeder demoVideoSeeder;
     private final MatchResultReader matchResultReader;
     private final MatchResultWriter matchResultWriter;
+    private final RoomMissionSlotService roomMissionSlotService;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -57,6 +59,7 @@ public class DemoRoomService {
                            DemoGhostProvisioner demoGhostProvisioner, DemoRoomCleaner demoRoomCleaner,
                            DemoVideoSeeder demoVideoSeeder,
                            MatchResultReader matchResultReader, MatchResultWriter matchResultWriter,
+                           RoomMissionSlotService roomMissionSlotService,
                            ApplicationEventPublisher eventPublisher, Clock clock) {
         this.userReader = userReader;
         this.roomReader = roomReader;
@@ -68,6 +71,7 @@ public class DemoRoomService {
         this.demoVideoSeeder = demoVideoSeeder;
         this.matchResultReader = matchResultReader;
         this.matchResultWriter = matchResultWriter;
+        this.roomMissionSlotService = roomMissionSlotService;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -138,6 +142,7 @@ public class DemoRoomService {
         LocalDateTime opensAt = startsAt.plusDays(TOTAL_DAYS); // 최종선택은 먼 미래 → now 는 ACTIVE 구간
         Room room = roomWriter.save(new Room(null, RoomStatus.ACTIVE, startsAt.toLocalDate(), TOTAL_DAYS,
                 startsAt, null, startsAt, opensAt, opensAt.plusHours(1), opensAt.plusHours(2), opensAt.plusHours(3)));
+        roomMissionSlotService.createDefaultsForRoom(room.id(), TOTAL_DAYS, startsAt, opensAt);
 
         List<RoomMember> members = new ArrayList<>();
         members.add(RoomMember.of(room.id(), demoUserId, DEMO_GENDER, null, now));

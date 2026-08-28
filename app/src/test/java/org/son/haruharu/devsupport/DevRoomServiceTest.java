@@ -17,6 +17,7 @@ import org.son.haruharu.devsupport.exception.InvalidDevMembersException;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.matching.business.MatchingExecutor;
+import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.room.business.ConsolationRewardService;
 import org.son.haruharu.domain.room.business.RoomActivator;
 import org.son.haruharu.domain.room.business.RoomService;
@@ -58,6 +59,7 @@ class DevRoomServiceTest {
     @Mock MatchingExecutor matchingExecutor;
     @Mock RoomActivator roomActivator;
     @Mock ConsolationRewardService consolationRewardService;
+    @Mock RoomMissionSlotService roomMissionSlotService;
     @Mock DevRoomCleaner devRoomCleaner;
 
     AdjustableClock adjustableClock;
@@ -68,7 +70,7 @@ class DevRoomServiceTest {
         adjustableClock = new AdjustableClock(Clock.fixed(REAL_NOW.atZone(SEOUL).toInstant(), SEOUL));
         devRoomService = new DevRoomService(identityService, roomService, roomReader, roomWriter,
                 roomMemberWriter, matchingExecutor, roomActivator, consolationRewardService,
-                devRoomCleaner, adjustableClock);
+                roomMissionSlotService, devRoomCleaner, adjustableClock);
     }
 
     private void givenVerifiedMembers(Long... userIds) {
@@ -105,6 +107,8 @@ class DevRoomServiceTest {
         assertThat(saved.scheduledDate()).isEqualTo(LocalDate.of(2026, 7, 10));
         assertThat(response.currentDay()).isEqualTo(1);
         assertThat(adjustableClock.isFixed()).isFalse();
+        verify(roomMissionSlotService).createDefaultsForRoom(
+                2L, 3, LocalDateTime.of(2026, 7, 10, 9, 0), LocalDateTime.of(2026, 7, 13, 9, 0));
     }
 
     @Test

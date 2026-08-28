@@ -11,7 +11,10 @@ import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.storage.ChatMessageEntity;
 import org.son.haruharu.domain.chat.storage.ChatRoomEntity;
 import org.son.haruharu.domain.mission.implement.RoomMission;
+import org.son.haruharu.domain.mission.implement.MissionPeriod;
+import org.son.haruharu.domain.mission.implement.RoomMissionSlot;
 import org.son.haruharu.domain.mission.storage.RoomMissionEntity;
+import org.son.haruharu.domain.mission.storage.RoomMissionSlotEntity;
 import org.son.haruharu.domain.notification.implement.NotificationHistory;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.domain.notification.storage.NotificationHistoryEntity;
@@ -87,6 +90,18 @@ class EntityAuditColumnRoundTripTest {
         RoomMission roomMission = new RoomMission(1L, 10L, 100L, CREATED_AT, null, 0, CREATED_AT);
 
         RoomMission restored = RoomMissionEntity.from(roomMission).toDomain();
+
+        assertThat(restored.createdAt()).isEqualTo(CREATED_AT);
+    }
+
+    @Test
+    @DisplayName("RoomMissionSlotEntity.from()은 createdAt을 복원한다")
+    void givenRoomMissionSlotWithCreatedAt_whenFromThenToDomain_thenCreatedAtSurvives() {
+        RoomMissionSlot slot = new RoomMissionSlot(
+                1L, 10L, 1, MissionPeriod.MORNING,
+                CREATED_AT, CREATED_AT.plusHours(5), CREATED_AT);
+
+        RoomMissionSlot restored = RoomMissionSlotEntity.from(slot).toDomain();
 
         assertThat(restored.createdAt()).isEqualTo(CREATED_AT);
     }

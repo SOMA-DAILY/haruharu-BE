@@ -19,9 +19,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * core 전체를 스캔하면 identity 등 core 전용 빈(CiDiCryptoConverter→IdentityCrypto)까지 끌어와
  * 컨텍스트를 오염시키므로, 필요한 패키지(대시보드: room/matching/user)만 추가한다.
  * <p>
- * 리포지토리 스캔은 admin 도메인 + core room.storage 한정이다. 나머지 core 데이터는 여전히
- * admin 자체 JPQL 쿼리로 읽지만, 방 생성·초대코드 발급(#318)은 core 도메인 로직(#311·#312)을
- * 그대로 쓰므로 그 저장소가 필요하다 — 배선 범위는 {@link org.son.haruharu.admin.config.AdminRoomDomainConfig} 참고.
+ * 리포지토리는 admin 도메인과 core room·user·mission storage 패키지를 스캔한다. Spring Data의
+ * 패키지 단위 스캔 때문에 mission은 slot 저장소가 속한 패키지 전체가 포함되며, 실제 도메인 빈은
+ * {@link org.son.haruharu.admin.config.AdminRoomDomainConfig}에서 필요한 구현만 배선한다.
  */
 @SpringBootApplication
 @EntityScan({
@@ -37,7 +37,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 })
 @EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.room.storage",
         // #321: RoomInviteService.join 의 유저 행 비관적 락(UserRepositoryImpl→UserJpaRepository) 배선.
-        "org.son.haruharu.domain.user.storage"})
+        "org.son.haruharu.domain.user.storage",
+        "org.son.haruharu.domain.mission.storage"})
 @Import({JpaConfig.class, ClockConfig.class, TimeZoneConfig.class})
 public class AdminApplication {
 

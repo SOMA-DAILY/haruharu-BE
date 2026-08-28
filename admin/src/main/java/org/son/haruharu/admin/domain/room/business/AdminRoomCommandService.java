@@ -9,6 +9,7 @@ import org.son.haruharu.admin.domain.room.business.dto.AdminRoomCreatedResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomInviteResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomMemberResponse;
 import org.son.haruharu.admin.domain.room.implement.AdminRoomReader;
+import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.implement.RoomInvite;
@@ -32,24 +33,29 @@ public class AdminRoomCommandService {
 
     private final RoomService roomService;
     private final RoomInviteService roomInviteService;
+    private final RoomMissionSlotService roomMissionSlotService;
     private final RoomMemberReader roomMemberReader;
     private final RoomMemberWriter roomMemberWriter;
     private final AdminRoomReader adminRoomReader;
 
     public AdminRoomCommandService(RoomService roomService, RoomInviteService roomInviteService,
+                                   RoomMissionSlotService roomMissionSlotService,
                                    RoomMemberReader roomMemberReader, RoomMemberWriter roomMemberWriter,
                                    AdminRoomReader adminRoomReader) {
         this.roomService = roomService;
         this.roomInviteService = roomInviteService;
+        this.roomMissionSlotService = roomMissionSlotService;
         this.roomMemberReader = roomMemberReader;
         this.roomMemberWriter = roomMemberWriter;
         this.adminRoomReader = adminRoomReader;
     }
 
-    /** 방 생성 + 코드 발급. 스케줄 시각 검증은 core 가 하며, 실패 시 코드도 발급되지 않는다(같은 트랜잭션). */
+    /** 방 + 미션 슬롯 + 코드 생성. 검증·저장 실패 시 전체를 롤백한다(같은 트랜잭션). */
     @Transactional
     public AdminRoomCreatedResponse createRoomWithInvite(CreateAdminRoomCommand command, Long adminId) {
         Long roomId = roomService.createRoom(command.toRoomCommand());
+        roomMissionSlotService.createForRoom(roomId, command.totalDays(), command.startsAt(),
+                command.finalSelectionOpensAt(), command.missionSlots());
         RoomInvite invite = roomInviteService.issueFor(
                 roomId, command.maxUses(), command.inviteExpiresAt(), createdBy(adminId));
         return new AdminRoomCreatedResponse(roomId, invite.code());
