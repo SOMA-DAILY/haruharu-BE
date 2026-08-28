@@ -8,6 +8,17 @@ import org.son.haruharu.domain.demoaccess.implement.DemoAccessCode;
 import org.son.haruharu.domain.demoaccess.storage.DemoAccessCodeEntity;
 import org.son.haruharu.domain.demoaccess.storage.DemoAccessCodeJpaRepository;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.mission.implement.ActivationChannel;
+import org.son.haruharu.domain.mission.implement.InteractionScope;
+import org.son.haruharu.domain.mission.implement.Mission;
+import org.son.haruharu.domain.mission.implement.MissionAttributeLevel;
+import org.son.haruharu.domain.mission.implement.MissionGoal;
+import org.son.haruharu.domain.mission.implement.MissionRevision;
+import org.son.haruharu.domain.mission.implement.PreferenceLeakRisk;
+import org.son.haruharu.domain.mission.storage.MissionEntity;
+import org.son.haruharu.domain.mission.storage.MissionJpaRepository;
+import org.son.haruharu.domain.mission.storage.MissionRevisionEntity;
+import org.son.haruharu.domain.mission.storage.MissionRevisionJpaRepository;
 import org.son.haruharu.domain.mission.storage.RoomMissionJpaRepository;
 import org.son.haruharu.domain.room.implement.MatchResult;
 import org.son.haruharu.domain.room.implement.MatchResultReader;
@@ -22,6 +33,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.math.BigDecimal;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -45,6 +59,8 @@ class DemoLoginApiIntegrationTest {
     @Autowired JwtProvider jwtProvider;
     @Autowired UserCredentialReader userCredentialReader;
     @Autowired DemoAccessCodeJpaRepository demoAccessCodeJpaRepository;
+    @Autowired MissionJpaRepository missionJpaRepository;
+    @Autowired MissionRevisionJpaRepository missionRevisionJpaRepository;
     @Autowired RoomMemberReader roomMemberReader;
     @Autowired RoomMissionJpaRepository roomMissionJpaRepository;
     @Autowired MatchResultReader matchResultReader;
@@ -53,6 +69,10 @@ class DemoLoginApiIntegrationTest {
     @BeforeEach
     void setCode() {
         demoAccessCodeJpaRepository.save(DemoAccessCodeEntity.from(DemoAccessCode.of(CODE)));
+        if (missionRevisionJpaRepository.findActiveCurrentRevisions().isEmpty()) {
+            List.of("데모 미션 A", "데모 미션 B", "데모 미션 C", "데모 미션 D", "데모 미션 E", "데모 미션 F")
+                    .forEach(this::persistMission);
+        }
     }
 
     private Long userIdOf(MvcResult result) throws Exception {
@@ -114,5 +134,17 @@ class DemoLoginApiIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.error.code").value("DEMO_ACCESS_DENIED"));
+    }
+
+    private void persistMission(String description) {
+        Mission mission = missionJpaRepository.save(MissionEntity.from(Mission.create())).toDomain();
+        MissionRevision revision = MissionRevision.create(
+                mission.id(), 1, description, MissionAttributeLevel.LOW, MissionGoal.OBSERVATION,
+                ActivationChannel.VIDEO, InteractionScope.SELF,
+                MissionAttributeLevel.LOW, MissionAttributeLevel.LOW,
+                PreferenceLeakRisk.NONE, MissionAttributeLevel.LOW,
+                "DEMO_" + mission.id(), new BigDecimal("0.8"), false);
+        MissionRevision saved = missionRevisionJpaRepository.save(MissionRevisionEntity.from(revision)).toDomain();
+        missionJpaRepository.save(MissionEntity.from(mission.activateRevision(saved.id())));
     }
 }

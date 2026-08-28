@@ -2,12 +2,13 @@ package org.son.haruharu.domain.mission.implement;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface MissionRepository {
 
-    List<Mission> findActive();
+    List<MissionRevision> findActiveRevisions();
 
-    Optional<Mission> findById(Long id);
+    List<MissionRevision> findRevisionsByIds(Set<Long> revisionIds);
 
-    List<Mission> saveAll(List<Mission> missions);
+    Optional<MissionRevision> findRevisionById(Long revisionId);
 }

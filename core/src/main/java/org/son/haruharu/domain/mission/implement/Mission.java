@@ -1,14 +1,23 @@
 package org.son.haruharu.domain.mission.implement;
 
-
-/** 미션(참조 데이터). 미션 영상 업로드 시 points만큼 열쇠를 지급한다(#40). */
+/** 논리 미션. 문구와 추천 메타데이터는 불변 {@link MissionRevision}에 보관한다. */
 public record Mission(
         Long id,
-        String description,
-        int points,
-        boolean isActive
+        Long activeRevisionId,
+        boolean active
 ) {
-    public static Mission of(String description, int points) {
-        return new Mission(null, description, points, true);
+    public static Mission create() {
+        return new Mission(null, null, true);
+    }
+
+    public Mission activateRevision(Long revisionId) {
+        if (revisionId == null) {
+            throw new IllegalArgumentException("revisionId must not be null");
+        }
+        return new Mission(id, revisionId, active);
+    }
+
+    public Mission changeActive(boolean nextActive) {
+        return new Mission(id, activeRevisionId, nextActive);
     }
 }

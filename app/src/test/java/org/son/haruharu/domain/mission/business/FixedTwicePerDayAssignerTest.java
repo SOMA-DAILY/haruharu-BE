@@ -2,6 +2,7 @@ package org.son.haruharu.domain.mission.business;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -10,8 +11,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.son.haruharu.domain.mission.implement.Mission;
+import org.son.haruharu.domain.mission.implement.ActivationChannel;
+import org.son.haruharu.domain.mission.implement.InteractionScope;
+import org.son.haruharu.domain.mission.implement.MissionAttributeLevel;
+import org.son.haruharu.domain.mission.implement.MissionGoal;
 import org.son.haruharu.domain.mission.implement.MissionReader;
+import org.son.haruharu.domain.mission.implement.MissionRevision;
+import org.son.haruharu.domain.mission.implement.PreferenceLeakRisk;
 import org.son.haruharu.domain.mission.implement.RoomMission;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomStatus;
@@ -40,10 +46,19 @@ class FixedTwicePerDayAssignerTest {
                 startsAt == null ? null : startsAt.plusDays(2).plusHours(3), startsAt == null ? null : startsAt.plusDays(3));
     }
 
-    private List<Mission> pool(int n) {
+    private List<MissionRevision> pool(int n) {
         return java.util.stream.IntStream.rangeClosed(1, n)
-                .mapToObj(i -> new Mission((long) i, "미션" + i, 5, true))
+                .mapToObj(i -> revision((long) i, "미션" + i))
                 .toList();
+    }
+
+    private MissionRevision revision(Long id, String description) {
+        return new MissionRevision(id, id, 1, description,
+                MissionAttributeLevel.LOW, MissionGoal.OBSERVATION,
+                ActivationChannel.VIDEO, InteractionScope.SELF,
+                MissionAttributeLevel.LOW, MissionAttributeLevel.LOW,
+                PreferenceLeakRisk.NONE, MissionAttributeLevel.LOW,
+                "CLUSTER_" + id, new BigDecimal("0.8"), false, null);
     }
 
     @Test
@@ -65,7 +80,7 @@ class FixedTwicePerDayAssignerTest {
             assertThat(rm.closesAt()).isNull(); // 무기한 열림(MVP)
         });
         // 방 안 미션 문구(missionId) 중복 없음
-        assertThat(result).extracting(RoomMission::missionId).doesNotHaveDuplicates();
+        assertThat(result).extracting(RoomMission::missionRevisionId).doesNotHaveDuplicates();
     }
 
     @Test

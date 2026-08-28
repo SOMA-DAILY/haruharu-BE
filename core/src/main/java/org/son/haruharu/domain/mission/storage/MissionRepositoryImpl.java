@@ -1,32 +1,36 @@
 package org.son.haruharu.domain.mission.storage;
 
 import lombok.RequiredArgsConstructor;
-import org.son.haruharu.domain.mission.implement.Mission;
+import org.son.haruharu.domain.mission.implement.MissionRevision;
 import org.son.haruharu.domain.mission.implement.MissionRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 @Repository
 @RequiredArgsConstructor
 public class MissionRepositoryImpl implements MissionRepository {
 
-    private final MissionJpaRepository jpaRepository;
+    private final MissionRevisionJpaRepository revisionJpaRepository;
 
     @Override
-    public List<Mission> findActive() {
-        return jpaRepository.findByIsActiveTrue().stream().map(MissionEntity::toDomain).toList();
-    }
-
-    @Override
-    public java.util.Optional<Mission> findById(Long id) {
-        return jpaRepository.findById(id).map(MissionEntity::toDomain);
-    }
-
-    @Override
-    public List<Mission> saveAll(List<Mission> missions) {
-        return jpaRepository.saveAll(missions.stream().map(MissionEntity::from).toList()).stream()
-                .map(MissionEntity::toDomain)
+    public List<MissionRevision> findActiveRevisions() {
+        return revisionJpaRepository.findActiveCurrentRevisions().stream()
+                .map(MissionRevisionEntity::toDomain)
                 .toList();
+    }
+
+    @Override
+    public List<MissionRevision> findRevisionsByIds(Set<Long> revisionIds) {
+        return revisionJpaRepository.findByIdIn(revisionIds).stream()
+                .map(MissionRevisionEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public Optional<MissionRevision> findRevisionById(Long revisionId) {
+        return revisionJpaRepository.findById(revisionId).map(MissionRevisionEntity::toDomain);
     }
 }

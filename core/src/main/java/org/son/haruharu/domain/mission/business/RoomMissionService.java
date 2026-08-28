@@ -1,8 +1,8 @@
 package org.son.haruharu.domain.mission.business;
 
 import org.son.haruharu.domain.mission.business.dto.RoomMissionResponse;
-import org.son.haruharu.domain.mission.implement.Mission;
 import org.son.haruharu.domain.mission.implement.MissionReader;
+import org.son.haruharu.domain.mission.implement.MissionRevision;
 import org.son.haruharu.domain.mission.implement.RoomMission;
 import org.son.haruharu.domain.mission.implement.RoomMissionReader;
 import org.son.haruharu.domain.mission.implement.RoomMissionWriter;
@@ -16,6 +16,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -66,11 +67,12 @@ public class RoomMissionService {
         if (open.isEmpty()) {
             return List.of();
         }
-        Map<Long, Mission> missionsById = missionReader.getActiveCandidates().stream()
-                .collect(Collectors.toMap(Mission::id, Function.identity(), (a, b) -> a));
+        Set<Long> revisionIds = open.stream().map(RoomMission::missionRevisionId).collect(Collectors.toSet());
+        Map<Long, MissionRevision> revisionsById = missionReader.getRevisionsByIds(revisionIds).stream()
+                .collect(Collectors.toMap(MissionRevision::id, Function.identity(), (a, b) -> a));
         return open.stream()
-                .filter(rm -> missionsById.containsKey(rm.missionId())) // 비활성화된 미션 문구는 카드에서 제외
-                .map(rm -> RoomMissionResponse.of(rm, missionsById.get(rm.missionId())))
+                .filter(rm -> revisionsById.containsKey(rm.missionRevisionId()))
+                .map(rm -> RoomMissionResponse.of(rm, revisionsById.get(rm.missionRevisionId())))
                 .toList();
     }
 }
