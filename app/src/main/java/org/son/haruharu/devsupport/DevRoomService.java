@@ -12,6 +12,7 @@ import org.son.haruharu.devsupport.exception.InvalidDevMembersException;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.matching.business.MatchingExecutor;
+import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.room.business.ConsolationRewardService;
 import org.son.haruharu.domain.room.business.RoomActivator;
 import org.son.haruharu.domain.room.business.RoomService;
@@ -55,6 +56,7 @@ public class DevRoomService {
     private final MatchingExecutor matchingExecutor;
     private final RoomActivator roomActivator;
     private final ConsolationRewardService consolationRewardService;
+    private final RoomMissionSlotService roomMissionSlotService;
     private final DevRoomCleaner devRoomCleaner;
     private final AdjustableClock adjustableClock;
 
@@ -62,6 +64,7 @@ public class DevRoomService {
                           RoomReader roomReader, RoomWriter roomWriter,
                           RoomMemberWriter roomMemberWriter, MatchingExecutor matchingExecutor,
                           RoomActivator roomActivator, ConsolationRewardService consolationRewardService,
+                          RoomMissionSlotService roomMissionSlotService,
                           DevRoomCleaner devRoomCleaner, AdjustableClock adjustableClock) {
         this.identityService = identityService;
         this.roomService = roomService;
@@ -71,6 +74,7 @@ public class DevRoomService {
         this.matchingExecutor = matchingExecutor;
         this.roomActivator = roomActivator;
         this.consolationRewardService = consolationRewardService;
+        this.roomMissionSlotService = roomMissionSlotService;
         this.devRoomCleaner = devRoomCleaner;
         this.adjustableClock = adjustableClock;
     }
@@ -96,6 +100,8 @@ public class DevRoomService {
         LocalDateTime startedAt = startDate.atTime(Room.DAY_START_HOUR, 0);
         Room room = roomWriter.save(
                 new Room(null, RoomStatus.ACTIVE, startDate, TOTAL_DAYS, startedAt, null));
+        roomMissionSlotService.createDefaultsForRoom(
+                room.id(), TOTAL_DAYS, startedAt, startedAt.plusDays(TOTAL_DAYS));
 
         roomMemberWriter.saveAll(memberTemplates.stream()
                 .map(t -> RoomMember.of(room.id(), t.userId(), t.gender(), t.birthday(),

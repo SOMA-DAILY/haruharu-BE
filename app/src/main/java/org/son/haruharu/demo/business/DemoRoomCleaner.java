@@ -46,6 +46,7 @@ public class DemoRoomCleaner {
                     SELECT id FROM room_members WHERE room_id = ?)""", roomId);
         // 미션 인스턴스(#341) — DevRoomCleaner엔 없는 정리
         jdbcTemplate.update("DELETE FROM room_missions WHERE room_id = ?", roomId);
+        jdbcTemplate.update("DELETE FROM room_mission_slots WHERE room_id = ?", roomId);
         // 영상(리액션 → 포스트)
         jdbcTemplate.update("""
                 DELETE FROM video_reactions WHERE video_post_id IN (

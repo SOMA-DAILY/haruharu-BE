@@ -19,11 +19,13 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -124,23 +126,86 @@ class AdminRoomApiIntegrationTest {
                   "result_at": "%s",
                   "ends_at": "%s",
                   "total_days": 3,
-                  "max_uses": 6
+                  "max_uses": 6,
+                  "mission_slots": %s
                 }
-                """.formatted(startsAt, startsAt.plusDays(2).withHour(18), startsAt.plusDays(2).withHour(21),
-                startsAt.plusDays(2).withHour(22), startsAt.plusDays(3).withHour(9));
+                """.formatted(startsAt, startsAt.plusHours(60), startsAt.plusHours(63),
+                startsAt.plusHours(64), startsAt.plusHours(72), missionSlots(startsAt));
+    }
+
+    private static String missionSlots(LocalDateTime startsAt) {
+        return """
+                [
+                  {"day_number":1,"period":"MORNING","opens_at":"%s","closes_at":"%s"},
+                  {"day_number":1,"period":"AFTERNOON","opens_at":"%s","closes_at":"%s"},
+                  {"day_number":2,"period":"MORNING","opens_at":"%s","closes_at":"%s"},
+                  {"day_number":2,"period":"AFTERNOON","opens_at":"%s","closes_at":"%s"},
+                  {"day_number":3,"period":"MORNING","opens_at":"%s","closes_at":"%s"},
+                  {"day_number":3,"period":"AFTERNOON","opens_at":"%s","closes_at":"%s"}
+                ]
+                """.formatted(
+                startsAt.plusHours(1), startsAt.plusHours(6),
+                startsAt.plusHours(9), startsAt.plusHours(14),
+                startsAt.plusHours(25), startsAt.plusHours(30),
+                startsAt.plusHours(33), startsAt.plusHours(38),
+                startsAt.plusHours(49), startsAt.plusHours(54),
+                startsAt.plusHours(55), startsAt.plusHours(58));
     }
 
     @Test
     @DisplayName("방 생성 시 PENDING 방과 6자리 초대코드가 함께 반환된다")
     void createRoom_returnsRoomIdAndInviteCode() throws Exception {
-        mockMvc.perform(post("/api/v1/admin/rooms")
+        String response = mockMvc.perform(post("/api/v1/admin/rooms")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRoomBody(LocalDateTime.now().plusDays(1).withNano(0)))
                         .with(authentication(adminAuth())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.room_id").isNumber())
                 .andExpect(jsonPath("$.data.code").value(org.hamcrest.Matchers.matchesPattern(
-                        "[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}")));
+                        "[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}")))
+                .andReturn().getResponse().getContentAsString();
+
+        Long roomId = com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
+        Long slotCount = em.createQuery(
+                        "select count(s) from RoomMissionSlotEntity s where s.roomId = :roomId", Long.class)
+                .setParameter("roomId", roomId)
+                .getSingleResult();
+        assertThat(slotCount).isEqualTo(6L);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("미션 슬롯이 중복되면 400이고 방·슬롯·초대코드가 남지 않는다")
+    void givenDuplicateMissionSlot_whenCreateRoom_thenReturns400AndRollsBack() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        String duplicateSlots = missionSlots(startsAt)
+                .replaceFirst("\\\"AFTERNOON\\\"", "\\\"MORNING\\\"");
+        String body = createRoomBody(startsAt).replace(missionSlots(startsAt), duplicateSlots);
+        long roomCount = roomCount();
+        long slotCount = roomMissionSlotCount();
+        long inviteCount = roomInviteCount();
+
+        mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON).content(body)
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("ROOM_MISSION_SLOT_INVALID_SCHEDULE"));
+
+        assertThat(roomCount()).isEqualTo(roomCount);
+        assertThat(roomMissionSlotCount()).isEqualTo(slotCount);
+        assertThat(roomInviteCount()).isEqualTo(inviteCount);
+    }
+
+    private long roomCount() {
+        return em.createQuery("select count(r) from RoomEntity r", Long.class).getSingleResult();
+    }
+
+    private long roomMissionSlotCount() {
+        return em.createQuery("select count(s) from RoomMissionSlotEntity s", Long.class).getSingleResult();
+    }
+
+    private long roomInviteCount() {
+        return em.createQuery("select count(i) from RoomInviteEntity i", Long.class).getSingleResult();
     }
 
     @Test
@@ -155,10 +220,11 @@ class AdminRoomApiIntegrationTest {
                   "result_at": "%s",
                   "ends_at": "%s",
                   "total_days": 3,
-                  "max_uses": 6
+                  "max_uses": 6,
+                  "mission_slots": %s
                 }
                 """.formatted(startsAt, startsAt.minusHours(1), startsAt.plusDays(2),
-                startsAt.plusDays(2).plusHours(1), startsAt.plusDays(3));
+                startsAt.plusDays(2).plusHours(1), startsAt.plusDays(3), missionSlots(startsAt));
 
         mockMvc.perform(post("/api/v1/admin/rooms")
                         .contentType(MediaType.APPLICATION_JSON).content(body)

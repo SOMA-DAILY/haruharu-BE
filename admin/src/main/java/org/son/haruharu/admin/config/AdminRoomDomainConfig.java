@@ -1,5 +1,8 @@
 package org.son.haruharu.admin.config;
 
+import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
+import org.son.haruharu.domain.mission.implement.RoomMissionSlotWriter;
+import org.son.haruharu.domain.mission.storage.RoomMissionSlotRepositoryImpl;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.implement.InviteCodeGenerator;
@@ -29,10 +32,11 @@ import org.springframework.context.annotation.Import;
  */
 @Configuration
 @Import({
-        // business — 방 생성·초대코드 유스케이스. 같은 패키지의 coin·notification 얽힌 서비스는 가져오지 않는다.
+        // business — 방·미션 슬롯·초대코드 생성 유스케이스에 필요한 서비스만 가져온다.
         RoomService.class,
         RoomInviteService.class,
-        // implement — 위 두 서비스가 쓰는 협력자만.
+        RoomMissionSlotService.class,
+        // implement — 위 서비스가 쓰는 협력자만.
         RoomReader.class,
         RoomWriter.class,
         RoomMemberReader.class,
@@ -40,6 +44,7 @@ import org.springframework.context.annotation.Import;
         RoomInviteReader.class,
         RoomInviteWriter.class,
         InviteCodeGenerator.class,
+        RoomMissionSlotWriter.class,
         // RoomInviteService.join 이 유저 행 비관적 락(#321)을 걸어 UserReader 에 의존한다. admin 은 join 을
         // 호출하지 않지만 생성자 주입이라 빈이 있어야 컨텍스트가 뜬다 → UserReader·포트 구현체를 함께 배선.
         UserReader.class,
@@ -47,6 +52,7 @@ import org.springframework.context.annotation.Import;
         RoomRepositoryImpl.class,
         RoomMemberRepositoryImpl.class,
         RoomInviteRepositoryImpl.class,
+        RoomMissionSlotRepositoryImpl.class,
         UserRepositoryImpl.class
 })
 public class AdminRoomDomainConfig {

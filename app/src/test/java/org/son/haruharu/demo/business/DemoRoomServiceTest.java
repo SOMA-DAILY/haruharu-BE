@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.business.event.RoomStartedEvent;
+import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.room.implement.MatchResult;
 import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.MatchResultWriter;
@@ -55,6 +56,7 @@ class DemoRoomServiceTest {
     @Mock DemoVideoSeeder demoVideoSeeder;
     @Mock MatchResultReader matchResultReader;
     @Mock MatchResultWriter matchResultWriter;
+    @Mock RoomMissionSlotService roomMissionSlotService;
     @Mock ApplicationEventPublisher eventPublisher;
 
     DemoRoomService service;
@@ -66,7 +68,7 @@ class DemoRoomServiceTest {
     void setUp() {
         service = new DemoRoomService(userReader, roomReader, roomMemberReader, roomWriter, roomMemberWriter,
                 demoGhostProvisioner, demoRoomCleaner, demoVideoSeeder, matchResultReader, matchResultWriter,
-                eventPublisher, clock);
+                roomMissionSlotService, eventPublisher, clock);
     }
 
     private RoomMember memberInRoom(Long roomId) {
@@ -122,6 +124,9 @@ class DemoRoomServiceTest {
         assertThat(eventCaptor.getValue().roomId()).isEqualTo(100L);
 
         verify(demoVideoSeeder).seed(anyList(), any(), any()); // 피드 영상 시드
+        verify(roomMissionSlotService).createDefaultsForRoom(
+                eq(100L), eq(3), eq(LocalDateTime.of(2026, 6, 24, 10, 0)),
+                eq(LocalDateTime.of(2026, 6, 27, 10, 0)));
     }
 
     @Test

@@ -67,8 +67,8 @@ public class AdminRoomController {
     }
 
     @Operation(summary = "방 생성 + 초대코드 발급",
-            description = "스케줄 시각 5개를 직접 입력해 PENDING 방을 만들고 초대코드를 함께 발급한다. "
-                    + "시각 순서(시작 < 선택오픈 < 선택마감 ≤ 발표 ≤ 종료) 위반 시 400. SUPER·OPERATOR 전용.")
+            description = "방 스케줄과 Day별 오전·오후 미션 슬롯을 직접 입력해 PENDING 방을 만들고 "
+                    + "초대코드를 함께 발급한다. 방·슬롯·코드는 한 트랜잭션으로 저장된다. SUPER·OPERATOR 전용.")
     @PostMapping("/rooms")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<AdminRoomCreatedResponse> createRoom(

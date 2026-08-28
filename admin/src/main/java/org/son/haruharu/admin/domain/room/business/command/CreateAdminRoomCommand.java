@@ -1,7 +1,9 @@
 package org.son.haruharu.admin.domain.room.business.command;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
+import org.son.haruharu.domain.mission.business.command.CreateRoomMissionSlotCommand;
 import org.son.haruharu.domain.room.business.command.CreateRoomCommand;
 
 /**
@@ -16,7 +18,8 @@ public record CreateAdminRoomCommand(
         LocalDateTime endsAt,
         int totalDays,
         Integer maxUses,
-        LocalDateTime inviteExpiresAt
+        LocalDateTime inviteExpiresAt,
+        List<CreateRoomMissionSlotCommand> missionSlots
 ) {
     public CreateRoomCommand toRoomCommand() {
         return new CreateRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
