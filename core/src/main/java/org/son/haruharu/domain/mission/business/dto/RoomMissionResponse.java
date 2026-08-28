@@ -1,7 +1,7 @@
 package org.son.haruharu.domain.mission.business.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import org.son.haruharu.domain.mission.implement.Mission;
+import org.son.haruharu.domain.mission.implement.MissionRevision;
 import org.son.haruharu.domain.mission.implement.RoomMission;
 
 import java.time.LocalDateTime;
@@ -14,9 +14,9 @@ public record RoomMissionResponse(
         @Schema(description = "미션 마감 시각(무기한이면 null)", nullable = true) LocalDateTime closesAt,
         @Schema(description = "방 내 순번", example = "0") int sequence
 ) {
-    public static RoomMissionResponse of(RoomMission roomMission, Mission mission) {
+    public static RoomMissionResponse of(RoomMission roomMission, MissionRevision revision) {
         return new RoomMissionResponse(
-                roomMission.id(), mission.description(),
+                roomMission.id(), revision.description(),
                 roomMission.opensAt(), roomMission.closesAt(), roomMission.sequence());
     }
 }

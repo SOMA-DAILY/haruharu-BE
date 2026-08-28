@@ -1,24 +1,36 @@
 package org.son.haruharu.admin.domain.mission.business;
 
+import org.son.haruharu.admin.common.PageResponse;
 import org.son.haruharu.admin.domain.mission.business.command.CreateMissionCommand;
-import org.son.haruharu.admin.domain.mission.business.command.UpdateMissionCommand;
+import org.son.haruharu.admin.domain.mission.business.command.MissionEligibilityCommand;
 import org.son.haruharu.admin.domain.mission.business.dto.AdminMissionResponse;
-import org.son.haruharu.admin.domain.mission.business.exception.AdminMissionDuplicateException;
+import org.son.haruharu.admin.domain.mission.business.dto.AdminMissionRevisionResponse;
 import org.son.haruharu.admin.domain.mission.implement.AdminMissionReader;
 import org.son.haruharu.admin.domain.mission.implement.AdminMissionWriter;
 import org.son.haruharu.domain.mission.implement.Mission;
+import org.son.haruharu.domain.mission.implement.MissionRevision;
+import org.son.haruharu.domain.mission.implement.MissionRevisionEligibility;
+import org.son.haruharu.domain.mission.implement.exception.InvalidMissionRevisionEligibilityException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
- * 어드민 미션 카탈로그 관리(생성·목록·수정, 전부 SUPER 권한 — AdminSecurityConfig에서 제한).
+ * 어드민 미션 카탈로그 관리(생성·목록·revision 발행·상태 변경).
  * 여기서 관리하는 활성 미션이 방 배정(FixedTwicePerDayAssigner)의 후보 풀이 된다.
  */
 @Service
 @Transactional(readOnly = true)
 public class AdminMissionService {
+
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final AdminMissionReader adminMissionReader;
     private final AdminMissionWriter adminMissionWriter;
@@ -28,35 +40,124 @@ public class AdminMissionService {
         this.adminMissionWriter = adminMissionWriter;
     }
 
-    public List<AdminMissionResponse> getMissions() {
-        return adminMissionReader.findAll().stream().map(AdminMissionResponse::from).toList();
+    public PageResponse<AdminMissionResponse> getMissions(int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
+        List<Mission> missions = adminMissionReader.findAll(safePage * safeSize, safeSize);
+        Map<Long, MissionRevision> revisionsById = revisionsById(missions.stream()
+                .map(Mission::activeRevisionId).collect(Collectors.toSet()));
+        Map<Long, List<MissionRevisionEligibility>> eligibilitiesByRevisionId = eligibilitiesByRevisionId(
+                revisionsById.keySet());
+        List<AdminMissionResponse> content = missions.stream()
+                .map(mission -> AdminMissionResponse.of(mission, AdminMissionRevisionResponse.of(
+                        revisionsById.get(mission.activeRevisionId()),
+                        eligibilitiesByRevisionId.getOrDefault(mission.activeRevisionId(), List.of()))))
+                .toList();
+        return PageResponse.of(content, safePage, safeSize, adminMissionReader.countMissions());
     }
 
     @Transactional
     public AdminMissionResponse create(CreateMissionCommand command) {
-        if (adminMissionReader.existsByDescription(command.description())) {
-            throw new AdminMissionDuplicateException();
-        }
-        Mission saved = adminMissionWriter.save(Mission.of(command.description(), command.points()));
-        return AdminMissionResponse.from(saved);
+        validateCommand(command);
+        Mission mission = adminMissionWriter.saveMission(Mission.create());
+        MissionRevision revision = adminMissionWriter.saveRevision(toRevision(mission.id(), 1, command));
+        List<MissionRevisionEligibility> eligibilities = adminMissionWriter.saveEligibilities(
+                toEligibilities(revision.id(), command.eligibilities()));
+        Mission activated = adminMissionWriter.saveMission(mission.activateRevision(revision.id()));
+        return AdminMissionResponse.of(activated, AdminMissionRevisionResponse.of(revision, eligibilities));
     }
 
     @Transactional
-    public AdminMissionResponse update(Long id, UpdateMissionCommand command) {
-        Mission existing = adminMissionReader.getById(id);
-        // 문구를 실제로 바꾸는 경우에만 중복 검사. 생성이 dup 문구를 막으므로 수정도 같은 불변식을 지킨다.
-        // (자기 자신은 검사 대상이 아니므로 "문구가 달라질 때"만 확인 — 별도 exclude 쿼리가 필요 없다.)
-        if (command.description() != null
-                && !command.description().equals(existing.description())
-                && adminMissionReader.existsByDescription(command.description())) {
-            throw new AdminMissionDuplicateException();
+    public AdminMissionResponse publishRevision(Long missionId, CreateMissionCommand command) {
+        validateCommand(command);
+        Mission mission = adminMissionReader.getByIdForUpdate(missionId);
+        int nextNumber = adminMissionReader.getLatestRevision(missionId).revisionNumber() + 1;
+        MissionRevision revision = adminMissionWriter.saveRevision(toRevision(missionId, nextNumber, command));
+        List<MissionRevisionEligibility> eligibilities = adminMissionWriter.saveEligibilities(
+                toEligibilities(revision.id(), command.eligibilities()));
+        Mission activated = adminMissionWriter.saveMission(mission.activateRevision(revision.id()));
+        return AdminMissionResponse.of(activated, AdminMissionRevisionResponse.of(revision, eligibilities));
+    }
+
+    public PageResponse<AdminMissionRevisionResponse> getRevisions(
+            Long missionId,
+            int page,
+            int size
+    ) {
+        adminMissionReader.getById(missionId);
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
+        List<MissionRevision> revisions = adminMissionReader.findRevisions(
+                missionId, safePage * safeSize, safeSize);
+        Map<Long, List<MissionRevisionEligibility>> eligibilitiesByRevisionId = eligibilitiesByRevisionId(
+                revisions.stream().map(MissionRevision::id).collect(Collectors.toSet()));
+        List<AdminMissionRevisionResponse> content = revisions.stream()
+                .map(revision -> AdminMissionRevisionResponse.of(revision,
+                        eligibilitiesByRevisionId.getOrDefault(revision.id(), List.of())))
+                .toList();
+        return PageResponse.of(content, safePage, safeSize, adminMissionReader.countRevisions(missionId));
+    }
+
+    @Transactional
+    public AdminMissionResponse changeStatus(Long missionId, boolean active) {
+        Mission mission = adminMissionReader.getByIdForUpdate(missionId);
+        Mission updated = adminMissionWriter.saveMission(mission.changeActive(active));
+        return toResponse(updated);
+    }
+
+    private AdminMissionResponse toResponse(Mission mission) {
+        MissionRevision revision = adminMissionReader.getRevision(mission.activeRevisionId());
+        return AdminMissionResponse.of(mission, AdminMissionRevisionResponse.of(
+                revision, adminMissionReader.findEligibilities(revision.id())));
+    }
+
+    private MissionRevision toRevision(Long missionId, int revisionNumber, CreateMissionCommand command) {
+        return MissionRevision.create(
+                missionId, revisionNumber, command.description(), command.disclosureDepth(), command.missionGoal(),
+                command.activationChannel(), command.interactionScope(), command.participationBurden(),
+                command.privacyRisk(), command.preferenceLeakRisk(), command.captureDifficulty(),
+                command.semanticCluster(), command.baseQualityScore(), command.fallback());
+    }
+
+    private List<MissionRevisionEligibility> toEligibilities(
+            Long revisionId,
+            List<MissionEligibilityCommand> commands
+    ) {
+        return commands.stream()
+                .map(command -> MissionRevisionEligibility.of(revisionId, command.dayNumber(), command.period()))
+                .toList();
+    }
+
+    private void validateDistinctEligibilities(List<MissionEligibilityCommand> eligibilities) {
+        if (eligibilities == null || eligibilities.isEmpty() || eligibilities.stream().anyMatch(Objects::isNull)) {
+            throw new InvalidMissionRevisionEligibilityException();
         }
-        // 부분 수정: 제공된 필드만 갱신.
-        Mission updated = new Mission(
-                existing.id(),
-                command.description() != null ? command.description() : existing.description(),
-                command.points() != null ? command.points() : existing.points(),
-                command.active() != null ? command.active() : existing.isActive());
-        return AdminMissionResponse.from(adminMissionWriter.save(updated));
+        Set<MissionEligibilityCommand> distinct = new HashSet<>(eligibilities);
+        if (distinct.size() != eligibilities.size()) {
+            throw new InvalidMissionRevisionEligibilityException();
+        }
+    }
+
+    /** 저장 전에 도메인 불변식을 전부 확인해 영속성 컨텍스트에도 부분 aggregate를 남기지 않는다. */
+    private void validateCommand(CreateMissionCommand command) {
+        validateDistinctEligibilities(command.eligibilities());
+        toRevision(1L, 1, command);
+        toEligibilities(1L, command.eligibilities());
+    }
+
+    private Map<Long, MissionRevision> revisionsById(Set<Long> revisionIds) {
+        if (revisionIds.isEmpty()) {
+            return Map.of();
+        }
+        return adminMissionReader.findRevisionsByIds(revisionIds).stream()
+                .collect(Collectors.toMap(MissionRevision::id, Function.identity()));
+    }
+
+    private Map<Long, List<MissionRevisionEligibility>> eligibilitiesByRevisionId(Set<Long> revisionIds) {
+        if (revisionIds.isEmpty()) {
+            return Map.of();
+        }
+        return adminMissionReader.findEligibilitiesByRevisionIds(revisionIds).stream()
+                .collect(Collectors.groupingBy(MissionRevisionEligibility::missionRevisionId));
     }
 }

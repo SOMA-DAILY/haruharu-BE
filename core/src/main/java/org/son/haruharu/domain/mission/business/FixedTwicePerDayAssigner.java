@@ -1,7 +1,7 @@
 package org.son.haruharu.domain.mission.business;
 
-import org.son.haruharu.domain.mission.implement.Mission;
 import org.son.haruharu.domain.mission.implement.MissionReader;
+import org.son.haruharu.domain.mission.implement.MissionRevision;
 import org.son.haruharu.domain.mission.implement.RoomMission;
 import org.son.haruharu.domain.room.implement.Room;
 import org.springframework.stereotype.Component;
@@ -39,7 +39,7 @@ public class FixedTwicePerDayAssigner implements MissionAssigner {
             return List.of(); // 스케줄 시각 없는 구 모델 방은 미션 배정 대상 아님
         }
         int slotCount = room.totalDays() * 2; // 하루 2개(오전·오후)
-        List<Mission> picked = pickDistinct(slotCount);
+        List<MissionRevision> picked = pickDistinct(slotCount);
         if (picked.isEmpty()) {
             return List.of();
         }
@@ -61,9 +61,9 @@ public class FixedTwicePerDayAssigner implements MissionAssigner {
     }
 
     /** 활성 후보에서 최대 count개를 서로 다르게 무작위로 뽑는다(방 안 문구 중복 방지). */
-    private List<Mission> pickDistinct(int count) {
-        List<Mission> pool = new ArrayList<>(missionReader.getActiveCandidates());
-        List<Mission> picked = new ArrayList<>();
+    private List<MissionRevision> pickDistinct(int count) {
+        List<MissionRevision> pool = new ArrayList<>(missionReader.getActiveCandidates());
+        List<MissionRevision> picked = new ArrayList<>();
         while (!pool.isEmpty() && picked.size() < count) {
             picked.add(pool.remove(random.nextInt(pool.size())));
         }

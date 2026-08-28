@@ -33,8 +33,8 @@ public class RoomMissionEntity extends BaseEntity {
     @Column(name = "room_id", nullable = false)
     private Long roomId;
 
-    @Column(name = "mission_id", nullable = false)
-    private Long missionId;
+    @Column(name = "mission_revision_id", nullable = false)
+    private Long missionRevisionId;
 
     @Column(name = "opens_at", nullable = false)
     private LocalDateTime opensAt;
@@ -50,7 +50,7 @@ public class RoomMissionEntity extends BaseEntity {
         RoomMissionEntity entity = new RoomMissionEntity();
         entity.id = roomMission.id();
         entity.roomId = roomMission.roomId();
-        entity.missionId = roomMission.missionId();
+        entity.missionRevisionId = roomMission.missionRevisionId();
         entity.opensAt = roomMission.opensAt();
         entity.closesAt = roomMission.closesAt();
         entity.sequence = roomMission.sequence();
@@ -59,6 +59,6 @@ public class RoomMissionEntity extends BaseEntity {
     }
 
     public RoomMission toDomain() {
-        return new RoomMission(id, roomId, missionId, opensAt, closesAt, sequence, createdAt);
+        return new RoomMission(id, roomId, missionRevisionId, opensAt, closesAt, sequence, createdAt);
     }
 }

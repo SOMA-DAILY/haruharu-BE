@@ -5,6 +5,7 @@ import org.son.haruharu.domain.mission.storage.exception.MissionNotFoundExceptio
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Set;
 
 // MVP 미션 비활성화 동안 활성 소비자 없음(도메인 유지). 미션 재개 시 RoomToday/Video 흐름에서 다시 주입된다.
 @Component
@@ -14,12 +15,16 @@ public class MissionReader {
     private final MissionRepository missionRepository;
 
     /** 활성 미션 후보 풀(MVP: 전역 풀 노출). 방/Day/슬롯별 고정이 필요해지면 MissionCandidateStrategy로 확장. */
-    public List<Mission> getActiveCandidates() {
-        return missionRepository.findActive();
+    public List<MissionRevision> getActiveCandidates() {
+        return missionRepository.findActiveRevisions();
     }
 
-    public Mission getById(Long id) {
-        return missionRepository.findById(id)
+    public MissionRevision getRevisionById(Long id) {
+        return missionRepository.findRevisionById(id)
                 .orElseThrow(MissionNotFoundException::new);
+    }
+
+    public List<MissionRevision> getRevisionsByIds(Set<Long> revisionIds) {
+        return missionRepository.findRevisionsByIds(revisionIds);
     }
 }
