@@ -154,7 +154,7 @@ public class DemoRoomService {
         // 과거 슬롯에 전원의 영상을 심어 피드를 채운다(현재 슬롯은 리뷰어 촬영용으로 비움).
         demoVideoSeeder.seed(saved, startsAt, now);
 
-        // 멤버 커밋 후(AFTER_COMMIT) GroupChatAutoCreateListener·MissionAutoAssignListener 가 채팅·미션을 자동 생성한다.
+        // 멤버 커밋 후 GroupChatAutoCreateListener가 채팅을 만들고, 미션은 별도 JIT 배치가 슬롯별로 배정한다.
         eventPublisher.publishEvent(new RoomStartedEvent(room.id()));
     }
 }

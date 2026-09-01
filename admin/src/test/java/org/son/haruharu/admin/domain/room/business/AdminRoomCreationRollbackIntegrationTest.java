@@ -28,7 +28,7 @@ import static org.mockito.BDDMockito.given;
 @ActiveProfiles("test")
 class AdminRoomCreationRollbackIntegrationTest {
 
-    private static final LocalDateTime STARTS_AT = LocalDateTime.of(2026, 9, 1, 9, 0);
+    private static final LocalDateTime STARTS_AT = LocalDateTime.now().plusDays(1).withNano(0);
 
     @Autowired
     AdminRoomCommandService service;

@@ -25,7 +25,10 @@ import lombok.NoArgsConstructor;
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_room_mission_slots_room_day_period",
                 columnNames = {"room_id", "day_number", "period"}),
-        indexes = @Index(name = "idx_room_mission_slots_opens_at", columnList = "opens_at")
+        indexes = {
+                @Index(name = "idx_room_mission_slots_opens_at", columnList = "opens_at"),
+                @Index(name = "idx_room_mission_slots_closes_at", columnList = "closes_at")
+        }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RoomMissionSlotEntity extends BaseEntity {

@@ -12,9 +12,12 @@ public class RoomMissionReader {
 
     private final RoomMissionRepository roomMissionRepository;
 
-    /** 방에 미션 인스턴스가 이미 배정됐는지. 자동 배정 재발행 멱등 게이트. */
-    public boolean isAssigned(Long roomId) {
-        return roomMissionRepository.existsByRoomId(roomId);
+    public boolean isAssignedToSlot(Long roomMissionSlotId) {
+        return roomMissionRepository.existsByRoomMissionSlotId(roomMissionSlotId);
+    }
+
+    public List<RoomMission> getByRoomId(Long roomId) {
+        return roomMissionRepository.findByRoomId(roomId);
     }
 
     /** 지금 열려 있는 미션들(opensAt ≤ now < closesAt, sequence 오름차순). /today 미션 카드용. */

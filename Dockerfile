@@ -26,6 +26,7 @@ RUN ./gradlew :${MODULE}:bootJar -x test --no-daemon
 
 FROM eclipse-temurin:21-jre-alpine
 ARG MODULE
+ARG APPLICATION_COMMIT_SHA=unknown
 WORKDIR /app
 COPY --from=builder /app/${MODULE}/build/libs/*.jar app.jar
 EXPOSE 8080
@@ -33,6 +34,7 @@ EXPOSE 8080
 # 로그 타임스탬프를 KST로 남긴다(#257). TimeZoneConfig(@PostConstruct)는 Logback 초기화보다 늦게 실행돼
 # 로그에는 컨테이너 기본 타임존(UTC)이 캐싱된다 — 앱 로직은 KST인데 로그만 9시간 어긋나는 원인.
 # JVM 기동 전에 정해져야 하므로 여기서 지정한다. TimeZoneConfig는 로컬·테스트 방어용으로 존치.
-ENV TZ=Asia/Seoul
+ENV TZ=Asia/Seoul \
+    APPLICATION_COMMIT_SHA=${APPLICATION_COMMIT_SHA}
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

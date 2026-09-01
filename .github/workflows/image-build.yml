@@ -55,6 +55,7 @@ jobs:
           push: true
           build-args: |
             MODULE=app
+            APPLICATION_COMMIT_SHA=${{ steps.meta.outputs.sha }}
           tags: |
             ${{ env.ECR_REGISTRY }}/haruharu-app:${{ steps.meta.outputs.sha }}
             ${{ env.ECR_REGISTRY }}/haruharu-app:${{ steps.meta.outputs.branch }}
@@ -69,6 +70,7 @@ jobs:
           push: true
           build-args: |
             MODULE=admin
+            APPLICATION_COMMIT_SHA=${{ steps.meta.outputs.sha }}
           tags: |
             ${{ env.ECR_REGISTRY }}/haruharu-admin:${{ steps.meta.outputs.sha }}
             ${{ env.ECR_REGISTRY }}/haruharu-admin:${{ steps.meta.outputs.branch }}

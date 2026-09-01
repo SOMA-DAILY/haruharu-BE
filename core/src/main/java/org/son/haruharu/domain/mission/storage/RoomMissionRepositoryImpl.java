@@ -14,15 +14,13 @@ public class RoomMissionRepositoryImpl implements RoomMissionRepository {
     private final RoomMissionJpaRepository jpaRepository;
 
     @Override
-    public List<RoomMission> saveAll(List<RoomMission> roomMissions) {
-        return jpaRepository.saveAll(roomMissions.stream().map(RoomMissionEntity::from).toList()).stream()
-                .map(RoomMissionEntity::toDomain)
-                .toList();
+    public RoomMission save(RoomMission roomMission) {
+        return jpaRepository.saveAndFlush(RoomMissionEntity.from(roomMission)).toDomain();
     }
 
     @Override
-    public boolean existsByRoomId(Long roomId) {
-        return jpaRepository.existsByRoomId(roomId);
+    public boolean existsByRoomMissionSlotId(Long roomMissionSlotId) {
+        return jpaRepository.existsByRoomMissionSlotId(roomMissionSlotId);
     }
 
     @Override

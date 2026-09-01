@@ -57,6 +57,14 @@ fcm:
 # 구름 경제(#143): 신청 20 / 완주 5+5+5 / 미매칭 위로 5 → 완주+미매칭 = 전액 환급(±0).
 # 아래 4개 값은 하나의 불변식(전액 환급)이라 env 오버라이드 없이 yaml 리터럴로만 관리한다 — 변경은 PR로.
 haruharu:
+  application:
+    commit-sha: ${APPLICATION_COMMIT_SHA:unknown}
+  mission:
+    assignment:
+      enabled: ${MISSION_ASSIGNMENT_ENABLED:true}
+      lead-minutes: ${MISSION_ASSIGNMENT_LEAD_MINUTES:60}
+      batch-size: ${MISSION_ASSIGNMENT_BATCH_SIZE:100}
+      cron: ${MISSION_ASSIGNMENT_CRON:0 * * * * *}
   # 첫 가입 1회 보너스 구름(#232). 정책값은 코드 @DefaultValue가 아닌 이 yaml 리터럴로 관리(matching.enter-cost와 동일 방침).
   coin:
     signup-bonus: 20

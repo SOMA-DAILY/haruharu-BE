@@ -14,9 +14,8 @@ public class MissionReader {
 
     private final MissionRepository missionRepository;
 
-    /** 활성 미션 후보 풀(MVP: 전역 풀 노출). 방/Day/슬롯별 고정이 필요해지면 MissionCandidateStrategy로 확장. */
-    public List<MissionRevision> getActiveCandidates() {
-        return missionRepository.findActiveRevisions();
+    public List<MissionCatalogEntry> getActiveCatalog() {
+        return missionRepository.findActiveCatalog();
     }
 
     public MissionRevision getRevisionById(Long id) {

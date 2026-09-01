@@ -6,7 +6,7 @@ import java.util.Set;
 
 public interface MissionRepository {
 
-    List<MissionRevision> findActiveRevisions();
+    List<MissionCatalogEntry> findActiveCatalog();
 
     List<MissionRevision> findRevisionsByIds(Set<Long> revisionIds);
 
