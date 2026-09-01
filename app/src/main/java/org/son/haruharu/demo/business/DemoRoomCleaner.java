@@ -44,7 +44,10 @@ public class DemoRoomCleaner {
         jdbcTemplate.update("""
                 DELETE FROM final_selections WHERE room_member_id IN (
                     SELECT id FROM room_members WHERE room_id = ?)""", roomId);
-        // 미션 인스턴스(#341) — DevRoomCleaner엔 없는 정리
+        // 미션 배정 incident → 인스턴스 → 슬롯 (FK 역순)
+        jdbcTemplate.update("""
+                DELETE FROM mission_assignment_incidents WHERE room_mission_slot_id IN (
+                    SELECT id FROM room_mission_slots WHERE room_id = ?)""", roomId);
         jdbcTemplate.update("DELETE FROM room_missions WHERE room_id = ?", roomId);
         jdbcTemplate.update("DELETE FROM room_mission_slots WHERE room_id = ?", roomId);
         // 영상(리액션 → 포스트)

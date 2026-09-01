@@ -8,5 +8,7 @@ public interface RoomMissionJpaRepository extends JpaRepository<RoomMissionEntit
 
     boolean existsByRoomId(Long roomId);
 
+    boolean existsByRoomMissionSlotId(Long roomMissionSlotId);
+
     List<RoomMissionEntity> findByRoomIdOrderBySequenceAsc(Long roomId);
 }

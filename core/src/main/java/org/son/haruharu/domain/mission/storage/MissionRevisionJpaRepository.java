@@ -14,9 +14,9 @@ public interface MissionRevisionJpaRepository extends JpaRepository<MissionRevis
             from MissionRevisionEntity revision, MissionEntity mission
             where revision.id = mission.activeRevisionId
               and mission.active = true
-              and revision.fallback = false
+            order by revision.id
             """)
-    List<MissionRevisionEntity> findActiveCurrentRevisions();
+    List<MissionRevisionEntity> findActiveCurrentCatalog();
 
     List<MissionRevisionEntity> findByIdIn(Collection<Long> ids);
 

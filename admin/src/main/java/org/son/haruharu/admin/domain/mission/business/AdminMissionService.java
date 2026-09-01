@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 /**
  * 어드민 미션 카탈로그 관리(생성·목록·revision 발행·상태 변경).
- * 여기서 관리하는 활성 미션이 방 배정(FixedTwicePerDayAssigner)의 후보 풀이 된다.
+ * 여기서 관리하는 활성 current revision과 eligibility가 JIT Random V1의 후보 풀이 된다.
  */
 @Service
 @Transactional(readOnly = true)

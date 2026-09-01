@@ -8,17 +8,7 @@ import org.son.haruharu.domain.demoaccess.implement.DemoAccessCode;
 import org.son.haruharu.domain.demoaccess.storage.DemoAccessCodeEntity;
 import org.son.haruharu.domain.demoaccess.storage.DemoAccessCodeJpaRepository;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
-import org.son.haruharu.domain.mission.implement.ActivationChannel;
-import org.son.haruharu.domain.mission.implement.InteractionScope;
-import org.son.haruharu.domain.mission.implement.Mission;
-import org.son.haruharu.domain.mission.implement.MissionAttributeLevel;
-import org.son.haruharu.domain.mission.implement.MissionGoal;
-import org.son.haruharu.domain.mission.implement.MissionRevision;
-import org.son.haruharu.domain.mission.implement.PreferenceLeakRisk;
-import org.son.haruharu.domain.mission.storage.MissionEntity;
-import org.son.haruharu.domain.mission.storage.MissionJpaRepository;
-import org.son.haruharu.domain.mission.storage.MissionRevisionEntity;
-import org.son.haruharu.domain.mission.storage.MissionRevisionJpaRepository;
+import org.son.haruharu.domain.mission.implement.RoomMissionSlotReader;
 import org.son.haruharu.domain.mission.storage.RoomMissionJpaRepository;
 import org.son.haruharu.domain.room.implement.MatchResult;
 import org.son.haruharu.domain.room.implement.MatchResultReader;
@@ -33,9 +23,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.json.JsonMapper;
-
-import java.math.BigDecimal;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -59,20 +46,15 @@ class DemoLoginApiIntegrationTest {
     @Autowired JwtProvider jwtProvider;
     @Autowired UserCredentialReader userCredentialReader;
     @Autowired DemoAccessCodeJpaRepository demoAccessCodeJpaRepository;
-    @Autowired MissionJpaRepository missionJpaRepository;
-    @Autowired MissionRevisionJpaRepository missionRevisionJpaRepository;
     @Autowired RoomMemberReader roomMemberReader;
     @Autowired RoomMissionJpaRepository roomMissionJpaRepository;
+    @Autowired RoomMissionSlotReader roomMissionSlotReader;
     @Autowired MatchResultReader matchResultReader;
     @Autowired ChatRoomReader chatRoomReader;
 
     @BeforeEach
     void setCode() {
         demoAccessCodeJpaRepository.save(DemoAccessCodeEntity.from(DemoAccessCode.of(CODE)));
-        if (missionRevisionJpaRepository.findActiveCurrentRevisions().isEmpty()) {
-            List.of("데모 미션 A", "데모 미션 B", "데모 미션 C", "데모 미션 D", "데모 미션 E", "데모 미션 F")
-                    .forEach(this::persistMission);
-        }
     }
 
     private Long userIdOf(MvcResult result) throws Exception {
@@ -104,12 +86,13 @@ class DemoLoginApiIntegrationTest {
                 .extracting("userId")
                 .isEqualTo(demoUserId);
 
-        // 로그인이 방을 세웠다: 데모+유령 6인, 그리고 RoomStartedEvent로 미션이 자동 배정됐다(이벤트 파이프라인 검증).
+        // 로그인이 방과 슬롯을 세운다. 미션 인스턴스는 RoomStartedEvent가 아니라 별도 JIT 배치가 배정한다.
         Long roomId = roomMemberReader.findByUserId(demoUserId).get(0).roomId();
         assertThat(roomMemberReader.getByRoomId(roomId)).hasSize(6);
         assertThat(roomMemberReader.getByRoomId(roomId)).extracting(RoomMember::gender)
                 .filteredOn("MALE"::equals).hasSize(3); // 3:3 구성
-        assertThat(roomMissionJpaRepository.existsByRoomId(roomId)).isTrue();
+        assertThat(roomMissionSlotReader.getByRoomId(roomId)).hasSize(6);
+        assertThat(roomMissionJpaRepository.existsByRoomId(roomId)).isFalse();
 
         // 데모 토큰으로 피드를 열면 과거 슬롯에 심어진 영상이 보인다(데모도 그 슬롯을 올려 게이트 통과).
         mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId).header("Authorization", "Bearer " + accessToken))
@@ -134,17 +117,5 @@ class DemoLoginApiIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.error.code").value("DEMO_ACCESS_DENIED"));
-    }
-
-    private void persistMission(String description) {
-        Mission mission = missionJpaRepository.save(MissionEntity.from(Mission.create())).toDomain();
-        MissionRevision revision = MissionRevision.create(
-                mission.id(), 1, description, MissionAttributeLevel.LOW, MissionGoal.OBSERVATION,
-                ActivationChannel.VIDEO, InteractionScope.SELF,
-                MissionAttributeLevel.LOW, MissionAttributeLevel.LOW,
-                PreferenceLeakRisk.NONE, MissionAttributeLevel.LOW,
-                "DEMO_" + mission.id(), new BigDecimal("0.8"), false);
-        MissionRevision saved = missionRevisionJpaRepository.save(MissionRevisionEntity.from(revision)).toDomain();
-        missionJpaRepository.save(MissionEntity.from(mission.activateRevision(saved.id())));
     }
 }
