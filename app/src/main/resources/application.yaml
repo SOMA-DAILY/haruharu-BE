@@ -65,6 +65,8 @@ haruharu:
       lead-minutes: ${MISSION_ASSIGNMENT_LEAD_MINUTES:60}
       batch-size: ${MISSION_ASSIGNMENT_BATCH_SIZE:100}
       cron: ${MISSION_ASSIGNMENT_CRON:0 * * * * *}
+      # 활성 배정 정책. RANDOM_V1 은 Rule V1 효과 비교용 대조군으로 남겨둔다.
+      policy: ${MISSION_ASSIGNMENT_POLICY:RULE_V1}
     # settle-minutes: 시간창 종료 후 집계까지 두는 여유. 활동 이벤트가 AFTER_COMMIT이라 지연 도착분을 놓치지 않는다.
     # cron: assignment(매분 0초)와 같은 초에 두지 말 것. Spring Batch JobRepository 는 SERIALIZABLE 로
     #       메타데이터를 쓰므로 두 잡이 동시에 launch 하면 직렬화 충돌로 한쪽이 아예 실행되지 못한다.

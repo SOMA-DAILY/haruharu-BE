@@ -7,6 +7,7 @@ import org.son.haruharu.domain.mission.implement.MissionAssignmentContextSnapsho
 import org.son.haruharu.domain.mission.implement.MissionAssignmentRelaxationLevel;
 import org.son.haruharu.domain.mission.implement.MissionCandidateSnapshot;
 import org.son.haruharu.domain.mission.implement.RoomMission;
+import org.son.haruharu.domain.mission.implement.RoomStateSnapshot;
 import org.son.haruharu.domain.mission.implement.RoomMissionReader;
 import org.son.haruharu.domain.mission.implement.RoomMissionSlot;
 import org.son.haruharu.domain.mission.implement.RoomMissionWriter;
@@ -94,7 +95,7 @@ class MissionAssignmentConcurrencyIntegrationTest {
                 "RANDOM_V1", "catalog-sha", "context-v1", assignedAt,
                 new MissionAssignmentContextSnapshot(
                         room.id(), slot.id(), slot.dayNumber(), slot.period().name(),
-                        slot.opensAt(), slot.closesAt(), List.of(), assignedAt),
+                        slot.opensAt(), slot.closesAt(), List.of(), RoomStateSnapshot.empty(6), assignedAt),
                 "candidate-v1",
                 new MissionCandidateSnapshot(List.of(
                         new MissionCandidateSnapshot.Candidate(revisionId, revisionId, 1, false, probability))),

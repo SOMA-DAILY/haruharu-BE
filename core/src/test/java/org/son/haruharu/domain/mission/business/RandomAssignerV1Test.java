@@ -92,8 +92,9 @@ class RandomAssignerV1Test {
         RoomMissionSlot slot = new RoomMissionSlot(
                 100L, room.id(), 1, MissionPeriod.MORNING, OPENS_AT, CLOSES_AT, OPENS_AT.minusDays(1));
         return new MissionAssignmentContext(
-                room, slot, 0, List.of(), candidates, fallbackCandidates,
-                "context-v1", now, now, "catalog-sha", "app-sha", seed);
+                room, slot, 0, List.of(), List.of(), candidates, List.of(), fallbackCandidates,
+                org.son.haruharu.domain.mission.implement.RoomStateSnapshot.empty(6),
+                "context-v2", now, now, "catalog-sha", "app-sha", seed);
     }
 
     private MissionRevision revision(Long id, boolean fallback) {

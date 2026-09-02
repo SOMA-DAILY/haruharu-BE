@@ -11,6 +11,7 @@ public record MissionAssignmentContextSnapshot(
         LocalDateTime opensAt,
         LocalDateTime closesAt,
         List<Long> previousMissionRevisionIds,
+        RoomStateSnapshot roomState,
         LocalDateTime contextAsOf
 ) {
 }
