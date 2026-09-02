@@ -19,6 +19,7 @@ import org.son.haruharu.domain.mission.implement.MissionPeriod;
 import org.son.haruharu.domain.mission.implement.MissionRevision;
 import org.son.haruharu.domain.mission.implement.PreferenceLeakRisk;
 import org.son.haruharu.domain.mission.implement.RoomMission;
+import org.son.haruharu.domain.mission.implement.RoomStateSnapshot;
 import org.son.haruharu.domain.mission.implement.RoomMissionSlot;
 import org.son.haruharu.domain.mission.implement.RoomMissionWriter;
 import org.son.haruharu.domain.mission.storage.MissionEntity;
@@ -395,7 +396,7 @@ class MissionMemberStatePostgresIntegrationTest {
                 "RANDOM_V1", "catalog-test", "context-v1", assignedAt,
                 new MissionAssignmentContextSnapshot(
                         room.id(), slot.id(), slot.dayNumber(), slot.period().name(),
-                        opensAt, opensAt.plusHours(1), List.of(), assignedAt),
+                        opensAt, opensAt.plusHours(1), List.of(), RoomStateSnapshot.empty(6), assignedAt),
                 "candidate-v1", new MissionCandidateSnapshot(List.of(
                         new MissionCandidateSnapshot.Candidate(
                                 savedRevision.id(), logical.id(), 1, false, BigDecimal.ONE))),

@@ -6,7 +6,6 @@ import org.son.haruharu.domain.mission.implement.MissionAssignmentRelaxationLeve
 import org.son.haruharu.domain.mission.implement.MissionCandidateSnapshot;
 import org.son.haruharu.domain.mission.implement.MissionRevision;
 import org.son.haruharu.domain.mission.implement.RoomMission;
-import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -17,7 +16,6 @@ import java.util.List;
 import java.util.SplittableRandom;
 import java.util.UUID;
 
-@Component
 public class RandomAssignerV1 implements MissionAssigner {
 
     static final String POLICY_VERSION = "RANDOM_V1";
@@ -49,7 +47,8 @@ public class RandomAssignerV1 implements MissionAssigner {
         MissionAssignmentContextSnapshot contextSnapshot = new MissionAssignmentContextSnapshot(
                 context.room().id(), context.missionSlot().id(), context.missionSlot().dayNumber(),
                 context.missionSlot().period().name(), context.missionSlot().opensAt(),
-                context.missionSlot().closesAt(), context.previousMissionRevisionIds(), context.contextAsOf());
+                context.missionSlot().closesAt(), context.previousMissionRevisionIds(),
+                context.roomState(), context.contextAsOf());
         long delaySeconds = Math.max(0L, Duration.between(context.missionSlot().opensAt(), context.now()).getSeconds());
         UUID explorationId = UUID.nameUUIDFromBytes((context.missionSlot().id() + ":" + context.rngSeed())
                 .getBytes(StandardCharsets.UTF_8));

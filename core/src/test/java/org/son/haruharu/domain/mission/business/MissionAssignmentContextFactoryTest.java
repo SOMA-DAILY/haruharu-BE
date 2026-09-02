@@ -18,6 +18,7 @@ import org.son.haruharu.domain.mission.implement.MissionRevisionEligibility;
 import org.son.haruharu.domain.mission.implement.PreferenceLeakRisk;
 import org.son.haruharu.domain.mission.implement.RoomMission;
 import org.son.haruharu.domain.mission.implement.RoomMissionReader;
+import org.son.haruharu.domain.mission.implement.RoomStateReader;
 import org.son.haruharu.domain.mission.implement.RoomMissionSlot;
 import org.son.haruharu.domain.mission.implement.RoomMissionSlotReader;
 import org.son.haruharu.domain.room.implement.Room;
@@ -38,13 +39,14 @@ class MissionAssignmentContextFactoryTest {
     @Mock RoomMissionReader roomMissionReader;
     @Mock RoomMissionSlotReader slotReader;
     @Mock MissionAssignmentSeedGenerator seedGenerator;
+    @Mock RoomStateReader roomStateReader;
 
     MissionAssignmentContextFactory factory;
 
     @BeforeEach
     void setUp() {
         factory = new MissionAssignmentContextFactory(
-                missionReader, roomMissionReader, slotReader, seedGenerator, "commit-sha");
+                missionReader, roomMissionReader, slotReader, seedGenerator, roomStateReader, "commit-sha");
     }
 
     @Test

@@ -43,8 +43,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+// 이 테스트는 #365 의 JIT 배정 기계 장치를 검증한다. 기본 정책이 RULE_V1 로 바뀌어도
+// 대조군인 RANDOM_V1 경로가 계속 동작하는지 확인해야 하므로 정책을 고정한다.
 @SpringBootTest(properties = {
         "haruharu.application.commit-sha=test-sha",
+        "haruharu.mission.assignment.policy=RANDOM_V1",
         "spring.datasource.url=jdbc:h2:mem:mission_jit_assignment_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE"
 })
 @ActiveProfiles("test")
