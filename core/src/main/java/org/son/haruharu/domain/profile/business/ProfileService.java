@@ -71,13 +71,11 @@ public class ProfileService {
         return userProfileReader.getByUserId(userId).nickname();
     }
 
-    /** 온보딩 완료 판정용: 프로필(nickname)과 이미지가 모두 갖춰졌는지 여부. */
+    /** 온보딩 완료 판정용: 공백이 아닌 닉네임이 저장되어 있는지 여부. */
     public boolean hasCompletedProfile(Long userId) {
-        boolean profileFilled = userProfileReader.findByUserId(userId)
+        return userProfileReader.findByUserId(userId)
             .map(profile -> profile.nickname() != null && !profile.nickname().isBlank())
             .orElse(false);
-        boolean hasImage = !userImageReader.getAllByUserId(userId).isEmpty();
-        return profileFilled && hasImage;
     }
 
     @Transactional

@@ -28,7 +28,7 @@ public class ValueController {
     }
 
     @Operation(summary = "활성 가치관 질문 목록 조회",
-            description = "온보딩·가치관 화면용 활성 질문 전체. 각 질문은 option_a/option_b 선택지를 포함한다.")
+            description = "가치관 선택·편집 화면용 활성 질문 전체. 각 질문은 option_a/option_b 선택지를 포함한다.")
     @GetMapping("/value-questions")
     public ApiResponse<ValueQuestionsResponse> getQuestions() {
         return ApiResponse.ok(valueService.getActiveQuestions());

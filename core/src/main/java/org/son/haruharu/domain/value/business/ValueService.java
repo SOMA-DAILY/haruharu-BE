@@ -51,7 +51,7 @@ public class ValueService {
         return MyValueAnswersResponse.of(valueQuestionReader.getAllActive(), answerByQuestion);
     }
 
-    /** 온보딩 완료 판정용: 가치관 답변이 하나라도 저장되어 있는지 여부. */
+    /** 사용자가 가치관 답변을 하나라도 저장했는지 여부. */
     public boolean hasAnswered(Long userId) {
         return !userValueAnswerReader.getAllByUserId(userId).isEmpty();
     }
@@ -82,7 +82,7 @@ public class ValueService {
             if (!ALLOWED_ANSWERS.contains(answer)) {
                 throw new InvalidValueAnswerException();
             }
-            // 온보딩은 활성 질문에만 답할 수 있다. 비활성/존재하지 않는 질문이면 404.
+            // 활성 질문에만 답할 수 있다. 비활성/존재하지 않는 질문이면 404.
             if (!activeQuestionIds.contains(questionId)) {
                 throw new ValueQuestionNotFoundException();
             }

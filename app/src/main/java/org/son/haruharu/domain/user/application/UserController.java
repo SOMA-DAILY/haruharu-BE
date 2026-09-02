@@ -34,8 +34,8 @@ public class UserController {
     }
 
     @Operation(summary = "온보딩 완료 처리",
-            description = "프로필·가치관·이미지가 모두 준비된 경우 온보딩을 완료 처리하고 갱신된 user_status를 반환한다. "
-                    + "필수 항목이 미완료면 400(ONBOARDING_INCOMPLETE), 사용자가 없으면 404(USER_NOT_FOUND).")
+            description = "공백이 아닌 닉네임이 등록된 경우 온보딩을 완료 처리하고 갱신된 user_status를 반환한다. "
+                    + "닉네임이 미등록이면 400(ONBOARDING_INCOMPLETE), 사용자가 없으면 404(USER_NOT_FOUND).")
     @PostMapping("/onboarding/complete")
     public ApiResponse<OnboardingStatusResponse> completeOnboarding(Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();

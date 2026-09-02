@@ -5,24 +5,13 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.son.haruharu.domain.profile.implement.DrinkingStatus;
-import org.son.haruharu.domain.profile.implement.SmokingStatus;
-import org.son.haruharu.domain.profile.implement.UserImage;
-import org.son.haruharu.domain.profile.implement.UserProfile;
-import org.son.haruharu.domain.profile.storage.UserImageEntity;
-import org.son.haruharu.domain.profile.storage.UserImageJpaRepository;
-import org.son.haruharu.domain.profile.storage.UserProfileEntity;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.son.haruharu.domain.profile.storage.UserProfileJpaRepository;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserStatus;
 import org.son.haruharu.domain.user.storage.UserEntity;
 import org.son.haruharu.domain.user.storage.UserJpaRepository;
-import org.son.haruharu.domain.value.implement.UserValueAnswer;
-import org.son.haruharu.domain.value.implement.ValueQuestion;
-import org.son.haruharu.domain.value.storage.UserValueAnswerEntity;
-import org.son.haruharu.domain.value.storage.UserValueAnswerJpaRepository;
-import org.son.haruharu.domain.value.storage.ValueQuestionEntity;
-import org.son.haruharu.domain.value.storage.ValueQuestionJpaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -32,8 +21,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -45,9 +36,6 @@ class OnboardingApiIntegrationTest {
     @Autowired MockMvc mockMvc;
     @Autowired UserJpaRepository userJpaRepository;
     @Autowired UserProfileJpaRepository userProfileJpaRepository;
-    @Autowired UserImageJpaRepository userImageJpaRepository;
-    @Autowired ValueQuestionJpaRepository valueQuestionJpaRepository;
-    @Autowired UserValueAnswerJpaRepository userValueAnswerJpaRepository;
     @Autowired JdbcTemplate jdbcTemplate;
 
     @BeforeEach
@@ -69,30 +57,18 @@ class OnboardingApiIntegrationTest {
         return userJpaRepository.save(UserEntity.from(new User(null, status, null))).toDomain().id();
     }
 
-    private void saveProfileWithNickname(Long userId) {
-        userProfileJpaRepository.save(UserProfileEntity.from(
-                new UserProfile(null, userId, "서울", "직장인", 175, "INFP", "테스터",
-                        DrinkingStatus.SOMETIMES, SmokingStatus.NONE)));
-    }
-
-    private void saveImage(Long userId) {
-        userImageJpaRepository.save(UserImageEntity.from(new UserImage(null, userId, "https://cdn/img.png", 0)));
-    }
-
-    private void saveValueAnswer(Long userId) {
-        Long questionId = valueQuestionJpaRepository.save(ValueQuestionEntity.from(
-                new ValueQuestion(null, "질문", "A", "B", "LIFESTYLE", 1, true))).toDomain().id();
-        userValueAnswerJpaRepository.save(UserValueAnswerEntity.from(
-                new UserValueAnswer(null, userId, questionId, "A")));
-    }
-
     @Test
-    @DisplayName("프로필·가치관·이미지를 모두 갖춘 ONBOARDING 유저가 온보딩 완료 시 200·ACTIVE 반환 후 DB 상태가 ACTIVE가 된다")
-    void givenCompletedData_whenCompleteOnboarding_thenReturnsActiveAndPersists() throws Exception {
+    @DisplayName("닉네임만 PUT한 ONBOARDING 유저가 완료 API 호출 시 200·ACTIVE 반환 후 DB 상태가 ACTIVE가 된다")
+    void givenNicknameOnly_whenUpdateProfileAndCompleteOnboarding_thenReturnsActiveAndPersists() throws Exception {
         Long userId = saveUser(UserStatus.ONBOARDING);
-        saveProfileWithNickname(userId);
-        saveImage(userId);
-        saveValueAnswer(userId);
+
+        mockMvc.perform(put("/api/v1/users/me/profile")
+                        .with(authentication(auth(userId)))
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"nickname\":\"하루\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.data.nickname").value("하루"));
 
         mockMvc.perform(post("/api/v1/users/me/onboarding/complete")
                         .with(authentication(auth(userId))))
@@ -102,14 +78,24 @@ class OnboardingApiIntegrationTest {
 
         assertThat(userJpaRepository.findById(userId).orElseThrow().toDomain().status())
                 .isEqualTo(UserStatus.ACTIVE);
+        assertThat(userProfileJpaRepository.findByUserId(userId).orElseThrow().toDomain().nickname())
+                .isEqualTo("하루");
     }
 
-    @Test
-    @DisplayName("이미지가 없는 ONBOARDING 유저가 온보딩 완료 시 400을 반환하고 상태가 전이되지 않는다")
-    void givenNoImage_whenCompleteOnboarding_thenReturns400AndKeepsOnboarding() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"nickname\":null}", "{\"nickname\":\"\"}", "{\"nickname\":\"   \"}"})
+    @DisplayName("닉네임 누락·null·빈 문자열·공백 PUT은 400이고 완료 API도 ONBOARDING_INCOMPLETE를 반환한다")
+    void givenInvalidNickname_whenUpdateProfileAndCompleteOnboarding_thenReturns400AndKeepsOnboarding(String body)
+            throws Exception {
         Long userId = saveUser(UserStatus.ONBOARDING);
-        saveProfileWithNickname(userId);
-        saveValueAnswer(userId);
+
+        mockMvc.perform(put("/api/v1/users/me/profile")
+                        .with(authentication(auth(userId)))
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 
         mockMvc.perform(post("/api/v1/users/me/onboarding/complete")
                         .with(authentication(auth(userId))))
