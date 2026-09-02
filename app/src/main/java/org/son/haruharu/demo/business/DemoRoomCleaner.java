@@ -48,6 +48,9 @@ public class DemoRoomCleaner {
         jdbcTemplate.update("""
                 DELETE FROM mission_assignment_incidents WHERE room_mission_slot_id IN (
                     SELECT id FROM room_mission_slots WHERE room_id = ?)""", roomId);
+        jdbcTemplate.update(
+                "DELETE FROM mission_member_states WHERE room_mission_id IN (SELECT id FROM room_missions WHERE room_id = ?)",
+                roomId);
         jdbcTemplate.update("DELETE FROM room_missions WHERE room_id = ?", roomId);
         jdbcTemplate.update("DELETE FROM room_mission_slots WHERE room_id = ?", roomId);
         // 영상(리액션 → 포스트)

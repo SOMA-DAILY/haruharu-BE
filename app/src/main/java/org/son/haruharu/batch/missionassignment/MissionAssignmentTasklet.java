@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.son.haruharu.domain.mission.business.MissionAssignmentBatchResult;
 import org.son.haruharu.domain.mission.business.MissionAssignmentBatchService;
+import org.son.haruharu.domain.mission.business.MissionMemberStateInitializer;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.StepContribution;
 import org.springframework.batch.core.step.tasklet.Tasklet;
@@ -20,15 +21,18 @@ public class MissionAssignmentTasklet implements Tasklet {
     private static final Logger log = LoggerFactory.getLogger(MissionAssignmentTasklet.class);
 
     private final MissionAssignmentBatchService batchService;
+    private final MissionMemberStateInitializer stateInitializer;
     private final MissionAssignmentBatchProperties properties;
     private final Clock clock;
 
     public MissionAssignmentTasklet(
             MissionAssignmentBatchService batchService,
+            MissionMemberStateInitializer stateInitializer,
             MissionAssignmentBatchProperties properties,
             Clock clock
     ) {
         this.batchService = batchService;
+        this.stateInitializer = stateInitializer;
         this.properties = properties;
         this.clock = clock;
     }
@@ -38,6 +42,7 @@ public class MissionAssignmentTasklet implements Tasklet {
         LocalDateTime now = LocalDateTime.now(clock);
         MissionAssignmentBatchResult result = batchService.processDueSlots(
                 now, Duration.ofMinutes(properties.leadMinutes()), properties.batchSize());
+        int initializedTargets = stateInitializer.initializeOpenedTargets(now, properties.batchSize());
         for (int index = 0; index < result.examined(); index++) {
             contribution.incrementReadCount();
         }
@@ -46,6 +51,7 @@ public class MissionAssignmentTasklet implements Tasklet {
                 .addKeyValue("event", "MISSION_ASSIGNMENT_BATCH_COMPLETED")
                 .addKeyValue("examined", result.examined())
                 .addKeyValue("assigned", result.assigned())
+                .addKeyValue("initializedTargets", initializedTargets)
                 .addKeyValue("degraded", result.degraded())
                 .addKeyValue("retrying", result.retrying())
                 .addKeyValue("failed", result.failed())

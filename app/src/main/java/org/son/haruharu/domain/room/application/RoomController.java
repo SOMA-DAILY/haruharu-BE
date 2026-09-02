@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.son.haruharu.domain.mission.business.RoomMissionService;
+import org.son.haruharu.domain.mission.business.MissionMemberStateService;
 import org.son.haruharu.domain.mission.business.dto.RoomMissionResponse;
 import org.son.haruharu.domain.room.business.RoomFeedService;
 import org.son.haruharu.domain.room.business.RoomInviteService;
@@ -54,13 +55,15 @@ public class RoomController {
     private final MatchResultService matchResultService;
     private final RoomFeedService roomFeedService;
     private final RoomMissionService roomMissionService;
+    private final MissionMemberStateService missionMemberStateService;
 
     public RoomController(RoomService roomService, RoomInviteService roomInviteService,
                           RoomTodayService roomTodayService,
                           RoomMembersService roomMembersService, MemberProfileService memberProfileService,
                           FinalSelectionService finalSelectionService,
                           MatchResultService matchResultService, RoomFeedService roomFeedService,
-                          RoomMissionService roomMissionService) {
+                          RoomMissionService roomMissionService,
+                          MissionMemberStateService missionMemberStateService) {
         this.roomService = roomService;
         this.roomInviteService = roomInviteService;
         this.roomTodayService = roomTodayService;
@@ -70,6 +73,7 @@ public class RoomController {
         this.matchResultService = matchResultService;
         this.roomFeedService = roomFeedService;
         this.roomMissionService = roomMissionService;
+        this.missionMemberStateService = missionMemberStateService;
     }
 
     @Operation(summary = "초대코드로 방 입장",
@@ -209,5 +213,25 @@ public class RoomController {
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(roomMissionService.getOpenMissions(roomId, userId));
+    }
+
+    @Operation(summary = "미션 카드 노출 기록", description = "열린 미션 대상 멤버의 최초·최근 노출 시각을 멱등 기록한다.")
+    @PostMapping("/{roomId}/missions/{roomMissionId}/impression")
+    public ApiResponse<Void> impressMission(
+            @PathVariable Long roomId,
+            @PathVariable Long roomMissionId,
+            Authentication authentication) {
+        missionMemberStateService.impress(roomId, roomMissionId, (Long) authentication.getPrincipal());
+        return ApiResponse.ok(null);
+    }
+
+    @Operation(summary = "미션 카드 닫기", description = "열린 미션 카드를 해당 멤버에게만 멱등 해소한다.")
+    @PostMapping("/{roomId}/missions/{roomMissionId}/dismiss")
+    public ApiResponse<Void> dismissMission(
+            @PathVariable Long roomId,
+            @PathVariable Long roomMissionId,
+            Authentication authentication) {
+        missionMemberStateService.dismiss(roomId, roomMissionId, (Long) authentication.getPrincipal());
+        return ApiResponse.ok(null);
     }
 }
