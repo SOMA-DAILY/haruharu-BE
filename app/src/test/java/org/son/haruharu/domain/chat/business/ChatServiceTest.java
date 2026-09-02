@@ -301,7 +301,9 @@ class ChatServiceTest {
         assertThat(result.messageId()).isEqualTo(42L);
         assertThat(result.senderId()).isEqualTo(ME);
         assertThat(result.content()).isEqualTo("안녕");
-        then(eventPublisher).should().publishEvent(new ChatMessageSentEvent(ROOM, List.of(2L), "하루"));
+        then(eventPublisher).should().publishEvent(new ChatMessageSentEvent(
+                42L, ROOM, ChatRoomType.DIRECT, null, ME,
+                List.of(2L), "하루", LocalDateTime.now(clock)));
     }
 
     @Test

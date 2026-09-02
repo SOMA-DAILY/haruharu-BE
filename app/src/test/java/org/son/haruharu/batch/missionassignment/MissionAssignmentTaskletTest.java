@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.mission.business.MissionAssignmentBatchResult;
 import org.son.haruharu.domain.mission.business.MissionAssignmentBatchService;
+import org.son.haruharu.domain.mission.business.MissionMemberStateInitializer;
 import org.springframework.batch.core.step.StepContribution;
 import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 import org.springframework.batch.test.MetaDataInstanceFactory;
@@ -25,6 +26,7 @@ import static org.mockito.BDDMockito.then;
 class MissionAssignmentTaskletTest {
 
     @Mock MissionAssignmentBatchService batchService;
+    @Mock MissionMemberStateInitializer stateInitializer;
 
     private final Clock clock = Clock.fixed(
             Instant.parse("2026-09-02T02:30:00Z"), ZoneId.of("Asia/Seoul"));
@@ -33,7 +35,8 @@ class MissionAssignmentTaskletTest {
     @BeforeEach
     void setUp() {
         tasklet = new MissionAssignmentTasklet(
-                batchService, new MissionAssignmentBatchProperties(true, 60, 100), clock);
+                batchService, stateInitializer,
+                new MissionAssignmentBatchProperties(true, 60, 100), clock);
     }
 
     @Test
@@ -42,6 +45,8 @@ class MissionAssignmentTaskletTest {
         given(batchService.processDueSlots(
                 java.time.LocalDateTime.of(2026, 9, 2, 11, 30), Duration.ofMinutes(60), 100))
                 .willReturn(new MissionAssignmentBatchResult(3, 2, 1, 0, 1, 0));
+        given(stateInitializer.initializeOpenedTargets(
+                java.time.LocalDateTime.of(2026, 9, 2, 11, 30), 100)).willReturn(6);
         StepContribution contribution = MetaDataInstanceFactory.createStepExecution().createStepContribution();
 
         RepeatStatus status = tasklet.execute(contribution, null);
@@ -51,5 +56,7 @@ class MissionAssignmentTaskletTest {
         assertThat(contribution.getWriteCount()).isEqualTo(2);
         then(batchService).should().processDueSlots(
                 java.time.LocalDateTime.of(2026, 9, 2, 11, 30), Duration.ofMinutes(60), 100);
+        then(stateInitializer).should().initializeOpenedTargets(
+                java.time.LocalDateTime.of(2026, 9, 2, 11, 30), 100);
     }
 }

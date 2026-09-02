@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.mission.implement;
 
 import lombok.RequiredArgsConstructor;
+import org.son.haruharu.domain.mission.storage.exception.RoomMissionNotFoundException;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -14,6 +15,11 @@ public class RoomMissionReader {
 
     public boolean isAssignedToSlot(Long roomMissionSlotId) {
         return roomMissionRepository.existsByRoomMissionSlotId(roomMissionSlotId);
+    }
+
+    public RoomMission getById(Long id) {
+        return roomMissionRepository.findById(id)
+                .orElseThrow(RoomMissionNotFoundException::new);
     }
 
     public List<RoomMission> getByRoomId(Long roomId) {

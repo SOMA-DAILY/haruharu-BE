@@ -1,0 +1,41 @@
+package org.son.haruharu.demo.business;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.son.haruharu.devsupport.DevRoomCleaner;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+
+class RoomCleanerMissionMemberStateOrderTest {
+
+    @Test
+    @DisplayName("demo cleaner는 mission_member_states를 room_missions보다 먼저 삭제한다")
+    void givenDemoRoom_whenClean_thenDeletesMemberStatesBeforeRoomMissions() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+
+        new DemoRoomCleaner(jdbcTemplate).deleteRoomCascade(1L);
+
+        assertMissionFkOrder(jdbcTemplate);
+    }
+
+    @Test
+    @DisplayName("dev cleaner는 mission_member_states를 room_missions보다 먼저 삭제한다")
+    void givenDevRoom_whenClean_thenDeletesMemberStatesBeforeRoomMissions() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+
+        new DevRoomCleaner(jdbcTemplate).deleteRoomCascade(1L);
+
+        assertMissionFkOrder(jdbcTemplate);
+    }
+
+    private void assertMissionFkOrder(JdbcTemplate jdbcTemplate) {
+        InOrder order = inOrder(jdbcTemplate);
+        order.verify(jdbcTemplate).update(
+                "DELETE FROM mission_member_states WHERE room_mission_id IN (SELECT id FROM room_missions WHERE room_id = ?)",
+                1L);
+        order.verify(jdbcTemplate).update("DELETE FROM room_missions WHERE room_id = ?", 1L);
+    }
+}

@@ -117,10 +117,13 @@ public class ChatService {
     @Transactional
     public ChatMessageBroadcast sendMessage(Long chatRoomId, Long senderId, String content) {
         requireMember(chatRoomId, senderId);
-        List<Long> recipientIds = recipientsFor(chatRoomId, senderId); // DIRECT=상대 1명, GROUP=나 제외 전원
+        ChatRoom chatRoom = chatRoomReader.getById(chatRoomId);
+        List<Long> recipientIds = recipientsFor(chatRoom, senderId); // DIRECT=상대 1명, GROUP=나 제외 전원
         ChatMessage saved = chatMessageWriter.save(ChatMessage.create(chatRoomId, senderId, content));
         String senderNickname = profileService.getNickname(senderId);
-        eventPublisher.publishEvent(new ChatMessageSentEvent(chatRoomId, recipientIds, senderNickname));
+        eventPublisher.publishEvent(new ChatMessageSentEvent(
+                saved.id(), chatRoomId, chatRoom.type(), chatRoom.roomId(), senderId,
+                recipientIds, senderNickname, saved.createdAt()));
         return ChatMessageBroadcast.from(saved);
     }
 
@@ -209,8 +212,8 @@ public class ChatService {
     }
 
     /** 발신자 제외 수신자 목록(푸시 대상). DIRECT=상대 1명, GROUP=나 제외 현재 참여자(나간 멤버 제외). */
-    private List<Long> recipientsFor(Long chatRoomId, Long senderId) {
-        ChatRoom room = chatRoomReader.getById(chatRoomId);
+    private List<Long> recipientsFor(ChatRoom room, Long senderId) {
+        Long chatRoomId = room.id();
         if (room.type() == ChatRoomType.GROUP) {
             return chatRoomMemberReader.findByChatRoomId(chatRoomId).stream()
                     .filter(member -> !member.hasLeft())

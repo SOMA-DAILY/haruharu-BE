@@ -20,11 +20,13 @@ import org.son.haruharu.domain.video.business.exception.InvalidVideoExtensionExc
 import org.son.haruharu.domain.video.business.exception.InvalidVideoUrlException;
 import org.son.haruharu.domain.video.business.exception.NotVideoOwnerException;
 import org.son.haruharu.domain.video.business.exception.RoomNotActiveException;
+import org.son.haruharu.domain.video.business.event.VideoUploadedEvent;
 import org.son.haruharu.domain.video.implement.SlotClock;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.son.haruharu.domain.video.implement.VideoPostWriter;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,17 +45,19 @@ public class VideoService {
     private final RoomMemberReader roomMemberReader;
     private final VideoPostReader videoPostReader;
     private final VideoPostWriter videoPostWriter;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public VideoService(S3StoragePort s3StoragePort, RoomReader roomReader,
                         RoomMemberReader roomMemberReader,
                         VideoPostReader videoPostReader, VideoPostWriter videoPostWriter,
-                        Clock clock) {
+                        ApplicationEventPublisher eventPublisher, Clock clock) {
         this.s3StoragePort = s3StoragePort;
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.videoPostReader = videoPostReader;
         this.videoPostWriter = videoPostWriter;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -96,6 +100,7 @@ public class VideoService {
         VideoPost saved = videoPostWriter.save(VideoPost.create(
                 member.id(), slotStart, null,
                 command.caption(), command.videoUrl(), command.thumbnailUrl(), now));
+        eventPublisher.publishEvent(new VideoUploadedEvent(saved.id(), roomId, member.id(), saved.createdAt()));
 
         // 비공개 영상은 서명 없이 접근 불가(403). 재생 가능한 presigned GET URL로 변환해 응답한다(#162).
         return VideoPostResponse.of(saved,
