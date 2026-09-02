@@ -10,9 +10,12 @@ import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.storage.ChatMessageEntity;
 import org.son.haruharu.domain.chat.storage.ChatRoomEntity;
+import org.son.haruharu.domain.mission.implement.MissionMemberStateSummary;
+import org.son.haruharu.domain.mission.implement.MissionOutcome;
 import org.son.haruharu.domain.mission.implement.RoomMission;
 import org.son.haruharu.domain.mission.implement.MissionPeriod;
 import org.son.haruharu.domain.mission.implement.RoomMissionSlot;
+import org.son.haruharu.domain.mission.storage.MissionOutcomeEntity;
 import org.son.haruharu.domain.mission.storage.RoomMissionEntity;
 import org.son.haruharu.domain.mission.storage.RoomMissionSlotEntity;
 import org.son.haruharu.domain.notification.implement.NotificationHistory;
@@ -42,6 +45,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EntityAuditColumnRoundTripTest {
 
     private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 6, 1, 12, 0);
+
+    @Test
+    @DisplayName("MissionOutcomeEntity.from()은 createdAt을 복원한다")
+    void givenMissionOutcomeWithCreatedAt_whenFromThenToDomain_thenCreatedAtSurvives() {
+        MissionOutcome outcome = new MissionOutcome(
+                1L, 10L, MissionOutcome.METRIC_SCHEMA_V1,
+                6, 5, 4, 3, 1, 1, 1,
+                MissionOutcome.ratio(4, 6), MissionOutcome.ratio(5, 6),
+                CREATED_AT.plusHours(6), CREATED_AT.plusHours(6).plusMinutes(5), CREATED_AT);
+
+        MissionOutcome restored = MissionOutcomeEntity.from(outcome).toDomain();
+
+        assertThat(restored.createdAt()).isEqualTo(CREATED_AT);
+    }
 
     @Test
     @DisplayName("UserEntity.from()은 createdAt을 복원한다")

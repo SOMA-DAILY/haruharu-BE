@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 
 public interface MissionMemberStateJpaRepository extends JpaRepository<MissionMemberStateEntity, Long> {
@@ -194,6 +195,40 @@ public interface MissionMemberStateJpaRepository extends JpaRepository<MissionMe
             @Param("channel") org.son.haruharu.domain.mission.implement.ActivationChannel channel,
             @Param("resolution") org.son.haruharu.domain.mission.implement.MissionCardResolution resolution,
             @Param("occurredAt") LocalDateTime occurredAt);
+
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+            UPDATE mission_member_states
+            SET resolution = 'EXPIRED',
+                resolved_at = :closesAt,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE room_mission_id = :roomMissionId
+              AND resolution IS NULL
+              AND deleted_at IS NULL
+            """, nativeQuery = true)
+    int expireUnresolved(
+            @Param("roomMissionId") Long roomMissionId,
+            @Param("closesAt") LocalDateTime closesAt);
+
+    /**
+     * outcome 확정용 단일 행 집계. 활동(activated)과 카드 해소(resolution)는 별개다 —
+     * 노출 없이 활동한 멤버도 활동으로 센다.
+     * 컬럼 순서: target, impressed, activated, expectedChannel, crossChannel, dismissed, expired.
+     */
+    @Query(value = """
+            SELECT
+                COUNT(*),
+                COUNT(*) FILTER (WHERE first_impressed_at IS NOT NULL),
+                COUNT(*) FILTER (WHERE expected_activity_count > 0 OR cross_channel_activity_count > 0),
+                COUNT(*) FILTER (WHERE expected_activity_count > 0),
+                COUNT(*) FILTER (WHERE cross_channel_activity_count > 0),
+                COUNT(*) FILTER (WHERE resolution = 'DISMISSED'),
+                COUNT(*) FILTER (WHERE resolution = 'EXPIRED')
+            FROM mission_member_states
+            WHERE room_mission_id = :roomMissionId
+              AND deleted_at IS NULL
+            """, nativeQuery = true)
+    List<Object[]> summarize(@Param("roomMissionId") Long roomMissionId);
 
     @Query("""
             select state.roomMissionId from MissionMemberStateEntity state

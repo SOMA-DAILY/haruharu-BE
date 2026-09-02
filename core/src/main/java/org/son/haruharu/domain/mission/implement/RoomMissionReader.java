@@ -26,6 +26,12 @@ public class RoomMissionReader {
         return roomMissionRepository.findByRoomId(roomId);
     }
 
+    /** 집계 대상 — 시간창이 닫혔는데 해당 버전 outcome 이 아직 없는 미션. */
+    public List<RoomMission> getClosedWithoutOutcome(
+            LocalDateTime closedBefore, String metricSchemaVersion, int batchSize) {
+        return roomMissionRepository.findClosedWithoutOutcome(closedBefore, metricSchemaVersion, batchSize);
+    }
+
     /** 지금 열려 있는 미션들(opensAt ≤ now < closesAt, sequence 오름차순). /today 미션 카드용. */
     public List<RoomMission> getOpenMissions(Long roomId, LocalDateTime now) {
         return roomMissionRepository.findByRoomId(roomId).stream()

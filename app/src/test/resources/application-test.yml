@@ -44,6 +44,8 @@ haruharu:
   mission:
     assignment:
       enabled: false
+    outcome:
+      enabled: false
   coin:
     enabled: true
   payment:
