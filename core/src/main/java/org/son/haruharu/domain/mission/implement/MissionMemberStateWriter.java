@@ -26,6 +26,11 @@ public class MissionMemberStateWriter {
         return repository.initializeActivityTargets(roomId, roomMemberId, occurredAt);
     }
 
+    /** 시간창 종료 시 미해소 카드를 EXPIRED 로 마감한다. */
+    public int expireUnresolved(Long roomMissionId, LocalDateTime closesAt) {
+        return repository.expireUnresolved(roomMissionId, closesAt);
+    }
+
     public int impress(Long roomMissionId, Long roomMemberId, LocalDateTime occurredAt) {
         return repository.impress(roomMissionId, roomMemberId, occurredAt);
     }

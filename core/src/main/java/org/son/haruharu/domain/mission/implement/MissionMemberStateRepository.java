@@ -21,4 +21,10 @@ public interface MissionMemberStateRepository {
             MissionCardResolution resolution, LocalDateTime occurredAt);
 
     Set<Long> findResolvedRoomMissionIds(Long roomMemberId, Collection<Long> roomMissionIds);
+
+    /** 시간창이 닫힌 미션의 미해소 카드를 EXPIRED 로 마감한다. 반환값은 마감된 행 수. */
+    int expireUnresolved(Long roomMissionId, LocalDateTime closesAt);
+
+    /** outcome 확정용 멤버 상태 집계. 대상이 없으면 0으로 채워진 집계를 반환한다. */
+    MissionMemberStateSummary summarize(Long roomMissionId);
 }

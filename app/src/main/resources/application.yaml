@@ -65,6 +65,14 @@ haruharu:
       lead-minutes: ${MISSION_ASSIGNMENT_LEAD_MINUTES:60}
       batch-size: ${MISSION_ASSIGNMENT_BATCH_SIZE:100}
       cron: ${MISSION_ASSIGNMENT_CRON:0 * * * * *}
+    # settle-minutes: 시간창 종료 후 집계까지 두는 여유. 활동 이벤트가 AFTER_COMMIT이라 지연 도착분을 놓치지 않는다.
+    # cron: assignment(매분 0초)와 같은 초에 두지 말 것. Spring Batch JobRepository 는 SERIALIZABLE 로
+    #       메타데이터를 쓰므로 두 잡이 동시에 launch 하면 직렬화 충돌로 한쪽이 아예 실행되지 못한다.
+    outcome:
+      enabled: ${MISSION_OUTCOME_ENABLED:true}
+      settle-minutes: ${MISSION_OUTCOME_SETTLE_MINUTES:5}
+      batch-size: ${MISSION_OUTCOME_BATCH_SIZE:100}
+      cron: ${MISSION_OUTCOME_CRON:30 * * * * *}
   # 첫 가입 1회 보너스 구름(#232). 정책값은 코드 @DefaultValue가 아닌 이 yaml 리터럴로 관리(matching.enter-cost와 동일 방침).
   coin:
     signup-bonus: 20

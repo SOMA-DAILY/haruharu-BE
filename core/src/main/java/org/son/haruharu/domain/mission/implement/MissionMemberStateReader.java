@@ -14,6 +14,11 @@ public class MissionMemberStateReader {
         this.repository = repository;
     }
 
+    /** outcome 확정용 멤버 상태 집계. */
+    public MissionMemberStateSummary summarize(Long roomMissionId) {
+        return repository.summarize(roomMissionId);
+    }
+
     public Set<Long> getResolvedRoomMissionIds(Long roomMemberId, Collection<Long> roomMissionIds) {
         if (roomMissionIds.isEmpty()) {
             return Set.of();
