@@ -68,6 +68,8 @@ class RoomTodayApiIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.timer_type").value("NEXT_SLOT"))
                 .andExpect(jsonPath("$.data.timer_target_at").exists())
-                .andExpect(jsonPath("$.data.slots[0].slot_start").exists());
+                .andExpect(jsonPath("$.data.slots.length()").value(1))
+                .andExpect(jsonPath("$.data.slots[0].slot_start").exists())
+                .andExpect(jsonPath("$.data.slots[0].open_now").value(true));
     }
 }

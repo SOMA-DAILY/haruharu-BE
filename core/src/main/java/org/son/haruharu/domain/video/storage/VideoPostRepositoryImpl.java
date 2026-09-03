@@ -34,6 +34,14 @@ public class VideoPostRepositoryImpl implements VideoPostRepository {
     }
 
     @Override
+    public List<LocalDateTime> findVisibleSlotStarts(List<Long> roomMemberIds, List<LocalDateTime> slotStarts) {
+        if (roomMemberIds.isEmpty() || slotStarts.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findVisibleSlotStarts(roomMemberIds, slotStarts);
+    }
+
+    @Override
     public boolean existsActiveBySlotStart(Long roomMemberId, LocalDateTime slotStart) {
         return jpaRepository.existsByRoomMemberIdAndSlotStartAndDeletedAtIsNull(roomMemberId, slotStart);
     }

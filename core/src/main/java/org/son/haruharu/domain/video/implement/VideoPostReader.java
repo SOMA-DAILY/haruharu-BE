@@ -23,6 +23,10 @@ public class VideoPostReader {
         return videoPostRepository.findUploadedSlotStarts(roomMemberId, slotStarts);
     }
 
+    public List<LocalDateTime> getVisibleSlotStarts(List<Long> roomMemberIds, List<LocalDateTime> slotStarts) {
+        return videoPostRepository.findVisibleSlotStarts(roomMemberIds, slotStarts);
+    }
+
     public boolean hasActiveUpload(Long roomMemberId, LocalDateTime slotStart) {
         return videoPostRepository.existsActiveBySlotStart(roomMemberId, slotStart);
     }

@@ -108,7 +108,8 @@ public class RoomController {
 
     @Operation(summary = "오늘 화면 조회",
             description = "현재 노출 중인 슬롯 창(시간창·현재 촬영 슬롯 open_now·내 업로드 여부 uploaded)과 내 업로드 진행(uploaded_count)·"
-                    + "헤더 타이머(timer_target_at, timer_type)를 반환한다. "
+                    + "헤더 타이머(timer_target_at, timer_type)를 반환한다. slots는 공개 가능한 영상이 있는 시간대와 "
+                    + "ACTIVE 현재 촬영 시간대를 담으며, 빈 비현재 시간대는 제외한다. "
                     + "slots[].uploaded는 요청 유저 본인 기준이며, 지난 슬롯 + uploaded=false는 '놓침'으로 판정하면 된다. "
                     + "참여자가 아니면 403(ROOM_403_NOT_MEMBER), 방이 없으면 404(ROOM_404_NOT_FOUND).")
     @GetMapping("/{roomId}/today")
@@ -182,15 +183,16 @@ public class RoomController {
     }
 
     @Operation(summary = "현재 슬롯 창 영상 피드 조회",
-            description = "지금 노출 중인 슬롯 창(slot_start 기준 최근 3시간)의 영상 피드를 반환한다. 잠금은 슬롯(시간대) 단위로, "
-                    + "내가 업로드한 슬롯의 타 멤버 영상만 열람할 수 있다(참여 유도). slots는 각 slot_start의 잠금 여부(locked)와 "
+            description = "지금 노출 중인 슬롯 창(slot_start 기준 최근 3시간)의 영상 피드를 반환한다. "
+                    + "slots는 공개 가능한 영상이 있는 시간대와 ACTIVE 현재 촬영 시간대를 담으며 locked는 하위 호환 필드로 항상 false다. "
                     + "현재 촬영 슬롯 여부(current, dots 촬영 CTA 대상 — ACTIVE일 때만 true), "
                     + "각 영상은 반응 집계(reaction_counts: [{type, emoji, count}] 배열 — 반응 0인 이모지 타입은 생략, ReactionType 선언 순서)와 "
                     + "내 반응(my_reaction, 없으면 null)을 함께 담는다. 참여자가 아니면 403(ROOM_403_NOT_MEMBER).")
     @GetMapping("/{roomId}/feed")
     public ApiResponse<FeedResponse> getFeed(@Parameter(description = "소개팅방 id", example = "1") @PathVariable Long roomId,
                                              @Parameter(description = "과거 회고 커서(#350). 이 slot_start 이전 슬롯을 조회한다. "
-                                                     + "생략 시 현재 노출 창(최근 3시간). 응답의 next_cursor 를 넣어 이어 조회한다.",
+                                                     + "빈 시간대를 포함한 원본 시간축 기준이며, 생략 시 현재 노출 창(최근 3시간)이다. "
+                                                     + "응답의 next_cursor 를 넣어 이어 조회한다.",
                                                      example = "2026-06-26T20:00:00")
                                              @RequestParam(required = false)
                                              @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime before,
