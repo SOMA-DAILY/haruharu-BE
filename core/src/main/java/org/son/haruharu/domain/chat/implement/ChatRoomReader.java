@@ -33,6 +33,12 @@ public class ChatRoomReader {
         return chatRoomRepository.findByRoomId(roomId);
     }
 
+    /** 소개팅방(roomId)의 GROUP 채팅방. 조회 유스케이스에서 없으면 404로 변환한다. */
+    public ChatRoom getByRoomId(Long roomId) {
+        return chatRoomRepository.findByRoomId(roomId)
+                .orElseThrow(ChatRoomNotFoundException::new);
+    }
+
     /** 매칭 결과로 자동 생성된 채팅방 id(없으면 empty). 매칭 결과 화면의 "채팅 시작하기" 직행용. */
     public Optional<Long> findChatRoomIdByMatchResultId(Long matchResultId) {
         return chatRoomRepository.findIdByMatchResultId(matchResultId);

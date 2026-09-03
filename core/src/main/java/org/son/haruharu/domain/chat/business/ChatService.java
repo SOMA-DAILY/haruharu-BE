@@ -3,6 +3,7 @@ package org.son.haruharu.domain.chat.business;
 import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
+import org.son.haruharu.domain.chat.business.dto.GroupChatRoomResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
@@ -146,6 +147,13 @@ public class ChatService {
         }
         Long partnerUserId = requireActivePartner(chatRoomId, userId);
         return ChatRoomDetailResponse.direct(chatRoomId, toPartnerBrief(partnerUserId), room.createdAt());
+    }
+
+    /** 소개팅방 id로 연결된 GROUP 채팅을 찾고 현재 활성 채팅 멤버에게만 id를 반환한다. */
+    public GroupChatRoomResponse getGroupRoomBySourceRoom(Long roomId, Long userId) {
+        ChatRoom room = chatRoomReader.getByRoomId(roomId);
+        requireMember(room.id(), userId);
+        return new GroupChatRoomResponse(room.id());
     }
 
     /** 과거 메시지(최신순 커서 페이지). 삭제된 메시지는 제외. */
