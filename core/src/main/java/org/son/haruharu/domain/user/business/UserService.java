@@ -85,7 +85,7 @@ public class UserService {
     }
 
     /**
-     * 온보딩 완료 처리. 프로필·가치관·이미지 완료를 서버가 검증한 뒤 ONBOARDING → ACTIVE로 전이한다.
+     * 온보딩 완료 처리. 닉네임 등록을 서버가 검증한 뒤 ONBOARDING → ACTIVE로 전이한다.
      * 이미 온보딩을 벗어난 상태면 재저장 없이 현재 라우팅 상태만 반환한다(멱등).
      */
     @Transactional
@@ -95,7 +95,7 @@ public class UserService {
             throw new InactiveUserException();
         }
         if (user.status() == UserStatus.ONBOARDING) {
-            if (!profileService.hasCompletedProfile(userId) || !valueService.hasAnswered(userId)) {
+            if (!profileService.hasCompletedProfile(userId)) {
                 throw new OnboardingIncompleteException();
             }
             userWriter.save(new User(userId, UserStatus.ACTIVE, user.createdAt()));

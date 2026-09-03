@@ -4,6 +4,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -58,6 +61,40 @@ class ProfileServiceTest {
             userProfileReader, userProfileWriter,
             userImageReader, userImageWriter, s3StoragePort
         );
+    }
+
+    @Test
+    @DisplayName("이미지 없이 공백이 아닌 닉네임만 있어도 온보딩 프로필이 완료된 것으로 판정한다")
+    void givenNicknameWithoutImages_whenCheckCompletedProfile_thenReturnsTrue() {
+        Long userId = 1L;
+        given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(new UserProfile(
+            1L, userId, null, null, null, null, "하루", null, null
+        )));
+
+        assertThat(profileService.hasCompletedProfile(userId)).isTrue();
+        then(userImageReader).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("프로필이 없으면 온보딩 프로필이 미완료된 것으로 판정한다")
+    void givenNoProfile_whenCheckCompletedProfile_thenReturnsFalse() {
+        Long userId = 1L;
+        given(userProfileReader.findByUserId(userId)).willReturn(Optional.empty());
+
+        assertThat(profileService.hasCompletedProfile(userId)).isFalse();
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "\t", "\n"})
+    @DisplayName("닉네임이 null·빈 문자열·공백이면 온보딩 프로필이 미완료된 것으로 판정한다")
+    void givenBlankNickname_whenCheckCompletedProfile_thenReturnsFalse(String nickname) {
+        Long userId = 1L;
+        given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(new UserProfile(
+            1L, userId, null, null, null, null, nickname, null, null
+        )));
+
+        assertThat(profileService.hasCompletedProfile(userId)).isFalse();
     }
 
     @Test

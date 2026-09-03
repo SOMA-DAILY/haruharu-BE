@@ -30,8 +30,8 @@ public class ProfileController {
     }
 
     @Operation(summary = "프로필 수정",
-            description = "닉네임·지역·소속·키·mbti·음주/흡연 상태 등 데이팅 프로필을 수정한다. "
-                    + "프로필이 없으면 404(USER_PROFILE_NOT_FOUND).")
+            description = "필수 닉네임과 선택 지역·소속·키·mbti·음주/흡연 상태를 수정한다. "
+                    + "프로필이 없으면 새로 생성한다.")
     @PutMapping("/profile")
     public ApiResponse<ProfileResponse> updateProfile(
             @Valid @RequestBody ProfileUpdateRequest request,

@@ -96,5 +96,5 @@ OAuth2 (Kakao/Apple) → 내부 JWT 발급 → Response Body (access_token, refr
 
 - AccessToken: 단기 만료, Response Body 반환 → 클라이언트가 Authorization 헤더로 전송
 - RefreshToken: 장기 만료, Response Body 반환 + DB 저장 (재사용 탐지)
-- 온보딩: **닉네임·지역만** 수집 (성별 미수집 — 필요 시 PASS 지연인증). 옛 프로필 필드(MBTI 등)는 nullable 잔존
+- 온보딩: **닉네임만** 수집 (성별 미수집 — 필요 시 PASS 지연인증). 옛 프로필 필드(지역·MBTI 등)는 nullable 잔존
 - `room_members.gender`는 운영진이 방 구성 시 부여 (admin)

@@ -270,7 +270,7 @@ public static UserEntity from(User user) {
 **활성 (새 MVP 루프):**
 - `user` — users. 사용자 존재(id, status)
 - `auth` — user_credentials · refresh_tokens. OAuth 연결·JWT 세션
-- `profile` — user_profiles · user_images. 온보딩=닉네임·지역 (옛 필드 nullable 잔존)
+- `profile` — user_profiles · user_images. 온보딩=닉네임만 (옛 필드 nullable 잔존)
 - `agreement` — user_agreements. 약관 동의
 - `room` — rooms(초대코드·어드민 스케줄·status) · room_members · room_invites(신규) · final_selections · match_results
 - `video` — video_posts(슬롯 시간창) · video_reactions
