@@ -25,4 +25,8 @@ public class ChatRoomMemberReader {
     public List<ChatRoomMember> findByChatRoomId(Long chatRoomId) {
         return chatRoomMemberRepository.findByChatRoomId(chatRoomId);
     }
+
+    public List<ChatRoomMember> findByChatRoomIdForUpdate(Long chatRoomId) {
+        return chatRoomMemberRepository.findByChatRoomIdForUpdate(chatRoomId);
+    }
 }

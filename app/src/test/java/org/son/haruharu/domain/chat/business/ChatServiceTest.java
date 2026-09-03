@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
@@ -32,10 +33,16 @@ import org.son.haruharu.domain.user.business.UserService;
 import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
+import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomMember;
+import org.son.haruharu.domain.room.implement.RoomMemberReader;
+import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -47,8 +54,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class ChatServiceTest {
@@ -59,6 +68,8 @@ class ChatServiceTest {
     @Mock ChatRoomMemberWriter chatRoomMemberWriter;
     @Mock ChatMessageReader chatMessageReader;
     @Mock ChatMessageWriter chatMessageWriter;
+    @Mock RoomReader roomReader;
+    @Mock RoomMemberReader roomMemberReader;
     @Mock ProfileService profileService;
     @Mock UserService userService;
     @Mock ApplicationEventPublisher eventPublisher;
@@ -73,8 +84,8 @@ class ChatServiceTest {
     @BeforeEach
     void setUp() {
         chatService = new ChatService(chatRoomReader, chatRoomWriter, chatRoomMemberReader,
-                chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, userService,
-                eventPublisher, clock);
+                chatRoomMemberWriter, chatMessageReader, chatMessageWriter, roomReader, roomMemberReader,
+                profileService, userService, eventPublisher, clock);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -101,6 +112,15 @@ class ChatServiceTest {
         return new ChatRoom(chatRoomId, ChatRoomType.GROUP, roomId, null, LocalDateTime.now(clock));
     }
 
+    private Room room(RoomStatus status) {
+        return new Room(ROOM, status, LocalDate.of(2026, 7, 3), 3,
+                status == RoomStatus.ACTIVE ? LocalDateTime.now(clock) : null, null);
+    }
+
+    private RoomMember roomMember(Long id, Long userId, LocalDateTime joinedAt) {
+        return new RoomMember(id, ROOM, userId, null, null, joinedAt);
+    }
+
     @Test
     @DisplayName("내 채팅방 목록은 상대 닉네임·마지막 메시지·안읽은 수를 포함하고 마지막 메시지 최신순으로 정렬된다")
     void getMyRooms_returnsSortedSummaries() {
@@ -117,10 +137,12 @@ class ChatServiceTest {
                 .willReturn(List.of(membership(10L, ME, 5L), membership(10L, 2L, null)));
         given(profileService.getProfile(3L)).willReturn(profile("바다"));
         given(profileService.getProfile(2L)).willReturn(profile("하늘"));
-        given(chatMessageReader.findLast(20L)).willReturn(Optional.of(message(3L, 20L, 3L, "헤이", older)));
-        given(chatMessageReader.findLast(10L)).willReturn(Optional.of(message(8L, 10L, 2L, "안녕", newer)));
-        given(chatMessageReader.countUnread(20L, null, ME)).willReturn(1L);
-        given(chatMessageReader.countUnread(10L, 5L, ME)).willReturn(2L);
+        given(chatMessageReader.findLast(20L, LocalDateTime.now(clock)))
+                .willReturn(Optional.of(message(3L, 20L, 3L, "헤이", older)));
+        given(chatMessageReader.findLast(10L, LocalDateTime.now(clock)))
+                .willReturn(Optional.of(message(8L, 10L, 2L, "안녕", newer)));
+        given(chatMessageReader.countUnread(20L, null, ME, LocalDateTime.now(clock))).willReturn(1L);
+        given(chatMessageReader.countUnread(10L, 5L, ME, LocalDateTime.now(clock))).willReturn(2L);
 
         ChatRoomsResponse result = chatService.getMyRooms(ME);
 
@@ -147,8 +169,8 @@ class ChatServiceTest {
                 new ProfileResponse.ImageInfo(31L, "https://cdn/second.jpg", 2),
                 new ProfileResponse.ImageInfo(30L, "https://cdn/rep.jpg", 0),
                 new ProfileResponse.ImageInfo(32L, "https://cdn/third.jpg", 1)));
-        given(chatMessageReader.findLast(10L)).willReturn(Optional.empty());
-        given(chatMessageReader.countUnread(10L, null, ME)).willReturn(0L);
+        given(chatMessageReader.findLast(10L, LocalDateTime.now(clock))).willReturn(Optional.empty());
+        given(chatMessageReader.countUnread(10L, null, ME, LocalDateTime.now(clock))).willReturn(0L);
 
         ChatRoomsResponse result = chatService.getMyRooms(ME);
 
@@ -219,13 +241,13 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("참여자가 메시지 조회 시 커서 페이지를 반환한다")
-    void getMessages_whenMember_returnsPage() {
+    @DisplayName("메시지 조회는 membership 입장 시각을 inclusive 하한으로 reader에 전달한다")
+    void givenMembershipJoinTime_whenGetMessages_thenPassesInclusiveBoundaryToReader() {
         given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, ChatRoomType.DIRECT, null, 99L, LocalDateTime.now(clock)));
         given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
         given(chatRoomMemberReader.findByChatRoomId(ROOM))
                 .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
-        given(chatMessageReader.findPage(ROOM, null, 30))
+        given(chatMessageReader.findPage(ROOM, LocalDateTime.now(clock), null, 30))
                 .willReturn(List.of(message(8L, ROOM, 2L, "b", LocalDateTime.now(clock)),
                         message(7L, ROOM, 1L, "a", LocalDateTime.now(clock))));
 
@@ -234,6 +256,35 @@ class ChatServiceTest {
         assertThat(result.messages()).hasSize(2);
         assertThat(result.messages().get(0).messageId()).isEqualTo(8L);
         assertThat(result.nextCursor()).isNull();
+        then(chatMessageReader).should().findPage(ROOM, LocalDateTime.now(clock), null, 30);
+    }
+
+    @Test
+    @DisplayName("채팅방 목록은 membership 입장 시각을 마지막 메시지와 unread 쿼리에 전달한다")
+    void givenMembershipJoinTime_whenGetMyRooms_thenPassesBoundaryToLastAndUnreadQueries() {
+        LocalDateTime joinedAt = LocalDateTime.of(2026, 7, 3, 10, 30);
+        ChatRoomMember me = new ChatRoomMember(1L, ROOM, ME, joinedAt, null, 7L);
+        given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(me));
+        given(chatRoomReader.getById(ROOM)).willReturn(groupRoom(ROOM, 99L));
+        given(chatMessageReader.findLast(ROOM, joinedAt)).willReturn(Optional.empty());
+        given(chatMessageReader.countUnread(ROOM, 7L, ME, joinedAt)).willReturn(0L);
+        given(chatRoomMemberReader.findByChatRoomId(ROOM)).willReturn(List.of(me));
+
+        chatService.getMyRooms(ME);
+
+        then(chatMessageReader).should().findLast(ROOM, joinedAt);
+        then(chatMessageReader).should().countUnread(ROOM, 7L, ME, joinedAt);
+    }
+
+    @Test
+    @DisplayName("전체 unread 집계는 단일 count 결과를 반환하고 프로필·유저 요약을 구축하지 않는다")
+    void givenAggregateUnread_whenGetUnreadCount_thenReturnsCountWithoutBuildingSummariesOrProfiles() {
+        given(chatMessageReader.countUnreadByUserId(ME)).willReturn(7L);
+
+        var result = chatService.getUnreadCount(ME);
+
+        assertThat(result.unreadCount()).isEqualTo(7L);
+        verifyNoInteractions(profileService, userService);
     }
 
     @Test
@@ -244,7 +295,7 @@ class ChatServiceTest {
         given(chatRoomMemberReader.findByChatRoomId(ROOM))
                 .willReturn(List.of(membership(ROOM, ME, 3L), membership(ROOM, 2L, null)));
         given(chatRoomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(chatMessageReader.countUnread(ROOM, 7L, ME)).willReturn(0L);
+        given(chatMessageReader.countUnread(ROOM, 7L, ME, LocalDateTime.now(clock))).willReturn(0L);
 
         ReadResponse result = chatService.markRead(ROOM, ME, 7L);
 
@@ -355,9 +406,9 @@ class ChatServiceTest {
         given(userService.isWithdrawn(3L)).willReturn(true);
         given(userService.isWithdrawn(2L)).willReturn(false);
         given(profileService.getProfile(2L)).willReturn(profile("하늘"));
-        given(chatMessageReader.findLast(10L))
+        given(chatMessageReader.findLast(10L, LocalDateTime.now(clock)))
                 .willReturn(Optional.of(message(8L, 10L, 2L, "안녕", LocalDateTime.of(2026, 7, 3, 11, 0))));
-        given(chatMessageReader.countUnread(10L, null, ME)).willReturn(2L);
+        given(chatMessageReader.countUnread(10L, null, ME, LocalDateTime.now(clock))).willReturn(2L);
 
         ChatRoomsResponse result = chatService.getMyRooms(ME);
 
@@ -470,30 +521,85 @@ class ChatServiceTest {
     // ── GROUP 채팅 ──────────────────────────────────────────
 
     @Test
-    @DisplayName("방 시작 시 GROUP 채팅방과 멤버 전원(6명 스냅샷)을 생성한다")
-    void createGroupRoom_createsGroupRoomAndAllMembers() {
-        given(chatRoomReader.existsByRoomId(ROOM)).willReturn(false);
-        given(chatRoomWriter.save(any())).willReturn(groupRoom(88L, ROOM));
+    @DisplayName("PENDING 방은 GROUP 채팅 행을 잠그거나 생성하지 않는다")
+    void givenPendingRoom_whenSynchronizeGroupRoom_thenDoesNotCreateOrLockChatRows() {
+        given(roomReader.findByIdForUpdate(ROOM)).willReturn(Optional.of(room(RoomStatus.PENDING)));
 
-        chatService.createGroupRoom(ROOM, List.of(1L, 2L, 3L, 4L, 5L, 6L));
+        chatService.synchronizeGroupRoom(ROOM);
 
-        ArgumentCaptor<ChatRoom> roomCaptor = ArgumentCaptor.forClass(ChatRoom.class);
-        verify(chatRoomWriter).save(roomCaptor.capture());
-        assertThat(roomCaptor.getValue().type()).isEqualTo(ChatRoomType.GROUP);
-        assertThat(roomCaptor.getValue().roomId()).isEqualTo(ROOM);
-        ArgumentCaptor<ChatRoomMember> captor = ArgumentCaptor.forClass(ChatRoomMember.class);
-        verify(chatRoomMemberWriter, times(6)).save(captor.capture());
-        assertThat(captor.getAllValues()).extracting(ChatRoomMember::userId)
-                .containsExactlyInAnyOrder(1L, 2L, 3L, 4L, 5L, 6L);
-        assertThat(captor.getAllValues()).allSatisfy(m -> assertThat(m.chatRoomId()).isEqualTo(88L));
+        then(chatRoomReader).shouldHaveNoInteractions();
+        then(chatRoomWriter).shouldHaveNoInteractions();
+        then(chatRoomMemberReader).shouldHaveNoInteractions();
+        then(chatRoomMemberWriter).shouldHaveNoInteractions();
+        then(roomMemberReader).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("이미 GROUP 채팅이 있는 방이면 중복 생성하지 않는다(멱등, room_id 기준)")
-    void createGroupRoom_whenAlreadyExists_skips() {
-        given(chatRoomReader.existsByRoomId(ROOM)).willReturn(true);
+    @DisplayName("ACTIVE 방은 GROUP 채팅을 만들고 room member 입장 시각을 정확히 복사한다")
+    void givenActiveRoomWithoutGroupChat_whenSynchronizeGroupRoom_thenCreatesChatAndCopiesAllRoomMemberJoinTimes() {
+        LocalDateTime firstJoinedAt = LocalDateTime.of(2026, 7, 3, 9, 15);
+        LocalDateTime secondJoinedAt = LocalDateTime.of(2026, 7, 3, 10, 45);
+        given(roomReader.findByIdForUpdate(ROOM)).willReturn(Optional.of(room(RoomStatus.ACTIVE)));
+        given(chatRoomReader.findByRoomIdForUpdate(ROOM)).willReturn(Optional.empty());
+        given(chatRoomWriter.save(any())).willReturn(groupRoom(88L, ROOM));
+        given(chatRoomMemberReader.findByChatRoomIdForUpdate(88L)).willReturn(List.of());
+        given(roomMemberReader.findByRoomIdOrdered(ROOM)).willReturn(List.of(
+                roomMember(11L, 101L, firstJoinedAt),
+                roomMember(12L, 102L, secondJoinedAt)));
 
-        chatService.createGroupRoom(ROOM, List.of(1L, 2L, 3L));
+        chatService.synchronizeGroupRoom(ROOM);
+
+        InOrder order = inOrder(roomReader, chatRoomReader, chatRoomWriter,
+                chatRoomMemberReader, roomMemberReader, chatRoomMemberWriter);
+        order.verify(roomReader).findByIdForUpdate(ROOM);
+        order.verify(chatRoomReader).findByRoomIdForUpdate(ROOM);
+        order.verify(chatRoomWriter).save(any());
+        order.verify(chatRoomMemberReader).findByChatRoomIdForUpdate(88L);
+        order.verify(roomMemberReader).findByRoomIdOrdered(ROOM);
+        ArgumentCaptor<ChatRoomMember> memberCaptor = ArgumentCaptor.forClass(ChatRoomMember.class);
+        order.verify(chatRoomMemberWriter, times(2)).save(memberCaptor.capture());
+        assertThat(memberCaptor.getAllValues())
+                .extracting(ChatRoomMember::userId, ChatRoomMember::joinedAt)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(101L, firstJoinedAt),
+                        org.assertj.core.groups.Tuple.tuple(102L, secondJoinedAt));
+    }
+
+    @Test
+    @DisplayName("SELECTING 방은 left 행을 보존하고 누락된 멤버만 추가한다")
+    void givenSelectingRoomWithMissingChatMember_whenSynchronizeGroupRoom_thenAddsOnlyMissingMember() {
+        LocalDateTime joinedAt = LocalDateTime.of(2026, 7, 3, 11, 30);
+        ChatRoomMember existing = membership(88L, 101L, null);
+        ChatRoomMember left = membership(88L, 102L, null).leave(LocalDateTime.of(2026, 7, 3, 12, 0));
+        given(roomReader.findByIdForUpdate(ROOM)).willReturn(Optional.of(room(RoomStatus.SELECTING)));
+        given(chatRoomReader.findByRoomIdForUpdate(ROOM)).willReturn(Optional.of(groupRoom(88L, ROOM)));
+        given(chatRoomMemberReader.findByChatRoomIdForUpdate(88L)).willReturn(List.of(existing, left));
+        given(roomMemberReader.findByRoomIdOrdered(ROOM)).willReturn(List.of(
+                roomMember(11L, 101L, LocalDateTime.of(2026, 7, 3, 9, 0)),
+                roomMember(12L, 102L, LocalDateTime.of(2026, 7, 3, 9, 5)),
+                roomMember(13L, 103L, joinedAt)));
+
+        chatService.synchronizeGroupRoom(ROOM);
+
+        ArgumentCaptor<ChatRoomMember> captor = ArgumentCaptor.forClass(ChatRoomMember.class);
+        then(chatRoomMemberWriter).should().save(captor.capture());
+        assertThat(captor.getValue().userId()).isEqualTo(103L);
+        assertThat(captor.getValue().joinedAt()).isEqualTo(joinedAt);
+        then(chatRoomWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("중복 동기화는 이미 있는 membership을 다시 저장하지 않는다")
+    void givenDuplicateSynchronization_whenMembershipExists_thenDoesNotInsertAgain() {
+        LocalDateTime joinedAt = LocalDateTime.of(2026, 7, 3, 9, 15);
+        given(roomReader.findByIdForUpdate(ROOM)).willReturn(Optional.of(room(RoomStatus.ACTIVE)));
+        given(chatRoomReader.findByRoomIdForUpdate(ROOM)).willReturn(Optional.of(groupRoom(88L, ROOM)));
+        given(chatRoomMemberReader.findByChatRoomIdForUpdate(88L))
+                .willReturn(List.of(new ChatRoomMember(1L, 88L, 101L, joinedAt, null, null)));
+        given(roomMemberReader.findByRoomIdOrdered(ROOM))
+                .willReturn(List.of(roomMember(11L, 101L, joinedAt)));
+
+        chatService.synchronizeGroupRoom(ROOM);
 
         then(chatRoomWriter).should(never()).save(any());
         then(chatRoomMemberWriter).should(never()).save(any());

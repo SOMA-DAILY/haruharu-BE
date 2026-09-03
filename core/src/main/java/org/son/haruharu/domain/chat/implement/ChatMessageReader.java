@@ -2,6 +2,7 @@ package org.son.haruharu.domain.chat.implement;
 
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,15 +15,21 @@ public class ChatMessageReader {
         this.chatMessageRepository = chatMessageRepository;
     }
 
-    public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
-        return chatMessageRepository.findPage(chatRoomId, cursorId, limit);
+    public List<ChatMessage> findPage(Long chatRoomId, LocalDateTime joinedAt, Long cursorId, int limit) {
+        return chatMessageRepository.findPage(chatRoomId, joinedAt, cursorId, limit);
     }
 
-    public Optional<ChatMessage> findLast(Long chatRoomId) {
-        return chatMessageRepository.findLast(chatRoomId);
+    public Optional<ChatMessage> findLast(Long chatRoomId, LocalDateTime joinedAt) {
+        return chatMessageRepository.findLast(chatRoomId, joinedAt);
     }
 
-    public long countUnread(Long chatRoomId, Long lastReadMessageId, Long excludeSenderId) {
-        return chatMessageRepository.countUnread(chatRoomId, lastReadMessageId, excludeSenderId);
+    public long countUnread(Long chatRoomId, Long lastReadMessageId,
+                            Long excludeSenderId, LocalDateTime joinedAt) {
+        return chatMessageRepository.countUnread(
+                chatRoomId, lastReadMessageId, excludeSenderId, joinedAt);
+    }
+
+    public long countUnreadByUserId(Long userId) {
+        return chatMessageRepository.countUnreadByUserId(userId);
     }
 }

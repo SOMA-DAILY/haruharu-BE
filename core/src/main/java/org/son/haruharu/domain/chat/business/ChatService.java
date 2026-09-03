@@ -6,6 +6,7 @@ import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
+import org.son.haruharu.domain.chat.business.dto.UnreadCountResponse;
 import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
@@ -20,6 +21,12 @@ import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.profile.business.ProfileService;
+import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
+import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomMember;
+import org.son.haruharu.domain.room.implement.RoomMemberReader;
+import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.user.business.UserService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -29,8 +36,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 채팅 유스케이스(조회·상태 변경). 실시간 메시지 송수신은 #60(STOMP)에서 담당한다.
@@ -48,6 +57,8 @@ public class ChatService {
     private final ChatRoomMemberWriter chatRoomMemberWriter;
     private final ChatMessageReader chatMessageReader;
     private final ChatMessageWriter chatMessageWriter;
+    private final RoomReader roomReader;
+    private final RoomMemberReader roomMemberReader;
     private final ProfileService profileService;
     private final UserService userService;
     private final ApplicationEventPublisher eventPublisher;
@@ -59,6 +70,8 @@ public class ChatService {
                        ChatRoomMemberWriter chatRoomMemberWriter,
                        ChatMessageReader chatMessageReader,
                        ChatMessageWriter chatMessageWriter,
+                       RoomReader roomReader,
+                       RoomMemberReader roomMemberReader,
                        ProfileService profileService,
                        UserService userService,
                        ApplicationEventPublisher eventPublisher,
@@ -69,6 +82,8 @@ public class ChatService {
         this.chatRoomMemberWriter = chatRoomMemberWriter;
         this.chatMessageReader = chatMessageReader;
         this.chatMessageWriter = chatMessageWriter;
+        this.roomReader = roomReader;
+        this.roomMemberReader = roomMemberReader;
         this.profileService = profileService;
         this.userService = userService;
         this.eventPublisher = eventPublisher;
@@ -93,21 +108,29 @@ public class ChatService {
         chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), userIdB, now));
     }
 
-    /**
-     * 소개팅방 시작 시 방 전체 그룹채팅(GROUP)을 생성한다(RoomStartedEvent 커밋 후 호출).
-     * room_id 당 1방 멱등 — 이벤트 재발행에도 중복 생성하지 않는다(exists + UNIQUE). 멤버는 생성 시점 스냅샷.
-     *
-     * AFTER_COMMIT 리스너에서 호출되므로 REQUIRES_NEW로 새 트랜잭션을 연다(#158, DIRECT와 동일).
-     */
+    /** 방 시작·멤버 입장 이벤트가 공유하는 GROUP 채팅 멱등 동기화. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void createGroupRoom(Long roomId, List<Long> memberUserIds) {
-        if (chatRoomReader.existsByRoomId(roomId)) {
+    public void synchronizeGroupRoom(Long roomId) {
+        Room sourceRoom = roomReader.findByIdForUpdate(roomId)
+                .orElseThrow(RoomNotFoundException::new);
+        RoomStatus status = sourceRoom.statusAt(LocalDateTime.now(clock));
+        if (status != RoomStatus.ACTIVE && status != RoomStatus.SELECTING) {
             return;
         }
-        ChatRoom room = chatRoomWriter.save(ChatRoom.createGroup(roomId));
-        LocalDateTime now = LocalDateTime.now(clock);
-        memberUserIds.forEach(userId ->
-                chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), userId, now)));
+
+        ChatRoom groupRoom = chatRoomReader.findByRoomIdForUpdate(roomId)
+                .orElseGet(() -> chatRoomWriter.save(ChatRoom.createGroup(roomId)));
+        List<ChatRoomMember> existingMembers =
+                chatRoomMemberReader.findByChatRoomIdForUpdate(groupRoom.id());
+        Set<Long> existingUserIds = new HashSet<>();
+        existingMembers.stream().map(ChatRoomMember::userId).forEach(existingUserIds::add);
+
+        for (RoomMember sourceMember : roomMemberReader.findByRoomIdOrdered(roomId)) {
+            if (existingUserIds.add(sourceMember.userId())) {
+                chatRoomMemberWriter.save(ChatRoomMember.join(
+                        groupRoom.id(), sourceMember.userId(), sourceMember.joinedAt()));
+            }
+        }
     }
 
     /**
@@ -150,10 +173,10 @@ public class ChatService {
 
     /** 과거 메시지(최신순 커서 페이지). 삭제된 메시지는 제외. */
     public MessagePageResponse getMessages(Long chatRoomId, Long userId, Long cursor, int size) {
-        requireMember(chatRoomId, userId);
+        ChatRoomMember member = requireMember(chatRoomId, userId);
         requireActiveIfDirect(chatRoomId, userId);
         int limit = Math.min(Math.max(size, 1), MAX_MESSAGE_PAGE_SIZE);
-        List<ChatMessage> messages = chatMessageReader.findPage(chatRoomId, cursor, limit);
+        List<ChatMessage> messages = chatMessageReader.findPage(chatRoomId, member.joinedAt(), cursor, limit);
         return MessagePageResponse.of(messages, limit);
     }
 
@@ -163,8 +186,13 @@ public class ChatService {
         ChatRoomMember member = requireMember(chatRoomId, userId);
         requireActiveIfDirect(chatRoomId, userId);
         ChatRoomMember updated = chatRoomMemberWriter.save(member.readUpTo(lastReadMessageId));
-        long unread = chatMessageReader.countUnread(chatRoomId, updated.lastReadMessageId(), userId);
+        long unread = chatMessageReader.countUnread(
+                chatRoomId, updated.lastReadMessageId(), userId, updated.joinedAt());
         return new ReadResponse(chatRoomId, unread);
+    }
+
+    public UnreadCountResponse getUnreadCount(Long userId) {
+        return new UnreadCountResponse(chatMessageReader.countUnreadByUserId(userId));
     }
 
     /** 채팅방 나가기. leftAt을 기록한다(방·메시지 데이터는 보존). */
@@ -187,8 +215,9 @@ public class ChatService {
             }
         }
 
-        Optional<ChatMessage> last = chatMessageReader.findLast(chatRoomId);
-        long unread = chatMessageReader.countUnread(chatRoomId, me.lastReadMessageId(), userId);
+        Optional<ChatMessage> last = chatMessageReader.findLast(chatRoomId, me.joinedAt());
+        long unread = chatMessageReader.countUnread(
+                chatRoomId, me.lastReadMessageId(), userId, me.joinedAt());
         String lastMessage = last.map(ChatMessage::content).orElse(null);
         LocalDateTime lastMessageAt = last.map(ChatMessage::createdAt).orElse(null);
 

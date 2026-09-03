@@ -13,6 +13,7 @@ import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
+import org.son.haruharu.domain.chat.business.dto.UnreadCountResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,6 +43,14 @@ public class ChatController {
     public ApiResponse<ChatRoomsResponse> getMyRooms(Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(chatService.getMyRooms(userId));
+    }
+
+    @Operation(summary = "전체 안 읽은 메시지 수 조회",
+            description = "활성 GROUP·DIRECT membership의 입장 이후 안 읽은 타인 메시지 합계.")
+    @GetMapping("/unread-count")
+    public ApiResponse<UnreadCountResponse> getUnreadCount(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(chatService.getUnreadCount(userId));
     }
 
     @Operation(summary = "채팅방 상세 조회",

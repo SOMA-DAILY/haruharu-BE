@@ -52,8 +52,9 @@ public class RoomInviteService {
     }
 
     /**
-     * 초대코드로 방 입장. room-first 잠금 아래 같은 방 재입장은 멱등 처리하고 active membership을
-     * 잠긴 초대코드의 maxUses(또는 null 무제한)와 비교한다.
+     * 초대코드로 방 입장. room-first 잠금 아래 같은 방 재입장은 membership·사용량을 바꾸지 않고
+     * 채팅 동기화 이벤트만 재발행한다. 신규 입장은 active membership을 잠긴 초대코드의
+     * maxUses(또는 null 무제한)와 비교한다.
      */
     @Transactional
     public JoinRoomResponse join(Long userId, String code) {
@@ -79,7 +80,10 @@ public class RoomInviteService {
             throw new InviteCodeNotUsableException();
         }
 
-        if (roomMemberReader.findByRoomIdAndUserId(room.id(), userId).isPresent()) {
+        RoomMember existingMember = roomMemberReader.findByRoomIdAndUserId(room.id(), userId).orElse(null);
+        if (existingMember != null) {
+            eventPublisher.publishEvent(new RoomMemberJoinedEvent(
+                    room.id(), userId, existingMember.joinedAt()));
             return new JoinRoomResponse(room.id());
         }
 

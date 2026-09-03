@@ -33,6 +33,10 @@ public class ChatRoomReader {
         return chatRoomRepository.findByRoomId(roomId);
     }
 
+    public Optional<ChatRoom> findByRoomIdForUpdate(Long roomId) {
+        return chatRoomRepository.findByRoomIdForUpdate(roomId);
+    }
+
     /** 매칭 결과로 자동 생성된 채팅방 id(없으면 empty). 매칭 결과 화면의 "채팅 시작하기" 직행용. */
     public Optional<Long> findChatRoomIdByMatchResultId(Long matchResultId) {
         return chatRoomRepository.findIdByMatchResultId(matchResultId);
