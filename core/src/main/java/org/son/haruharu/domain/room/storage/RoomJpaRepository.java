@@ -1,15 +1,25 @@
 package org.son.haruharu.domain.room.storage;
 
-import org.son.haruharu.domain.room.implement.RoomStatus;
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
+
+import org.son.haruharu.domain.room.implement.RoomStatus;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface RoomJpaRepository extends JpaRepository<RoomEntity, Long> {
 
     List<RoomEntity> findByIdIn(List<Long> ids);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from RoomEntity r where r.id = :id")
+    Optional<RoomEntity> findByIdForUpdate(@Param("id") Long id);
 
     List<RoomEntity> findByIdInAndStatusNot(List<Long> ids, RoomStatus status);
 

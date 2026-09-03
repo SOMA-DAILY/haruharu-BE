@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -38,5 +39,13 @@ public class RoomMemberReader {
     public RoomMember getByRoomIdAndUserId(Long roomId, Long userId) {
         return roomMemberRepository.findByRoomIdAndUserId(roomId, userId)
                 .orElseThrow(NotRoomMemberException::new);
+    }
+
+    public Optional<RoomMember> findByRoomIdAndUserId(Long roomId, Long userId) {
+        return roomMemberRepository.findByRoomIdAndUserId(roomId, userId);
+    }
+
+    public long countByRoomId(Long roomId) {
+        return roomMemberRepository.countByRoomId(roomId);
     }
 }

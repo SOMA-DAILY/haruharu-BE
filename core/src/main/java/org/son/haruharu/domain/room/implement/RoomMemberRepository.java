@@ -18,5 +18,7 @@ public interface RoomMemberRepository {
 
     Optional<RoomMember> findByRoomIdAndUserId(Long roomId, Long userId);
 
+    long countByRoomId(Long roomId);
+
     Optional<RoomMember> findById(Long id);
 }

@@ -2,9 +2,11 @@ package org.son.haruharu.domain.room.implement;
 
 import java.time.LocalDateTime;
 
+import org.son.haruharu.domain.room.implement.exception.InvalidRoomInviteMaxUsesException;
+
 /**
  * 방 입장 초대코드(#312). first-class 행으로 만료·다중사용·자동생성 확장에 대비한다([[mvp-pivot-invite-code]]).
- * 정원은 maxUses로 표현한다(MVP: 방당 ACTIVE 코드 1개, maxUses=6=3:3). createdBy 는 admin id 또는 "SYSTEM".
+ * maxUses는 관리자가 정하는 실제 방 정원이며, null이면 무제한이다. usedCount는 코드별 usage 메타데이터다.
  */
 public record RoomInvite(
         Long id,
@@ -19,10 +21,13 @@ public record RoomInvite(
     /** 코드 발급: ACTIVE·usedCount=0. */
     public static RoomInvite issue(Long roomId, String code, Integer maxUses,
                                    LocalDateTime expiresAt, String createdBy) {
+        if (maxUses != null && maxUses <= 0) {
+            throw new InvalidRoomInviteMaxUsesException();
+        }
         return new RoomInvite(null, roomId, code, RoomInviteStatus.ACTIVE, maxUses, 0, expiresAt, createdBy);
     }
 
-    /** 지금 사용 가능한가: ACTIVE + 미만료 + 정원(maxUses) 미초과. */
+    /** 지금 lifecycle상 사용 가능한가: ACTIVE + 미만료. 정원은 room lock 아래 active membership으로 따로 판정한다. */
     public boolean isUsable(LocalDateTime now) {
         if (status != RoomInviteStatus.ACTIVE) {
             return false;
@@ -30,7 +35,12 @@ public record RoomInvite(
         if (expiresAt != null && !now.isBefore(expiresAt)) {
             return false;
         }
-        return maxUses == null || usedCount < maxUses;
+        return true;
+    }
+
+    /** 현재 active 멤버 수 기준으로 새 멤버 한 명을 받을 수 있는지 판단한다. null은 무제한이다. */
+    public boolean hasCapacity(long activeMemberCount) {
+        return maxUses == null || activeMemberCount < maxUses;
     }
 
     /** 사용 1회 증가(입장 성공 시). */

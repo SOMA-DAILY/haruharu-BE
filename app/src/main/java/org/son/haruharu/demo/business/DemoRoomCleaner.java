@@ -21,6 +21,8 @@ public class DemoRoomCleaner {
     }
 
     public void deleteRoomCascade(Long roomId) {
+        jdbcTemplate.queryForObject(
+                "SELECT id FROM rooms WHERE id = ? FOR UPDATE", Long.class, roomId);
         // 채팅방(DIRECT=매치결과 경유, GROUP=room_id 직결) → 멤버·메시지. 두 유형 chat_rooms.id를 모아 정리한다.
         String chatRoomIds = """
                 SELECT id FROM chat_rooms WHERE room_id = ?

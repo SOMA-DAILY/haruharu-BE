@@ -64,7 +64,7 @@ public class AdminRoomCommandService {
     /** 코드 재발급. 기존 ACTIVE 코드는 EXPIRED 로 닫힌다(core reissueFor). 없는 방이면 404. */
     @Transactional
     public AdminRoomInviteResponse reissueInvite(Long roomId, Integer maxUses, LocalDateTime expiresAt, Long adminId) {
-        adminRoomReader.getById(roomId); // 존재 확인 게이트
+        adminRoomReader.requireExists(roomId); // scalar 존재 확인: room lock 재조회가 fresh state를 보게 한다
         return AdminRoomInviteResponse.from(
                 roomInviteService.reissueFor(roomId, maxUses, expiresAt, createdBy(adminId)));
     }
@@ -75,7 +75,7 @@ public class AdminRoomCommandService {
      */
     @Transactional
     public void cancelRoom(Long roomId) {
-        adminRoomReader.getById(roomId); // 존재 확인 게이트 — 없는 방은 ADMIN_ROOM_NOT_FOUND(404)
+        adminRoomReader.requireExists(roomId); // 없는 방은 ADMIN_ROOM_NOT_FOUND(404), Entity preload는 하지 않는다
         roomService.cancel(roomId);
     }
 

@@ -95,7 +95,7 @@ public class RoomController {
     @Operation(summary = "초대코드로 방 입장",
             description = "운영진이 발급한 초대코드로 소개팅방에 입장한다. room_member가 생성되고 입장한 room_id를 반환한다. "
                     + "코드가 없으면 404(INVITE_CODE_NOT_FOUND), 만료·비활성·정원 초과이거나 종료·취소된 방이면 400(INVITE_CODE_NOT_USABLE), "
-                    + "이미 입장한 방이면 409(ROOM_ALREADY_JOINED).")
+                    + "같은 방 재입장은 기존 room_id를 멱등 반환한다.")
     @PostMapping("/join")
     public ApiResponse<JoinRoomResponse> join(@Valid @RequestBody JoinRoomRequest request,
                                               Authentication authentication) {

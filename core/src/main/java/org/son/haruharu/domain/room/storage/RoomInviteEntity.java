@@ -38,7 +38,7 @@ public class RoomInviteEntity extends BaseEntity {
     @Column(nullable = false, length = 20)
     private RoomInviteStatus status;
 
-    // 정원(=방 3:3 인원). null이면 무제한. MVP는 6.
+    // 관리자가 정한 실제 방 정원. null이면 무제한이며, join 시 active membership과 비교한다.
     @Column
     private Integer maxUses;
 

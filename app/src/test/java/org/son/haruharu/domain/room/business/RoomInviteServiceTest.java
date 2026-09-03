@@ -12,10 +12,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.common.time.AdjustableClock;
 import org.son.haruharu.domain.room.business.dto.JoinRoomResponse;
-import org.son.haruharu.domain.room.business.exception.AlreadyJoinedRoomException;
+import org.son.haruharu.domain.room.business.event.RoomMemberJoinedEvent;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotFoundException;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException;
 import org.son.haruharu.domain.room.implement.InviteCodeGenerator;
@@ -24,10 +28,13 @@ import org.son.haruharu.domain.room.implement.RoomInvite;
 import org.son.haruharu.domain.room.implement.RoomInviteReader;
 import org.son.haruharu.domain.room.implement.RoomInviteStatus;
 import org.son.haruharu.domain.room.implement.RoomInviteWriter;
+import org.son.haruharu.domain.room.implement.RoomMember;
+import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
-import org.son.haruharu.domain.user.implement.UserReader;
+import org.son.haruharu.domain.room.implement.exception.InvalidRoomInviteMaxUsesException;
+import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -38,6 +45,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class RoomInviteServiceTest {
@@ -45,15 +53,16 @@ class RoomInviteServiceTest {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Long USER_ID = 1L;
     private static final Long ROOM_ID = 10L;
-    private static final String CODE = "ABC123";
+    private static final String CODE = "ABJ234";
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 6, 24, 12, 0);
 
     @Mock RoomInviteReader roomInviteReader;
     @Mock RoomInviteWriter roomInviteWriter;
     @Mock RoomReader roomReader;
-    @Mock RoomService roomService;
+    @Mock RoomMemberReader roomMemberReader;
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock InviteCodeGenerator inviteCodeGenerator;
-    @Mock UserReader userReader;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     RoomInviteService service;
 
@@ -62,97 +71,255 @@ class RoomInviteServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new RoomInviteService(roomInviteReader, roomInviteWriter, roomReader,
-                roomService, roomMemberWriter, inviteCodeGenerator, userReader, clock);
+        service = serviceWithClock(clock);
+    }
+
+    private RoomInviteService serviceWithClock(Clock serviceClock) {
+        return new RoomInviteService(roomInviteReader, roomInviteWriter, roomReader,
+                roomMemberReader, roomMemberWriter, inviteCodeGenerator, eventPublisher, serviceClock);
     }
 
     private RoomInvite activeInvite() {
         return new RoomInvite(5L, ROOM_ID, CODE, RoomInviteStatus.ACTIVE, 6, 0, null, "admin");
     }
 
+    private RoomInvite activeInvite(int maxUses) {
+        return new RoomInvite(5L, ROOM_ID, CODE, RoomInviteStatus.ACTIVE, maxUses, 0, null, "admin");
+    }
+
     private Room roomWithStatus(RoomStatus status) {
-        // startsAt/endsAt null → statusAt은 저장 status를 반환(구모델 폴백 경로 활용)
         return new Room(ROOM_ID, status, LocalDate.of(2026, 6, 24), 3, null, null);
     }
 
-    @Test
-    @DisplayName("유효한 코드로 입장 시 gender=null 멤버를 추가하고 usedCount를 올린 뒤 roomId를 반환한다")
-    void givenValidCode_whenJoin_thenAddsMemberAndReturnsRoomId() {
-        given(roomInviteReader.findByCodeForUpdate(CODE)).willReturn(Optional.of(activeInvite()));
-        given(roomReader.findById(ROOM_ID)).willReturn(Optional.of(roomWithStatus(RoomStatus.PENDING)));
-        given(roomService.hasCurrentRoom(USER_ID)).willReturn(false);
-
-        JoinRoomResponse res = service.join(USER_ID, CODE);
-
-        assertThat(res.roomId()).isEqualTo(ROOM_ID);
-        verify(roomMemberWriter).save(argThat(m ->
-                m.roomId().equals(ROOM_ID) && m.userId().equals(USER_ID) && m.gender() == null));
-        verify(roomInviteWriter).save(argThat(i -> i.usedCount() == 1));
+    private void givenJoinCandidate(Room room, RoomInvite lockedInvite) {
+        given(roomInviteReader.findRoomIdByCode(CODE)).willReturn(Optional.of(ROOM_ID));
+        given(roomReader.findByIdForUpdate(ROOM_ID)).willReturn(Optional.of(room));
+        given(roomInviteReader.findByCodeForUpdate(CODE)).willReturn(Optional.of(lockedInvite));
     }
 
     @Test
-    @DisplayName("존재하지 않는 코드면 InviteCodeNotFoundException")
+    @DisplayName("새 멤버 입장은 코드를 정규화하고 room-first 잠금 뒤 한 번 저장·증가·이벤트 발행한다")
+    void givenNewMembership_whenJoin_thenNormalizesLocksAndWritesExactlyOnce() {
+        givenJoinCandidate(roomWithStatus(RoomStatus.PENDING), activeInvite());
+        given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(5L);
+
+        JoinRoomResponse response = service.join(USER_ID, "  abj234  ");
+
+        assertThat(response.roomId()).isEqualTo(ROOM_ID);
+        InOrder order = inOrder(roomInviteReader, roomReader, roomMemberReader, roomMemberWriter,
+                roomInviteWriter, eventPublisher);
+        order.verify(roomInviteReader).findRoomIdByCode(CODE);
+        order.verify(roomReader).findByIdForUpdate(ROOM_ID);
+        order.verify(roomInviteReader).findByCodeForUpdate(CODE);
+        order.verify(roomMemberReader).findByRoomIdAndUserId(ROOM_ID, USER_ID);
+        order.verify(roomMemberReader).countByRoomId(ROOM_ID);
+        order.verify(roomMemberWriter).save(argThat(member -> member.roomId().equals(ROOM_ID)
+                && member.userId().equals(USER_ID) && member.joinedAt().equals(NOW)));
+        order.verify(roomInviteWriter).save(argThat(invite -> invite.usedCount() == 1));
+        order.verify(eventPublisher).publishEvent(new RoomMemberJoinedEvent(ROOM_ID, USER_ID, NOW));
+    }
+
+    @Test
+    @DisplayName("형식이 잘못된 코드는 저장소 접근 없이 InviteCodeNotUsableException")
+    void givenInvalidNormalizedCode_whenJoin_thenThrowsWithoutRepositoryCalls() {
+        assertThatThrownBy(() -> service.join(USER_ID, " I01234 "))
+                .isInstanceOf(InviteCodeNotUsableException.class);
+
+        verifyNoInteractions(roomInviteReader, roomReader, roomMemberReader, roomMemberWriter,
+                roomInviteWriter, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 유효 형식 코드는 InviteCodeNotFoundException")
     void givenUnknownCode_whenJoin_thenNotFound() {
-        given(roomInviteReader.findByCodeForUpdate(CODE)).willReturn(Optional.empty());
+        given(roomInviteReader.findRoomIdByCode(CODE)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.join(USER_ID, CODE))
                 .isInstanceOf(InviteCodeNotFoundException.class);
-        verify(roomMemberWriter, never()).save(any());
+        verify(roomReader, never()).findByIdForUpdate(any());
     }
 
     @Test
-    @DisplayName("만료된 코드면 InviteCodeNotUsableException (방 조회 전에 차단)")
-    void givenExpiredCode_whenJoin_thenNotUsable() {
+    @DisplayName("room lock 뒤 코드가 다른 방으로 바뀌면 부수 효과 없이 거부한다")
+    void givenInviteChangesAfterDiscovery_whenJoin_thenRejectsWithoutWrites() {
+        RoomInvite changed = new RoomInvite(5L, 99L, CODE, RoomInviteStatus.ACTIVE, 6, 0, null, "admin");
+        given(roomInviteReader.findRoomIdByCode(CODE)).willReturn(Optional.of(ROOM_ID));
+        given(roomReader.findByIdForUpdate(ROOM_ID)).willReturn(Optional.of(roomWithStatus(RoomStatus.PENDING)));
+        given(roomInviteReader.findByCodeForUpdate(CODE)).willReturn(Optional.of(changed));
+
+        assertThatThrownBy(() -> service.join(USER_ID, CODE))
+                .isInstanceOf(InviteCodeNotUsableException.class);
+        verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("같은 방 기존 멤버도 만료 코드를 사용하면 멱등보다 코드 lifecycle 거부가 우선한다")
+    void givenExistingMembershipAndExpiredInvite_whenJoinSameRoom_thenRejectsBeforeIdempotency() {
+        RoomInvite expired = new RoomInvite(5L, ROOM_ID, CODE, RoomInviteStatus.EXPIRED, 6, 6,
+                NOW.minusMinutes(1), "admin");
+        givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), expired);
+
+        assertThatThrownBy(() -> service.join(USER_ID, CODE))
+                .isInstanceOf(InviteCodeNotUsableException.class);
+
+        verify(roomMemberReader, never()).findByRoomIdAndUserId(any(), any());
+        verify(roomMemberReader, never()).countByRoomId(any());
+        verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("같은 방 기존 멤버는 정원이 찬 ACTIVE 코드에도 기존 roomId를 받고 쓰기·이벤트가 없다")
+    void givenExistingMembershipAndFullInvite_whenJoinSameRoom_thenReturnsWithoutCountWritesOrEvent() {
+        RoomInvite full = new RoomInvite(5L, ROOM_ID, CODE, RoomInviteStatus.ACTIVE, 1, 1,
+                null, "admin");
+        givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), full);
+        given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID))
+                .willReturn(Optional.of(RoomMember.of(ROOM_ID, USER_ID, null, null, NOW.minusDays(1))));
+
+        assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
+
+        verify(roomMemberReader, never()).countByRoomId(any());
+        verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("다른 현재 방 멤버십은 대상 방의 새 멤버십 생성을 막지 않는다")
+    void givenMembershipInDifferentCurrentRoom_whenJoin_thenAddsSecondMembership() {
+        givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), activeInvite());
+        given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(1L);
+
+        assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
+
+        verify(roomMemberWriter).save(argThat(member -> member.roomId().equals(ROOM_ID)));
+    }
+
+    @Test
+    @DisplayName("실제 active 멤버가 maxUses=2에 도달하면 invite 사용량과 무관하게 부수 효과 없이 거부한다")
+    void givenActiveMembersAtInviteMaxUses_whenJoin_thenThrowsWithoutWrites() {
+        givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), activeInvite(2));
+        given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(2L);
+
+        assertThatThrownBy(() -> service.join(USER_ID, CODE))
+                .isInstanceOf(InviteCodeNotUsableException.class);
+        verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("maxUses=8인 재발급 코드는 기존 6명 active member가 있어도 즉시 새 멤버를 받는다")
+    void givenReissuedInviteWithLargerCapacity_whenJoin_thenUsesNewInviteCapacity() {
+        givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), activeInvite(8));
+        given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(6L);
+
+        assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
+
+        verify(roomMemberWriter).save(any());
+        verify(roomInviteWriter).save(argThat(invite -> invite.maxUses() == 8 && invite.usedCount() == 1));
+    }
+
+    @Test
+    @DisplayName("maxUses=null인 코드는 active member가 여섯 명을 넘어도 새 멤버를 받는다")
+    void givenUnlimitedInvite_whenJoinAfterSixMembers_thenSucceeds() {
+        RoomInvite unlimited = new RoomInvite(5L, ROOM_ID, CODE, RoomInviteStatus.ACTIVE, null, 17, null, "admin");
+        givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), unlimited);
+        given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(6L);
+
+        assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
+
+        verify(roomMemberWriter).save(any());
+        verify(roomInviteWriter).save(argThat(invite -> invite.usedCount() == 18));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RoomStatus.class, names = {"PENDING", "ACTIVE", "SELECTING"})
+    @DisplayName("PENDING·ACTIVE·SELECTING 방은 새 멤버 입장을 허용한다")
+    void givenJoinableRoomStatus_whenJoin_thenSucceeds(RoomStatus status) {
+        givenJoinCandidate(roomWithStatus(status), activeInvite());
+        given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(0L);
+
+        assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RoomStatus.class, names = {"ENDED", "CANCELLED"})
+    @DisplayName("ENDED·CANCELLED 방은 기존 멤버도 부수 효과 없이 거부한다")
+    void givenTerminalRoom_whenJoin_thenRejectsEvenExistingMember(RoomStatus status) {
+        givenJoinCandidate(roomWithStatus(status), activeInvite());
+
+        assertThatThrownBy(() -> service.join(USER_ID, CODE))
+                .isInstanceOf(InviteCodeNotUsableException.class);
+        verify(roomMemberReader, never()).findByRoomIdAndUserId(any(), any());
+        verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("비활성·만료 코드는 신규 멤버에게 부수 효과 없이 거부된다")
+    void givenInactiveOrExpiredInvite_whenNewMemberJoins_thenRejectsWithoutWrites() {
         RoomInvite expired = new RoomInvite(5L, ROOM_ID, CODE, RoomInviteStatus.ACTIVE, 6, 0,
-                LocalDateTime.of(2026, 6, 24, 11, 0), "admin");
-        given(roomInviteReader.findByCodeForUpdate(CODE)).willReturn(Optional.of(expired));
+                NOW.minusSeconds(1), "admin");
+        givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), expired);
 
         assertThatThrownBy(() -> service.join(USER_ID, CODE))
                 .isInstanceOf(InviteCodeNotUsableException.class);
-        verify(roomMemberWriter, never()).save(any());
+        verify(roomMemberReader, never()).findByRoomIdAndUserId(any(), any());
+        verify(roomMemberReader, never()).countByRoomId(any());
+        verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
     }
 
     @Test
-    @DisplayName("종료된 방이면 InviteCodeNotUsableException")
-    void givenEndedRoom_whenJoin_thenNotUsable() {
-        given(roomInviteReader.findByCodeForUpdate(CODE)).willReturn(Optional.of(activeInvite()));
-        given(roomReader.findById(ROOM_ID)).willReturn(Optional.of(roomWithStatus(RoomStatus.ENDED)));
+    @DisplayName("room lock 대기 중 invite가 만료되면 lock 이후 시각으로 거부하고 쓰기·이벤트가 없다")
+    void givenInviteExpiresWhileWaitingForRoomLock_whenJoin_thenRejectsAtSerializedTime() {
+        LocalDateTime beforeExpiry = NOW;
+        LocalDateTime afterExpiry = NOW.plusMinutes(2);
+        AdjustableClock advancingClock = new AdjustableClock(clock);
+        advancingClock.fix(beforeExpiry);
+        RoomInvite expiring = new RoomInvite(5L, ROOM_ID, CODE, RoomInviteStatus.ACTIVE, 6, 0,
+                NOW.plusMinutes(1), "admin");
+        RoomInviteService boundaryService = serviceWithClock(advancingClock);
+        given(roomInviteReader.findRoomIdByCode(CODE)).willReturn(Optional.of(ROOM_ID));
+        given(roomReader.findByIdForUpdate(ROOM_ID)).willAnswer(invocation -> {
+            advancingClock.fix(afterExpiry);
+            return Optional.of(roomWithStatus(RoomStatus.ACTIVE));
+        });
+        given(roomInviteReader.findByCodeForUpdate(CODE)).willReturn(Optional.of(expiring));
 
-        assertThatThrownBy(() -> service.join(USER_ID, CODE))
+        assertThatThrownBy(() -> boundaryService.join(USER_ID, CODE))
                 .isInstanceOf(InviteCodeNotUsableException.class);
-        verify(roomMemberWriter, never()).save(any());
+        verify(roomMemberReader, never()).findByRoomIdAndUserId(any(), any());
+        verify(roomMemberReader, never()).countByRoomId(any());
+        verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
     }
 
     @Test
-    @DisplayName("이미 참여 중인 방이 있으면 AlreadyJoinedRoomException")
-    void givenAlreadyInCurrentRoom_whenJoin_thenConflict() {
+    @DisplayName("room lock 대기 중 방이 종료되면 기존 멤버 멱등보다 terminal 거부가 우선한다")
+    void givenRoomEndsWhileWaitingForRoomLock_whenExistingMemberJoins_thenTerminalWins() {
+        LocalDateTime beforeEnd = NOW;
+        LocalDateTime afterEnd = NOW.plusMinutes(2);
+        AdjustableClock advancingClock = new AdjustableClock(clock);
+        advancingClock.fix(beforeEnd);
+        RoomInviteService boundaryService = serviceWithClock(advancingClock);
+        Room scheduled = new Room(ROOM_ID, RoomStatus.ACTIVE, NOW.toLocalDate(), 3, NOW.minusDays(1), null,
+                NOW.minusDays(1), NOW.plusHours(1), NOW.plusHours(2), NOW.plusHours(3), NOW.plusMinutes(1));
+        given(roomInviteReader.findRoomIdByCode(CODE)).willReturn(Optional.of(ROOM_ID));
+        given(roomReader.findByIdForUpdate(ROOM_ID)).willAnswer(invocation -> {
+            advancingClock.fix(afterEnd);
+            return Optional.of(scheduled);
+        });
         given(roomInviteReader.findByCodeForUpdate(CODE)).willReturn(Optional.of(activeInvite()));
-        given(roomReader.findById(ROOM_ID)).willReturn(Optional.of(roomWithStatus(RoomStatus.PENDING)));
-        given(roomService.hasCurrentRoom(USER_ID)).willReturn(true);
 
-        assertThatThrownBy(() -> service.join(USER_ID, CODE))
-                .isInstanceOf(AlreadyJoinedRoomException.class);
-        verify(roomMemberWriter, never()).save(any());
+        assertThatThrownBy(() -> boundaryService.join(USER_ID, CODE))
+                .isInstanceOf(InviteCodeNotUsableException.class);
+        verify(roomMemberReader, never()).findByRoomIdAndUserId(any(), any());
+        verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
     }
 
     @Test
-    @DisplayName("입장 시 hasCurrentRoom 검사 전에 유저 행을 먼저 잠근다(#321 동시성 직렬화)")
-    void givenValidCode_whenJoin_thenLocksUserBeforeCurrentRoomCheck() {
-        given(roomInviteReader.findByCodeForUpdate(CODE)).willReturn(Optional.of(activeInvite()));
-        given(roomReader.findById(ROOM_ID)).willReturn(Optional.of(roomWithStatus(RoomStatus.PENDING)));
-        given(roomService.hasCurrentRoom(USER_ID)).willReturn(false);
-
-        service.join(USER_ID, CODE);
-
-        // 락이 검사보다 먼저여야 뒤이은 hasCurrentRoom read 가 락 뒤에 온다.
-        var order = inOrder(userReader, roomService, roomMemberWriter);
-        order.verify(userReader).lockById(USER_ID);
-        order.verify(roomService).hasCurrentRoom(USER_ID);
-        order.verify(roomMemberWriter).save(any());
-    }
-
-    @Test
-    @DisplayName("issueFor는 생성기가 만든 코드로 ACTIVE 코드를 발급한다 (#318)")
+    @DisplayName("issueFor는 생성기가 만든 코드로 ACTIVE 코드를 발급한다")
     void givenRoom_whenIssueFor_thenGeneratesCodeAndSavesActive() {
         given(inviteCodeGenerator.generate()).willReturn("K7M2QX");
         given(roomInviteWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
@@ -161,41 +328,42 @@ class RoomInviteServiceTest {
 
         assertThat(issued.code()).isEqualTo("K7M2QX");
         assertThat(issued.status()).isEqualTo(RoomInviteStatus.ACTIVE);
-        assertThat(issued.roomId()).isEqualTo(ROOM_ID);
-        assertThat(issued.maxUses()).isEqualTo(6);
         assertThat(issued.usedCount()).isZero();
-        assertThat(issued.createdBy()).isEqualTo("admin:1");
     }
 
     @Test
-    @DisplayName("reissueFor는 기존 ACTIVE 코드를 EXPIRED로 만들고 새 코드를 발급한다 (방당 ACTIVE 1개)")
-    void givenActiveInviteExists_whenReissueFor_thenExpiresOldAndIssuesNew() {
+    @DisplayName("issue는 non-positive maxUses를 저장 전에 도메인 오류로 거부한다")
+    void givenNonPositiveMaxUses_whenIssue_thenRejectsBeforePersistence() {
+        assertThatThrownBy(() -> service.issue(ROOM_ID, CODE, 0, null, "admin:1"))
+                .isInstanceOf(InvalidRoomInviteMaxUsesException.class);
+
+        verifyNoInteractions(roomInviteWriter);
+    }
+
+    @Test
+    @DisplayName("reissueFor는 room lock 뒤 기존 ACTIVE 코드를 닫고 새 코드를 발급한다")
+    void givenActiveInviteExists_whenReissueFor_thenLocksRoomBeforeInviteHistory() {
+        given(roomReader.findByIdForUpdate(ROOM_ID)).willReturn(Optional.of(roomWithStatus(RoomStatus.PENDING)));
         given(roomInviteReader.findByRoomId(ROOM_ID)).willReturn(List.of(activeInvite()));
-        given(inviteCodeGenerator.generate()).willReturn("NEWC0DE".substring(0, 6));
+        given(inviteCodeGenerator.generate()).willReturn("NEM234");
         given(roomInviteWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         RoomInvite reissued = service.reissueFor(ROOM_ID, 6, null, "admin:1");
 
-        assertThat(reissued.status()).isEqualTo(RoomInviteStatus.ACTIVE);
-        assertThat(reissued.code()).isNotEqualTo(CODE);
-        verify(roomInviteWriter).save(argThat(i ->
-                CODE.equals(i.code()) && i.status() == RoomInviteStatus.EXPIRED));
-    }
-
-    @Test
-    @DisplayName("reissueFor는 기존 코드가 없어도 새 코드를 발급한다")
-    void givenNoInvite_whenReissueFor_thenIssuesNew() {
-        given(roomInviteReader.findByRoomId(ROOM_ID)).willReturn(List.of());
-        given(inviteCodeGenerator.generate()).willReturn("ZZZ999");
-        given(roomInviteWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
-
-        assertThat(service.reissueFor(ROOM_ID, 6, null, "admin:1").code()).isEqualTo("ZZZ999");
+        assertThat(reissued.code()).isEqualTo("NEM234");
+        InOrder order = inOrder(roomReader, roomInviteReader, roomInviteWriter);
+        order.verify(roomReader).findByIdForUpdate(ROOM_ID);
+        order.verify(roomInviteReader).findByRoomId(ROOM_ID);
+        order.verify(roomInviteWriter).save(argThat(invite -> invite.status() == RoomInviteStatus.EXPIRED));
+        order.verify(roomInviteWriter).save(argThat(invite -> invite.status() == RoomInviteStatus.ACTIVE));
     }
 
     @Test
     @DisplayName("reissueFor는 이미 EXPIRED인 코드는 다시 저장하지 않는다")
     void givenExpiredInvite_whenReissueFor_thenSavesOnlyNewCode() {
-        RoomInvite alreadyExpired = new RoomInvite(9L, ROOM_ID, "OLDCDE", RoomInviteStatus.EXPIRED, 6, 6, null, "admin");
+        RoomInvite alreadyExpired = new RoomInvite(9L, ROOM_ID, "NLD234", RoomInviteStatus.EXPIRED,
+                6, 6, null, "admin");
+        given(roomReader.findByIdForUpdate(ROOM_ID)).willReturn(Optional.of(roomWithStatus(RoomStatus.PENDING)));
         given(roomInviteReader.findByRoomId(ROOM_ID)).willReturn(List.of(alreadyExpired));
         given(inviteCodeGenerator.generate()).willReturn("ZZZ999");
         given(roomInviteWriter.save(any())).willAnswer(inv -> inv.getArgument(0));

@@ -19,6 +19,10 @@ public class RoomReader {
         return roomRepository.findById(roomId);
     }
 
+    public Optional<Room> findByIdForUpdate(Long roomId) {
+        return roomRepository.findByIdForUpdate(roomId);
+    }
+
     /**
      * 후보 방 id들 중 종료되지 않은 현재 방을 단일 조회로 찾는다.
      * <p>

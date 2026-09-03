@@ -11,7 +11,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.room.business.RoomInviteService;
-import org.son.haruharu.domain.room.business.exception.AlreadyJoinedRoomException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomWriter;
@@ -29,8 +28,8 @@ import org.springframework.test.context.ActiveProfiles;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 초대코드 동시 입장 경쟁 조건(#321). 클래스 레벨 @Transactional 을 붙이지 않는다 —
- * 각 스레드의 join 이 독립 트랜잭션으로 커밋돼야 유저 행 비관적 락의 직렬화가 실제로 검증된다.
+ * 초대코드 동시 입장 빠른 H2 회귀. 클래스 레벨 @Transactional 을 붙이지 않는다 —
+ * 각 스레드의 join 이 독립 트랜잭션으로 커밋돼야 room 행 비관적 락의 직렬화가 검증된다.
  * (H2 MODE=PostgreSQL 은 SELECT ... FOR UPDATE 를 실동작시킨다.)
  */
 @SpringBootTest
@@ -66,29 +65,26 @@ class RoomJoinConcurrencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("한 유저가 서로 다른 코드 2개로 동시에 입장하면 하나만 성공하고 활성 멤버십은 정확히 1개다")
-    void givenTwoCodes_whenJoinConcurrently_thenOnlyOneSucceeds() throws Exception {
+    @DisplayName("한 유저가 서로 다른 방 2개에 동시에 입장하면 둘 다 성공한다")
+    void givenOneUserAndTwoRooms_whenJoinConcurrently_thenBothMembershipsSucceed() throws Exception {
         Long userId = newActiveUser();
         Long roomA = newJoinableRoom();
         Long roomB = newJoinableRoom();
-        roomInviteService.issue(roomA, "CODEAA", 6, null, "admin");
-        roomInviteService.issue(roomB, "CODEBB", 6, null, "admin");
+        roomInviteService.issue(roomA, "H2A345", 6, null, "admin");
+        roomInviteService.issue(roomB, "H2B345", 6, null, "admin");
 
         AtomicInteger success = new AtomicInteger();
-        AtomicInteger alreadyJoined = new AtomicInteger();
         AtomicInteger others = new AtomicInteger();
 
         runConcurrently(
-                () -> attemptJoin(userId, "CODEAA", success, alreadyJoined, others),
-                () -> attemptJoin(userId, "CODEBB", success, alreadyJoined, others));
+                () -> attemptJoin(userId, "H2A345", success, others),
+                () -> attemptJoin(userId, "H2B345", success, others));
 
-        assertThat(success.get()).isEqualTo(1);
-        assertThat(alreadyJoined.get()).isEqualTo(1);
+        assertThat(success.get()).isEqualTo(2);
         assertThat(others.get()).isZero();
-        // 두 방을 통틀어 이 유저의 room_member 행은 정확히 1개여야 한다(유령 멤버십·정원 낭비 없음).
         long memberships = roomMemberReader.getByRoomId(roomA).stream().filter(m -> m.userId().equals(userId)).count()
                 + roomMemberReader.getByRoomId(roomB).stream().filter(m -> m.userId().equals(userId)).count();
-        assertThat(memberships).isEqualTo(1);
+        assertThat(memberships).isEqualTo(2);
     }
 
     @Test
@@ -100,26 +96,40 @@ class RoomJoinConcurrencyIntegrationTest {
         roomInviteService.issue(roomId, "SHARED", 6, null, "admin");
 
         AtomicInteger success = new AtomicInteger();
-        AtomicInteger alreadyJoined = new AtomicInteger();
         AtomicInteger others = new AtomicInteger();
 
         runConcurrently(
-                () -> attemptJoin(userA, "SHARED", success, alreadyJoined, others),
-                () -> attemptJoin(userB, "SHARED", success, alreadyJoined, others));
+                () -> attemptJoin(userA, "SHARED", success, others),
+                () -> attemptJoin(userB, "SHARED", success, others));
 
         assertThat(success.get()).isEqualTo(2);
-        assertThat(alreadyJoined.get()).isZero();
         assertThat(others.get()).isZero();
         assertThat(roomMemberReader.getByRoomId(roomId)).hasSize(2);
     }
 
-    private void attemptJoin(Long userId, String code, AtomicInteger success,
-                             AtomicInteger alreadyJoined, AtomicInteger others) {
+    @Test
+    @DisplayName("한 유저가 같은 방 코드를 동시에 재시도하면 둘 다 성공하고 membership·usage는 하나다")
+    void givenOneUser_whenJoinSameRoomConcurrently_thenIdempotent() throws Exception {
+        Long userId = newActiveUser();
+        Long roomId = newJoinableRoom();
+        roomInviteService.issue(roomId, "H2S345", 6, null, "admin");
+        AtomicInteger success = new AtomicInteger();
+        AtomicInteger others = new AtomicInteger();
+
+        runConcurrently(
+                () -> attemptJoin(userId, "H2S345", success, others),
+                () -> attemptJoin(userId, "H2S345", success, others));
+
+        assertThat(success.get()).isEqualTo(2);
+        assertThat(others.get()).isZero();
+        assertThat(roomMemberReader.getByRoomId(roomId)).hasSize(1);
+        assertThat(roomInviteJpaRepository.findByCode("H2S345").orElseThrow().toDomain().usedCount()).isOne();
+    }
+
+    private void attemptJoin(Long userId, String code, AtomicInteger success, AtomicInteger others) {
         try {
             roomInviteService.join(userId, code);
             success.incrementAndGet();
-        } catch (AlreadyJoinedRoomException e) {
-            alreadyJoined.incrementAndGet();
         } catch (RuntimeException e) {
             others.incrementAndGet();
         }

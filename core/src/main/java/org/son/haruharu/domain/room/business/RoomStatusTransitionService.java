@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import org.son.haruharu.domain.room.business.event.FinalSelectionOpenedEvent;
 import org.son.haruharu.domain.room.business.event.RoomStartedEvent;
 import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.springframework.context.ApplicationEventPublisher;
@@ -23,17 +24,24 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RoomStatusTransitionService {
 
+    private final RoomReader roomReader;
     private final RoomWriter roomWriter;
     private final ApplicationEventPublisher eventPublisher;
 
-    public RoomStatusTransitionService(RoomWriter roomWriter, ApplicationEventPublisher eventPublisher) {
+    public RoomStatusTransitionService(RoomReader roomReader, RoomWriter roomWriter,
+                                       ApplicationEventPublisher eventPublisher) {
+        this.roomReader = roomReader;
         this.roomWriter = roomWriter;
         this.eventPublisher = eventPublisher;
     }
 
     /** 전이가 일어났으면 true. 파생 상태가 저장 상태와 같으면(멱등) 아무 것도 하지 않고 false. */
     @Transactional
-    public boolean transition(Room room, LocalDateTime now) {
+    public boolean transition(Room candidate, LocalDateTime now) {
+        Room room = roomReader.findByIdForUpdate(candidate.id()).orElse(null);
+        if (room == null || room.status() == RoomStatus.CANCELLED || room.status() == RoomStatus.ENDED) {
+            return false;
+        }
         // 스케줄 시각이 없는 구 모델 방은 09:00 배치(RoomActivator/RoomTerminator)가 담당한다.
         if (room.startsAt() == null) {
             return false;

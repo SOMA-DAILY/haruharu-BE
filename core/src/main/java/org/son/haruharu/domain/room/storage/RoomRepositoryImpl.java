@@ -37,6 +37,11 @@ public class RoomRepositoryImpl implements RoomRepository {
     }
 
     @Override
+    public Optional<Room> findByIdForUpdate(Long id) {
+        return jpaRepository.findByIdForUpdate(id).map(RoomEntity::toDomain);
+    }
+
+    @Override
     public List<Room> findByIdInAndStatusNot(List<Long> ids, RoomStatus status) {
         if (ids.isEmpty()) {
             return List.of();

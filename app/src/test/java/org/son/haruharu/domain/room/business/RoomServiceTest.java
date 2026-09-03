@@ -120,13 +120,14 @@ class RoomServiceTest {
         Room room = new Room(77L, RoomStatus.PENDING, starts.toLocalDate(), 3, null, null,
                 starts, starts.plusDays(2), starts.plusDays(2).plusHours(3),
                 starts.plusDays(2).plusHours(4), starts.plusDays(3));
-        given(roomReader.findById(77L)).willReturn(Optional.of(room));
+        given(roomReader.findByIdForUpdate(77L)).willReturn(Optional.of(room));
         given(roomWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         roomService.cancel(77L);
 
         verify(roomWriter).save(argThat(r -> r.status() == RoomStatus.CANCELLED
                 && r.statusAt(starts.plusDays(1)) == RoomStatus.CANCELLED));
+        verify(roomReader, never()).findById(77L);
     }
 
     @Test
@@ -136,7 +137,7 @@ class RoomServiceTest {
         Room ended = new Room(78L, RoomStatus.ENDED, starts.toLocalDate(), 3, null, null,
                 starts, starts.plusDays(2), starts.plusDays(2).plusHours(3),
                 starts.plusDays(2).plusHours(4), starts.plusDays(3));
-        given(roomReader.findById(78L)).willReturn(Optional.of(ended));
+        given(roomReader.findByIdForUpdate(78L)).willReturn(Optional.of(ended));
 
         assertThatThrownBy(() -> roomService.cancel(78L))
                 .isInstanceOf(RoomAlreadyEndedException.class);
@@ -146,7 +147,7 @@ class RoomServiceTest {
     @Test
     @DisplayName("없는 방을 취소하면 RoomNotFoundException")
     void givenUnknownRoom_whenCancel_thenNotFound() {
-        given(roomReader.findById(999L)).willReturn(Optional.empty());
+        given(roomReader.findByIdForUpdate(999L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> roomService.cancel(999L))
                 .isInstanceOf(RoomNotFoundException.class);
