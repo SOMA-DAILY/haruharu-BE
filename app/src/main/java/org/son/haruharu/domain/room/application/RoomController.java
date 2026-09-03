@@ -19,6 +19,7 @@ import org.son.haruharu.domain.mission.business.MissionMemberStateService;
 import org.son.haruharu.domain.mission.business.dto.RoomMissionResponse;
 import org.son.haruharu.domain.room.business.RoomFeedService;
 import org.son.haruharu.domain.room.business.RoomInviteService;
+import org.son.haruharu.domain.room.business.RoomListService;
 import org.son.haruharu.domain.room.business.RoomMembersService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.RoomTodayService;
@@ -30,6 +31,7 @@ import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.business.dto.MembersResponse;
 import org.son.haruharu.domain.room.business.dto.MyFinalSelectionResponse;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
+import org.son.haruharu.domain.room.business.dto.RoomsResponse;
 import org.son.haruharu.domain.room.business.dto.TodayResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
@@ -47,6 +49,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class RoomController {
 
     private final RoomService roomService;
+    private final RoomListService roomListService;
     private final RoomInviteService roomInviteService;
     private final RoomTodayService roomTodayService;
     private final RoomMembersService roomMembersService;
@@ -57,7 +60,7 @@ public class RoomController {
     private final RoomMissionService roomMissionService;
     private final MissionMemberStateService missionMemberStateService;
 
-    public RoomController(RoomService roomService, RoomInviteService roomInviteService,
+    public RoomController(RoomService roomService, RoomListService roomListService, RoomInviteService roomInviteService,
                           RoomTodayService roomTodayService,
                           RoomMembersService roomMembersService, MemberProfileService memberProfileService,
                           FinalSelectionService finalSelectionService,
@@ -65,6 +68,7 @@ public class RoomController {
                           RoomMissionService roomMissionService,
                           MissionMemberStateService missionMemberStateService) {
         this.roomService = roomService;
+        this.roomListService = roomListService;
         this.roomInviteService = roomInviteService;
         this.roomTodayService = roomTodayService;
         this.roomMembersService = roomMembersService;
@@ -74,6 +78,18 @@ public class RoomController {
         this.roomFeedService = roomFeedService;
         this.roomMissionService = roomMissionService;
         this.missionMemberStateService = missionMemberStateService;
+    }
+
+    @Operation(summary = "참여 중인 소개팅방 목록 조회",
+            description = "로그인 유저의 PENDING·ACTIVE·SELECTING 방을 서버 기준 하나의 now로 반환한다. "
+                    + "방은 ACTIVE·SELECTING·PENDING, 다음 timer_target_at, room_id 순으로 정렬되며 "
+                    + "profile_image_urls는 고정 상한이나 패딩 없이 본인을 먼저 두고 실제 방 참여자와 같은 수의 슬롯을 반환한다. "
+                    + "사진이 없는 참여자의 null 위치를 보존하고, 방 참여자가 없으면 빈 배열을 반환한다. "
+                    + "참여 방 자체가 없을 때도 빈 rooms 배열을 200으로 반환한다.")
+    @GetMapping
+    public ApiResponse<RoomsResponse> getRooms(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(roomListService.getRooms(userId));
     }
 
     @Operation(summary = "초대코드로 방 입장",

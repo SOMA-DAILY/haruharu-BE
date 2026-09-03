@@ -9,6 +9,8 @@ import java.util.List;
 
 public interface RoomJpaRepository extends JpaRepository<RoomEntity, Long> {
 
+    List<RoomEntity> findByIdIn(List<Long> ids);
+
     List<RoomEntity> findByIdInAndStatusNot(List<Long> ids, RoomStatus status);
 
     List<RoomEntity> findAllByScheduledDateAndStatusAndStartsAtIsNull(

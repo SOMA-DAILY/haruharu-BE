@@ -5,6 +5,7 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +35,14 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     @Override
     public List<RoomMember> findByRoomId(Long roomId) {
         return jpaRepository.findByRoomId(roomId).stream().map(RoomMemberEntity::toDomain).toList();
+    }
+
+    @Override
+    public List<RoomMember> findByRoomIds(Collection<Long> roomIds) {
+        if (roomIds.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findByRoomIdIn(roomIds).stream().map(RoomMemberEntity::toDomain).toList();
     }
 
     @Override
