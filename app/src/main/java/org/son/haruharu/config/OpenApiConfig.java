@@ -21,12 +21,13 @@ public class OpenApiConfig {
      * springdoc의 스키마 생성은 swagger-core가 쓰는 별도 Jackson 2(com.fasterxml) 매퍼를 사용해
      * 전역 전략이 반영되지 않는다(필드명이 camelCase로 노출). 스키마 매퍼에도 동일한 SNAKE_CASE를
      * 지정해 실제 요청/응답 필드명(snake_case)과 문서를 일치시킨다. (@JsonProperty 개별 오버라이드는 유지됨)
+     * 문서가 OpenAPI 3.1이므로 resolver도 3.1 모드로 생성해 nullable type union을 보존한다.
      */
     @Bean
     public ModelResolver modelResolver() {
         ObjectMapper schemaMapper = new ObjectMapper()
             .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-        return new ModelResolver(schemaMapper);
+        return new ModelResolver(schemaMapper).openapi31(true);
     }
 
     @Bean

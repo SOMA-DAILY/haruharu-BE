@@ -10,6 +10,8 @@ public interface RoomRepository {
 
     Optional<Room> findById(Long id);
 
+    List<Room> findByIdIn(List<Long> ids);
+
     List<Room> findByIdInAndStatusNot(List<Long> ids, RoomStatus status);
 
     /** 배치용 — starts_at 이 없는 구 모델 방. */

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,12 +27,35 @@ public class RoomReader {
      * hasCurrentRoom 이 true 로 남아 <b>다음 방 입장이 막힌다</b>. 정확도는 배치가 아니라 읽기가 보장한다.
      */
     public Optional<Room> findCurrent(List<Long> candidateRoomIds, LocalDateTime now) {
-        return roomRepository.findByIdInAndStatusNot(candidateRoomIds, RoomStatus.ENDED).stream()
-                .filter(room -> {
-                    RoomStatus derived = room.statusAt(now);
-                    return derived != RoomStatus.ENDED && derived != RoomStatus.CANCELLED;
-                })
-                .findFirst();
+        return findCurrentAll(candidateRoomIds, now).stream().findFirst();
+    }
+
+    /**
+     * 후보 방 id들 중 시각 기준으로 현재(PENDING, ACTIVE, SELECTING)인 방을 모두 반환한다.
+     * 대표 방이 필요한 기존 API도 이 순서를 공유하도록 {@link #findCurrent(List, LocalDateTime)}가 위임한다.
+     */
+    public List<Room> findCurrentAll(List<Long> candidateRoomIds, LocalDateTime now) {
+        if (candidateRoomIds.isEmpty()) {
+            return List.of();
+        }
+        return roomRepository.findByIdIn(candidateRoomIds).stream()
+                .filter(room -> isCurrent(room.statusAt(now)))
+                .sorted(Comparator.comparingInt((Room room) -> statusRank(room.statusAt(now)))
+                        .thenComparing(Room::id))
+                .toList();
+    }
+
+    private boolean isCurrent(RoomStatus status) {
+        return status == RoomStatus.PENDING || status == RoomStatus.ACTIVE || status == RoomStatus.SELECTING;
+    }
+
+    private int statusRank(RoomStatus status) {
+        return switch (status) {
+            case ACTIVE -> 0;
+            case SELECTING -> 1;
+            case PENDING -> 2;
+            default -> 3;
+        };
     }
 
     /**

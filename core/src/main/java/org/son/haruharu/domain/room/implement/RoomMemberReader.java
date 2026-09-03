@@ -5,6 +5,7 @@ import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
 import java.util.List;
 
 @Component
@@ -24,6 +25,13 @@ public class RoomMemberReader {
 
     public List<RoomMember> getByRoomId(Long roomId) {
         return roomMemberRepository.findByRoomId(roomId);
+    }
+
+    public List<RoomMember> findByRoomIds(Collection<Long> roomIds) {
+        if (roomIds.isEmpty()) {
+            return List.of();
+        }
+        return roomMemberRepository.findByRoomIds(roomIds);
     }
 
     /** 방-유저 멤버십 확인. 참여자가 아니면 예외(거의 모든 방 API의 인가 게이트). */

@@ -27,6 +27,16 @@ public class RoomRepositoryImpl implements RoomRepository {
     }
 
     @Override
+    public List<Room> findByIdIn(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findByIdIn(ids).stream()
+                .map(RoomEntity::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<Room> findByIdInAndStatusNot(List<Long> ids, RoomStatus status) {
         if (ids.isEmpty()) {
             return List.of();

@@ -8,6 +8,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,5 +40,17 @@ class OpenApiSchemaNamingIntegrationTest {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.components.schemas.ApiResponseHomeResponse.properties.isSuccess").exists());
+    }
+
+    @Test
+    @DisplayName("방 카드 이미지 배열의 OpenAPI items는 문자열과 null을 모두 허용한다")
+    void givenNullableProfileImageSlots_whenApiDocs_thenArrayItemsAllowStringAndNull() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.openapi").value("3.1.0"))
+                .andExpect(jsonPath("$.components.schemas.RoomSummary.properties.profile_image_urls.type")
+                        .value("array"))
+                .andExpect(jsonPath("$.components.schemas.RoomSummary.properties.profile_image_urls.items.type")
+                        .value(containsInAnyOrder("string", "null")));
     }
 }

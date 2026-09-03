@@ -79,9 +79,56 @@ class HomeApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("여러 현재 방이 있어도 내 방·홈은 ACTIVE 중 가장 작은 room_id를 기존 응답 형태로 선택한다")
+    void givenMultipleCurrentRooms_whenGetLegacyRoomAndHome_thenSelectsLowestActiveRoomWithLegacyShape() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        Long userId = 901L;
+        Long lowestActiveId = saveScheduledRoom(now.minusHours(2), now.plusDays(1));
+        Long higherActiveId = saveScheduledRoom(now.minusHours(1), now.plusDays(1));
+        Long selectingId = saveScheduledRoom(now.minusDays(2), now.minusHours(1));
+        Long pendingId = saveScheduledRoom(now.plusHours(1), now.plusDays(1));
+        saveMember(lowestActiveId, userId, now);
+        saveMember(higherActiveId, userId, now);
+        saveMember(selectingId, userId, now);
+        saveMember(pendingId, userId, now);
+
+        mockMvc.perform(get("/api/v1/rooms/me").with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.room_id").value(lowestActiveId.intValue()))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.scheduled_date").exists())
+                .andExpect(jsonPath("$.data.total_days").value(3))
+                .andExpect(jsonPath("$.data.current_day").value(1))
+                .andExpect(jsonPath("$.data.starts_at").exists())
+                .andExpect(jsonPath("$.data.ends_at").exists())
+                .andExpect(jsonPath("$.data.member_count").value(1));
+
+        mockMvc.perform(get("/api/v1/home").with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.active_room.room_id").value(lowestActiveId.intValue()))
+                .andExpect(jsonPath("$.data.active_room.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.active_room.current_day").value(1))
+                .andExpect(jsonPath("$.data.active_room.starts_at").exists())
+                .andExpect(jsonPath("$.data.active_room.ends_at").exists());
+    }
+
+    @Test
     @DisplayName("인증 없이 홈 조회 시 401을 반환한다")
     void givenNoAuth_whenGetHome_thenUnauthorized() throws Exception {
         mockMvc.perform(get("/api/v1/home"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    private Long saveScheduledRoom(LocalDateTime startsAt, LocalDateTime selectionOpensAt) {
+        LocalDateTime endsAt = startsAt.plusDays(3);
+        Room room = new Room(null, org.son.haruharu.domain.room.implement.RoomStatus.PENDING,
+                startsAt.toLocalDate(), 3, startsAt, null,
+                startsAt, selectionOpensAt, selectionOpensAt.plusHours(1), selectionOpensAt.plusHours(2), endsAt);
+        return roomJpaRepository.save(RoomEntity.from(room)).toDomain().id();
+    }
+
+    private void saveMember(Long roomId, Long userId, LocalDateTime joinedAt) {
+        roomMemberJpaRepository.save(RoomMemberEntity.from(
+                RoomMember.of(roomId, userId, "MALE", LocalDate.of(2000, 1, 1), joinedAt)));
     }
 }
