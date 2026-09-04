@@ -46,6 +46,13 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     }
 
     @Override
+    public List<RoomMember> findByRoomIdOrderByIdAsc(Long roomId) {
+        return jpaRepository.findByRoomIdOrderByIdAsc(roomId).stream()
+                .map(RoomMemberEntity::toDomain)
+                .toList();
+    }
+
+    @Override
     public Optional<RoomMember> findByRoomIdAndUserId(Long roomId, Long userId) {
         return jpaRepository.findByRoomIdAndUserId(roomId, userId).map(RoomMemberEntity::toDomain);
     }

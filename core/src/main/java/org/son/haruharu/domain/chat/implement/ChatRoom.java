@@ -3,7 +3,7 @@ package org.son.haruharu.domain.chat.implement;
 import java.time.LocalDateTime;
 
 /**
- * 채팅방. type으로 GROUP(소개팅방 전체 6인, roomId 연결)·DIRECT(최종선택 상호성사 1:1, matchResultId 연결)를 구분한다.
+ * 채팅방. type으로 GROUP(소개팅방의 모든 멤버, roomId 연결)·DIRECT(최종선택 상호성사 1:1, matchResultId 연결)를 구분한다.
  * roomId·matchResultId는 type에 따라 한쪽만 채워진다(다른 쪽 null).
  */
 public record ChatRoom(

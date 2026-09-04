@@ -35,6 +35,10 @@ public class RoomMemberReader {
         return roomMemberRepository.findByRoomIds(roomIds);
     }
 
+    public List<RoomMember> findByRoomIdOrdered(Long roomId) {
+        return roomMemberRepository.findByRoomIdOrderByIdAsc(roomId);
+    }
+
     /** 방-유저 멤버십 확인. 참여자가 아니면 예외(거의 모든 방 API의 인가 게이트). */
     public RoomMember getByRoomIdAndUserId(Long roomId, Long userId) {
         return roomMemberRepository.findByRoomIdAndUserId(roomId, userId)

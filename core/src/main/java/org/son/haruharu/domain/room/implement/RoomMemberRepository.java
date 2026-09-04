@@ -16,6 +16,8 @@ public interface RoomMemberRepository {
 
     List<RoomMember> findByRoomIds(Collection<Long> roomIds);
 
+    List<RoomMember> findByRoomIdOrderByIdAsc(Long roomId);
+
     Optional<RoomMember> findByRoomIdAndUserId(Long roomId, Long userId);
 
     long countByRoomId(Long roomId);

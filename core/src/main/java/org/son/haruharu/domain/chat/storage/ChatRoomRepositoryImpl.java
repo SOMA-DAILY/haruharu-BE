@@ -44,6 +44,11 @@ public class ChatRoomRepositoryImpl implements ChatRoomRepository {
     }
 
     @Override
+    public Optional<ChatRoom> findByRoomIdForUpdate(Long roomId) {
+        return chatRoomJpaRepository.findByRoomIdForUpdate(roomId).map(ChatRoomEntity::toDomain);
+    }
+
+    @Override
     public void hardDeleteByMatchResultId(Long matchResultId) {
         chatRoomJpaRepository.hardDeleteByMatchResultId(matchResultId);
     }

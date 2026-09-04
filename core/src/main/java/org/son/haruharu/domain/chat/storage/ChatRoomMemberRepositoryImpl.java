@@ -40,6 +40,13 @@ public class ChatRoomMemberRepositoryImpl implements ChatRoomMemberRepository {
     }
 
     @Override
+    public List<ChatRoomMember> findByChatRoomIdForUpdate(Long chatRoomId) {
+        return chatRoomMemberJpaRepository.findByChatRoomIdForUpdate(chatRoomId).stream()
+                .map(ChatRoomMemberEntity::toDomain)
+                .toList();
+    }
+
+    @Override
     public void deleteByChatRoomId(Long chatRoomId) {
         chatRoomMemberJpaRepository.deleteByChatRoomId(chatRoomId);
     }

@@ -6,21 +6,50 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageEntity, Long> {
 
     // 삭제된(deleted_at) 메시지 제외는 BaseEntity @SoftDelete 전역 필터가 처리한다.
-    List<ChatMessageEntity> findByChatRoomIdOrderByIdDesc(Long chatRoomId, Pageable pageable);
+    List<ChatMessageEntity> findByChatRoomIdAndCreatedAtGreaterThanEqualOrderByIdDesc(
+            Long chatRoomId, LocalDateTime joinedAt, Pageable pageable);
 
-    List<ChatMessageEntity> findByChatRoomIdAndIdLessThanOrderByIdDesc(
-            Long chatRoomId, Long cursorId, Pageable pageable);
+    List<ChatMessageEntity> findByChatRoomIdAndIdLessThanAndCreatedAtGreaterThanEqualOrderByIdDesc(
+            Long chatRoomId, Long cursorId, LocalDateTime joinedAt, Pageable pageable);
 
-    Optional<ChatMessageEntity> findFirstByChatRoomIdOrderByIdDesc(Long chatRoomId);
+    Optional<ChatMessageEntity> findFirstByChatRoomIdAndCreatedAtGreaterThanEqualOrderByIdDesc(
+            Long chatRoomId, LocalDateTime joinedAt);
 
-    long countByChatRoomIdAndIdGreaterThanAndSenderIdNot(
-            Long chatRoomId, Long lastReadMessageId, Long excludeSenderId);
+    long countByChatRoomIdAndIdGreaterThanAndSenderIdNotAndCreatedAtGreaterThanEqual(
+            Long chatRoomId, Long lastReadMessageId, Long excludeSenderId, LocalDateTime joinedAt);
+
+    @Query(value = """
+            SELECT count(*)
+            FROM chat_room_members membership
+            JOIN chat_messages message
+              ON message.chat_room_id = membership.chat_room_id
+            WHERE membership.user_id = :userId
+              AND membership.left_at IS NULL
+              AND message.deleted_at IS NULL
+              AND message.sender_id <> :userId
+              AND message.id > coalesce(membership.last_read_message_id, 0)
+              AND message.created_at >= membership.joined_at
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM chat_rooms room
+                  JOIN chat_room_members partner
+                    ON partner.chat_room_id = room.id
+                   AND partner.user_id <> :userId
+                  JOIN users partner_user
+                    ON partner_user.id = partner.user_id
+                  WHERE room.id = membership.chat_room_id
+                    AND room.type = 'DIRECT'
+                    AND partner_user.status = 'DELETED'
+              )
+            """, nativeQuery = true)
+    long countUnreadByUserId(@Param("userId") Long userId);
 
     // 네이티브 DELETE — 전역 @SoftDelete 우회(데모 재시드 시 이전 대화가 누적되지 않게 물리 삭제).
     @Modifying

@@ -169,18 +169,20 @@ class RoomInviteServiceTest {
     }
 
     @Test
-    @DisplayName("같은 방 기존 멤버는 정원이 찬 ACTIVE 코드에도 기존 roomId를 받고 쓰기·이벤트가 없다")
-    void givenExistingMembershipAndFullInvite_whenJoinSameRoom_thenReturnsWithoutCountWritesOrEvent() {
+    @DisplayName("같은 방 기존 멤버는 정원이 찬 ACTIVE 코드에도 사용량을 늘리지 않고 원래 입장 시각으로 동기화 이벤트를 재발행한다")
+    void givenExistingMembershipAndFullInvite_whenJoinSameRoom_thenRepublishesReconciliationWithoutWrites() {
         RoomInvite full = new RoomInvite(5L, ROOM_ID, CODE, RoomInviteStatus.ACTIVE, 1, 1,
                 null, "admin");
+        LocalDateTime originalJoinedAt = NOW.minusDays(1);
         givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), full);
         given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID))
-                .willReturn(Optional.of(RoomMember.of(ROOM_ID, USER_ID, null, null, NOW.minusDays(1))));
+                .willReturn(Optional.of(RoomMember.of(ROOM_ID, USER_ID, null, null, originalJoinedAt)));
 
         assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
 
         verify(roomMemberReader, never()).countByRoomId(any());
-        verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
+        verifyNoInteractions(roomMemberWriter, roomInviteWriter);
+        verify(eventPublisher).publishEvent(new RoomMemberJoinedEvent(ROOM_ID, USER_ID, originalJoinedAt));
     }
 
     @Test

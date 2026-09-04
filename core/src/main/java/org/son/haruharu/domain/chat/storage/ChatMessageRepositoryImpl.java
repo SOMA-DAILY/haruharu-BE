@@ -7,6 +7,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,27 +28,37 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     }
 
     @Override
-    public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
+    public List<ChatMessage> findPage(Long chatRoomId, LocalDateTime joinedAt, Long cursorId, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
         List<ChatMessageEntity> rows = (cursorId == null)
-                ? chatMessageJpaRepository.findByChatRoomIdOrderByIdDesc(chatRoomId, pageable)
-                : chatMessageJpaRepository.findByChatRoomIdAndIdLessThanOrderByIdDesc(
-                        chatRoomId, cursorId, pageable);
+                ? chatMessageJpaRepository.findByChatRoomIdAndCreatedAtGreaterThanEqualOrderByIdDesc(
+                        chatRoomId, joinedAt, pageable)
+                : chatMessageJpaRepository
+                        .findByChatRoomIdAndIdLessThanAndCreatedAtGreaterThanEqualOrderByIdDesc(
+                                chatRoomId, cursorId, joinedAt, pageable);
         return rows.stream().map(ChatMessageEntity::toDomain).toList();
     }
 
     @Override
-    public Optional<ChatMessage> findLast(Long chatRoomId) {
-        return chatMessageJpaRepository.findFirstByChatRoomIdOrderByIdDesc(chatRoomId)
+    public Optional<ChatMessage> findLast(Long chatRoomId, LocalDateTime joinedAt) {
+        return chatMessageJpaRepository
+                .findFirstByChatRoomIdAndCreatedAtGreaterThanEqualOrderByIdDesc(chatRoomId, joinedAt)
                 .map(ChatMessageEntity::toDomain);
     }
 
     @Override
-    public long countUnread(Long chatRoomId, Long lastReadMessageId, Long excludeSenderId) {
+    public long countUnread(Long chatRoomId, Long lastReadMessageId,
+                            Long excludeSenderId, LocalDateTime joinedAt) {
         // 커서가 없으면(한 번도 안 읽음) 0L 기준 — IDENTITY id는 1부터라 전체가 안읽음으로 집계된다.
         long cursor = (lastReadMessageId == null) ? 0L : lastReadMessageId;
-        return chatMessageJpaRepository.countByChatRoomIdAndIdGreaterThanAndSenderIdNot(
-                chatRoomId, cursor, excludeSenderId);
+        return chatMessageJpaRepository
+                .countByChatRoomIdAndIdGreaterThanAndSenderIdNotAndCreatedAtGreaterThanEqual(
+                        chatRoomId, cursor, excludeSenderId, joinedAt);
+    }
+
+    @Override
+    public long countUnreadByUserId(Long userId) {
+        return chatMessageJpaRepository.countUnreadByUserId(userId);
     }
 
     @Override

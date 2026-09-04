@@ -1,6 +1,8 @@
 package org.son.haruharu.domain.chat.storage;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,6 +17,11 @@ public interface ChatRoomMemberJpaRepository extends JpaRepository<ChatRoomMembe
     List<ChatRoomMemberEntity> findByUserIdAndLeftAtIsNull(Long userId);
 
     List<ChatRoomMemberEntity> findByChatRoomId(Long chatRoomId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select member from ChatRoomMemberEntity member "
+            + "where member.chatRoomId = :chatRoomId order by member.id")
+    List<ChatRoomMemberEntity> findByChatRoomIdForUpdate(@Param("chatRoomId") Long chatRoomId);
 
     // chat_room_members는 BaseEntity 미상속(soft-delete 아님)이라 JPQL 벌크 delete가 물리 삭제로 동작한다.
     @Modifying
