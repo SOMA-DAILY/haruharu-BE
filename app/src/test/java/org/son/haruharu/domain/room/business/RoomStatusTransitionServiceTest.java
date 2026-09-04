@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.room.business;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -12,12 +13,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.room.business.event.FinalSelectionOpenedEvent;
 import org.son.haruharu.domain.room.business.event.RoomStartedEvent;
 import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
@@ -30,6 +33,7 @@ class RoomStatusTransitionServiceTest {
     private static final LocalDateTime RESULT_AT = LocalDateTime.of(2026, 8, 22, 22, 0);
     private static final LocalDateTime ENDS_AT = LocalDateTime.of(2026, 8, 23, 9, 0);
 
+    @Mock RoomReader roomReader;
     @Mock RoomWriter roomWriter;
     @Mock ApplicationEventPublisher eventPublisher;
 
@@ -37,7 +41,7 @@ class RoomStatusTransitionServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new RoomStatusTransitionService(roomWriter, eventPublisher);
+        service = new RoomStatusTransitionService(roomReader, roomWriter, eventPublisher);
     }
 
     private Room roomWith(RoomStatus stored) {
@@ -45,10 +49,15 @@ class RoomStatusTransitionServiceTest {
                 STARTS_AT, OPENS_AT, CLOSES_AT, RESULT_AT, ENDS_AT);
     }
 
+    private boolean transition(Room room, LocalDateTime now) {
+        given(roomReader.findByIdForUpdate(room.id())).willReturn(Optional.of(room));
+        return service.transition(room, now);
+    }
+
     @Test
     @DisplayName("PENDING → ACTIVE 전이 시 startedAt을 starts_at으로 앵커하고 ROOM_STARTED를 발행한다")
     void givenPastStartsAt_whenTransition_thenActiveWithStartedAtAnchor() {
-        boolean changed = service.transition(roomWith(RoomStatus.PENDING), STARTS_AT.plusMinutes(5));
+        boolean changed = transition(roomWith(RoomStatus.PENDING), STARTS_AT.plusMinutes(5));
 
         assertThat(changed).isTrue();
         ArgumentCaptor<Room> captor = ArgumentCaptor.forClass(Room.class);
@@ -62,7 +71,7 @@ class RoomStatusTransitionServiceTest {
     @Test
     @DisplayName("ACTIVE → SELECTING 전이 시 FinalSelectionOpenedEvent를 발행한다")
     void givenPastOpensAt_whenTransition_thenSelectingAndEvent() {
-        boolean changed = service.transition(roomWith(RoomStatus.ACTIVE), OPENS_AT.plusMinutes(1));
+        boolean changed = transition(roomWith(RoomStatus.ACTIVE), OPENS_AT.plusMinutes(1));
 
         assertThat(changed).isTrue();
         ArgumentCaptor<Room> captor = ArgumentCaptor.forClass(Room.class);
@@ -74,7 +83,7 @@ class RoomStatusTransitionServiceTest {
     @Test
     @DisplayName("PENDING → SELECTING 직행(배치 장기 중단)에도 startedAt 앵커·ROOM_STARTED·최종선택 오픈 이벤트가 모두 발행된다")
     void givenPendingSkippingActive_whenTransition_thenStartedAtAnchoredAndEvents() {
-        service.transition(roomWith(RoomStatus.PENDING), OPENS_AT.plusMinutes(1));
+        transition(roomWith(RoomStatus.PENDING), OPENS_AT.plusMinutes(1));
 
         ArgumentCaptor<Room> captor = ArgumentCaptor.forClass(Room.class);
         then(roomWriter).should().save(captor.capture());
@@ -89,7 +98,7 @@ class RoomStatusTransitionServiceTest {
     @Test
     @DisplayName("PENDING → ENDED 직행에도 startedAt 앵커·ROOM_STARTED가 발행된다(채팅·미션 누락 방지)")
     void givenPendingSkippingToEnded_whenTransition_thenStartedAtAnchoredAndRoomStarted() {
-        service.transition(roomWith(RoomStatus.PENDING), ENDS_AT.plusHours(1));
+        transition(roomWith(RoomStatus.PENDING), ENDS_AT.plusHours(1));
 
         ArgumentCaptor<Room> captor = ArgumentCaptor.forClass(Room.class);
         then(roomWriter).should().save(captor.capture());
@@ -101,7 +110,7 @@ class RoomStatusTransitionServiceTest {
     @Test
     @DisplayName("ENDED 전이에는 알림이 없다")
     void givenPastEndsAt_whenTransition_thenEndedWithoutEvent() {
-        boolean changed = service.transition(roomWith(RoomStatus.SELECTING), ENDS_AT.plusMinutes(1));
+        boolean changed = transition(roomWith(RoomStatus.SELECTING), ENDS_AT.plusMinutes(1));
 
         assertThat(changed).isTrue();
         then(eventPublisher).should(never()).publishEvent(any());
@@ -110,7 +119,7 @@ class RoomStatusTransitionServiceTest {
     @Test
     @DisplayName("파생 상태가 저장 상태와 같으면 저장·알림 모두 하지 않는다 (멱등)")
     void givenAlreadyInSync_whenTransition_thenNoop() {
-        boolean changed = service.transition(roomWith(RoomStatus.ACTIVE), STARTS_AT.plusHours(1));
+        boolean changed = transition(roomWith(RoomStatus.ACTIVE), STARTS_AT.plusHours(1));
 
         assertThat(changed).isFalse();
         then(roomWriter).should(never()).save(any());
@@ -120,7 +129,7 @@ class RoomStatusTransitionServiceTest {
     @Test
     @DisplayName("CANCELLED 방은 시각이 지나도 전이하지 않는다 (sticky)")
     void givenCancelled_whenTransition_thenNoop() {
-        boolean changed = service.transition(roomWith(RoomStatus.PENDING).cancelled(), STARTS_AT.plusHours(2));
+        boolean changed = transition(roomWith(RoomStatus.PENDING).cancelled(), STARTS_AT.plusHours(2));
 
         assertThat(changed).isFalse();
         then(roomWriter).should(never()).save(any());
@@ -131,7 +140,7 @@ class RoomStatusTransitionServiceTest {
     void givenLegacyRoom_whenTransition_thenNoop() {
         Room legacy = new Room(2L, RoomStatus.PENDING, STARTS_AT.toLocalDate(), 3, null, null);
 
-        boolean changed = service.transition(legacy, STARTS_AT.plusHours(2));
+        boolean changed = transition(legacy, STARTS_AT.plusHours(2));
 
         assertThat(changed).isFalse();
         then(roomWriter).should(never()).save(any());

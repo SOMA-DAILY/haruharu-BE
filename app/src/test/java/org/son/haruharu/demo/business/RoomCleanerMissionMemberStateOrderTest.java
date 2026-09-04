@@ -6,6 +6,8 @@ import org.mockito.InOrder;
 import org.son.haruharu.devsupport.DevRoomCleaner;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 
@@ -18,6 +20,7 @@ class RoomCleanerMissionMemberStateOrderTest {
 
         new DemoRoomCleaner(jdbcTemplate).deleteRoomCascade(1L);
 
+        assertRoomLockComesFirst(jdbcTemplate);
         assertMissionFkOrder(jdbcTemplate);
     }
 
@@ -28,7 +31,15 @@ class RoomCleanerMissionMemberStateOrderTest {
 
         new DevRoomCleaner(jdbcTemplate).deleteRoomCascade(1L);
 
+        assertRoomLockComesFirst(jdbcTemplate);
         assertMissionFkOrder(jdbcTemplate);
+    }
+
+    private void assertRoomLockComesFirst(JdbcTemplate jdbcTemplate) {
+        InOrder order = inOrder(jdbcTemplate);
+        order.verify(jdbcTemplate).queryForObject(
+                "SELECT id FROM rooms WHERE id = ? FOR UPDATE", Long.class, 1L);
+        order.verify(jdbcTemplate).update(contains("DELETE FROM chat_messages"), eq(1L), eq(1L));
     }
 
     private void assertMissionFkOrder(JdbcTemplate jdbcTemplate) {

@@ -14,10 +14,13 @@ public interface RoomInviteJpaRepository extends JpaRepository<RoomInviteEntity,
 
     Optional<RoomInviteEntity> findByCode(String code);
 
+    @Query("select i.roomId from RoomInviteEntity i where i.code = :code")
+    Optional<Long> findRoomIdByCode(@Param("code") String code);
+
     /** 방의 코드 이력(최신 발급이 앞). 방당 코드 수는 한 자릿수라 페이지네이션 없이 전량 조회한다(#318). */
     List<RoomInviteEntity> findByRoomIdOrderByIdDesc(Long roomId);
 
-    /** 입장 정원(usedCount) 갱신 경쟁 방지용 비관적 락(#312). 동시 입장 시 코드 행을 직렬화한다. */
+    /** room lock 뒤 lifecycle 재검증과 usedCount 갱신을 직렬화한다. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select i from RoomInviteEntity i where i.code = :code")
     Optional<RoomInviteEntity> findByCodeForUpdate(@Param("code") String code);

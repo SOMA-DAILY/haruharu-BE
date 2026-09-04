@@ -26,6 +26,17 @@ class RoomTest {
     }
 
     @Test
+    @DisplayName("Room의 모든 불변 전이는 스케줄 시각을 보존한다")
+    void givenRoomWithSchedule_whenStatusChanges_thenScheduleIsPreserved() {
+        Room room = scheduledRoom();
+
+        assertThat(room.materialized(RoomStatus.ACTIVE).startsAt()).isEqualTo(SCHED_START);
+        assertThat(room.cancelled().endsAt()).isEqualTo(SCHED_START.plusHours(8));
+        assertThat(room.started(SCHED_START).startsAt()).isEqualTo(SCHED_START);
+        assertThat(room.ended(SCHED_START.plusDays(3)).endsAt()).isEqualTo(SCHED_START.plusHours(8));
+    }
+
+    @Test
     @DisplayName("createScheduled: PENDING·시각 세팅·scheduledDate=시작일")
     void givenTimes_whenCreateScheduled_thenPendingWithTimes() {
         Room room = scheduledRoom();

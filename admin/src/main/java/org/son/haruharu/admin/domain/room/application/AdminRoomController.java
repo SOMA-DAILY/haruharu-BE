@@ -83,7 +83,7 @@ public class AdminRoomController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<AdminRoomInviteResponse> reissueInvite(
             @Parameter(description = "방 id", example = "1") @PathVariable Long roomId,
-            @RequestBody(required = false) ReissueInviteRequest request, Authentication authentication) {
+            @RequestBody(required = false) @Valid ReissueInviteRequest request, Authentication authentication) {
         Long adminId = (Long) authentication.getPrincipal();
         Integer maxUses = request == null ? null : request.maxUses();
         LocalDateTime expiresAt = request == null ? null : request.expiresAt();

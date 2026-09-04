@@ -16,7 +16,11 @@ public class RoomInviteReader {
         return roomInviteRepository.findByCode(code);
     }
 
-    /** 입장 처리 시 정원 경쟁을 막기 위한 비관적 락 조회(#312). */
+    public Optional<Long> findRoomIdByCode(String code) {
+        return roomInviteRepository.findRoomIdByCode(code);
+    }
+
+    /** room lock 뒤 lifecycle 재검증과 usedCount 갱신을 위한 invite 비관적 락 조회. */
     public Optional<RoomInvite> findByCodeForUpdate(String code) {
         return roomInviteRepository.findByCodeForUpdate(code);
     }

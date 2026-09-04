@@ -84,7 +84,7 @@ public class RoomService {
      */
     @Transactional
     public void cancel(Long roomId) {
-        Room room = roomReader.findById(roomId)
+        Room room = roomReader.findByIdForUpdate(roomId)
                 .orElseThrow(RoomNotFoundException::new);
         if (room.statusAt(LocalDateTime.now(clock)) == RoomStatus.ENDED) {
             throw new RoomAlreadyEndedException();

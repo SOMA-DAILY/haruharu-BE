@@ -234,6 +234,28 @@ class AdminRoomApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("방 생성의 실제 정원은 양수여야 하며 null은 무제한으로 허용된다")
+    void givenInvalidOrUnlimitedMaxUses_whenCreatingRoom_thenValidatesAsExpected() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        String validBody = createRoomBody(startsAt);
+
+        for (int invalidMaxUses : List.of(0, -1)) {
+            mockMvc.perform(post("/api/v1/admin/rooms")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(validBody.replace("\"max_uses\": 6", "\"max_uses\": " + invalidMaxUses))
+                            .with(authentication(adminAuth())))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+        }
+
+        mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody.replace("\"max_uses\": 6", "\"max_uses\": null"))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     @DisplayName("코드 재발급 시 기존 코드는 EXPIRED가 되고 새 ACTIVE 코드가 반환된다")
     void reissueInvite_expiresOldAndReturnsNew() throws Exception {
         LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
@@ -260,6 +282,42 @@ class AdminRoomApiIntegrationTest {
                 .andExpect(jsonPath("$.data[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$.data[1].code").value(oldCode))
                 .andExpect(jsonPath("$.data[1].status").value("EXPIRED"));
+    }
+
+    @Test
+    @DisplayName("없는 방의 코드를 재발급하면 기존 ADMIN_ROOM_NOT_FOUND 404를 유지한다")
+    void givenMissingRoom_whenReissuingInvite_thenReturnsAdminRoomNotFound() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/rooms/{roomId}/invites", 999999L)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"max_uses\": 6}")
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("ADMIN_ROOM_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("재발급 실제 정원은 양수여야 하고 요청 body가 없으면 null 무제한으로 유효하다")
+    void givenInvalidOrAbsentMaxUses_whenReissuingInvite_thenValidatesAsExpected() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        String created = mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON).content(createRoomBody(startsAt))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long roomId = com.jayway.jsonpath.JsonPath.parse(created).read("$.data.room_id", Long.class);
+
+        for (int invalidMaxUses : List.of(0, -1)) {
+            mockMvc.perform(post("/api/v1/admin/rooms/{roomId}/invites", roomId)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"max_uses\":" + invalidMaxUses + "}")
+                            .with(authentication(adminAuth())))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+        }
+
+        mockMvc.perform(post("/api/v1/admin/rooms/{roomId}/invites", roomId)
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.max_uses").isEmpty());
     }
 
     @Test

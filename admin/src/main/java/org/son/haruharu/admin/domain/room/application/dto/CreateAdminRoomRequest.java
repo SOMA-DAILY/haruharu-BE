@@ -28,8 +28,8 @@ public record CreateAdminRoomRequest(
         @NotNull LocalDateTime endsAt,
         @Schema(description = "총 일수", example = "3")
         @Positive int totalDays,
-        @Schema(description = "초대코드 정원(3:3이면 6, null이면 무제한)", example = "6", nullable = true)
-        Integer maxUses,
+        @Schema(description = "관리자가 정하는 실제 방 정원(null이면 무제한)", example = "6", nullable = true)
+        @Positive Integer maxUses,
         @Schema(description = "초대코드 만료 시각(null이면 무기한)", nullable = true)
         LocalDateTime inviteExpiresAt,
         @Schema(description = "Day별 오전·오후 미션 슬롯. total_days × 2개를 전달한다.")

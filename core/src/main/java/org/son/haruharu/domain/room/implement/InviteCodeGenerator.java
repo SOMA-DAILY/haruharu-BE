@@ -1,6 +1,9 @@
 package org.son.haruharu.domain.room.implement;
 
 import java.security.SecureRandom;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 import org.son.haruharu.domain.room.implement.exception.InviteCodeGenerationFailedException;
 import org.springframework.stereotype.Component;
@@ -18,6 +21,8 @@ public class InviteCodeGenerator {
     /** 혼동문자 O·0·I·1 제외 32글자. 길이가 2의 거듭제곱이라 무작위 편향 없이 인덱싱된다. */
     private static final String ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final int LENGTH = 6;
+    public static final String CODE_REGEX = "^[A-HJ-NP-Z2-9]{6}$";
+    private static final Pattern CODE_PATTERN = Pattern.compile(CODE_REGEX);
 
     /** 중복 재시도 한도. 초과 시 예외 — 정상 상황에서는 도달하지 않는다. */
     public static final int MAX_ATTEMPTS = 5;
@@ -38,6 +43,17 @@ public class InviteCodeGenerator {
             }
         }
         throw new InviteCodeGenerationFailedException();
+    }
+
+    /** 사용자 입력 코드를 locale 독립적으로 정규화하고 정확한 도메인 형식을 검증한다. */
+    public static Optional<String> normalize(String raw) {
+        if (raw == null) {
+            return Optional.empty();
+        }
+        String normalized = raw.trim().toUpperCase(Locale.ROOT);
+        return CODE_PATTERN.matcher(normalized).matches()
+                ? Optional.of(normalized)
+                : Optional.empty();
     }
 
     private String randomCode() {

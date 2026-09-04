@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -127,7 +128,6 @@ class AdminRoomCommandServiceTest {
     @Test
     @DisplayName("코드 재발급은 방 존재를 확인한 뒤 core의 reissueFor에 위임한다")
     void givenExistingRoom_whenReissueInvite_thenDelegatesToCore() {
-        given(adminRoomReader.getById(ROOM_ID)).willReturn(room());
         given(roomInviteService.reissueFor(eq(ROOM_ID), eq(6), isNull(), eq("admin:1")))
                 .willReturn(issuedInvite("NEWCDE"));
 
@@ -135,12 +135,14 @@ class AdminRoomCommandServiceTest {
 
         assertThat(res.code()).isEqualTo("NEWCDE");
         assertThat(res.status()).isEqualTo(RoomInviteStatus.ACTIVE);
+        verify(adminRoomReader).requireExists(ROOM_ID);
+        verify(adminRoomReader, never()).getById(ROOM_ID);
     }
 
     @Test
     @DisplayName("없는 방에 코드 재발급 시 AdminRoomNotFoundException")
     void givenUnknownRoom_whenReissueInvite_thenNotFound() {
-        given(adminRoomReader.getById(ROOM_ID)).willThrow(new AdminRoomNotFoundException());
+        doThrow(new AdminRoomNotFoundException()).when(adminRoomReader).requireExists(ROOM_ID);
 
         assertThatThrownBy(() -> service.reissueInvite(ROOM_ID, 6, null, ADMIN_ID))
                 .isInstanceOf(AdminRoomNotFoundException.class);
@@ -192,17 +194,17 @@ class AdminRoomCommandServiceTest {
     @Test
     @DisplayName("방 취소는 방 존재 확인 후 core RoomService.cancel 에 위임한다")
     void givenExistingRoom_whenCancelRoom_thenDelegatesToCore() {
-        given(adminRoomReader.getById(ROOM_ID)).willReturn(room());
-
         service.cancelRoom(ROOM_ID);
 
+        verify(adminRoomReader).requireExists(ROOM_ID);
+        verify(adminRoomReader, never()).getById(ROOM_ID);
         verify(roomService).cancel(ROOM_ID);
     }
 
     @Test
     @DisplayName("없는 방을 취소하면 AdminRoomNotFoundException — core 는 호출되지 않는다")
     void givenUnknownRoom_whenCancelRoom_thenNotFound() {
-        given(adminRoomReader.getById(ROOM_ID)).willThrow(new AdminRoomNotFoundException());
+        doThrow(new AdminRoomNotFoundException()).when(adminRoomReader).requireExists(ROOM_ID);
 
         assertThatThrownBy(() -> service.cancelRoom(ROOM_ID))
                 .isInstanceOf(AdminRoomNotFoundException.class);

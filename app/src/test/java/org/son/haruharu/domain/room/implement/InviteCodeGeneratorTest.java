@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.room.implement;
 
 import java.util.Optional;
+import java.util.Locale;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -69,5 +70,30 @@ class InviteCodeGeneratorTest {
         assertThatThrownBy(() -> generator.generate())
                 .isInstanceOf(InviteCodeGenerationFailedException.class);
         verify(roomInviteReader, times(InviteCodeGenerator.MAX_ATTEMPTS)).findByCode(anyString());
+    }
+
+    @Test
+    @DisplayName("소문자와 공백이 있는 코드는 Locale.ROOT 대문자 6자리 코드로 정규화한다")
+    void givenLowercaseTrimmedCode_whenNormalize_thenReturnsRootUppercaseCode() {
+        Locale original = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            assertThat(InviteCodeGenerator.normalize("  abj234  ")).contains("ABJ234");
+        } finally {
+            Locale.setDefault(original);
+        }
+    }
+
+    @Test
+    @DisplayName("공백·길이 오류·혼동 문자가 포함된 코드는 정규화에 실패한다")
+    void givenBlankWrongLengthOrAmbiguousCharacter_whenNormalize_thenReturnsEmpty() {
+        assertThat(InviteCodeGenerator.normalize(null)).isEmpty();
+        assertThat(InviteCodeGenerator.normalize("   ")).isEmpty();
+        assertThat(InviteCodeGenerator.normalize("ABC23")).isEmpty();
+        assertThat(InviteCodeGenerator.normalize("ABC2345")).isEmpty();
+        assertThat(InviteCodeGenerator.normalize("ABCI23")).isEmpty();
+        assertThat(InviteCodeGenerator.normalize("ABCO23")).isEmpty();
+        assertThat(InviteCodeGenerator.normalize("ABC023")).isEmpty();
+        assertThat(InviteCodeGenerator.normalize("ABC123")).isEmpty();
     }
 }

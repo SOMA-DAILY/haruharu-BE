@@ -50,6 +50,14 @@ public class AdminRoomQueryRepository {
                 .getResultList().stream().findFirst().map(RoomEntity::toDomain);
     }
 
+    /** 쓰기 command의 404 매핑용 스칼라 존재 확인. RoomEntity를 persistence context에 올리지 않는다. */
+    public boolean existsRoomById(Long roomId) {
+        return entityManager.createQuery(
+                        "select count(r.id) from RoomEntity r where r.id = :roomId", Long.class)
+                .setParameter("roomId", roomId)
+                .getSingleResult() > 0;
+    }
+
     /** 여러 방의 참여자를 한 번에 조회(목록 성비·인원 집계용, N+1 방지). */
     public List<RoomMember> findMembersByRoomIds(List<Long> roomIds) {
         if (roomIds.isEmpty()) {

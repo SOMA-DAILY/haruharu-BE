@@ -34,6 +34,12 @@ public class AdminRoomReader {
                 .orElseThrow(AdminRoomNotFoundException::new);
     }
 
+    public void requireExists(Long roomId) {
+        if (!adminRoomQueryRepository.existsRoomById(roomId)) {
+            throw new AdminRoomNotFoundException();
+        }
+    }
+
     public List<RoomMember> membersOf(Long roomId) {
         return adminRoomQueryRepository.findMembersByRoomId(roomId);
     }

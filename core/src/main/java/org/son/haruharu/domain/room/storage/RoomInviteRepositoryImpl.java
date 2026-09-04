@@ -25,6 +25,11 @@ public class RoomInviteRepositoryImpl implements RoomInviteRepository {
     }
 
     @Override
+    public Optional<Long> findRoomIdByCode(String code) {
+        return jpaRepository.findRoomIdByCode(code);
+    }
+
+    @Override
     public Optional<RoomInvite> findByCodeForUpdate(String code) {
         return jpaRepository.findByCodeForUpdate(code).map(RoomInviteEntity::toDomain);
     }

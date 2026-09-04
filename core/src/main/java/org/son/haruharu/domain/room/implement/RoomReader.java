@@ -19,12 +19,18 @@ public class RoomReader {
         return roomRepository.findById(roomId);
     }
 
+    public Optional<Room> findByIdForUpdate(Long roomId) {
+        return roomRepository.findByIdForUpdate(roomId);
+    }
+
     /**
-     * 후보 방 id들 중 종료되지 않은 현재 방을 단일 조회로 찾는다.
+     * 후보 방 id들 중 종료되지 않은 <b>대표 현재 방</b>을 단일 조회로 찾는다. 다중 방 참여(#374)에서는 유저가
+     * 여러 현재 방을 가질 수 있으므로, 상태 우선순위(statusRank: ACTIVE→SELECTING→PENDING) 후 roomId tie-break 으로
+     * 결정적 단일 결과를 보장한다.
      * <p>
      * 저장 status 로 1차 필터한 뒤 <b>시각 기준으로 한 번 더 거른다</b>(#320). 새 모델 방은 ends_at 이 지나도
-     * 5분 배치가 돌기 전까지 저장 status 가 ACTIVE 라, 저장값만 믿으면 끝난 방이 '내 현재 방'으로 잡히고
-     * hasCurrentRoom 이 true 로 남아 <b>다음 방 입장이 막힌다</b>. 정확도는 배치가 아니라 읽기가 보장한다.
+     * 5분 배치가 돌기 전까지 저장 status 가 ACTIVE 라, 저장값만 믿으면 끝난 방이 '내 현재 방'으로 잡힌다.
+     * 정확도는 배치가 아니라 읽기가 보장한다.
      */
     public Optional<Room> findCurrent(List<Long> candidateRoomIds, LocalDateTime now) {
         return findCurrentAll(candidateRoomIds, now).stream().findFirst();

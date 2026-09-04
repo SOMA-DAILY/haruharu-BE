@@ -7,8 +7,8 @@ Codex. Read `CLAUDE.md` before planning or changing this repository.
 ## Product Direction
 
 The current MVP is the operator-managed invite-code model described in
-`CLAUDE.md`: six participants join a scheduled three-day room, share video and
-group chat, receive missions, make a final selection, and enter one-to-one chat
+`CLAUDE.md`: administrator-configured participants join a scheduled three-day room, share video and
+the whole-room group chat, receive missions, make a final selection, and enter one-to-one chat
 after a mutual selection. Automatic matching, coin/IAP, and mandatory PASS are
 legacy or deferred behavior unless an issue explicitly targets them.
 
