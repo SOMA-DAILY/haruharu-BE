@@ -18,7 +18,7 @@ import org.springframework.util.StringUtils;
  * 영상 파일은 구 데모와 동일하게 고정 S3 자산({@code DEMO_FEED_VIDEO_URL}) 하나를 재사용한다 — DB 행은 로그인 시점에
  * 새로 만들되 파일은 미리 올려둔 것을 가리킨다. URL 이 비어 있으면(미설정) 영상 없이 촬영 CTA 만 노출된다.
  * <p>
- * 게이트("내가 올린 슬롯의 남 영상만 열람")를 충족하려면 데모 계정도 같은 슬롯에 영상이 있어야 하므로 <b>전원</b>을 심는다.
+ * 공개 가능한 슬롯을 보여주기 위해 데모 방 멤버들의 영상을 <b>전원</b> 심는다.
  * {@code VideoService.upload} 는 자기 prefix URL 만 허용(validateOwnUrl)하므로 고정 외부 URL 은 Writer 로 직접 저장한다.
  */
 @Component

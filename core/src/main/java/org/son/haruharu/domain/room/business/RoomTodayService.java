@@ -52,13 +52,22 @@ public class RoomTodayService {
         LocalDateTime currentSlotStart = (room.startsAt() != null && room.statusAt(now) == RoomStatus.ACTIVE)
                 ? SlotClock.currentSlotStart(room.startsAt(), now)
                 : null;
-        Set<LocalDateTime> uploadedSlots = window.isEmpty()
+        List<Long> roomMemberIds = roomMemberReader.getByRoomId(roomId).stream()
+                .map(RoomMember::id)
+                .toList();
+        Set<LocalDateTime> visibleSlotStarts = window.isEmpty()
                 ? Set.of()
-                : Set.copyOf(videoPostReader.getUploadedSlotStarts(member.id(), window));
+                : Set.copyOf(videoPostReader.getVisibleSlotStarts(roomMemberIds, window));
+        List<LocalDateTime> responseWindow = window.stream()
+                .filter(slotStart -> slotStart.equals(currentSlotStart) || visibleSlotStarts.contains(slotStart))
+                .toList();
+        Set<LocalDateTime> uploadedSlots = responseWindow.isEmpty()
+                ? Set.of()
+                : Set.copyOf(videoPostReader.getUploadedSlotStarts(member.id(), responseWindow));
 
         TimerTarget timer = computeTimer(room, now);
 
-        return TodayResponse.of(room, now, currentDay, window, currentSlotStart, uploadedSlots,
+        return TodayResponse.of(room, now, currentDay, responseWindow, currentSlotStart, uploadedSlots,
                 timer.at(), timer.type());
     }
 

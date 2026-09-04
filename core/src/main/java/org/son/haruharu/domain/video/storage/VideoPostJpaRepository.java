@@ -15,6 +15,13 @@ public interface VideoPostJpaRepository extends JpaRepository<VideoPostEntity, L
     List<LocalDateTime> findUploadedSlotStarts(@Param("roomMemberId") Long roomMemberId,
                                                @Param("slotStarts") List<LocalDateTime> slotStarts);
 
+    /** 주어진 방 멤버들과 슬롯 중 활성·비숨김 영상이 하나라도 있는 슬롯들. */
+    @Query("select distinct v.slotStart from VideoPostEntity v "
+            + "where v.roomMemberId in :roomMemberIds and v.slotStart in :slotStarts "
+            + "and v.deletedAt is null and v.isHidden = false")
+    List<LocalDateTime> findVisibleSlotStarts(@Param("roomMemberIds") List<Long> roomMemberIds,
+                                              @Param("slotStarts") List<LocalDateTime> slotStarts);
+
     /** 업로드 가능 여부 게이트: 해당 slot_start에 활성(미삭제) 영상이 이미 있는지. 재촬영은 DELETE 선행 필요. */
     boolean existsByRoomMemberIdAndSlotStartAndDeletedAtIsNull(Long roomMemberId, LocalDateTime slotStart);
 

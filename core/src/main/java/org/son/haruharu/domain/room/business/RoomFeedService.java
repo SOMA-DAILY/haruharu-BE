@@ -30,8 +30,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 현재 노출 중인 슬롯 창(slot_start 기준 최근 3시간)의 영상 피드. 슬롯(시간창)별로 잠금:
- * 내가 업로드한 슬롯의 타 멤버 영상만 열람 가능(참여 유도). 슬롯은 방 시작 상대 정시(SlotClock).
+ * 현재 노출 중인 슬롯 창(slot_start 기준 최근 3시간)의 영상 피드. 공개 가능한 영상이 있는 시간대와
+ * ACTIVE 현재 촬영 시간대를 반환하며, 슬롯은 방 시작 상대 정시(SlotClock)다.
  */
 @Service
 @Transactional(readOnly = true)
@@ -88,7 +88,7 @@ public class RoomFeedService {
 
     /**
      * {@code before} 슬롯보다 과거의 슬롯들을 최대 size개 이어 조회(과거 회고 페이지네이션, #350).
-     * 노출 창(3시간)과 무관하게 방 시작까지 되짚어볼 수 있되, 게이트("내가 올린 슬롯만 남 영상 열림")는 동일 적용한다.
+     * 노출 창(3시간)과 무관하게 방 시작까지 되짚어보며, 공개 가능한 콘텐츠가 있는 슬롯만 반환한다.
      * 과거 슬롯이라 촬영 CTA(current)는 항상 false다.
      */
     public FeedResponse getFeedBefore(Long roomId, Long userId, LocalDateTime before, int size) {
@@ -127,29 +127,27 @@ public class RoomFeedService {
     }
 
     /**
-     * 주어진 슬롯 창에 게이트("내가 올린 슬롯만 남 영상 열림")를 적용해 피드를 만든다. getFeed·getFeedBefore 공용.
+     * 주어진 원본 슬롯 창에서 공개 콘텐츠가 있는 슬롯과 현재 촬영 슬롯만 남겨 피드를 만든다. getFeed·getFeedBefore 공용.
      * nextCursor는 창의 가장 과거 슬롯 — 그게 방 시작이면 더 과거가 없으므로 null.
      */
     private FeedResponse buildFeed(Long roomId, Long userId, RoomMember me, Room room,
-                                   List<LocalDateTime> window, LocalDateTime currentSlotStart) {
-        LocalDateTime oldest = window.get(0);
+                                   List<LocalDateTime> rawWindow, LocalDateTime currentSlotStart) {
+        LocalDateTime oldest = rawWindow.get(0);
         LocalDateTime nextCursor = oldest.isAfter(room.startsAt()) ? oldest : null;
 
-        Set<LocalDateTime> mySlots = Set.copyOf(videoPostReader.getUploadedSlotStarts(me.id(), window));
-        List<SlotStatus> slots = window.stream()
-                .map(slotStart -> new SlotStatus(slotStart, !mySlots.contains(slotStart),
-                        slotStart.equals(currentSlotStart)))
-                .toList();
-
-        if (mySlots.isEmpty()) {
-            return new FeedResponse(slots, List.of(), nextCursor); // 전 슬롯 잠금 → 피드 조회 불필요
-        }
-
-        // 작성자 userId(신고 연결용) 매핑을 위해 멤버 목록을 id→userId 맵으로 들고 간다
-        Map<Long, Long> userIdsByMemberId = roomMemberReader.getByRoomId(roomId).stream()
+        List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
+        List<Long> roomMemberIds = members.stream().map(RoomMember::id).toList();
+        Map<Long, Long> userIdsByMemberId = members.stream()
                 .collect(Collectors.toMap(RoomMember::id, RoomMember::userId));
-        List<VideoPost> visible = videoPostReader.getFeed(List.copyOf(userIdsByMemberId.keySet()), window).stream()
-                .filter(p -> mySlots.contains(p.slotStart()))
+        List<VideoPost> visible = videoPostReader.getFeed(roomMemberIds, rawWindow);
+        Set<LocalDateTime> contentSlots = visible.stream()
+                .map(VideoPost::slotStart)
+                .collect(Collectors.toSet());
+        List<LocalDateTime> responseWindow = rawWindow.stream()
+                .filter(slotStart -> slotStart.equals(currentSlotStart) || contentSlots.contains(slotStart))
+                .toList();
+        List<SlotStatus> slots = responseWindow.stream()
+                .map(slotStart -> new SlotStatus(slotStart, false, slotStart.equals(currentSlotStart)))
                 .toList();
 
         List<Long> postIds = visible.stream().map(VideoPost::id).toList();
