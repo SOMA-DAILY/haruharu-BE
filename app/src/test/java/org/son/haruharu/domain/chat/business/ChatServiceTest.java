@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
+import org.son.haruharu.domain.chat.business.dto.GroupChatRoomResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
@@ -186,6 +187,60 @@ class ChatServiceTest {
         ChatRoomDetailResponse result = chatService.getRoom(ROOM, ME);
 
         assertThat(result.partner().profileImageUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("여러 GROUP 채팅 중 요청한 소개팅방의 채팅방 id만 반환한다")
+    void givenMultipleGroupRooms_whenGetBySourceRoom_thenReturnsRequestedChatRoomId() {
+        Long sourceRoomId = 101L;
+        Long requestedChatRoomId = 20L;
+        given(chatRoomReader.getByRoomId(sourceRoomId))
+                .willReturn(groupRoom(requestedChatRoomId, sourceRoomId));
+        given(chatRoomMemberReader.findMembership(requestedChatRoomId, ME))
+                .willReturn(Optional.of(membership(requestedChatRoomId, ME, null)));
+
+        GroupChatRoomResponse result = chatService.getGroupRoomBySourceRoom(sourceRoomId, ME);
+
+        assertThat(result.chatRoomId()).isEqualTo(requestedChatRoomId);
+        then(chatRoomReader).should().getByRoomId(sourceRoomId);
+        then(chatRoomMemberReader).should().findMembership(requestedChatRoomId, ME);
+    }
+
+    @Test
+    @DisplayName("소개팅방의 GROUP 채팅이 아직 없으면 ChatRoomNotFoundException(404)이 발생한다")
+    void givenGroupRoomNotCreated_whenGetBySourceRoom_thenThrowsNotFound() {
+        Long sourceRoomId = 101L;
+        given(chatRoomReader.getByRoomId(sourceRoomId)).willThrow(new ChatRoomNotFoundException());
+
+        assertThatThrownBy(() -> chatService.getGroupRoomBySourceRoom(sourceRoomId, ME))
+                .isInstanceOf(ChatRoomNotFoundException.class);
+
+        then(chatRoomMemberReader).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("GROUP 채팅의 활성 멤버가 아니면 ChatNotMemberException(403)이 발생한다")
+    void givenNotGroupChatMember_whenGetBySourceRoom_thenThrowsForbidden() {
+        Long sourceRoomId = 101L;
+        given(chatRoomReader.getByRoomId(sourceRoomId))
+                .willReturn(groupRoom(ROOM, sourceRoomId));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> chatService.getGroupRoomBySourceRoom(sourceRoomId, ME))
+                .isInstanceOf(ChatNotMemberException.class);
+    }
+
+    @Test
+    @DisplayName("GROUP 채팅에서 나간 멤버는 방 ID로 조회할 수 없다")
+    void givenLeftGroupChatMember_whenGetBySourceRoom_thenThrowsForbidden() {
+        Long sourceRoomId = 101L;
+        ChatRoomMember left = membership(ROOM, ME, null).leave(LocalDateTime.now(clock));
+        given(chatRoomReader.getByRoomId(sourceRoomId))
+                .willReturn(groupRoom(ROOM, sourceRoomId));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(left));
+
+        assertThatThrownBy(() -> chatService.getGroupRoomBySourceRoom(sourceRoomId, ME))
+                .isInstanceOf(ChatNotMemberException.class);
     }
 
     @Test

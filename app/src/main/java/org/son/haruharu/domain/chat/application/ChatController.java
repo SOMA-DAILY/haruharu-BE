@@ -10,6 +10,7 @@ import org.son.haruharu.domain.chat.business.ChatPartnerService;
 import org.son.haruharu.domain.chat.business.ChatService;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
+import org.son.haruharu.domain.chat.business.dto.GroupChatRoomResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
@@ -42,6 +43,17 @@ public class ChatController {
     public ApiResponse<ChatRoomsResponse> getMyRooms(Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(chatService.getMyRooms(userId));
+    }
+
+    @Operation(summary = "방 ID로 GROUP 채팅방 조회",
+            description = "소개팅방에 연결된 GROUP 채팅방 id를 반환한다. 활성 채팅 멤버가 아니면 "
+                    + "403(CHAT_NOT_MEMBER), 아직 생성되지 않았으면 404(CHAT_ROOM_NOT_FOUND).")
+    @GetMapping("/group/by-room/{roomId}")
+    public ApiResponse<GroupChatRoomResponse> getGroupRoomBySourceRoom(
+            @Parameter(description = "소개팅방 id", example = "1") @PathVariable Long roomId,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(chatService.getGroupRoomBySourceRoom(roomId, userId));
     }
 
     @Operation(summary = "채팅방 상세 조회",
