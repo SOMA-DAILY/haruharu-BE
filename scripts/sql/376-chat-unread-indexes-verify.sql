@@ -57,6 +57,6 @@ JOIN room_members room_member
 LEFT JOIN chat_room_members membership
   ON membership.chat_room_id = chat_room.id
  AND membership.user_id = room_member.user_id
-WHERE room.status IN ('ACTIVE', 'SELECTING')
+WHERE room.status IN ('ACTIVE', 'SELECTING', 'ENDED')
   AND room.deleted_at IS NULL
   AND membership.id IS NULL;

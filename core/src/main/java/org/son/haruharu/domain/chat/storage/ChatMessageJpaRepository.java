@@ -36,6 +36,18 @@ public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageEntit
               AND message.sender_id <> :userId
               AND message.id > coalesce(membership.last_read_message_id, 0)
               AND message.created_at >= membership.joined_at
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM chat_rooms room
+                  JOIN chat_room_members partner
+                    ON partner.chat_room_id = room.id
+                   AND partner.user_id <> :userId
+                  JOIN users partner_user
+                    ON partner_user.id = partner.user_id
+                  WHERE room.id = membership.chat_room_id
+                    AND room.type = 'DIRECT'
+                    AND partner_user.status = 'DELETED'
+              )
             """, nativeQuery = true)
     long countUnreadByUserId(@Param("userId") Long userId);
 

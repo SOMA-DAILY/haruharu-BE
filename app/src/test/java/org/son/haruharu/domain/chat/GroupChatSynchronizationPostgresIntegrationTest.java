@@ -171,6 +171,24 @@ class GroupChatSynchronizationPostgresIntegrationTest {
     }
 
     @Test
+    @DisplayName("배치 중단으로 PENDING→ENDED로 건너뛴 방도 RoomStartedEvent 복구 동기화로 GROUP 채팅·membership이 생성된다")
+    void givenRoomSkippedToEnded_whenSynchronizeGroupRoom_thenStillCreatesGroupChatAndMembers() {
+        LocalDateTime base = LocalDateTime.of(2020, 1, 1, 9, 0); // 스케줄 전부 과거 → statusAt(now)=ENDED
+        Room room = roomWriter.save(Room.createScheduled(
+                base, base.plusDays(2), base.plusDays(2).plusHours(4),
+                base.plusDays(2).plusHours(5), base.plusDays(3), 3));
+        LocalDateTime joinedAt = base.minusHours(1);
+        roomMemberWriter.saveAll(List.of(
+                RoomMember.of(room.id(), 3101L, null, null, joinedAt),
+                RoomMember.of(room.id(), 3102L, null, null, joinedAt)));
+
+        // 리컨사일러가 PENDING→ENDED 전이 시 복구용으로 발행하는 RoomStartedEvent 경로. ENDED여도 동기화되어야 한다.
+        chatService.synchronizeGroupRoom(room.id());
+
+        assertConverged(room.id());
+    }
+
+    @Test
     @DisplayName("PostgreSQL에서 방 시작과 신규 입장이 경합해도 deadlock·누락 없이 수렴한다")
     void givenRoomStartAndMemberJoinRace_whenRepeatedOnPostgres_thenConvergesWithoutDeadlockOrMissingMembership()
             throws Exception {

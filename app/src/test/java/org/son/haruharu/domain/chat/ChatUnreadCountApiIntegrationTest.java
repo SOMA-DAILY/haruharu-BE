@@ -55,7 +55,8 @@ class ChatUnreadCountApiIntegrationTest {
 
     @BeforeEach
     void clean() {
-        jdbcTemplate.execute("TRUNCATE TABLE chat_messages, chat_room_members, chat_rooms RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute(
+                "TRUNCATE TABLE chat_messages, chat_room_members, chat_rooms, users RESTART IDENTITY CASCADE");
     }
 
     @Test
@@ -91,6 +92,30 @@ class ChatUnreadCountApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("DIRECT 상대가 탈퇴(DELETED)하면 그 방의 안읽음은 합계에서 제외된다(열 수도 지울 수도 없는 배지 방지)")
+    void givenDirectPartnerWithdrawn_whenGetUnreadCount_thenExcludesThatRoom() throws Exception {
+        Long withdrawnPartner = 200L;
+        Long activePartner = 300L;
+        insertUser(withdrawnPartner, "DELETED");
+        insertUser(activePartner, "ACTIVE");
+
+        long withdrawnRoomId = insertChatRoom("DIRECT", 2001L);
+        insertMembership(withdrawnRoomId, ME, JOINED_AT, null, null);
+        insertMembership(withdrawnRoomId, withdrawnPartner, JOINED_AT, null, null);
+        insertMessage(withdrawnRoomId, withdrawnPartner, "from-withdrawn", JOINED_AT.plusSeconds(1), null);
+
+        long activeRoomId = insertChatRoom("DIRECT", 2002L);
+        insertMembership(activeRoomId, ME, JOINED_AT, null, null);
+        insertMembership(activeRoomId, activePartner, JOINED_AT, null, null);
+        insertMessage(activeRoomId, activePartner, "from-active", JOINED_AT.plusSeconds(1), null);
+
+        mockMvc.perform(get("/api/v1/chat-rooms/unread-count")
+                        .with(authentication(auth(ME))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.unread_count").value(1)); // 활성 상대 방 1건만
+    }
+
+    @Test
     @DisplayName("집계 대상 메시지가 없으면 200과 0을 반환한다")
     void givenNoEligibleMessages_whenGetUnreadCount_thenReturnsOkWithZero() throws Exception {
         mockMvc.perform(get("/api/v1/chat-rooms/unread-count")
@@ -109,6 +134,13 @@ class ChatUnreadCountApiIntegrationTest {
 
     private static UsernamePasswordAuthenticationToken auth(Long userId) {
         return new UsernamePasswordAuthenticationToken(userId, null, List.of());
+    }
+
+    private void insertUser(long userId, String status) {
+        jdbcTemplate.update("""
+                INSERT INTO users(id, status, created_at, updated_at, deleted_at)
+                VALUES (?, ?, ?, ?, NULL)
+                """, userId, status, JOINED_AT, JOINED_AT);
     }
 
     private long insertChatRoom(String type, long sourceId) {

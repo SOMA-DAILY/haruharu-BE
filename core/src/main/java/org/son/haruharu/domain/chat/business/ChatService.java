@@ -114,7 +114,10 @@ public class ChatService {
         Room sourceRoom = roomReader.findByIdForUpdate(roomId)
                 .orElseThrow(RoomNotFoundException::new);
         RoomStatus status = sourceRoom.statusAt(LocalDateTime.now(clock));
-        if (status != RoomStatus.ACTIVE && status != RoomStatus.SELECTING) {
+        // 아직 시작 전(PENDING — 멤버 입장 이벤트는 방 시작 전에도 발화)·취소(CANCELLED) 방은 그룹채팅을 만들지 않는다.
+        // 단 배치 장기 중단으로 PENDING→ENDED 직행한 방은 RoomStatusTransitionService가 복구용 RoomStartedEvent를
+        // 한 번 발행하므로 ENDED 도 허용해야 한다(안 그러면 그 방 그룹채팅이 영구 누락되고 리컨사일러는 재발행하지 않는다).
+        if (status == RoomStatus.PENDING || status == RoomStatus.CANCELLED) {
             return;
         }
 
