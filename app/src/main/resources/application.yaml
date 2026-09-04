@@ -59,6 +59,15 @@ fcm:
 haruharu:
   application:
     commit-sha: ${APPLICATION_COMMIT_SHA:unknown}
+  batch:
+    # 내부 배치 트리거 API(#389) — 외부 오케스트레이터(Airflow)용 X-Internal-Token 공유 시크릿.
+    # 비어 있으면 /internal/batch/** 는 전부 401(fail-closed). 이 경로는 ALB/VPC 에서 외부 차단이 1차 방어다.
+    internal:
+      token: ${INTERNAL_BATCH_TOKEN:}
+    # 알림 정리 @Scheduled 런처 토글. Airflow 가 스케줄을 맡으면 false — Job 빈은 남아 트리거 API 로 실행된다.
+    notification-cleanup:
+      scheduler:
+        enabled: ${NOTIFICATION_CLEANUP_SCHEDULER_ENABLED:true}
   mission:
     assignment:
       enabled: ${MISSION_ASSIGNMENT_ENABLED:true}

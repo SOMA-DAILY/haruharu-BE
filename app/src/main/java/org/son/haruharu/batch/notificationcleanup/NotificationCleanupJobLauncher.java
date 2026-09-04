@@ -11,6 +11,7 @@ import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -23,8 +24,16 @@ import org.springframework.stereotype.Component;
  * {@link JobInstanceAlreadyCompleteException}/{@link JobExecutionAlreadyRunningException} 으로 거부된다 → 잡은 하루 한 번만 실행된다.
  * <p>
  * 지금은 app 인스턴스가 트리거하지만, 나중에 배치 전용 서버로 이 런처를 옮기면 된다(잡 코드 무변경, 같은 RDS JobRepository).
+ * <p>
+ * 스케줄 주체를 외부 오케스트레이터(Airflow, #389)로 옮길 때는 {@code haruharu.batch.notification-cleanup.scheduler.enabled=false}
+ * 로 이 런처만 끈다. Job 빈은 남아 내부 트리거 API(InternalBatchController)가 같은 잡을 실행한다. 되돌리려면 true.
  */
 @Component
+@ConditionalOnProperty(
+        prefix = "haruharu.batch.notification-cleanup.scheduler",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class NotificationCleanupJobLauncher {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationCleanupJobLauncher.class);

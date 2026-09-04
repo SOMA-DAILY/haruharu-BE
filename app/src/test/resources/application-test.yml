@@ -50,3 +50,8 @@ haruharu:
     enabled: true
   payment:
     enabled: true
+  # 내부 배치 트리거 API(#389) test-only 토큰. 다른 시크릿과 같은 규칙 — 환경변수가 있으면 그것을, 없으면 더미.
+  # InternalBatchApiIntegrationTest 는 이 값을 @Value 로 읽어 헤더에 싣는다(상수 하드코딩 아님).
+  batch:
+    internal:
+      token: ${INTERNAL_BATCH_TOKEN:test-only-internal-batch-token-min32chars}

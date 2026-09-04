@@ -3,6 +3,7 @@ package org.son.haruharu.config;
 import lombok.extern.slf4j.Slf4j;
 import org.son.haruharu.common.ApiErrorDetail;
 import org.son.haruharu.common.ApiResponse;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -28,6 +29,20 @@ public class SecurityConfig {
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, JsonMapper jsonMapper) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.jsonMapper = jsonMapper;
+    }
+
+    /**
+     * JwtAuthenticationFilter 는 @Component 라 Spring Boot 가 서블릿 컨테이너 전역 필터(/*)로도 자동 등록한다.
+     * 시큐리티 체인 안에서 이미 실행되므로(아래 addFilterBefore) 전역 등록은 불필요하고, 다른 체인이 담당하는
+     * {@code /internal/**}(#389, InternalBatchSecurityConfig)에까지 실행되어 인가가 끝난 요청을 유저 상태(403)로
+     * 덮어쓰거나 SecurityContext·MDC 를 오염시킨다. 전역 등록만 끄고 체인 내부 실행은 유지한다.
+     */
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtAuthenticationFilterRegistration(
+            JwtAuthenticationFilter filter) {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean
