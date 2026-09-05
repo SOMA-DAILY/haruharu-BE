@@ -2,8 +2,13 @@ package org.son.haruharu.domain.profile;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.command.UpdateProfileCommand;
+import org.son.haruharu.domain.profile.implement.UserImage;
+import org.son.haruharu.domain.profile.storage.UserImageEntity;
+import org.son.haruharu.domain.profile.storage.UserImageJpaRepository;
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.user.implement.User;
@@ -23,6 +28,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -42,6 +49,7 @@ class ImageApiIntegrationTest {
     @Autowired MockMvc mockMvc;
     @Autowired ProfileService profileService;
     @Autowired UserJpaRepository userJpaRepository;
+    @Autowired UserImageJpaRepository userImageJpaRepository;
 
     @MockitoBean S3StoragePort s3StoragePort;
 
@@ -68,7 +76,7 @@ class ImageApiIntegrationTest {
     @Test
     @DisplayName("이미지 저장 응답이 정렬된 image_urls(snake_case 문자열 배열)로 통일되어 반환된다")
     void givenTwoImages_whenPutImages_thenReturnsImageUrls() throws Exception {
-        Long userId = 2L;
+        Long userId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null))).toDomain().id();
         String base = "https://test-bucket.s3.ap-northeast-2.amazonaws.com/";
         String prefix = base + "users/" + userId + "/images/";
         given(s3StoragePort.publicBaseUrl()).willReturn(base);
@@ -85,15 +93,57 @@ class ImageApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("이미지가 0개면 IMAGE_400_MIN_LIMIT 에러를 반환한다 (최소 1장)")
-    void givenNoImage_whenPutImages_thenReturnsMinLimitError() throws Exception {
+    @DisplayName("빈 목록으로 교체하면 본인 사진만 전체 삭제되고 프로필 조회에도 반영되며 재삭제도 성공한다")
+    void givenExistingImages_whenPutEmptyImages_thenDeletesOwnImagesAndCanRepeat() throws Exception {
+        Long userId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null))).toDomain().id();
+        Long otherUserId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null))).toDomain().id();
+        profileService.updateProfile(userId, new UpdateProfileCommand(
+            null, null, null, null, "사진삭제테스트", null, null));
+        String base = "https://test-bucket.s3.ap-northeast-2.amazonaws.com/";
+        String firstKey = "users/" + userId + "/images/a.jpg";
+        String secondKey = "users/" + userId + "/images/b.jpg";
+        String otherUrl = base + "users/" + otherUserId + "/images/keep.jpg";
+        given(s3StoragePort.publicBaseUrl()).willReturn(base);
+        userImageJpaRepository.save(UserImageEntity.from(new UserImage(null, userId, base + firstKey, 0)));
+        userImageJpaRepository.save(UserImageEntity.from(new UserImage(null, userId, base + secondKey, 1)));
+        userImageJpaRepository.save(UserImageEntity.from(new UserImage(null, otherUserId, otherUrl, 0)));
+
+        mockMvc.perform(put("/api/v1/users/me/images")
+                .with(authentication(auth(userId)))
+                .contentType(APPLICATION_JSON)
+                .content("{\"image_urls\":[]}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.isSuccess").value(true))
+            .andExpect(jsonPath("$.data.image_urls").isArray())
+            .andExpect(jsonPath("$.data.image_urls").isEmpty());
+
+        assertThat(userImageJpaRepository.findAllByUserIdOrderBySortedOrderAsc(userId)).isEmpty();
+        assertThat(userImageJpaRepository.findAllByUserIdOrderBySortedOrderAsc(otherUserId))
+            .extracting(image -> image.toDomain().imageUrl()).containsExactly(otherUrl);
+        then(s3StoragePort).should().deleteObjects(List.of(firstKey, secondKey));
+        mockMvc.perform(get("/api/v1/users/me").with(authentication(auth(userId))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.images").isArray())
+            .andExpect(jsonPath("$.data.images").isEmpty());
+
+        mockMvc.perform(put("/api/v1/users/me/images")
+                .with(authentication(auth(userId)))
+                .contentType(APPLICATION_JSON)
+                .content("{\"image_urls\":[]}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.image_urls").isArray())
+            .andExpect(jsonPath("$.data.image_urls").isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"image_urls\":null}"})
+    @DisplayName("이미지 목록 누락과 null은 여전히 400으로 거절한다")
+    void givenMissingOrNullImages_whenPutImages_thenReturnsBadRequest(String body) throws Exception {
         mockMvc.perform(put("/api/v1/users/me/images")
                 .with(authentication(auth(3L)))
                 .contentType(APPLICATION_JSON)
-                .content("{\"image_urls\":[]}"))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.isSuccess").value(false))
-            .andExpect(jsonPath("$.error.code").value("IMAGE_400_MIN_LIMIT"));
+                .content(body))
+            .andExpect(status().isBadRequest());
     }
 
     @Test
