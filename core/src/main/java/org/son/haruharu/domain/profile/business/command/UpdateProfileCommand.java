@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.profile.business.command;
 
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.Gender;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 
@@ -11,17 +12,20 @@ public record UpdateProfileCommand(
         String mbti,
         String nickname,
         DrinkingStatus drinkingStatus,
-        SmokingStatus smokingStatus
+        SmokingStatus smokingStatus,
+        Gender gender
 ) {
     public UserProfile applyTo(UserProfile existing) {
         // 음주·흡연은 기존 클라이언트 호환 필드이며 현재 마이페이지 편집폼에는 없다. 미전송(null)이면 기존 값을 보존해
         // 편집 시 데이터가 소실되지 않게 한다. 나머지 필드는 편집폼에 모두 노출되므로 full-replace.
+        // 성별(#392)도 미전송(null)이면 기존 값을 보존한다 — 온보딩에선 요청 검증(@NotNull)이 필수를 강제한다.
         return new UserProfile(
             existing.id(), existing.userId(),
             this.location(), this.affiliation(),
             this.height(), this.mbti(), this.nickname(),
             this.drinkingStatus() != null ? this.drinkingStatus() : existing.drinkingStatus(),
-            this.smokingStatus() != null ? this.smokingStatus() : existing.smokingStatus()
+            this.smokingStatus() != null ? this.smokingStatus() : existing.smokingStatus(),
+            this.gender() != null ? this.gender() : existing.gender()
         );
     }
 }

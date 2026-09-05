@@ -94,7 +94,7 @@ class AdminRoomServiceTest {
                 member(10L, 1L, "FEMALE"), member(11L, 1L, "MALE")));
         // 910만 프로필 존재, 911은 없음
         given(adminRoomReader.profilesOf(List.of(910L, 911L))).willReturn(List.of(
-                new UserProfile(1L, 910L, "서울", null, null, null, "여울", null, null)));
+                new UserProfile(1L, 910L, "서울", null, null, null, "여울", null, null, null)));
 
         AdminRoomDetailResponse result = service.getRoom(1L);
 

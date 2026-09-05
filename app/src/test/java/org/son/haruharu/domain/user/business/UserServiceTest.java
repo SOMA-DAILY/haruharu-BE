@@ -78,7 +78,7 @@ class UserServiceTest {
             "테스터", "서울", "직장인",
             175, "INFP", DrinkingStatus.SOMETIMES, SmokingStatus.NONE,
             List.of(new ProfileResponse.ImageInfo(imageId, "https://image1.png", 0))
-        );
+        , null);
 
         given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, null));
         given(profileService.getProfile(userId)).willReturn(profileResponse);
@@ -102,7 +102,7 @@ class UserServiceTest {
         Long userId = 1L;
         given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ONBOARDING, null));
         given(profileService.getProfile(userId)).willReturn(new ProfileResponse(
-            "유저", "서울", "학생", 160, "ENFP", DrinkingStatus.NONE, SmokingStatus.NONE, List.of()));
+            "유저", "서울", "학생", 160, "ENFP", DrinkingStatus.NONE, SmokingStatus.NONE, List.of(), null));
         // 미인증: findVerified가 empty → user_status UNVERIFIED
 
         UserProfileResponse result = userService.getMyProfile(userId);

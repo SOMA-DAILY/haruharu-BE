@@ -5,6 +5,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.Gender;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 
@@ -43,6 +44,11 @@ public class UserProfileEntity extends BaseEntity {
     @Column(length = 20)
     private SmokingStatus smokingStatus;
 
+    // 온보딩 자기신고 성별(#392). 검증된 성별의 단일 출처는 identity(user_identities.gender)이며 이 값은 별개다.
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private Gender gender;
+
     public static UserProfileEntity from(UserProfile userProfile) {
         var entity = new UserProfileEntity();
         entity.id = userProfile.id();
@@ -54,6 +60,7 @@ public class UserProfileEntity extends BaseEntity {
         entity.nickname = userProfile.nickname();
         entity.drinkingStatus = userProfile.drinkingStatus();
         entity.smokingStatus = userProfile.smokingStatus();
+        entity.gender = userProfile.gender();
         return entity;
     }
 
@@ -67,7 +74,8 @@ public class UserProfileEntity extends BaseEntity {
                 mbti,
                 nickname,
                 drinkingStatus,
-                smokingStatus
+                smokingStatus,
+                gender
         );
     }
 }

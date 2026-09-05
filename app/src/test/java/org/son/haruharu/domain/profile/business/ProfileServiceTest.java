@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.profile.business.command.UpdateImagesCommand;
 import org.son.haruharu.domain.profile.business.command.UpdateProfileCommand;
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.Gender;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.business.dto.ImageUploadUrlResponse;
 import org.son.haruharu.domain.profile.business.dto.ImagesResponse;
@@ -64,15 +65,24 @@ class ProfileServiceTest {
     }
 
     @Test
-    @DisplayName("이미지 없이 공백이 아닌 닉네임만 있어도 온보딩 프로필이 완료된 것으로 판정한다")
-    void givenNicknameWithoutImages_whenCheckCompletedProfile_thenReturnsTrue() {
+    @DisplayName("이미지 없이 닉네임·성별만 있어도 온보딩 프로필이 완료된 것으로 판정한다(#392)")
+    void givenNicknameAndGenderWithoutImages_whenCheckCompletedProfile_thenReturnsTrue() {
         Long userId = 1L;
         given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(new UserProfile(
-            1L, userId, null, null, null, null, "하루", null, null
-        )));
+            1L, userId, null, null, null, null, "하루", null, null, Gender.MALE)));
 
         assertThat(profileService.hasCompletedProfile(userId)).isTrue();
         then(userImageReader).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("닉네임만 있고 성별이 없으면 온보딩 프로필이 미완료된 것으로 판정한다(#392)")
+    void givenNicknameButNoGender_whenCheckCompletedProfile_thenReturnsFalse() {
+        Long userId = 1L;
+        given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(new UserProfile(
+            1L, userId, null, null, null, null, "하루", null, null, null)));
+
+        assertThat(profileService.hasCompletedProfile(userId)).isFalse();
     }
 
     @Test
@@ -92,7 +102,7 @@ class ProfileServiceTest {
         Long userId = 1L;
         given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(new UserProfile(
             1L, userId, null, null, null, null, nickname, null, null
-        )));
+        , null)));
 
         assertThat(profileService.hasCompletedProfile(userId)).isFalse();
     }
@@ -104,10 +114,10 @@ class ProfileServiceTest {
         UpdateProfileCommand command = new UpdateProfileCommand(
             "서울", "직장인",
             175, "INFP", "새닉네임", DrinkingStatus.SOMETIMES, SmokingStatus.NONE
-        );
+        , null);
         UserProfile existing = new UserProfile(1L, userId,
             "부산", "학생",
-            175, "INFP", "기존닉", DrinkingStatus.NONE, SmokingStatus.NONE);
+            175, "INFP", "기존닉", DrinkingStatus.NONE, SmokingStatus.NONE, null);
         UserProfile updated = command.applyTo(existing);
 
         given(userProfileReader.findByUserId(userId)).willReturn(Optional.of(existing));
@@ -127,7 +137,7 @@ class ProfileServiceTest {
         UpdateProfileCommand command = new UpdateProfileCommand(
             "서울", "회사원",
             178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE
-        );
+        , null);
 
         given(userProfileReader.findByUserId(userId)).willReturn(Optional.empty());
         given(userProfileWriter.save(any())).willAnswer(invocation -> invocation.getArgument(0));
@@ -158,7 +168,7 @@ class ProfileServiceTest {
         Long userId = 1L;
         String prefix = BASE_URL + "users/" + userId + "/images/";
         given(userProfileReader.getByUserId(userId)).willReturn(new UserProfile(1L, userId,
-            "서울", "직장인", 170, "INFP", "하루", DrinkingStatus.NONE, SmokingStatus.NONE));
+            "서울", "직장인", 170, "INFP", "하루", DrinkingStatus.NONE, SmokingStatus.NONE, null));
         given(userImageReader.getAllByUserId(userId)).willReturn(List.of(
             new UserImage(1L, userId, prefix + "a.jpg", 0),
             new UserImage(2L, userId, prefix + "b.jpg", 1)

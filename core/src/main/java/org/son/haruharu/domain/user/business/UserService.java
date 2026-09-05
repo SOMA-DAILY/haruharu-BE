@@ -67,7 +67,10 @@ public class UserService {
         userReader.getById(userId); // 존재 검증(없으면 404) — 프로필 응답 전 유저 존재 보장. (구 demoMode 소비는 #323로 제거)
         ProfileResponse profile = profileService.getProfile(userId);
         Optional<VerifiedIdentity> verified = identityService.findVerified(userId);
-        String gender = verified.map(VerifiedIdentity::gender).orElse(null);
+        // 성별: 본인인증(PASS)이 있으면 그 검증된 값이 우선, 없으면 온보딩 자기신고 프로필 gender 로 폴백(#392).
+        // PASS 지연인증이라 대부분 미검증 → 프로필 gender 가 실질 소스다.
+        String gender = verified.map(VerifiedIdentity::gender)
+            .orElseGet(() -> profile.gender() != null ? profile.gender().name() : null);
         Integer age = verified.map(VerifiedIdentity::birthday)
             .map(birthday -> Period.between(birthday, LocalDate.now(clock)).getYears())
             .orElse(null);

@@ -107,7 +107,7 @@ class ChatPartnerApiIntegrationTest {
         // 상대 프로필(닉네임·필드값 확인용)
         userProfileJpaRepository.save(UserProfileEntity.from(new UserProfile(
                 null, partnerUser, "서울 마포", "디자이너", 168, "INFP", "이나경",
-                DrinkingStatus.SOMETIMES, SmokingStatus.NONE)));
+                DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null)));
 
         Long matchResultId = matchResultJpaRepository.save(MatchResultEntity.from(
                 MatchResult.of(meMemberId, partnerMemberId, LocalDateTime.of(2026, 6, 26, 22, 0)))).toDomain().id();

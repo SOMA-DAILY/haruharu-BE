@@ -83,7 +83,7 @@ class AdminRoomApiIntegrationTest {
         LocalDateTime now = LocalDateTime.now();
         Long roomId = persistRoom(Room.create(LocalDate.now(), 3).started(now));
         em.persist(RoomMemberEntity.from(RoomMember.of(roomId, 901L, "FEMALE", LocalDate.of(2000, 1, 1), now)));
-        em.persist(UserProfileEntity.from(new UserProfile(null, 901L, "서울", "직장인", 168, "INFP", "여울", null, null)));
+        em.persist(UserProfileEntity.from(new UserProfile(null, 901L, "서울", "직장인", 168, "INFP", "여울", null, null, null)));
         em.flush();
 
         mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", roomId).with(authentication(adminAuth())))

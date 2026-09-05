@@ -54,7 +54,7 @@ class AdminPurchaseApiIntegrationTest {
         LocalDateTime now = LocalDateTime.now();
         persistPurchase(901L, "groom_60", "txn-a", now.minusHours(2));
         Long recent = persistPurchase(902L, "groom_200", "txn-b", now.minusHours(1));
-        em.persist(UserProfileEntity.from(new UserProfile(null, 902L, "서울", "직장인", 170, "INFP", "여울", null, null)));
+        em.persist(UserProfileEntity.from(new UserProfile(null, 902L, "서울", "직장인", 170, "INFP", "여울", null, null, null)));
         em.flush();
 
         mockMvc.perform(get("/api/v1/admin/iap/purchases")

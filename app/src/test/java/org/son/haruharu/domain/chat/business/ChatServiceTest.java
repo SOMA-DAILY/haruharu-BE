@@ -83,11 +83,11 @@ class ChatServiceTest {
     }
 
     private ProfileResponse profile(String nickname) {
-        return new ProfileResponse(nickname, "서울", "직장인", 175, "INFP", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, List.of());
+        return new ProfileResponse(nickname, "서울", "직장인", 175, "INFP", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, List.of(), null);
     }
 
     private ProfileResponse profileWithImages(String nickname, ProfileResponse.ImageInfo... images) {
-        return new ProfileResponse(nickname, "서울", "직장인", 175, "INFP", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, List.of(images));
+        return new ProfileResponse(nickname, "서울", "직장인", 175, "INFP", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, List.of(images), null);
     }
 
     private ChatMessage message(Long id, Long chatRoomId, Long senderId, String content, LocalDateTime at) {

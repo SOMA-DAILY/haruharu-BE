@@ -85,7 +85,7 @@ class MatchResultServiceTest {
     }
 
     private UserProfile profileOf(String nickname) {
-        return new UserProfile(5L, partnerUserId, "서울", "직장인", 168, "INFP", nickname, null, null);
+        return new UserProfile(5L, partnerUserId, "서울", "직장인", 168, "INFP", nickname, null, null, null);
     }
 
     @Test

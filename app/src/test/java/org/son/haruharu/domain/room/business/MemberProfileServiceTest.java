@@ -78,7 +78,7 @@ class MemberProfileServiceTest {
 
     private UserProfile profile(Long userId) {
         return new UserProfile(1L, userId,
-                "서울", "카카오", 165, "INFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE);
+                "서울", "카카오", 165, "INFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null);
     }
 
     private ProfileFieldView field(MemberProfileResponse res, String key) {

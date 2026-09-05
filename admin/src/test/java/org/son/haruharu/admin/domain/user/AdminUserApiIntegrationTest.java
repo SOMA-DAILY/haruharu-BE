@@ -62,8 +62,8 @@ class AdminUserApiIntegrationTest {
     void users_searchByNickname() throws Exception {
         Long yeoul = persistUser(UserStatus.ACTIVE);
         Long other = persistUser(UserStatus.ACTIVE);
-        em.persist(UserProfileEntity.from(new UserProfile(null, yeoul, "서울", "직장인", 168, "INFP", "여울", null, null)));
-        em.persist(UserProfileEntity.from(new UserProfile(null, other, "부산", "학생", 180, "ENTP", "바다", null, null)));
+        em.persist(UserProfileEntity.from(new UserProfile(null, yeoul, "서울", "직장인", 168, "INFP", "여울", null, null, null)));
+        em.persist(UserProfileEntity.from(new UserProfile(null, other, "부산", "학생", 180, "ENTP", "바다", null, null, null)));
         em.flush();
 
         mockMvc.perform(get("/api/v1/admin/users").param("keyword", "여울").with(authentication(adminAuth())))
@@ -79,7 +79,7 @@ class AdminUserApiIntegrationTest {
     void userDetail_assemblesProfileCoinPaymentParticipation() throws Exception {
         LocalDateTime now = LocalDateTime.now();
         Long userId = persistUser(UserStatus.ACTIVE);
-        em.persist(UserProfileEntity.from(new UserProfile(null, userId, "서울", "직장인", 168, "INFP", "여울", null, null)));
+        em.persist(UserProfileEntity.from(new UserProfile(null, userId, "서울", "직장인", 168, "INFP", "여울", null, null, null)));
         em.persist(CoinWalletEntity.from(new CoinWallet(null, userId, 100L, 50L, null)));
         em.persist(IapPurchaseEntity.from(IapPurchase.owned(userId, 1L, "coin_100", "tx-1", IapStore.APP_STORE, 100, now)));
         RoomEntity room = RoomEntity.from(Room.create(LocalDate.now(), 3).started(now));

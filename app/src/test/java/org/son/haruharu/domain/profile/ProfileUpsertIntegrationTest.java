@@ -39,7 +39,7 @@ class ProfileUpsertIntegrationTest {
         Long userId = 1L;
         UpdateProfileCommand command = new UpdateProfileCommand(
             "서울", "회사원",
-            178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE);
+            178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null);
 
         profileService.updateProfile(userId, command);
 
@@ -54,11 +54,11 @@ class ProfileUpsertIntegrationTest {
         Long userId = 2L;
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",
-            178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE));
+            178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null));
 
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "부산", "학생",
-            165, "INFJ", "이틀", DrinkingStatus.NONE, SmokingStatus.NONE));
+            165, "INFJ", "이틀", DrinkingStatus.NONE, SmokingStatus.NONE, null));
 
         List<UserProfileEntity> rows = jpaRepository.findAll().stream()
             .filter(e -> e.toDomain().userId().equals(userId))
@@ -74,12 +74,12 @@ class ProfileUpsertIntegrationTest {
         // 온보딩: 음주·흡연 포함 저장
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",
-            178, "ENFP", "하루", DrinkingStatus.OFTEN, SmokingStatus.E_CIGARETTE));
+            178, "ENFP", "하루", DrinkingStatus.OFTEN, SmokingStatus.E_CIGARETTE, null));
 
         // 마이페이지 편집: 음주·흡연 미전송(null) → 기존 값 보존되어야 함
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "부산", "학생",
-            165, "INFJ", "이틀", null, null));
+            165, "INFJ", "이틀", null, null, null));
 
         UserProfile saved = userProfileReader.getByUserId(userId);
         assertThat(saved.nickname()).isEqualTo("이틀");        // 편집 필드는 갱신

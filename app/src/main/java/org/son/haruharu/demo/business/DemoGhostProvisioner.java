@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
+import org.son.haruharu.domain.profile.implement.Gender;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileWriter;
 import org.son.haruharu.domain.user.implement.User;
@@ -60,7 +61,7 @@ public class DemoGhostProvisioner {
         User user = userWriter.save(new User(null, UserStatus.ACTIVE, null));
         userCredentialWriter.save(new UserCredential(null, user.id(), GHOST_PROVIDER_TYPE, providerId));
         userProfileWriter.save(new UserProfile(null, user.id(), "서울", null, null, null,
-                "하루메이트" + (index + 1), null, null));
+                "하루메이트" + (index + 1), null, null, Gender.valueOf(GHOST_GENDERS.get(index))));
         return user.id();
     }
 }

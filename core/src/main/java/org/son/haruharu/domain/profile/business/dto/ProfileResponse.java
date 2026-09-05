@@ -2,6 +2,7 @@ package org.son.haruharu.domain.profile.business.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.Gender;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserImage;
 import org.son.haruharu.domain.profile.implement.UserProfile;
@@ -17,7 +18,8 @@ public record ProfileResponse(
         String mbti,
         DrinkingStatus drinkingStatus,
         SmokingStatus smokingStatus,
-        List<ImageInfo> images
+        List<ImageInfo> images,
+        Gender gender
 ) {
     public record ImageInfo(
             Long id,
@@ -34,7 +36,8 @@ public record ProfileResponse(
             profile.drinkingStatus(), profile.smokingStatus(),
             images.stream()
                 .map(i -> new ImageInfo(i.id(), imageUrlResolver.apply(i.imageUrl()), i.sortedOrder()))
-                .toList()
+                .toList(),
+            profile.gender()
         );
     }
 }

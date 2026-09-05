@@ -62,6 +62,7 @@ class RoomInviteServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock InviteCodeGenerator inviteCodeGenerator;
+    @Mock org.son.haruharu.domain.profile.implement.UserProfileReader userProfileReader;
     @Mock ApplicationEventPublisher eventPublisher;
 
     RoomInviteService service;
@@ -76,7 +77,8 @@ class RoomInviteServiceTest {
 
     private RoomInviteService serviceWithClock(Clock serviceClock) {
         return new RoomInviteService(roomInviteReader, roomInviteWriter, roomReader,
-                roomMemberReader, roomMemberWriter, inviteCodeGenerator, eventPublisher, serviceClock);
+                roomMemberReader, roomMemberWriter, inviteCodeGenerator, userProfileReader,
+                eventPublisher, serviceClock);
     }
 
     private RoomInvite activeInvite() {
@@ -118,6 +120,31 @@ class RoomInviteServiceTest {
                 && member.userId().equals(USER_ID) && member.joinedAt().equals(NOW)));
         order.verify(roomInviteWriter).save(argThat(invite -> invite.usedCount() == 1));
         order.verify(eventPublisher).publishEvent(new RoomMemberJoinedEvent(ROOM_ID, USER_ID, NOW));
+    }
+
+    @Test
+    @DisplayName("프로필 성별이 있으면 입장 시 room_member.gender 로 스냅샷된다(#392)")
+    void givenProfileGender_whenJoin_thenSnapshotsGenderToRoomMember() {
+        givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), activeInvite());
+        given(userProfileReader.findByUserId(USER_ID)).willReturn(java.util.Optional.of(
+                new org.son.haruharu.domain.profile.implement.UserProfile(
+                        1L, USER_ID, null, null, null, null, "하루", null, null,
+                        org.son.haruharu.domain.profile.implement.Gender.MALE)));
+
+        service.join(USER_ID, CODE);
+
+        verify(roomMemberWriter).save(argThat(member -> "MALE".equals(member.gender())));
+    }
+
+    @Test
+    @DisplayName("프로필·성별이 없으면 입장 시 room_member.gender 는 null 이다(운영진 추후 부여)")
+    void givenNoProfileGender_whenJoin_thenRoomMemberGenderIsNull() {
+        givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), activeInvite());
+        given(userProfileReader.findByUserId(USER_ID)).willReturn(java.util.Optional.empty());
+
+        service.join(USER_ID, CODE);
+
+        verify(roomMemberWriter).save(argThat(member -> member.gender() == null));
     }
 
     @Test

@@ -2,6 +2,7 @@ package org.son.haruharu.demo.business;
 
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
+import org.son.haruharu.domain.profile.implement.Gender;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileWriter;
 import org.son.haruharu.domain.user.implement.User;
@@ -48,7 +49,7 @@ public class DemoUserProvisioner {
         User user = userWriter.save(new User(null, UserStatus.ACTIVE, null));
         userCredentialWriter.save(new UserCredential(null, user.id(), DEMO_PROVIDER_TYPE, providerId));
         userProfileWriter.save(new UserProfile(null, user.id(), DEMO_LOCATION, null, null, null,
-                DEMO_NICKNAME, null, null));
+                DEMO_NICKNAME, null, null, Gender.MALE));
         return user.id();
     }
 }

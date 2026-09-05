@@ -103,7 +103,7 @@ class ImageApiIntegrationTest {
         Long userId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null))).toDomain().id();
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",
-            178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE));
+            178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null));
 
         mockMvc.perform(get("/api/v1/users/me").with(authentication(auth(userId))))
             .andExpect(status().isOk())

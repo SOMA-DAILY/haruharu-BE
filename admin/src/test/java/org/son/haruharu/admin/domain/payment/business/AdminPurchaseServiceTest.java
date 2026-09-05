@@ -43,7 +43,7 @@ class AdminPurchaseServiceTest {
     }
 
     private UserProfile profile(Long userId, String nickname) {
-        return new UserProfile(userId, userId, "서울", "직장인", 170, "INFP", nickname, null, null);
+        return new UserProfile(userId, userId, "서울", "직장인", 170, "INFP", nickname, null, null, null);
     }
 
     @Test
