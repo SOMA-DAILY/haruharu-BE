@@ -74,7 +74,7 @@ class RoomMembersServiceTest {
 
     private UserProfile profile(Long userId, String nickname, String location) {
         return new UserProfile(1L, userId,
-                location, "ABC대학교", 180, "INTJ", nickname, DrinkingStatus.SOMETIMES, SmokingStatus.NONE);
+                location, "ABC대학교", 180, "INTJ", nickname, DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null);
     }
 
     private RoomMember member(Long roomId, Long userId) {

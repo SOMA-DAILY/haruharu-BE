@@ -49,7 +49,7 @@ class AdminUserServiceTest {
     }
 
     private UserProfile profile(Long userId, String nickname) {
-        return new UserProfile(1L, userId, "서울", "직장인", 168, "INFP", nickname, null, null);
+        return new UserProfile(1L, userId, "서울", "직장인", 168, "INFP", nickname, null, null, null);
     }
 
     @Test

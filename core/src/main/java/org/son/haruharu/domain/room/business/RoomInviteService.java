@@ -20,6 +20,9 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
+import org.son.haruharu.domain.profile.implement.Gender;
+import org.son.haruharu.domain.profile.implement.UserProfile;
+import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,12 +37,14 @@ public class RoomInviteService {
     private final RoomMemberReader roomMemberReader;
     private final RoomMemberWriter roomMemberWriter;
     private final InviteCodeGenerator inviteCodeGenerator;
+    private final UserProfileReader userProfileReader;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public RoomInviteService(RoomInviteReader roomInviteReader, RoomInviteWriter roomInviteWriter,
                              RoomReader roomReader, RoomMemberReader roomMemberReader,
                              RoomMemberWriter roomMemberWriter, InviteCodeGenerator inviteCodeGenerator,
+                             UserProfileReader userProfileReader,
                              ApplicationEventPublisher eventPublisher, Clock clock) {
         this.roomInviteReader = roomInviteReader;
         this.roomInviteWriter = roomInviteWriter;
@@ -47,6 +52,7 @@ public class RoomInviteService {
         this.roomMemberReader = roomMemberReader;
         this.roomMemberWriter = roomMemberWriter;
         this.inviteCodeGenerator = inviteCodeGenerator;
+        this.userProfileReader = userProfileReader;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -87,7 +93,12 @@ public class RoomInviteService {
             throw new InviteCodeNotUsableException();
         }
 
-        roomMemberWriter.save(RoomMember.of(room.id(), userId, null, null, now));
+        // 성별 스냅샷(#392): 프로필 gender 를 방 멤버로 고정한다. 프로필·gender 미설정이면 null(운영진이 추후 부여).
+        String gender = userProfileReader.findByUserId(userId)
+                .map(UserProfile::gender)
+                .map(Gender::name)
+                .orElse(null);
+        roomMemberWriter.save(RoomMember.of(room.id(), userId, gender, null, now));
         roomInviteWriter.save(invite.incrementUsed());
         eventPublisher.publishEvent(new RoomMemberJoinedEvent(room.id(), userId, now));
         return new JoinRoomResponse(room.id());

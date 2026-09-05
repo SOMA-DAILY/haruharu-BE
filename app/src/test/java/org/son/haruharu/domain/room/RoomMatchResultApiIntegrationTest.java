@@ -83,7 +83,7 @@ class RoomMatchResultApiIntegrationTest {
 
         userProfileJpaRepository.save(UserProfileEntity.from(new UserProfile(
                 null, partnerUser, "서울 마포", "디자이너", 168, "INFP", "이나경",
-                DrinkingStatus.SOMETIMES, SmokingStatus.NONE)));
+                DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null)));
         // 대표사진 = sorted_order 최소. 순서를 뒤섞어 저장해도 0번이 대표로 선택돼야 한다.
         userImageJpaRepository.save(UserImageEntity.from(new UserImage(null, partnerUser, "https://cdn/second.jpg", 1)));
         userImageJpaRepository.save(UserImageEntity.from(new UserImage(null, partnerUser, "https://cdn/rep.jpg", 0)));

@@ -25,7 +25,7 @@ public record UserProfileResponse(
             @JsonProperty("smoking_status") SmokingStatus smokingStatus
     ) {}
 
-    /** gender·age는 프로필이 아니라 본인인증(identity)에서 수급한다. */
+    /** age는 본인인증(identity)에서 수급한다. gender는 검증(PASS)이 있으면 그 값, 없으면 온보딩 자기신고 프로필 gender다(#392). */
     public static UserProfileResponse from(Long userId, ProfileResponse profile,
                                            String gender, Integer age, String userStatus) {
         return new UserProfileResponse(

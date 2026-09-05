@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.profile.implement.DrinkingStatus;
+import org.son.haruharu.domain.profile.implement.Gender;
 import org.son.haruharu.domain.profile.implement.SmokingStatus;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.storage.UserProfileEntity;
@@ -57,7 +58,13 @@ class UserProfileApiIntegrationTest {
     private void saveProfile(Long userId) {
         userProfileJpaRepository.save(UserProfileEntity.from(
                 new UserProfile(null, userId, "서울", "직장인", 175, "INFP", "테스터",
-                        DrinkingStatus.SOMETIMES, SmokingStatus.NONE)));
+                        DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null)));
+    }
+
+    private void saveProfileWithGender(Long userId, Gender gender) {
+        userProfileJpaRepository.save(UserProfileEntity.from(
+                new UserProfile(null, userId, "서울", "직장인", 175, "INFP", "테스터",
+                        DrinkingStatus.SOMETIMES, SmokingStatus.NONE, gender)));
     }
 
     @Test
@@ -71,5 +78,16 @@ class UserProfileApiIntegrationTest {
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.data.user_id").value(userId))
                 .andExpect(jsonPath("$.data.profile.nickname").value("테스터"));
+    }
+
+    @Test
+    @DisplayName("본인인증 없이 온보딩만 한 유저는 자기신고 프로필 gender가 반환된다(#392)")
+    void givenSelfReportedGenderWithoutVerification_whenGetMyProfile_thenReturnsProfileGender() throws Exception {
+        Long userId = saveUser();
+        saveProfileWithGender(userId, Gender.MALE);
+
+        mockMvc.perform(get("/api/v1/users/me").with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.profile.gender").value("MALE"));
     }
 }

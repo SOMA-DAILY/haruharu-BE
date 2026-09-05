@@ -73,8 +73,10 @@ public class ProfileService {
 
     /** 온보딩 완료 판정용: 공백이 아닌 닉네임이 저장되어 있는지 여부. */
     public boolean hasCompletedProfile(Long userId) {
+        // 온보딩 완료 조건(#392): 닉네임 + 성별. 성별은 프로필 PUT 에선 nullable(편집 호환)이고 완료 게이트에서만 필수다.
         return userProfileReader.findByUserId(userId)
-            .map(profile -> profile.nickname() != null && !profile.nickname().isBlank())
+            .map(profile -> profile.nickname() != null && !profile.nickname().isBlank()
+                    && profile.gender() != null)
             .orElse(false);
     }
 

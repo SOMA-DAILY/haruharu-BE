@@ -9,6 +9,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.son.haruharu.domain.profile.storage.UserProfileJpaRepository;
 import org.son.haruharu.domain.user.implement.User;
+import org.son.haruharu.domain.profile.implement.Gender;
 import org.son.haruharu.domain.user.implement.UserStatus;
 import org.son.haruharu.domain.user.storage.UserEntity;
 import org.son.haruharu.domain.user.storage.UserJpaRepository;
@@ -58,14 +59,14 @@ class OnboardingApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("닉네임만 PUT한 ONBOARDING 유저가 완료 API 호출 시 200·ACTIVE 반환 후 DB 상태가 ACTIVE가 된다")
+    @DisplayName("닉네임·성별 PUT한 ONBOARDING 유저가 완료 API 호출 시 200·ACTIVE 반환 후 DB 상태가 ACTIVE가 된다")
     void givenNicknameOnly_whenUpdateProfileAndCompleteOnboarding_thenReturnsActiveAndPersists() throws Exception {
         Long userId = saveUser(UserStatus.ONBOARDING);
 
         mockMvc.perform(put("/api/v1/users/me/profile")
                         .with(authentication(auth(userId)))
                         .contentType(APPLICATION_JSON)
-                        .content("{\"nickname\":\"하루\"}"))
+                        .content("{\"nickname\":\"하루\",\"gender\":\"MALE\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.data.nickname").value("하루"));
@@ -105,5 +106,46 @@ class OnboardingApiIntegrationTest {
 
         assertThat(userJpaRepository.findById(userId).orElseThrow().toDomain().status())
                 .isEqualTo(UserStatus.ONBOARDING);
+    }
+
+    @Test
+    @DisplayName("성별 없이 프로필 PUT은 200이지만 성별이 없으면 온보딩 완료 시 ONBOARDING_INCOMPLETE(#392: 성별은 완료 게이트 필수)")
+    void givenNoGender_whenUpdateProfileThenComplete_thenSavedButOnboardingIncomplete() throws Exception {
+        Long userId = saveUser(UserStatus.ONBOARDING);
+
+        mockMvc.perform(put("/api/v1/users/me/profile")
+                        .with(authentication(auth(userId)))
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"nickname\":\"하루\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/users/me/onboarding/complete")
+                        .with(authentication(auth(userId))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("ONBOARDING_INCOMPLETE"));
+
+        assertThat(userJpaRepository.findById(userId).orElseThrow().toDomain().status())
+                .isEqualTo(UserStatus.ONBOARDING);
+    }
+
+    @Test
+    @DisplayName("성별을 이미 가진 유저의 편집 PUT은 성별 미전송이어도 200이고 기존 성별을 보존한다(#392 편집 계약 유지)")
+    void givenExistingGender_whenEditWithoutGender_thenSucceedsAndPreserves() throws Exception {
+        Long userId = saveUser(UserStatus.ACTIVE);
+        mockMvc.perform(put("/api/v1/users/me/profile")
+                        .with(authentication(auth(userId)))
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"nickname\":\"하루\",\"gender\":\"FEMALE\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/v1/users/me/profile")
+                        .with(authentication(auth(userId)))
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"nickname\":\"하루하루\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.nickname").value("하루하루"));
+
+        assertThat(userProfileJpaRepository.findByUserId(userId).orElseThrow().toDomain().gender())
+                .isEqualTo(Gender.FEMALE);
     }
 }
