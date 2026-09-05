@@ -19,7 +19,6 @@ import org.son.haruharu.domain.profile.business.dto.ImagesResponse;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.profile.business.exception.ImageInvalidExtensionException;
 import org.son.haruharu.domain.profile.business.exception.ImageInvalidUrlException;
-import org.son.haruharu.domain.profile.business.exception.ImageMinLimitException;
 import org.son.haruharu.domain.profile.implement.UserImage;
 import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserImageWriter;
@@ -242,20 +241,40 @@ class ProfileServiceTest {
     }
 
     @Test
-    @DisplayName("이미지가 없으면(0개) ImageMinLimitException이 발생하고 저장하지 않는다")
-    void givenNoImages_whenUpdateImages_thenThrowsMinLimit() {
+    @DisplayName("빈 이미지 목록으로 교체하면 기존 S3 객체와 DB 이미지를 전체 삭제한다")
+    void givenExistingImages_whenUpdateWithEmptyImages_thenDeletesAllImages() {
         Long userId = 1L;
-        UpdateImagesCommand command = new UpdateImagesCommand(List.of());
+        String prefix = BASE_URL + "users/1/images/";
+        given(s3StoragePort.publicBaseUrl()).willReturn(BASE_URL);
+        given(userImageReader.getAllByUserId(userId)).willReturn(List.of(
+            new UserImage(1L, userId, prefix + "a.jpg", 0),
+            new UserImage(2L, userId, prefix + "b.jpg", 1)
+        ));
 
-        assertThatThrownBy(() -> profileService.updateImages(userId, command))
-            .isInstanceOf(ImageMinLimitException.class);
+        ImagesResponse response = profileService.updateImages(userId, new UpdateImagesCommand(List.of()));
 
-        then(userImageWriter).should(never()).deleteAllByUserId(any());
+        assertThat(response.imageUrls()).isEmpty();
+        then(s3StoragePort).should().deleteObjects(List.of("users/1/images/a.jpg", "users/1/images/b.jpg"));
+        then(userImageWriter).should().deleteAllByUserId(userId);
         then(userImageWriter).should(never()).save(any());
     }
 
     @Test
-    @DisplayName("대표 사진 1장만으로도 저장할 수 있다 (최소 1장)")
+    @DisplayName("이미지가 없는 상태에서 빈 목록으로 교체해도 성공한다")
+    void givenNoImages_whenUpdateWithEmptyImages_thenReturnsEmptyImages() {
+        Long userId = 1L;
+        given(s3StoragePort.publicBaseUrl()).willReturn(BASE_URL);
+        given(userImageReader.getAllByUserId(userId)).willReturn(List.of());
+
+        ImagesResponse response = profileService.updateImages(userId, new UpdateImagesCommand(List.of()));
+
+        assertThat(response.imageUrls()).isEmpty();
+        then(s3StoragePort).should().deleteObjects(List.of());
+        then(userImageWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("대표 사진 1장만으로도 저장할 수 있다")
     void givenSingleImage_whenUpdateImages_thenSaves() {
         Long userId = 1L;
         String prefix = BASE_URL + "users/" + userId + "/images/";

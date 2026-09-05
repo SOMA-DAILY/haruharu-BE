@@ -52,8 +52,9 @@ public class ProfileController {
     }
 
     @Operation(summary = "프로필 이미지 교체",
-            description = "imageUrls로 프로필 이미지 목록을 통째로 교체한다(순서 유지). 각 URL은 본인이 발급받은 업로드 URL이어야 한다. "
-                    + "본인 소유가 아니면 400(IMAGE_400_INVALID_URL), 최소 개수 미만이면 400(IMAGE_400_MIN_LIMIT), "
+            description = "image_urls로 프로필 이미지 목록을 통째로 교체한다(0~10장, 순서 유지). 빈 배열은 기존 사진 전체 삭제이며, 사진이 없어도 성공한다. "
+                    + "목록 누락이나 null은 허용하지 않는다. 각 URL은 본인이 발급받은 업로드 URL이어야 한다. "
+                    + "본인 소유가 아니면 400(IMAGE_400_INVALID_URL), "
                     + "최대 개수 초과면 400(IMAGE_400_MAX_EXCEEDED).")
     @PutMapping("/images")
     public ApiResponse<ImagesResponse> updateImages(
