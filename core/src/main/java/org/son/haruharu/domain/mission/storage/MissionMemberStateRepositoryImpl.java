@@ -42,11 +42,6 @@ public class MissionMemberStateRepositoryImpl implements MissionMemberStateRepos
     }
 
     @Override
-    public int dismiss(Long roomMissionId, Long roomMemberId, LocalDateTime occurredAt) {
-        return jpaRepository.dismiss(roomMissionId, roomMemberId, occurredAt);
-    }
-
-    @Override
     public int recordActivity(
             Long roomId, Long roomMemberId, ActivationChannel channel,
             MissionCardResolution resolution, LocalDateTime occurredAt) {
@@ -72,7 +67,7 @@ public class MissionMemberStateRepositoryImpl implements MissionMemberStateRepos
         Object[] row = rows.getFirst();
         return new MissionMemberStateSummary(
                 count(row, 0), count(row, 1), count(row, 2), count(row, 3),
-                count(row, 4), count(row, 5), count(row, 6));
+                count(row, 4), count(row, 5));
     }
 
     /** COUNT 는 bigint 로 오므로 Number 로 받아 int 로 좁힌다. 방 인원 규모라 오버플로 위험은 없다. */

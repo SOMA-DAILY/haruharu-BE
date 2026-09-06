@@ -245,13 +245,4 @@ public class RoomController {
         return ApiResponse.ok(null);
     }
 
-    @Operation(summary = "미션 카드 닫기", description = "열린 미션 카드를 해당 멤버에게만 멱등 해소한다.")
-    @PostMapping("/{roomId}/missions/{roomMissionId}/dismiss")
-    public ApiResponse<Void> dismissMission(
-            @PathVariable Long roomId,
-            @PathVariable Long roomMissionId,
-            Authentication authentication) {
-        missionMemberStateService.dismiss(roomId, roomMissionId, (Long) authentication.getPrincipal());
-        return ApiResponse.ok(null);
-    }
 }

@@ -56,9 +56,6 @@ public class MissionOutcomeEntity extends BaseEntity {
     @Column(name = "cross_channel_activated_count", nullable = false)
     private int crossChannelActivatedCount;
 
-    @Column(name = "dismissed_member_count", nullable = false)
-    private int dismissedMemberCount;
-
     @Column(name = "expired_member_count", nullable = false)
     private int expiredMemberCount;
 
@@ -84,7 +81,6 @@ public class MissionOutcomeEntity extends BaseEntity {
         entity.activatedMemberCount = outcome.activatedMemberCount();
         entity.expectedChannelActivatedCount = outcome.expectedChannelActivatedCount();
         entity.crossChannelActivatedCount = outcome.crossChannelActivatedCount();
-        entity.dismissedMemberCount = outcome.dismissedMemberCount();
         entity.expiredMemberCount = outcome.expiredMemberCount();
         entity.roomActivationCoverage = outcome.roomActivationCoverage();
         entity.exposureReach = outcome.exposureReach();
@@ -99,7 +95,7 @@ public class MissionOutcomeEntity extends BaseEntity {
                 id, roomMissionId, metricSchemaVersion,
                 targetMemberCount, impressedMemberCount, activatedMemberCount,
                 expectedChannelActivatedCount, crossChannelActivatedCount,
-                dismissedMemberCount, expiredMemberCount,
+                expiredMemberCount,
                 roomActivationCoverage, exposureReach,
                 closesAt, calculatedAt, createdAt);
     }

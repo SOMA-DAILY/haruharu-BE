@@ -35,10 +35,6 @@ public class MissionMemberStateWriter {
         return repository.impress(roomMissionId, roomMemberId, occurredAt);
     }
 
-    public int dismiss(Long roomMissionId, Long roomMemberId, LocalDateTime occurredAt) {
-        return repository.dismiss(roomMissionId, roomMemberId, occurredAt);
-    }
-
     public int recordActivity(
             Long roomId, Long roomMemberId, ActivationChannel channel, LocalDateTime occurredAt) {
         return repository.recordActivity(

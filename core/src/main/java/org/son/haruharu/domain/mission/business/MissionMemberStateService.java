@@ -45,15 +45,6 @@ public class MissionMemberStateService {
         }
     }
 
-    @Transactional
-    public void dismiss(Long roomId, Long roomMissionId, Long userId) {
-        MutationTarget target = requireOpenTarget(roomId, roomMissionId, userId);
-        initializer.initializeTarget(target.mission(), target.member());
-        if (stateWriter.dismiss(roomMissionId, target.member().id(), target.now()) == 0) {
-            throw new MissionMemberStateNotFoundException();
-        }
-    }
-
     private MutationTarget requireOpenTarget(Long roomId, Long roomMissionId, Long userId) {
         LocalDateTime now = LocalDateTime.now(clock);
         RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId);

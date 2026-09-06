@@ -144,7 +144,7 @@ class MissionMemberStatePostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("실제 미션 API 흐름은 GET 무부작용, impression/dismiss 멱등, 멤버별 카드 격리를 지킨다")
+    @DisplayName("실제 미션 API 흐름은 GET 무부작용, impression 멱등, 닫기(로컬) 후 재노출, 멤버별 카드 격리를 지킨다")
     void givenOpenMission_whenUseMissionApis_thenKeepsReadOnlyAndMemberScopedResolution() throws Exception {
         LocalDateTime opensAt = LocalDateTime.now().minusMinutes(5);
         Fixture fixture = fixture(opensAt, ActivationChannel.VIDEO);
@@ -175,20 +175,23 @@ class MissionMemberStatePostgresIntegrationTest {
         assertThat(impressed.firstImpressedAt()).isNotNull();
         assertThat(impressed.lastImpressedAt()).isAfterOrEqualTo(impressed.firstImpressedAt());
 
-        mockMvc.perform(post("/api/v1/rooms/{roomId}/missions/{missionId}/dismiss",
-                        fixture.room().id(), fixture.mission().id())
-                        .with(authentication(auth(301L))))
-                .andExpect(status().isOk());
-        LocalDateTime resolvedAt = stateFor(firstMember.id()).resolvedAt();
-        mockMvc.perform(post("/api/v1/rooms/{roomId}/missions/{missionId}/dismiss",
-                        fixture.room().id(), fixture.mission().id())
-                        .with(authentication(auth(301L))))
-                .andExpect(status().isOk());
-        assertThat(stateFor(firstMember.id()).resolvedAt()).isEqualTo(resolvedAt);
+        // 카드 "닫기"는 FE 로컬 동작이라 서버 호출이 없다(#402). 다시 확인하면 해소 전이므로 카드가 그대로 내려오고,
+        // 재노출 impression 은 last_impressed_at 만 갱신한다(상태 행은 여전히 1건, 해소 없음).
         mockMvc.perform(get("/api/v1/rooms/{roomId}/missions", fixture.room().id())
                         .with(authentication(auth(301L))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").isEmpty());
+                .andExpect(jsonPath("$.data[0].room_mission_id").value(fixture.mission().id()));
+        mockMvc.perform(post("/api/v1/rooms/{roomId}/missions/{missionId}/impression",
+                        fixture.room().id(), fixture.mission().id())
+                        .with(authentication(auth(301L))))
+                .andExpect(status().isOk());
+        assertThat(statesForMission(fixture.mission().id())).hasSize(1);
+        assertThat(stateFor(firstMember.id()).resolution()).isNull();
+        // 제거된 dismiss 엔드포인트는 더 이상 존재하지 않는다
+        mockMvc.perform(post("/api/v1/rooms/{roomId}/missions/{missionId}/dismiss",
+                        fixture.room().id(), fixture.mission().id())
+                        .with(authentication(auth(301L))))
+                .andExpect(status().isNotFound());
         mockMvc.perform(get("/api/v1/rooms/{roomId}/missions", fixture.room().id())
                         .with(authentication(auth(302L))))
                 .andExpect(status().isOk())

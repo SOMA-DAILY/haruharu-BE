@@ -18,7 +18,7 @@ class MissionOutcomeTest {
     void givenFourOfSixActivated_whenConfirmed_thenCoverageIsTwoThirds() {
         // given
         MissionMemberStateSummary summary =
-                new MissionMemberStateSummary(6, 5, 4, 3, 1, 1, 1);
+                new MissionMemberStateSummary(6, 5, 4, 3, 1, 1);
 
         // when
         MissionOutcome outcome = MissionOutcome.confirmed(
@@ -57,7 +57,7 @@ class MissionOutcomeTest {
     void givenAllActivated_whenConfirmed_thenCoverageIsOne() {
         // given
         MissionMemberStateSummary summary =
-                new MissionMemberStateSummary(6, 6, 6, 6, 0, 0, 0);
+                new MissionMemberStateSummary(6, 6, 6, 6, 0, 0);
 
         // when
         MissionOutcome outcome = MissionOutcome.confirmed(
