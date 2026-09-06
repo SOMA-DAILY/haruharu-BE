@@ -81,7 +81,8 @@ public class AdminRoomService {
         String nickname = profile == null ? null : profile.nickname();
         String region = profile == null ? null : profile.location();
         return new AdminRoomDetailResponse.MemberView(
-                member.id(), member.userId(), member.gender(), member.joinedAt(), nickname, age, region);
+                member.id(), member.userId(), member.gender(), member.joinedAt(),
+                nickname, member.pseudonym(), age, region);
     }
 
     private AdminRoomSummary toSummary(Room room, List<RoomMember> members, LocalDateTime now) {

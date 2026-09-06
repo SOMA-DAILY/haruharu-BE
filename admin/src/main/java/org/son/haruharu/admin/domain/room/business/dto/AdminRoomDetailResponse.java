@@ -26,7 +26,8 @@ public record AdminRoomDetailResponse(
             @Schema(description = "유저 id", example = "901") Long userId,
             @Schema(description = "성별", example = "FEMALE") String gender,
             @Schema(description = "입장 시각") LocalDateTime joinedAt,
-            @Schema(description = "닉네임(프로필 없으면 null)", example = "여울", nullable = true) String nickname,
+            @Schema(description = "닉네임(실명, 프로필 없으면 null)", example = "여울", nullable = true) String nickname,
+            @Schema(description = "방 세션 가명(미배정 시 null, #393)", example = "유진", nullable = true) String pseudonym,
             @Schema(description = "나이(생년월일 없으면 null)", example = "24", nullable = true) Integer age,
             @Schema(description = "지역(프로필 없으면 null)", example = "서울", nullable = true) String region
     ) {}

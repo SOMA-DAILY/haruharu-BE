@@ -14,6 +14,7 @@ import org.son.haruharu.admin.domain.room.business.command.AssignGenderCommand;
 import org.son.haruharu.admin.domain.room.business.command.CreateAdminRoomCommand;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomCreatedResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomInviteResponse;
+import org.son.haruharu.admin.domain.room.business.dto.AdminRoomMemberResponse;
 import org.son.haruharu.admin.domain.room.implement.AdminRoomReader;
 import org.son.haruharu.admin.domain.room.storage.exception.AdminRoomNotFoundException;
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
@@ -157,11 +158,14 @@ class AdminRoomCommandServiceTest {
         given(roomMemberReader.countByRoomIdAndGender(ROOM_ID, "FEMALE")).willReturn(1L);
         given(roomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
-        service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand("FEMALE"));
+        AdminRoomMemberResponse res = service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand("FEMALE"));
 
         verify(roomMemberWriter).save(argThat(m ->
                 "FEMALE".equals(m.gender()) && "지우".equals(m.pseudonym())
                         && m.id().equals(MEMBER_ID) && m.userId().equals(901L)));
+        // 응답에도 부여된 성별·백필된 가명이 함께 내려간다(#400)
+        assertThat(res.gender()).isEqualTo("FEMALE");
+        assertThat(res.pseudonym()).isEqualTo("지우");
     }
 
     @Test
