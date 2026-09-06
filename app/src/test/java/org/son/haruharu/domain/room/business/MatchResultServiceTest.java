@@ -77,11 +77,11 @@ class MatchResultServiceTest {
     }
 
     private RoomMember me() {
-        return new RoomMember(meId, roomId, userId, "MALE", null, LocalDateTime.now());
+        return new RoomMember(meId, roomId, userId, "MALE", null, null, LocalDateTime.now());
     }
 
     private RoomMember partner() {
-        return new RoomMember(partnerId, roomId, partnerUserId, "FEMALE", null, LocalDateTime.now());
+        return new RoomMember(partnerId, roomId, partnerUserId, "FEMALE", null, null, LocalDateTime.now());
     }
 
     private UserProfile profileOf(String nickname) {
@@ -245,9 +245,9 @@ class MatchResultServiceTest {
     @DisplayName("새 매칭으로 새 방(PENDING)에 배정되면 이전 방의 pending_result는 반환되지 않는다")
     void givenNewPendingRoom_whenFindPendingResult_thenEmpty() {
         Long newRoomId = 99L;
-        RoomMember oldMember = new RoomMember(meId, roomId, userId, "MALE", null,
+        RoomMember oldMember = new RoomMember(meId, roomId, userId, "MALE", null, null,
                 LocalDateTime.of(2026, 7, 8, 9, 0));
-        RoomMember newMember = new RoomMember(21L, newRoomId, userId, "MALE", null,
+        RoomMember newMember = new RoomMember(21L, newRoomId, userId, "MALE", null, null,
                 LocalDateTime.of(2026, 7, 12, 22, 0));
         given(roomMemberReader.findByUserId(userId)).willReturn(List.of(oldMember, newMember));
         // 최신 멤버십의 방(PENDING, startedAt 없음)만 조회된다

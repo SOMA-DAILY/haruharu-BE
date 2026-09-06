@@ -94,9 +94,15 @@ public class MemberProfileService {
         String profileImageUrl = s3StoragePort.createPresignedImageGetUrl(
                 userImageReader.getRepresentativeImageUrl(target.userId()));
 
+        // 이름 공개(#393): 본인·상호매칭이면 실명(닉네임), 그 전에는 방 세션 가명(없으면 익명). imageRevealed와 동일 게이트(fullyRevealed).
+        String displayName = fullyRevealed
+                ? (profile == null ? null : profile.nickname())
+                : target.displayPseudonym();
+
         return new MemberProfileResponse(
                 target.id(),
-                profile == null ? null : profile.nickname(),
+                displayName,
+                fullyRevealed,
                 target.gender(),
                 profileImageUrl,
                 fullyRevealed,

@@ -11,6 +11,7 @@ public record RoomMember(
         Long roomId,
         Long userId,
         String gender,
+        String pseudonym,
         LocalDate birthday,
         LocalDateTime joinedAt
 ) {
@@ -20,9 +21,15 @@ public record RoomMember(
      */
     public static final Set<String> SUPPORTED_GENDERS = Set.of("MALE", "FEMALE");
 
-    /** 방 입장. 성별·생년월일은 본인인증값 스냅샷. */
+    /**
+     * 가명 미배정(성별 미상) 멤버의 표시 이름(#393). 매칭 전에는 어떤 경우에도 실명(닉네임)으로 폴백하지 않는다 —
+     * 실명 폴백은 방 세션 익명성을 깨므로, 가명이 없으면 이 중립 플레이스홀더를 쓴다.
+     */
+    public static final String ANONYMOUS_NAME = "익명";
+
+    /** 방 입장. 성별·생년월일은 본인인증값 스냅샷. 가명(pseudonym)은 입장 시 배정하며 여기선 null(호출측이 withPseudonym으로 부여). */
     public static RoomMember of(Long roomId, Long userId, String gender, LocalDate birthday, LocalDateTime joinedAt) {
-        return new RoomMember(null, roomId, userId, gender, birthday, joinedAt);
+        return new RoomMember(null, roomId, userId, gender, null, birthday, joinedAt);
     }
 
     /**
@@ -36,6 +43,16 @@ public record RoomMember(
         if (gender == null || !SUPPORTED_GENDERS.contains(gender)) {
             throw new InvalidRoomMemberGenderException();
         }
-        return new RoomMember(id, roomId, userId, gender, birthday, joinedAt);
+        return new RoomMember(id, roomId, userId, gender, pseudonym, birthday, joinedAt);
+    }
+
+    /** 방 세션 가명 부여(#393). 입장 시 성별·순번으로 배정한다(PseudonymPool). */
+    public RoomMember withPseudonym(String pseudonym) {
+        return new RoomMember(id, roomId, userId, gender, pseudonym, birthday, joinedAt);
+    }
+
+    /** 매칭 전 표시 이름(#393). 가명이 있으면 가명, 없으면(성별 미상) 중립 플레이스홀더 — 절대 실명으로 폴백하지 않는다. */
+    public String displayPseudonym() {
+        return pseudonym != null ? pseudonym : ANONYMOUS_NAME;
     }
 }

@@ -38,6 +38,10 @@ public class RoomMemberEntity extends BaseEntity {
     @Column(length = 10)
     private String gender;
 
+    // #393: 방 세션 동안 실명 대신 노출하는 가명. 성별 미상이면 배정 못 해 null.
+    @Column(length = 30)
+    private String pseudonym;
+
     // 성별·나이의 단일 출처는 본인인증(identity). 매칭 확정 시 스냅샷으로 복사해 방 세션 동안 고정.
     @Column
     private LocalDate birthday;
@@ -51,12 +55,13 @@ public class RoomMemberEntity extends BaseEntity {
         entity.roomId = member.roomId();
         entity.userId = member.userId();
         entity.gender = member.gender();
+        entity.pseudonym = member.pseudonym();
         entity.birthday = member.birthday();
         entity.joinedAt = member.joinedAt();
         return entity;
     }
 
     public RoomMember toDomain() {
-        return new RoomMember(id, roomId, userId, gender, birthday, joinedAt);
+        return new RoomMember(id, roomId, userId, gender, pseudonym, birthday, joinedAt);
     }
 }

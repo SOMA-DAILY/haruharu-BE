@@ -44,7 +44,7 @@ class MissionActivityCollectorServiceTest {
     @DisplayName("저장된 GROUP 채팅 이벤트는 roomId와 senderId로 방 멤버를 검증해 수집한다")
     void givenStoredGroupChatEvent_whenCollect_thenRecordsGroupChatSignal() {
         LocalDateTime occurredAt = LocalDateTime.of(2026, 9, 2, 9, 10);
-        RoomMember member = new RoomMember(20L, 1L, 30L, "MALE", null, occurredAt.minusDays(1));
+        RoomMember member = new RoomMember(20L, 1L, 30L, "MALE", null, null, occurredAt.minusDays(1));
         given(roomMemberReader.getByRoomIdAndUserId(1L, 30L)).willReturn(member);
 
         service.recordGroupChat(1L, 30L, occurredAt);

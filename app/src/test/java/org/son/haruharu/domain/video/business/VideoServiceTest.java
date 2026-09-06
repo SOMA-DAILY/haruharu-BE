@@ -62,7 +62,7 @@ class VideoServiceTest {
     }
 
     private RoomMember member(Long id, Long userId) {
-        return new RoomMember(id, 999L, userId, "MALE", null, LocalDateTime.now());
+        return new RoomMember(id, 999L, userId, "MALE", null, null, LocalDateTime.now());
     }
 
     /** starts_at 09:00 새 모델 ACTIVE 방(최종선택 2일 뒤, 종료 3일 뒤). */

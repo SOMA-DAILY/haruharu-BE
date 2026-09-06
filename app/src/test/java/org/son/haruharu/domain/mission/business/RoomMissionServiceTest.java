@@ -57,7 +57,7 @@ class RoomMissionServiceTest {
 
     private RoomMember member(Long roomId, Long userId) {
         return new RoomMember(
-                200L, roomId, userId, "MALE", null,
+                200L, roomId, userId, "MALE", null, null,
                 LocalDateTime.now(clock).minusDays(1));
     }
 
@@ -133,7 +133,7 @@ class RoomMissionServiceTest {
     void givenMemberJoinedAfterOpen_whenGetOpenMissions_thenReturnsNoCards() {
         LocalDateTime now = LocalDateTime.now(clock);
         RoomMember lateMember = new RoomMember(
-                200L, 10L, 1L, "MALE", null, now.minusMinutes(30));
+                200L, 10L, 1L, "MALE", null, null, now.minusMinutes(30));
         given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(lateMember);
         given(roomMissionReader.getOpenMissions(10L, now)).willReturn(List.of(
                 new RoomMission(100L, 10L, 1L, now.minusHours(1), null, 0, now)));

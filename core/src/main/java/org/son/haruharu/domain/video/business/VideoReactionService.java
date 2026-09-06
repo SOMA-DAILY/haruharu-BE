@@ -1,6 +1,5 @@
 package org.son.haruharu.domain.video.business;
 
-import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
@@ -30,19 +29,17 @@ public class VideoReactionService {
     private final RoomMemberReader roomMemberReader;
     private final VideoReactionReader videoReactionReader;
     private final VideoReactionWriter videoReactionWriter;
-    private final ProfileService profileService;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public VideoReactionService(VideoPostReader videoPostReader, RoomMemberReader roomMemberReader,
                                 VideoReactionReader videoReactionReader,
-                                VideoReactionWriter videoReactionWriter, ProfileService profileService,
+                                VideoReactionWriter videoReactionWriter,
                                 ApplicationEventPublisher eventPublisher, Clock clock) {
         this.videoPostReader = videoPostReader;
         this.roomMemberReader = roomMemberReader;
         this.videoReactionReader = videoReactionReader;
         this.videoReactionWriter = videoReactionWriter;
-        this.profileService = profileService;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -57,15 +54,16 @@ public class VideoReactionService {
         if (author.userId().equals(userId)) {
             throw new CannotReactToOwnVideoException();
         }
-        // 인가 게이트: 반응하는 유저가 그 영상이 속한 방의 멤버여야 한다.
-        roomMemberReader.getByRoomIdAndUserId(author.roomId(), userId);
+        // 인가 게이트: 반응하는 유저가 그 영상이 속한 방의 멤버여야 한다. 반환값은 알림 표시 이름(가명)에 재사용한다.
+        RoomMember reactor = roomMemberReader.getByRoomIdAndUserId(author.roomId(), userId);
 
         Optional<VideoReaction> existing = videoReactionReader.findMine(videoPostId, userId);
         if (existing.isEmpty()) {
             videoReactionWriter.save(VideoReaction.create(videoPostId, userId, reactionType.name(), LocalDateTime.now(clock)));
             if (!author.userId().equals(userId)) {
+                // 반응 알림도 매칭 전에는 실명이 아니라 방 세션 가명(없으면 익명)으로 표기한다(#393 — 그룹채팅과 동일 정책).
                 eventPublisher.publishEvent(new VideoReactedEvent(
-                        author.userId(), videoPostId, profileService.getNickname(userId), reactionType.name()));
+                        author.userId(), videoPostId, reactor.displayPseudonym(), reactionType.name()));
             }
             return new ReactionResponse(true, reactionType);
         }

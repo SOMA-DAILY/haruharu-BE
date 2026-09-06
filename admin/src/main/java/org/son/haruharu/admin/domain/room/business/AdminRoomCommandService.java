@@ -12,6 +12,7 @@ import org.son.haruharu.admin.domain.room.implement.AdminRoomReader;
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomService;
+import org.son.haruharu.domain.room.implement.PseudonymPool;
 import org.son.haruharu.domain.room.implement.RoomInvite;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -88,7 +89,9 @@ public class AdminRoomCommandService {
     }
 
     /**
-     * 멤버 성별 부여. 초대코드 입장은 gender=null 이라(온보딩 미수집) 운영진이 신청폼 기준으로 채운다.
+     * 멤버 성별 부여. 초대코드 입장 시 프로필 성별이 없었으면(gender=null) 가명(#393)도 배정되지 못한 채 남으므로,
+     * 운영진이 성별을 채울 때 <b>가명도 함께 백필</b>한다 — 이게 없으면 그룹채팅 등에서 표시 이름이 계속 비게 된다.
+     * 이미 가명이 있으면(입장 시 배정됐거나 재부여) 유지한다 — 대화 중 표시 이름이 갑자기 바뀌지 않게.
      * memberId 가 해당 방 소속인지 확인해 다른 방 멤버를 경로만 바꿔 수정하는 것을 막는다.
      * 허용값(MALE·FEMALE) 검증은 도메인(RoomMember.withGender)이 소유한다 — 여기서 중복 검사하지 않는다.
      */
@@ -98,7 +101,11 @@ public class AdminRoomCommandService {
         if (!member.roomId().equals(roomId)) {
             throw new RoomMemberNotFoundException();
         }
-        return AdminRoomMemberResponse.from(roomMemberWriter.save(member.withGender(command.gender())));
+        RoomMember gendered = member.withGender(command.gender());
+        RoomMember toSave = gendered.pseudonym() != null ? gendered
+                : gendered.withPseudonym(PseudonymPool.assign(command.gender(),
+                        (int) roomMemberReader.countByRoomIdAndGender(roomId, command.gender())));
+        return AdminRoomMemberResponse.from(roomMemberWriter.save(toSave));
     }
 
     /** 코드 발급 주체 표기. RoomInvite.createdBy 는 "admin id 또는 SYSTEM" 규약(#312). */

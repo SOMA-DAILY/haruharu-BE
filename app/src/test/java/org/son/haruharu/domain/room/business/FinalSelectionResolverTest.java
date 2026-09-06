@@ -49,7 +49,7 @@ class FinalSelectionResolverTest {
     }
 
     private RoomMember member(Long id, Long userId, String gender) {
-        return new RoomMember(id, ROOM, userId, gender, null, LocalDateTime.now());
+        return new RoomMember(id, ROOM, userId, gender, null, null, LocalDateTime.now());
     }
 
     private FinalSelection choice(Long memberId, Long selectedMemberId) {

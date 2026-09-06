@@ -14,6 +14,7 @@ import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MembersResponse;
 import org.son.haruharu.domain.room.business.dto.MembersResponse.MemberView;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
+import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -35,22 +36,24 @@ public class RoomMembersService {
     private final RoomMemberReader roomMemberReader;
     private final UserProfileReader userProfileReader;
     private final UserImageReader userImageReader;
+    private final MatchResultReader matchResultReader;
     private final S3StoragePort s3StoragePort;
     private final Clock clock;
 
     public RoomMembersService(RoomReader roomReader, RoomMemberReader roomMemberReader,
                               UserProfileReader userProfileReader, UserImageReader userImageReader,
-                              S3StoragePort s3StoragePort, Clock clock) {
+                              MatchResultReader matchResultReader, S3StoragePort s3StoragePort, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.userProfileReader = userProfileReader;
         this.userImageReader = userImageReader;
+        this.matchResultReader = matchResultReader;
         this.s3StoragePort = s3StoragePort;
         this.clock = clock;
     }
 
     public MembersResponse getMembers(Long roomId, Long userId) {
-        roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
+        RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
         LocalDateTime now = LocalDateTime.now(clock);
@@ -60,19 +63,28 @@ public class RoomMembersService {
         List<Long> userIds = members.stream().map(RoomMember::userId).toList();
         Map<Long, UserProfile> profiles = userProfileReader.findByUserIdIn(userIds);
         Map<Long, String> imageUrls = userImageReader.getRepresentativeImageUrls(userIds);
+        // 최종매칭은 1:1이라 내 매칭 상대는 최대 1명 — 한 번 조회해 루프에서 in-memory 비교한다(멤버당 isMatched N+1 방지).
+        Long matchedPartnerMemberId = matchResultReader.findByMember(me.id())
+                .map(match -> match.memberAId().equals(me.id()) ? match.memberBId() : match.memberAId())
+                .orElse(null);
 
         List<MemberView> views = members.stream()
-                .map(member -> toView(member, profiles.get(member.userId()), imageUrls.get(member.userId()),
+                .map(member -> toView(member, matchedPartnerMemberId,
+                        profiles.get(member.userId()), imageUrls.get(member.userId()),
                         userId, now.toLocalDate(), currentDay))
                 .toList();
 
         return new MembersResponse(views);
     }
 
-    private MemberView toView(RoomMember member, UserProfile profile, String imageUrl, Long meUserId,
-                              LocalDate today, int currentDay) {
+    private MemberView toView(RoomMember member, Long matchedPartnerMemberId, UserProfile profile, String imageUrl,
+                              Long meUserId, LocalDate today, int currentDay) {
         boolean self = member.userId().equals(meUserId);
-        String nickname = profile == null ? null : profile.nickname();
+        // 이름 공개(#393): 본인이거나 상호매칭 성립 시에만 실명(닉네임), 그 전에는 가명(없으면 익명). imageRevealed와 동일 게이트.
+        boolean nameRevealed = self || member.id().equals(matchedPartnerMemberId);
+        String displayName = nameRevealed
+                ? (profile == null ? null : profile.nickname())
+                : member.displayPseudonym();
         // 지역·나이 공개 기준은 단건 프로필(ProfileField.LOCATION / AGE_REVEAL_DAY)과 동일 소스 — 목록으로 우회 노출되지 않게 한다(#214)
         boolean locationRevealed = self || currentDay >= ProfileField.LOCATION.availableFromDay();
         boolean ageRevealed = self || currentDay >= MemberProfileService.AGE_REVEAL_DAY;
@@ -83,6 +95,6 @@ public class RoomMembersService {
         String profileImageUrl = s3StoragePort.createPresignedImageGetUrl(imageUrl);
 
         return new MemberView(member.id(), member.userId(), self,
-                nickname, member.gender(), location, age, profileImageUrl);
+                displayName, nameRevealed, member.gender(), location, age, profileImageUrl);
     }
 }

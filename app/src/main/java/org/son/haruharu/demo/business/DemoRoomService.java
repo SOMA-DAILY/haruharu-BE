@@ -13,6 +13,7 @@ import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.room.implement.MatchResult;
 import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.MatchResultWriter;
+import org.son.haruharu.domain.room.implement.PseudonymPool;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -145,9 +146,12 @@ public class DemoRoomService {
         roomMissionSlotService.createDefaultsForRoom(room.id(), TOTAL_DAYS, startsAt, opensAt);
 
         List<RoomMember> members = new ArrayList<>();
-        members.add(RoomMember.of(room.id(), demoUserId, DEMO_GENDER, null, now));
+        members.add(RoomMember.of(room.id(), demoUserId, DEMO_GENDER, null, now)
+                .withPseudonym(PseudonymPool.assign(DEMO_GENDER, 0)));
         for (DemoGhost ghost : demoGhostProvisioner.ensureGhosts()) {
-            members.add(RoomMember.of(room.id(), ghost.userId(), ghost.gender(), null, now));
+            int joinIndex = (int) members.stream().filter(member -> ghost.gender().equals(member.gender())).count();
+            members.add(RoomMember.of(room.id(), ghost.userId(), ghost.gender(), null, now)
+                    .withPseudonym(PseudonymPool.assign(ghost.gender(), joinIndex)));
         }
         List<RoomMember> saved = roomMemberWriter.saveAll(members);
 

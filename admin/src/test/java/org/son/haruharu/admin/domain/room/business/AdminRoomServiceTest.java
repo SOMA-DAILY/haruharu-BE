@@ -46,7 +46,7 @@ class AdminRoomServiceTest {
     }
 
     private RoomMember member(Long id, Long roomId, String gender) {
-        return new RoomMember(id, roomId, id + 900, gender, LocalDate.of(2000, 1, 1), LocalDateTime.now(clock));
+        return new RoomMember(id, roomId, id + 900, gender, null, LocalDate.of(2000, 1, 1), LocalDateTime.now(clock));
     }
 
     @Test

@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
@@ -40,14 +39,13 @@ class VideoReactionServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock VideoReactionReader videoReactionReader;
     @Mock VideoReactionWriter videoReactionWriter;
-    @Mock ProfileService profileService;
     @Mock ApplicationEventPublisher eventPublisher;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-26T03:00:00Z"), ZoneId.of("Asia/Seoul"));
 
     private VideoReactionService service() {
         return new VideoReactionService(videoPostReader, roomMemberReader, videoReactionReader,
-                videoReactionWriter, profileService, eventPublisher, clock);
+                videoReactionWriter, eventPublisher, clock);
     }
 
     private void stubPostAndMembership(Long postId, Long userId) {
@@ -57,9 +55,10 @@ class VideoReactionServiceTest {
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
-                .willReturn(new RoomMember(authorMemberId, roomId, 2L, "FEMALE", null, LocalDateTime.now()));
+                .willReturn(new RoomMember(authorMemberId, roomId, 2L, "FEMALE", null, null, LocalDateTime.now()));
+        // 반응자는 방 세션 가명 "현우"를 가진다(알림에 실명 대신 이 가명이 실려야 한다 — #393)
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-                .willReturn(new RoomMember(700L, roomId, userId, "MALE", null, LocalDateTime.now()));
+                .willReturn(new RoomMember(700L, roomId, userId, "MALE", "현우", null, LocalDateTime.now()));
     }
 
     @Test
@@ -114,17 +113,16 @@ class VideoReactionServiceTest {
     }
 
     @Test
-    @DisplayName("다른 유저가 새 반응을 남기면 반응자 닉네임을 담은 VideoReactedEvent가 작성자에게 발행된다")
-    void givenNewReactionByOther_whenToggle_thenPublishesEventWithReactorNickname() {
+    @DisplayName("다른 유저가 새 반응을 남기면 실명이 아니라 반응자의 방 세션 가명을 담은 VideoReactedEvent가 발행된다(#393)")
+    void givenNewReactionByOther_whenToggle_thenPublishesEventWithReactorPseudonym() {
         Long userId = 1L; // 작성자(2L)와 다른 유저
         Long postId = 100L;
         stubPostAndMembership(postId, userId);
         given(videoReactionReader.findMine(postId, userId)).willReturn(Optional.empty());
-        given(profileService.getNickname(userId)).willReturn("노을");
 
         service().toggle(userId, postId, ReactionType.LIKE);
 
-        then(eventPublisher).should().publishEvent(new VideoReactedEvent(2L, postId, "노을", "LIKE"));
+        then(eventPublisher).should().publishEvent(new VideoReactedEvent(2L, postId, "현우", "LIKE"));
     }
 
     @Test
@@ -138,7 +136,7 @@ class VideoReactionServiceTest {
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
-                .willReturn(new RoomMember(authorMemberId, roomId, userId, "FEMALE", null, LocalDateTime.now()));
+                .willReturn(new RoomMember(authorMemberId, roomId, userId, "FEMALE", null, null, LocalDateTime.now()));
 
         assertThatThrownBy(() -> service().toggle(userId, postId, ReactionType.LIKE))
                 .isInstanceOf(CannotReactToOwnVideoException.class);
@@ -171,7 +169,7 @@ class VideoReactionServiceTest {
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
         given(roomMemberReader.getById(authorMemberId))
-                .willReturn(new RoomMember(authorMemberId, roomId, 2L, "FEMALE", null, LocalDateTime.now()));
+                .willReturn(new RoomMember(authorMemberId, roomId, 2L, "FEMALE", null, null, LocalDateTime.now()));
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willThrow(new NotRoomMemberException());
 
         assertThatThrownBy(() -> service().toggle(userId, postId, ReactionType.LIKE))

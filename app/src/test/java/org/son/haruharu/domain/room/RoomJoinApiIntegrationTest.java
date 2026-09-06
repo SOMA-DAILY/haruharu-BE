@@ -19,6 +19,10 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.son.haruharu.domain.room.storage.RoomInviteJpaRepository;
+import org.son.haruharu.domain.profile.implement.Gender;
+import org.son.haruharu.domain.profile.implement.UserProfile;
+import org.son.haruharu.domain.profile.storage.UserProfileEntity;
+import org.son.haruharu.domain.profile.storage.UserProfileJpaRepository;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserStatus;
 import org.son.haruharu.domain.user.storage.UserEntity;
@@ -51,6 +55,7 @@ class RoomJoinApiIntegrationTest {
     @Autowired RoomMemberReader roomMemberReader;
     @Autowired RoomMemberWriter roomMemberWriter;
     @Autowired RoomInviteJpaRepository roomInviteJpaRepository;
+    @Autowired UserProfileJpaRepository userProfileJpaRepository;
 
     @BeforeEach
     void clean() {
@@ -250,6 +255,28 @@ class RoomJoinApiIntegrationTest {
                     .andExpect(jsonPath("$.data.room_id").value(active.id().intValue()))
                     .andExpect(jsonPath("$.data.status").value("ACTIVE"));
         }
+    }
+
+    @Test
+    @DisplayName("성별 프로필 유저들이 순서대로 입장하면 room_members.pseudonym이 성별별 입장 순번대로 배정된다(#393)")
+    void givenGenderedProfiles_whenJoinInOrder_thenAssignsPseudonymByJoinOrder() throws Exception {
+        Long roomId = createJoinableRoom();
+        roomInviteService.issue(roomId, "PSN234", 6, null, "admin");
+
+        join(genderedUserToken(Gender.MALE), "PSN234");   // 남성 1번째 → 민준
+        join(genderedUserToken(Gender.MALE), "PSN234");   // 남성 2번째 → 정석
+        join(genderedUserToken(Gender.FEMALE), "PSN234"); // 여성 1번째 → 유진
+
+        assertThat(roomMemberReader.getByRoomId(roomId))
+                .extracting(RoomMember::pseudonym)
+                .containsExactlyInAnyOrder("민준", "정석", "유진");
+    }
+
+    private String genderedUserToken(Gender gender) {
+        Long userId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null))).toDomain().id();
+        userProfileJpaRepository.save(UserProfileEntity.from(
+                new UserProfile(null, userId, null, null, null, null, "닉" + userId, null, null, gender)));
+        return jwtProvider.generateAccessToken(userId);
     }
 
     private void join(String token, String code) throws Exception {

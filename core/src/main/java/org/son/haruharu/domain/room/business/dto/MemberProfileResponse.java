@@ -3,8 +3,9 @@ package org.son.haruharu.domain.room.business.dto;
 import java.util.List;
 
 /**
- * 방 멤버 단건 프로필. 닉네임·성별은 항상 노출(Day1). 나머지 항목(fields)은 currentDay >= availableFromDay면
- * 전원에게 자동 공개된다(재화·해금 없음). 가치관 답변(valueAnswers)은 Day2부터 공개.
+ * 방 멤버 단건 프로필. 성별은 항상 노출(Day1). nickname 필드에는 표시 이름이 담긴다(#393): 본인·상호매칭이면 실명(닉네임),
+ * 그 전에는 방 세션 가명이며 nameRevealed로 구분한다(imageRevealed와 동일 게이트). 나머지 항목(fields)은
+ * currentDay >= availableFromDay면 전원에게 자동 공개된다(재화·해금 없음). 가치관 답변(valueAnswers)은 Day2부터 공개.
  * visible=false면 value/answer는 null로 가려진다.
  * profileImageUrl은 대표사진 presigned GET URL(단기 만료). 대표사진 미수집이면 null이다(온보딩에서 이미지를 받지 않을 수 있음 —
  * MembersResponse·MatchResultResponse와 동일 정책). imageRevealed=false면 클라이언트가 블러 처리하고, 최종 상호매칭 성립(또는 본인)
@@ -13,6 +14,7 @@ import java.util.List;
 public record MemberProfileResponse(
         Long roomMemberId,
         String nickname,
+        boolean nameRevealed,
         String gender,
         String profileImageUrl,
         boolean imageRevealed,

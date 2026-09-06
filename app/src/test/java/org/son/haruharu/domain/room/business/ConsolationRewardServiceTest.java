@@ -55,7 +55,7 @@ class ConsolationRewardServiceTest {
     }
 
     private RoomMember member(Long id, Long userId) {
-        return new RoomMember(id, roomId, userId, "MALE", null, LocalDateTime.now());
+        return new RoomMember(id, roomId, userId, "MALE", null, null, LocalDateTime.now());
     }
 
     @Test

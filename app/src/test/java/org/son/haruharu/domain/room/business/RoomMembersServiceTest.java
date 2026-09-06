@@ -21,6 +21,8 @@ import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.MembersResponse;
+import org.son.haruharu.domain.room.implement.MatchResult;
+import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
@@ -50,6 +52,7 @@ class RoomMembersServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock UserProfileReader userProfileReader;
     @Mock UserImageReader userImageReader;
+    @Mock MatchResultReader matchResultReader;
     @Mock S3StoragePort s3StoragePort;
 
     @BeforeEach
@@ -62,7 +65,7 @@ class RoomMembersServiceTest {
 
     private RoomMembersService service() {
         return new RoomMembersService(roomReader, roomMemberReader, userProfileReader, userImageReader,
-                s3StoragePort, clock);
+                matchResultReader, s3StoragePort, clock);
     }
 
     /** clock(2026-06-26 12:00) 기준 currentDay가 원하는 값이 되도록 startedAt을 역산해 ACTIVE 방을 스텁한다. */
@@ -78,7 +81,8 @@ class RoomMembersServiceTest {
     }
 
     private RoomMember member(Long roomId, Long userId) {
-        return new RoomMember(900L, roomId, userId, "MALE", LocalDate.of(2000, 1, 1),
+        // roomMemberId는 userId로 유일하게(매칭 판정 isMatched(me.id, member.id)에 쓰인다). 가명은 "가명{userId}".
+        return new RoomMember(900L + userId, roomId, userId, "MALE", "가명" + userId, LocalDate.of(2000, 1, 1),
                 LocalDateTime.now(clock));
     }
 
@@ -129,10 +133,14 @@ class RoomMembersServiceTest {
         assertThat(otherView.me()).isFalse();
         assertThat(otherView.location()).isNull();
         assertThat(otherView.age()).isNull();
-        assertThat(otherView.nickname()).isEqualTo("영희");
+        // 매칭 전이라 실명 대신 가명이 내려가고 nameRevealed=false(#393)
+        assertThat(otherView.nickname()).isEqualTo("가명2");
+        assertThat(otherView.nameRevealed()).isFalse();
         assertThat(otherView.gender()).isEqualTo("MALE");
         assertThat(otherView.profileImageUrl()).isEqualTo("https://cdn/other.jpg?sig");
-        // 본인은 게이트 제외
+        // 본인은 게이트 제외 — 실명·지역·나이 그대로
+        assertThat(result.members().get(0).nickname()).isEqualTo("철수");
+        assertThat(result.members().get(0).nameRevealed()).isTrue();
         assertThat(result.members().get(0).location()).isEqualTo("서울");
         assertThat(result.members().get(0).age()).isEqualTo(26);
     }
@@ -180,8 +188,9 @@ class RoomMembersServiceTest {
 
         MembersResponse result = service().getMembers(roomId, myUserId);
 
+        // 본인은 실명, 매칭 안 한 상대는 가명(#393)
         assertThat(result.members()).extracting(MembersResponse.MemberView::nickname)
-                .containsExactly("철수", "영희");
+                .containsExactly("철수", "가명2");
         assertThat(result.members()).extracting(MembersResponse.MemberView::location)
                 .containsExactly("서울", "부산");
         then(userProfileReader).should().findByUserIdIn(anyCollection());
@@ -194,7 +203,7 @@ class RoomMembersServiceTest {
         Long userId = 1L;
         Long roomId = 12L;
         // 나이는 프로필이 아닌 RoomMember.birthday(본인인증 스냅샷)에서 온다 → birthday null이면 나이도 null
-        RoomMember me = new RoomMember(910L, roomId, userId, "MALE", null, LocalDateTime.now(clock));
+        RoomMember me = new RoomMember(910L, roomId, userId, "MALE", null, null, LocalDateTime.now(clock));
 
         stubRoomAtDay(roomId, 3);
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
@@ -268,6 +277,32 @@ class RoomMembersServiceTest {
         MembersResponse result = service().getMembers(roomId, userId);
 
         assertThat(result.members().get(0).profileImageUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("상호매칭이 성립한 상대는 실명(닉네임)이 공개되고 nameRevealed=true다(#393)")
+    void givenMatchedOther_whenGetMembers_thenRevealsRealNickname() {
+        Long myUserId = 1L;
+        Long otherUserId = 2L;
+        Long roomId = 22L;
+        RoomMember me = member(roomId, myUserId);
+        RoomMember other = member(roomId, otherUserId);
+
+        stubRoomAtDay(roomId, 1);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, myUserId)).willReturn(me);
+        given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(me, other));
+        given(userProfileReader.findByUserIdIn(anyCollection()))
+                .willReturn(Map.of(
+                        myUserId, profile(myUserId, "철수", "서울"),
+                        otherUserId, profile(otherUserId, "영희", "부산")));
+        given(matchResultReader.findByMember(me.id())).willReturn(Optional.of(
+                MatchResult.of(me.id(), other.id(), LocalDateTime.now(clock))));
+
+        MembersResponse result = service().getMembers(roomId, myUserId);
+
+        MembersResponse.MemberView otherView = result.members().get(1);
+        assertThat(otherView.nickname()).isEqualTo("영희");
+        assertThat(otherView.nameRevealed()).isTrue();
     }
 
     @Test

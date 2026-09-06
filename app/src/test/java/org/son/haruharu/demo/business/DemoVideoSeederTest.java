@@ -26,7 +26,7 @@ class DemoVideoSeederTest {
     @Mock VideoPostWriter videoPostWriter;
 
     private RoomMember member(Long id) {
-        return new RoomMember(id, 10L, id, "MALE", null, LocalDateTime.now());
+        return new RoomMember(id, 10L, id, "MALE", null, null, LocalDateTime.now());
     }
 
     @Test

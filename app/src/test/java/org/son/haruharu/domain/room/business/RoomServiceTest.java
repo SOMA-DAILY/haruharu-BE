@@ -163,11 +163,11 @@ class RoomServiceTest {
         Room room = new Room(roomId, RoomStatus.ACTIVE, scheduled, 3, LocalDateTime.now(), null);
 
         given(roomMemberReader.findByUserId(userId))
-            .willReturn(List.of(new RoomMember(51L, roomId, userId, "MALE", null, LocalDateTime.now())));
+            .willReturn(List.of(new RoomMember(51L, roomId, userId, "MALE", null, null, LocalDateTime.now())));
         given(roomReader.findCurrent(List.of(roomId), LocalDateTime.of(2026, 6, 26, 12, 0))).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
-            new RoomMember(52L, roomId, userId, "MALE", null, LocalDateTime.now()),
-            new RoomMember(53L, roomId, 2L, "FEMALE", null, LocalDateTime.now())
+            new RoomMember(52L, roomId, userId, "MALE", null, null, LocalDateTime.now()),
+            new RoomMember(53L, roomId, 2L, "FEMALE", null, null, LocalDateTime.now())
         ));
 
         RoomResponse result = roomService.getMyRoom(userId);
@@ -192,10 +192,10 @@ class RoomServiceTest {
             startsAt.plusDays(2).plusHours(3), endsAt);
 
         given(roomMemberReader.findByUserId(userId))
-            .willReturn(List.of(new RoomMember(60L, roomId, userId, "MALE", null, LocalDateTime.now())));
+            .willReturn(List.of(new RoomMember(60L, roomId, userId, "MALE", null, null, LocalDateTime.now())));
         given(roomReader.findCurrent(List.of(roomId), LocalDateTime.of(2026, 6, 26, 12, 0))).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
-            new RoomMember(60L, roomId, userId, "MALE", null, LocalDateTime.now())));
+            new RoomMember(60L, roomId, userId, "MALE", null, null, LocalDateTime.now())));
 
         RoomResponse result = roomService.getMyRoom(userId);
 
@@ -224,10 +224,10 @@ class RoomServiceTest {
             LocalDateTime.of(2026, 6, 25, 9, 0), null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId))
-            .willReturn(new RoomMember(54L, roomId, userId, "MALE", null, LocalDateTime.now()));
+            .willReturn(new RoomMember(54L, roomId, userId, "MALE", null, null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(roomId)).willReturn(List.of(
-            new RoomMember(55L, roomId, userId, "MALE", null, LocalDateTime.now())
+            new RoomMember(55L, roomId, userId, "MALE", null, null, LocalDateTime.now())
         ));
 
         RoomResponse result = roomService.getRoom(roomId, userId);
@@ -254,7 +254,7 @@ class RoomServiceTest {
         Long userId = 1L;
         Long roomId = 40L;
         given(roomMemberReader.findByUserId(userId))
-            .willReturn(List.of(new RoomMember(56L, roomId, userId, "MALE", null, LocalDateTime.now())));
+            .willReturn(List.of(new RoomMember(56L, roomId, userId, "MALE", null, null, LocalDateTime.now())));
         given(roomReader.findCurrent(List.of(roomId), LocalDateTime.of(2026, 6, 26, 12, 0))).willReturn(Optional.of(
             new Room(roomId, RoomStatus.ACTIVE, LocalDate.now(), 3, LocalDateTime.now(), null)));
 
@@ -267,7 +267,7 @@ class RoomServiceTest {
         Long withEndedOnly = 1L;
         Long endedRoomId = 50L;
         given(roomMemberReader.findByUserId(withEndedOnly))
-            .willReturn(List.of(new RoomMember(57L, endedRoomId, withEndedOnly, "MALE", null, LocalDateTime.now())));
+            .willReturn(List.of(new RoomMember(57L, endedRoomId, withEndedOnly, "MALE", null, null, LocalDateTime.now())));
         given(roomReader.findCurrent(List.of(endedRoomId), LocalDateTime.of(2026, 6, 26, 12, 0))).willReturn(Optional.empty());
 
         Long noHistory = 2L;
@@ -292,7 +292,7 @@ class RoomServiceTest {
     void givenStaleEndedRoom_whenFindMyRoom_thenEmpty() {
         Long userId = 1L;
         given(roomMemberReader.findByUserId(userId))
-                .willReturn(List.of(new RoomMember(1L, 10L, userId, "MALE", null, LocalDateTime.now())));
+                .willReturn(List.of(new RoomMember(1L, 10L, userId, "MALE", null, null, LocalDateTime.now())));
         given(roomReader.findCurrent(List.of(10L), LocalDateTime.of(2026, 6, 26, 12, 0)))
                 .willReturn(Optional.empty());
 
@@ -304,7 +304,7 @@ class RoomServiceTest {
     void givenStaleEndedRoom_whenHasCurrentRoom_thenFalse() {
         Long userId = 1L;
         given(roomMemberReader.findByUserId(userId))
-                .willReturn(List.of(new RoomMember(1L, 10L, userId, "MALE", null, LocalDateTime.now())));
+                .willReturn(List.of(new RoomMember(1L, 10L, userId, "MALE", null, null, LocalDateTime.now())));
         given(roomReader.findCurrent(List.of(10L), LocalDateTime.of(2026, 6, 26, 12, 0)))
                 .willReturn(Optional.empty());
 
