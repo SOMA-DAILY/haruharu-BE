@@ -99,7 +99,7 @@ class MissionOutcomePostgresIntegrationTest {
     @Test
     @DisplayName("활동한 멤버는 노출 없이도 활성화로 집계되고, 미해소 카드는 EXPIRED로 마감된다")
     void givenMixedMemberStates_whenConfirm_thenCountsActivationSeparatelyFromResolution() {
-        // given — 6인 방. m1·m2는 노출 후 활동, m3는 노출 없이 활동, m4는 dismiss, m5는 노출만, m6는 무반응
+        // given — 6인 방. m1·m2는 노출 후 활동, m3는 노출 없이 활동, m4·m5는 노출만, m6는 무반응
         Fixture fixture = fixture();
         List<RoomMember> members = members(fixture, 6);
         initializer.initializeOpenedTargets(fixture.opensAt().plusMinutes(1), 100);
@@ -113,8 +113,6 @@ class MissionOutcomePostgresIntegrationTest {
         activate(fixture, members.get(0), inWindow.plusMinutes(1));
         activate(fixture, members.get(1), inWindow.plusMinutes(1));
         activate(fixture, members.get(2), inWindow.plusMinutes(1)); // 노출 없이 활동
-        inTransaction(() -> stateWriter.dismiss(
-                fixture.mission().id(), members.get(3).id(), inWindow.plusMinutes(2)));
 
         // when
         Optional<MissionOutcome> confirmed = inTransactionResult(
@@ -126,9 +124,9 @@ class MissionOutcomePostgresIntegrationTest {
         assertThat(outcome.targetMemberCount()).isEqualTo(6);
         assertThat(outcome.impressedMemberCount()).isEqualTo(4);
         assertThat(outcome.activatedMemberCount()).isEqualTo(3);
-        assertThat(outcome.dismissedMemberCount()).isEqualTo(1);
-        // m3(노출 없이 활동)·m5(노출만)·m6(무반응)은 카드가 해소되지 않아 EXPIRED 로 마감된다.
-        assertThat(outcome.expiredMemberCount()).isEqualTo(3);
+        // m3(노출 없이 활동)·m4·m5(노출만)·m6(무반응)은 카드가 해소되지 않아 EXPIRED 로 마감된다.
+        // 카드 "닫기"는 서버 상태가 아니므로(#402) 해소 경로는 활동·마감뿐이다.
+        assertThat(outcome.expiredMemberCount()).isEqualTo(4);
         assertThat(outcome.roomActivationCoverage()).isEqualByComparingTo(new BigDecimal("0.5000"));
         assertThat(outcome.exposureReach()).isEqualByComparingTo(new BigDecimal("0.6667"));
         assertThat(outcome.closesAt()).isEqualTo(fixture.closesAt());

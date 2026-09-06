@@ -14,8 +14,6 @@ public interface MissionMemberStateRepository {
 
     int impress(Long roomMissionId, Long roomMemberId, LocalDateTime occurredAt);
 
-    int dismiss(Long roomMissionId, Long roomMemberId, LocalDateTime occurredAt);
-
     int recordActivity(
             Long roomId, Long roomMemberId, ActivationChannel channel,
             MissionCardResolution resolution, LocalDateTime occurredAt);

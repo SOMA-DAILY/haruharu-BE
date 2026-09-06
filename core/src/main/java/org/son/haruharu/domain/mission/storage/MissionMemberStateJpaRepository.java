@@ -131,21 +131,6 @@ public interface MissionMemberStateJpaRepository extends JpaRepository<MissionMe
 
     @Modifying(clearAutomatically = true)
     @Query(value = """
-            UPDATE mission_member_states
-            SET resolution = COALESCE(resolution, 'DISMISSED'),
-                resolved_at = COALESCE(resolved_at, :occurredAt),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE room_mission_id = :roomMissionId
-              AND room_member_id = :roomMemberId
-              AND deleted_at IS NULL
-            """, nativeQuery = true)
-    int dismiss(
-            @Param("roomMissionId") Long roomMissionId,
-            @Param("roomMemberId") Long roomMemberId,
-            @Param("occurredAt") LocalDateTime occurredAt);
-
-    @Modifying(clearAutomatically = true)
-    @Query(value = """
             UPDATE mission_member_states state
             SET expected_activity_count = expected_activity_count
                     + CASE WHEN expected_channel = :#{#channel.name()} THEN 1 ELSE 0 END,
@@ -213,7 +198,7 @@ public interface MissionMemberStateJpaRepository extends JpaRepository<MissionMe
     /**
      * outcome 확정용 단일 행 집계. 활동(activated)과 카드 해소(resolution)는 별개다 —
      * 노출 없이 활동한 멤버도 활동으로 센다.
-     * 컬럼 순서: target, impressed, activated, expectedChannel, crossChannel, dismissed, expired.
+     * 컬럼 순서: target, impressed, activated, expectedChannel, crossChannel, expired.
      */
     @Query(value = """
             SELECT
@@ -222,7 +207,6 @@ public interface MissionMemberStateJpaRepository extends JpaRepository<MissionMe
                 COUNT(*) FILTER (WHERE expected_activity_count > 0 OR cross_channel_activity_count > 0),
                 COUNT(*) FILTER (WHERE expected_activity_count > 0),
                 COUNT(*) FILTER (WHERE cross_channel_activity_count > 0),
-                COUNT(*) FILTER (WHERE resolution = 'DISMISSED'),
                 COUNT(*) FILTER (WHERE resolution = 'EXPIRED')
             FROM mission_member_states
             WHERE room_mission_id = :roomMissionId

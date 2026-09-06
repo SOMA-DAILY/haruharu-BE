@@ -84,22 +84,6 @@ class MissionMemberStateServiceTest {
         verify(roomMissionReader, never()).getById(10L);
     }
 
-    @Test
-    @DisplayName("열린 방 미션 dismiss는 대상 catch-up 뒤 멱등 해소를 기록한다")
-    void givenOpenMissionTarget_whenDismiss_thenInitializesAndResolves() {
-        LocalDateTime now = LocalDateTime.now(clock);
-        RoomMission mission = mission(1L, now.minusMinutes(10), now.plusHours(1));
-        RoomMember member = new RoomMember(20L, 1L, 30L, "MALE", null, null, now.minusDays(1));
-        given(roomMissionReader.getById(10L)).willReturn(mission);
-        given(roomMemberReader.getByRoomIdAndUserId(1L, 30L)).willReturn(member);
-        given(stateWriter.dismiss(10L, 20L, now)).willReturn(1);
-
-        service.dismiss(1L, 10L, 30L);
-
-        verify(initializer).initializeTarget(mission, member);
-        verify(stateWriter).dismiss(10L, 20L, now);
-    }
-
     private RoomMission mission(Long roomId, LocalDateTime opensAt, LocalDateTime closesAt) {
         return new RoomMission(10L, roomId, 100L, opensAt, closesAt, 0, opensAt.minusHours(1));
     }

@@ -12,10 +12,9 @@ public record MissionMemberStateSummary(
         int activatedMemberCount,
         int expectedChannelActivatedCount,
         int crossChannelActivatedCount,
-        int dismissedMemberCount,
         int expiredMemberCount
 ) {
     public static MissionMemberStateSummary empty() {
-        return new MissionMemberStateSummary(0, 0, 0, 0, 0, 0, 0);
+        return new MissionMemberStateSummary(0, 0, 0, 0, 0, 0);
     }
 }

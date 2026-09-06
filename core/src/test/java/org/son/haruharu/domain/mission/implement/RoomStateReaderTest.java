@@ -123,7 +123,7 @@ class RoomStateReaderTest {
     private MissionOutcome outcome(LocalDateTime closesAt, BigDecimal coverage, int activated) {
         return new MissionOutcome(
                 null, 10L, MissionOutcome.METRIC_SCHEMA_V1,
-                6, 6, activated, activated, 0, 0, 0,
+                6, 6, activated, activated, 0, 0,
                 coverage, new BigDecimal("1.0000"), closesAt, closesAt.plusMinutes(5), closesAt);
     }
 }

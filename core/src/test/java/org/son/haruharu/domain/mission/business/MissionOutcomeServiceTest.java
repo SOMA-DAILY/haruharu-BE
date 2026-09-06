@@ -60,7 +60,7 @@ class MissionOutcomeServiceTest {
         given(outcomeReader.isConfirmed(ROOM_MISSION_ID, MissionOutcome.METRIC_SCHEMA_V1))
                 .willReturn(false);
         given(memberStateReader.summarize(ROOM_MISSION_ID))
-                .willReturn(new MissionMemberStateSummary(6, 5, 4, 3, 1, 1, 1));
+                .willReturn(new MissionMemberStateSummary(6, 5, 4, 3, 1, 1));
         given(outcomeWriter.save(any(MissionOutcome.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
