@@ -137,14 +137,31 @@ class RoomInviteServiceTest {
     }
 
     @Test
-    @DisplayName("프로필·성별이 없으면 입장 시 room_member.gender 는 null 이다(운영진 추후 부여)")
-    void givenNoProfileGender_whenJoin_thenRoomMemberGenderIsNull() {
+    @DisplayName("프로필·성별이 없으면 입장 시 room_member.gender·pseudonym 모두 null 이고 성별 카운트도 조회하지 않는다")
+    void givenNoProfileGender_whenJoin_thenRoomMemberGenderAndPseudonymAreNull() {
         givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), activeInvite());
         given(userProfileReader.findByUserId(USER_ID)).willReturn(java.util.Optional.empty());
 
         service.join(USER_ID, CODE);
 
-        verify(roomMemberWriter).save(argThat(member -> member.gender() == null));
+        verify(roomMemberWriter).save(argThat(member -> member.gender() == null && member.pseudonym() == null));
+        verify(roomMemberReader, never()).countByRoomIdAndGender(any(), any());
+    }
+
+    @Test
+    @DisplayName("입장 시 같은 성별 순번(0-based)대로 방 세션 가명이 배정된다(#393)")
+    void givenExistingSameGenderMembers_whenJoin_thenAssignsPseudonymByJoinOrder() {
+        givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), activeInvite());
+        given(userProfileReader.findByUserId(USER_ID)).willReturn(java.util.Optional.of(
+                new org.son.haruharu.domain.profile.implement.UserProfile(
+                        1L, USER_ID, null, null, null, null, "하루", null, null,
+                        org.son.haruharu.domain.profile.implement.Gender.MALE)));
+        // 이미 남성 2명이 입장했으므로 3번째(index 2) → 남성 풀 세 번째 "현우"
+        given(roomMemberReader.countByRoomIdAndGender(ROOM_ID, "MALE")).willReturn(2L);
+
+        service.join(USER_ID, CODE);
+
+        verify(roomMemberWriter).save(argThat(member -> "현우".equals(member.pseudonym())));
     }
 
     @Test

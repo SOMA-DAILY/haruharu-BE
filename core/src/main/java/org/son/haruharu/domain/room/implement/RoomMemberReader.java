@@ -48,4 +48,9 @@ public class RoomMemberReader {
     public long countByRoomId(Long roomId) {
         return roomMemberRepository.countByRoomId(roomId);
     }
+
+    /** 같은 방·성별의 기존 멤버 수. 가명 배정의 입장 순번(0-based)으로 쓴다(#393). */
+    public long countByRoomIdAndGender(Long roomId, String gender) {
+        return roomMemberRepository.countByRoomIdAndGender(roomId, gender);
+    }
 }

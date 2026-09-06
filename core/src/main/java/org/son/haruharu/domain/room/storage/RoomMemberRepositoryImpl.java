@@ -56,6 +56,11 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     }
 
     @Override
+    public long countByRoomIdAndGender(Long roomId, String gender) {
+        return jpaRepository.countByRoomIdAndGender(roomId, gender);
+    }
+
+    @Override
     public Optional<RoomMember> findById(Long id) {
         return jpaRepository.findById(id).map(RoomMemberEntity::toDomain);
     }

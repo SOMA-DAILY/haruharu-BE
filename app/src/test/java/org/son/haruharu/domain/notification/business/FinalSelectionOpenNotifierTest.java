@@ -47,7 +47,7 @@ class FinalSelectionOpenNotifierTest {
     }
 
     private RoomMember member(Long memberId, Long userId) {
-        return new RoomMember(memberId, 7L, userId, "MALE", null, DAY1.atTime(0, 0));
+        return new RoomMember(memberId, 7L, userId, "MALE", null, null, DAY1.atTime(0, 0));
     }
 
     @Test

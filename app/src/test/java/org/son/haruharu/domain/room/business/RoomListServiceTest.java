@@ -287,6 +287,6 @@ class RoomListServiceTest {
     }
 
     private static RoomMember member(Long id, Long roomId, Long userId) {
-        return new RoomMember(id, roomId, userId, "MALE", null, NOW);
+        return new RoomMember(id, roomId, userId, "MALE", null, null, NOW);
     }
 }

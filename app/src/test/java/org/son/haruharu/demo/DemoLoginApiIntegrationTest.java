@@ -91,8 +91,20 @@ class DemoLoginApiIntegrationTest {
         assertThat(roomMemberReader.getByRoomId(roomId)).hasSize(6);
         assertThat(roomMemberReader.getByRoomId(roomId)).extracting(RoomMember::gender)
                 .filteredOn("MALE"::equals).hasSize(3); // 3:3 구성
+        assertThat(roomMemberReader.getByRoomId(roomId)).extracting(RoomMember::pseudonym)
+                .containsExactlyInAnyOrder("민준", "정석", "현우", "유진", "지우", "서연");
         assertThat(roomMissionSlotReader.getByRoomId(roomId)).hasSize(6);
         assertThat(roomMissionJpaRepository.existsByRoomId(roomId)).isFalse();
+
+        mockMvc.perform(get("/api/v1/rooms/{id}/members", roomId)
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.members[?(@.me == false)].nickname",
+                        org.hamcrest.Matchers.containsInAnyOrder("정석", "현우", "유진", "지우", "서연")))
+                .andExpect(jsonPath("$.data.members[?(@.me == false)].name_revealed",
+                        org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(false))))
+                .andExpect(jsonPath("$.data.members[?(@.me == true)].name_revealed",
+                        org.hamcrest.Matchers.contains(true)));
 
         // 데모 토큰으로 피드를 열면 과거 슬롯에 심어진 영상이 보인다(데모도 그 슬롯을 올려 게이트 통과).
         mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId).header("Authorization", "Bearer " + accessToken))

@@ -67,7 +67,7 @@ class MemberProfileServiceTest {
     }
 
     private RoomMember member(Long id, Long roomId, Long userId) {
-        return new RoomMember(id, roomId, userId, "FEMALE", LocalDate.of(2000, 1, 1), LocalDateTime.now());
+        return new RoomMember(id, roomId, userId, "FEMALE", "가명", LocalDate.of(2000, 1, 1), LocalDateTime.now());
     }
 
     // startedAt=방날짜(2026-06-26) 09:00에서 (currentDay-1)일 전 앵커 → currentDayAt(clock)=currentDay
@@ -113,8 +113,8 @@ class MemberProfileServiceTest {
     }
 
     @Test
-    @DisplayName("Day1에는 닉네임·성별만 노출되고 지역·나이·직업 등은 가려진다(재화·해금 없음)")
-    void givenDay1_whenGetProfile_thenOnlyNicknameAndGenderVisible() {
+    @DisplayName("Day1에는 매칭 전이라 실명 대신 가명이 노출되고(nameRevealed=false) 성별만 함께 노출된다")
+    void givenDay1_whenGetProfile_thenPseudonymAndGenderVisible() {
         Long userId = 1L;
         Long targetUserId = 2L;
         Long roomId = 10L;
@@ -125,7 +125,9 @@ class MemberProfileServiceTest {
 
         MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
 
-        assertThat(result.nickname()).isEqualTo("하루");
+        // 매칭 전이라 실명(하루)이 아니라 가명이 내려간다(#393)
+        assertThat(result.nickname()).isEqualTo("가명");
+        assertThat(result.nameRevealed()).isFalse();
         assertThat(result.gender()).isEqualTo("FEMALE");
 
         assertThat(field(result, "location").visible()).isFalse();
@@ -181,6 +183,9 @@ class MemberProfileServiceTest {
         assertThat(field(result, "affiliation").value()).isEqualTo("카카오");
         assertThat(field(result, "age").value()).isEqualTo("26");
         assertThat(result.fields()).allMatch(ProfileFieldView::visible);
+        // 본인은 항상 실명(가명 아님)·nameRevealed=true (#393)
+        assertThat(result.nickname()).isEqualTo("하루");
+        assertThat(result.nameRevealed()).isTrue();
         // 본인 프로필은 매칭 조회 없이 사진도 공개된다(단락평가로 isMatched 미호출)
         assertThat(result.imageRevealed()).isTrue();
         then(matchResultReader).should(never()).isMatched(any(), any());
@@ -198,7 +203,7 @@ class MemberProfileServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
         // birthday null인 대상 멤버
         given(roomMemberReader.getById(targetId)).willReturn(
-                new RoomMember(targetId, roomId, targetUserId, "MALE", null, LocalDateTime.now()));
+                new RoomMember(targetId, roomId, targetUserId, "MALE", null, null, LocalDateTime.now()));
         given(roomReader.findById(roomId)).willReturn(Optional.of(room(roomId, 3)));
         given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.empty()); // 프로필 미작성
         given(valueQuestionReader.getAllActive()).willReturn(List.of());
@@ -206,7 +211,9 @@ class MemberProfileServiceTest {
 
         MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
 
-        assertThat(result.nickname()).isNull();
+        // 프로필·성별 모두 없어 가명도 없으니 실명 대신 익명 플레이스홀더가 내려간다(실명 폴백 금지 — #393)
+        assertThat(result.nickname()).isEqualTo("익명");
+        assertThat(result.nameRevealed()).isFalse();
         // Day3라 visible=true지만 프로필이 없어 값은 null
         assertThat(field(result, "affiliation").visible()).isTrue();
         assertThat(field(result, "affiliation").value()).isNull();
@@ -252,6 +259,9 @@ class MemberProfileServiceTest {
 
         assertThat(result.imageRevealed()).isTrue();
         assertThat(result.profileImageUrl()).isEqualTo("https://cdn/rep.jpg?sig");
+        // 상호매칭 후에는 가명이 아니라 실명(닉네임)이 공개된다(#393)
+        assertThat(result.nickname()).isEqualTo("하루");
+        assertThat(result.nameRevealed()).isTrue();
     }
 
     @Test

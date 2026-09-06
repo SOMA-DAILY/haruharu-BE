@@ -56,7 +56,7 @@ class RoomTodayServiceTest {
     }
 
     private RoomMember member(Long memberId, Long userId) {
-        return new RoomMember(memberId, 100L, userId, "MALE", null, LocalDateTime.now());
+        return new RoomMember(memberId, 100L, userId, "MALE", null, null, LocalDateTime.now());
     }
 
     @Test

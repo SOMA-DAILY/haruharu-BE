@@ -47,7 +47,7 @@ class MissionMemberStateServiceTest {
     void givenOpenMissionTarget_whenImpress_thenInitializesAndRecords() {
         LocalDateTime now = LocalDateTime.now(clock);
         RoomMission mission = mission(1L, now.minusMinutes(10), now.plusHours(1));
-        RoomMember member = new RoomMember(20L, 1L, 30L, "MALE", null, now.minusDays(1));
+        RoomMember member = new RoomMember(20L, 1L, 30L, "MALE", null, null, now.minusDays(1));
         given(roomMissionReader.getById(10L)).willReturn(mission);
         given(roomMemberReader.getByRoomIdAndUserId(1L, 30L)).willReturn(member);
         given(stateWriter.impress(10L, 20L, now)).willReturn(1);
@@ -63,7 +63,7 @@ class MissionMemberStateServiceTest {
     void givenForeignOrClosedMission_whenImpress_thenRejectsWithoutWrite() {
         LocalDateTime now = LocalDateTime.now(clock);
         given(roomMemberReader.getByRoomIdAndUserId(1L, 30L))
-                .willReturn(new RoomMember(20L, 1L, 30L, "MALE", null, now.minusDays(1)));
+                .willReturn(new RoomMember(20L, 1L, 30L, "MALE", null, null, now.minusDays(1)));
         given(roomMissionReader.getById(10L))
                 .willReturn(mission(99L, now.minusHours(2), now.minusHours(1)));
 
@@ -89,7 +89,7 @@ class MissionMemberStateServiceTest {
     void givenOpenMissionTarget_whenDismiss_thenInitializesAndResolves() {
         LocalDateTime now = LocalDateTime.now(clock);
         RoomMission mission = mission(1L, now.minusMinutes(10), now.plusHours(1));
-        RoomMember member = new RoomMember(20L, 1L, 30L, "MALE", null, now.minusDays(1));
+        RoomMember member = new RoomMember(20L, 1L, 30L, "MALE", null, null, now.minusDays(1));
         given(roomMissionReader.getById(10L)).willReturn(mission);
         given(roomMemberReader.getByRoomIdAndUserId(1L, 30L)).willReturn(member);
         given(stateWriter.dismiss(10L, 20L, now)).willReturn(1);

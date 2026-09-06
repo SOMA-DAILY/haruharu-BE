@@ -10,6 +10,7 @@ import org.son.haruharu.domain.room.business.exception.InviteCodeNotFoundExcepti
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.InviteCodeGenerator;
+import org.son.haruharu.domain.room.implement.PseudonymPool;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomInvite;
 import org.son.haruharu.domain.room.implement.RoomInviteReader;
@@ -98,7 +99,10 @@ public class RoomInviteService {
                 .map(UserProfile::gender)
                 .map(Gender::name)
                 .orElse(null);
-        roomMemberWriter.save(RoomMember.of(room.id(), userId, gender, null, now));
+        // 가명 배정(#393): 같은 성별 기존 멤버 수를 입장 순번(0-based)으로 써서 배정한다. gender 미상이면 배정 스킵(null).
+        String pseudonym = gender == null ? null
+                : PseudonymPool.assign(gender, (int) roomMemberReader.countByRoomIdAndGender(room.id(), gender));
+        roomMemberWriter.save(RoomMember.of(room.id(), userId, gender, null, now).withPseudonym(pseudonym));
         roomInviteWriter.save(invite.incrementUsed());
         eventPublisher.publishEvent(new RoomMemberJoinedEvent(room.id(), userId, now));
         return new JoinRoomResponse(room.id());

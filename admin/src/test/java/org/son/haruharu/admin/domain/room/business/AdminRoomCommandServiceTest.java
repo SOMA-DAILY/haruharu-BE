@@ -83,7 +83,7 @@ class AdminRoomCommandServiceTest {
     }
 
     private RoomMember memberOfRoom(Long roomId) {
-        return new RoomMember(MEMBER_ID, roomId, 901L, null, LocalDate.of(2000, 1, 1), STARTS_AT);
+        return new RoomMember(MEMBER_ID, roomId, 901L, null, null, LocalDate.of(2000, 1, 1), STARTS_AT);
     }
 
     @Test
@@ -150,15 +150,31 @@ class AdminRoomCommandServiceTest {
     }
 
     @Test
-    @DisplayName("성별 부여 시 해당 멤버의 gender가 갱신된다")
-    void givenMemberWithoutGender_whenAssignGender_thenGenderSaved() {
+    @DisplayName("성별 부여 시 gender가 갱신되고 가명 미배정이면 입장 순번대로 가명이 백필된다(#393)")
+    void givenMemberWithoutGenderAndPseudonym_whenAssignGender_thenGenderSavedAndPseudonymBackfilled() {
         given(roomMemberReader.getById(MEMBER_ID)).willReturn(memberOfRoom(ROOM_ID));
+        // 이미 여성 1명 존재 → 이 멤버는 2번째(index 1) → 여성 풀 "지우"
+        given(roomMemberReader.countByRoomIdAndGender(ROOM_ID, "FEMALE")).willReturn(1L);
         given(roomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand("FEMALE"));
 
         verify(roomMemberWriter).save(argThat(m ->
-                "FEMALE".equals(m.gender()) && m.id().equals(MEMBER_ID) && m.userId().equals(901L)));
+                "FEMALE".equals(m.gender()) && "지우".equals(m.pseudonym())
+                        && m.id().equals(MEMBER_ID) && m.userId().equals(901L)));
+    }
+
+    @Test
+    @DisplayName("이미 가명이 배정된 멤버는 성별 부여 시 가명이 유지되고 순번을 다시 계산하지 않는다(#393)")
+    void givenMemberWithPseudonym_whenAssignGender_thenKeepsPseudonym() {
+        given(roomMemberReader.getById(MEMBER_ID)).willReturn(
+                new RoomMember(MEMBER_ID, ROOM_ID, 901L, null, "현우", null, STARTS_AT));
+        given(roomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand("MALE"));
+
+        verify(roomMemberWriter).save(argThat(m -> "현우".equals(m.pseudonym()) && "MALE".equals(m.gender())));
+        verify(roomMemberReader, never()).countByRoomIdAndGender(any(), any());
     }
 
     @Test

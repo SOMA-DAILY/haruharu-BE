@@ -58,7 +58,7 @@ class SlotStartNotifierTest {
     }
 
     private RoomMember member(Long memberId, Long userId) {
-        return new RoomMember(memberId, 7L, userId, "MALE", null, STARTS);
+        return new RoomMember(memberId, 7L, userId, "MALE", null, null, STARTS);
     }
 
     @Test

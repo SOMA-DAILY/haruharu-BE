@@ -20,5 +20,7 @@ public interface RoomMemberRepository {
 
     long countByRoomId(Long roomId);
 
+    long countByRoomIdAndGender(Long roomId, String gender);
+
     Optional<RoomMember> findById(Long id);
 }

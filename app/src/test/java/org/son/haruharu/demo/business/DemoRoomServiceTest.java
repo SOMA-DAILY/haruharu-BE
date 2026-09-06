@@ -72,7 +72,7 @@ class DemoRoomServiceTest {
     }
 
     private RoomMember memberInRoom(Long roomId) {
-        return new RoomMember(9L, roomId, DEMO_USER_ID, "MALE", null, LocalDateTime.now());
+        return new RoomMember(9L, roomId, DEMO_USER_ID, "MALE", null, null, LocalDateTime.now());
     }
 
     private Room anyRoom() {
@@ -118,6 +118,8 @@ class DemoRoomServiceTest {
         assertThat(captor.getValue()).hasSize(6);
         assertThat(captor.getValue()).extracting(RoomMember::gender)
                 .containsExactly("MALE", "MALE", "MALE", "FEMALE", "FEMALE", "FEMALE");
+        assertThat(captor.getValue()).extracting(RoomMember::pseudonym)
+                .containsExactly("민준", "정석", "현우", "유진", "지우", "서연");
 
         ArgumentCaptor<RoomStartedEvent> eventCaptor = ArgumentCaptor.forClass(RoomStartedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
@@ -159,11 +161,11 @@ class DemoRoomServiceTest {
     // ── forceMatch (PR4) ────────────────────────────────────────────────────
 
     private RoomMember demoMember() {
-        return new RoomMember(9L, 50L, DEMO_USER_ID, "MALE", null, LocalDateTime.now());
+        return new RoomMember(9L, 50L, DEMO_USER_ID, "MALE", null, null, LocalDateTime.now());
     }
 
     private RoomMember ghostMember(Long memberId, Long userId, String gender) {
-        return new RoomMember(memberId, 50L, userId, gender, null, LocalDateTime.now());
+        return new RoomMember(memberId, 50L, userId, gender, null, null, LocalDateTime.now());
     }
 
     private void stubCurrentRoomWithMembers(List<RoomMember> members) {

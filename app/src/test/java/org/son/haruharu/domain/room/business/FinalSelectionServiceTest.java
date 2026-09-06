@@ -63,11 +63,11 @@ class FinalSelectionServiceTest {
     }
 
     private RoomMember member(Long id, Long memberUserId, Long memberRoomId) {
-        return new RoomMember(id, memberRoomId, memberUserId, "MALE", null, LocalDateTime.now());
+        return new RoomMember(id, memberRoomId, memberUserId, "MALE", null, null, LocalDateTime.now());
     }
 
     private RoomMember female(Long id, Long memberUserId, Long memberRoomId) {
-        return new RoomMember(id, memberRoomId, memberUserId, "FEMALE", null, LocalDateTime.now());
+        return new RoomMember(id, memberRoomId, memberUserId, "FEMALE", null, null, LocalDateTime.now());
     }
 
     // 새 모델(#320·#337): 최종선택 오픈/마감은 어드민이 방마다 입력한 시각으로 판정한다.
@@ -340,7 +340,7 @@ class FinalSelectionServiceTest {
     void givenNullGenderTarget_whenSelect_thenSkipsGenderCheck() {
         stubMeAndRoom();
         given(roomMemberReader.getById(selectedId))
-                .willReturn(new RoomMember(selectedId, roomId, 2L, null, null, LocalDateTime.now()));
+                .willReturn(new RoomMember(selectedId, roomId, 2L, null, null, null, LocalDateTime.now()));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
 
         FinalSelectionResponse result = service.select(roomId, selectedId, userId);

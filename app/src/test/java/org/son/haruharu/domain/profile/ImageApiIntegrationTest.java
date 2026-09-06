@@ -98,7 +98,7 @@ class ImageApiIntegrationTest {
         Long userId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null))).toDomain().id();
         Long otherUserId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null))).toDomain().id();
         profileService.updateProfile(userId, new UpdateProfileCommand(
-            null, null, null, null, "사진삭제테스트", null, null));
+            null, null, null, null, "사진삭제테스트", null, null, null));
         String base = "https://test-bucket.s3.ap-northeast-2.amazonaws.com/";
         String firstKey = "users/" + userId + "/images/a.jpg";
         String secondKey = "users/" + userId + "/images/b.jpg";

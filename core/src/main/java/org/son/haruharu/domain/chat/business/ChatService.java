@@ -21,6 +21,9 @@ import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.profile.business.ProfileService;
+import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
+import org.son.haruharu.domain.room.implement.RoomMember;
+import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.user.business.UserService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -31,7 +34,9 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * 채팅 유스케이스(조회·상태 변경). 실시간 메시지 송수신은 #60(STOMP)에서 담당한다.
@@ -51,6 +56,7 @@ public class ChatService {
     private final ChatMessageWriter chatMessageWriter;
     private final ProfileService profileService;
     private final UserService userService;
+    private final RoomMemberReader roomMemberReader;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -62,6 +68,7 @@ public class ChatService {
                        ChatMessageWriter chatMessageWriter,
                        ProfileService profileService,
                        UserService userService,
+                       RoomMemberReader roomMemberReader,
                        ApplicationEventPublisher eventPublisher,
                        Clock clock) {
         this.chatRoomReader = chatRoomReader;
@@ -72,6 +79,7 @@ public class ChatService {
         this.chatMessageWriter = chatMessageWriter;
         this.profileService = profileService;
         this.userService = userService;
+        this.roomMemberReader = roomMemberReader;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -121,7 +129,8 @@ public class ChatService {
         ChatRoom chatRoom = chatRoomReader.getById(chatRoomId);
         List<Long> recipientIds = recipientsFor(chatRoom, senderId); // DIRECT=상대 1명, GROUP=나 제외 전원
         ChatMessage saved = chatMessageWriter.save(ChatMessage.create(chatRoomId, senderId, content));
-        String senderNickname = profileService.getNickname(senderId);
+        // 발신자 표시 이름(#393): GROUP은 방 세션 가명, DIRECT는 매칭쌍이라 실명. 푸시 본문("OO님이…")에 그대로 실린다.
+        String senderNickname = chatDisplayName(chatRoom, senderId);
         eventPublisher.publishEvent(new ChatMessageSentEvent(
                 saved.id(), chatRoomId, chatRoom.type(), chatRoom.roomId(), senderId,
                 recipientIds, senderNickname, saved.createdAt()));
@@ -143,7 +152,7 @@ public class ChatService {
         requireMember(chatRoomId, userId);
         ChatRoom room = chatRoomReader.getById(chatRoomId);
         if (room.type() == ChatRoomType.GROUP) {
-            return ChatRoomDetailResponse.group(chatRoomId, otherMemberBriefs(chatRoomId, userId), room.createdAt());
+            return ChatRoomDetailResponse.group(chatRoomId, otherMemberBriefs(room.roomId(), chatRoomId, userId), room.createdAt());
         }
         Long partnerUserId = requireActivePartner(chatRoomId, userId);
         return ChatRoomDetailResponse.direct(chatRoomId, toPartnerBrief(partnerUserId), room.createdAt());
@@ -202,20 +211,23 @@ public class ChatService {
 
         if (room.type() == ChatRoomType.GROUP) {
             return ChatRoomsResponse.ChatRoomSummary.group(
-                    chatRoomId, otherMemberBriefs(chatRoomId, userId), lastMessage, lastMessageAt, unread);
+                    chatRoomId, otherMemberBriefs(room.roomId(), chatRoomId, userId), lastMessage, lastMessageAt, unread);
         }
         return ChatRoomsResponse.ChatRoomSummary.direct(
                 chatRoomId, toPartnerBrief(directPartnerUserId), lastMessage, lastMessageAt, unread);
     }
 
     /** GROUP 채팅에서 나를 제외한 현재 참여자들의 경량 정보. 나간 멤버(leftAt)·탈퇴자는 제외한다(목록이 죽지 않게). */
-    private List<PartnerBrief> otherMemberBriefs(Long chatRoomId, Long userId) {
+    private List<PartnerBrief> otherMemberBriefs(Long sourceRoomId, Long chatRoomId, Long userId) {
+        // 소개팅 방 멤버를 한 번에 읽어 가명 조회를 배치화한다(참여자별 findByRoomIdAndUserId N+1 방지).
+        Map<Long, RoomMember> membersByUserId = roomMemberReader.getByRoomId(sourceRoomId).stream()
+                .collect(Collectors.toMap(RoomMember::userId, m -> m, (a, b) -> a));
         return chatRoomMemberReader.findByChatRoomId(chatRoomId).stream()
                 .filter(member -> !member.hasLeft())
                 .map(ChatRoomMember::userId)
                 .filter(id -> !id.equals(userId))
                 .filter(id -> !userService.isWithdrawn(id))
-                .map(this::toPartnerBrief)
+                .map(id -> toGroupMemberBrief(membersByUserId.get(id), id))
                 .toList();
     }
 
@@ -239,14 +251,34 @@ public class ChatService {
         }
     }
 
-    /** 상대 프로필에서 목록·헤더용 경량 정보를 뽑는다. 대표사진 = sorted_order 최소 이미지(없으면 null). */
+    /** 상대 프로필에서 목록·헤더용 경량 정보를 뽑는다. 대표사진 = sorted_order 최소 이미지(없으면 null). DIRECT(매칭쌍) 전용이라 실명. */
     private PartnerBrief toPartnerBrief(Long partnerUserId) {
         var profile = profileService.getProfile(partnerUserId);
-        String profileImageUrl = profile.images().stream()
+        return new PartnerBrief(partnerUserId, profile.nickname(), representativeImageUrl(profile));
+    }
+
+    /** GROUP 참여자 경량 정보. 이름은 방 세션 가명(없으면 익명 플레이스홀더)으로 가린다 — 매칭 전 실명 노출 금지(#393). */
+    private PartnerBrief toGroupMemberBrief(RoomMember roomMember, Long memberUserId) {
+        var profile = profileService.getProfile(memberUserId);
+        String displayName = roomMember != null ? roomMember.displayPseudonym() : RoomMember.ANONYMOUS_NAME;
+        return new PartnerBrief(memberUserId, displayName, representativeImageUrl(profile));
+    }
+
+    private String representativeImageUrl(ProfileResponse profile) {
+        return profile.images().stream()
                 .min(Comparator.comparingInt(img -> img.sortedOrder()))
                 .map(img -> img.imageUrl())
                 .orElse(null);
-        return new PartnerBrief(partnerUserId, profile.nickname(), profileImageUrl);
+    }
+
+    /** 채팅 표시 이름. GROUP은 방 세션 가명(없으면 익명 플레이스홀더) — 매칭 전 실명 노출 금지(#393). DIRECT는 매칭쌍이라 실명. */
+    private String chatDisplayName(ChatRoom chatRoom, Long userId) {
+        if (chatRoom.type() == ChatRoomType.GROUP) {
+            return roomMemberReader.findByRoomIdAndUserId(chatRoom.roomId(), userId)
+                    .map(RoomMember::displayPseudonym)
+                    .orElse(RoomMember.ANONYMOUS_NAME);
+        }
+        return profileService.getNickname(userId);
     }
 
     /** 방 존재(404) 확인 후 요청자가 참여자(403)인지 검증하고 멤버십을 반환한다. */

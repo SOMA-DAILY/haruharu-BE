@@ -62,6 +62,7 @@ class ChatServiceTest {
     @Mock ChatMessageWriter chatMessageWriter;
     @Mock ProfileService profileService;
     @Mock UserService userService;
+    @Mock org.son.haruharu.domain.room.implement.RoomMemberReader roomMemberReader;
     @Mock ApplicationEventPublisher eventPublisher;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-03T03:00:00Z"), ZoneOffset.UTC);
@@ -75,7 +76,7 @@ class ChatServiceTest {
     void setUp() {
         chatService = new ChatService(chatRoomReader, chatRoomWriter, chatRoomMemberReader,
                 chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, userService,
-                eventPublisher, clock);
+                roomMemberReader, eventPublisher, clock);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -244,6 +245,30 @@ class ChatServiceTest {
     }
 
     @Test
+    @DisplayName("GROUP 채팅 상세의 참여자 이름은 실명이 아니라 방 세션 가명(없으면 익명)으로 내려간다(#393)")
+    void givenGroupRoom_whenGetRoom_thenShowsPseudonymNotRealName() {
+        Long sourceRoomId = 77L;
+        given(chatRoomReader.getById(ROOM)).willReturn(groupRoom(ROOM, sourceRoomId));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM)).willReturn(List.of(
+                membership(ROOM, ME, null), membership(ROOM, 2L, null), membership(ROOM, 3L, null)));
+        given(userService.isWithdrawn(2L)).willReturn(false);
+        given(userService.isWithdrawn(3L)).willReturn(false);
+        given(profileService.getProfile(2L)).willReturn(profile("실명둘"));
+        given(profileService.getProfile(3L)).willReturn(profile("실명셋"));
+        // 소개팅 방 멤버 배치 조회: 2L은 가명 있음, 3L은 가명 없음(성별 미상) → 익명
+        given(roomMemberReader.getByRoomId(sourceRoomId)).willReturn(List.of(
+                new org.son.haruharu.domain.room.implement.RoomMember(101L, sourceRoomId, 2L, "MALE", "민준", null, LocalDateTime.now(clock)),
+                new org.son.haruharu.domain.room.implement.RoomMember(102L, sourceRoomId, 3L, null, null, null, LocalDateTime.now(clock))));
+
+        ChatRoomDetailResponse result = chatService.getRoom(ROOM, ME);
+
+        // 실명(실명둘·실명셋)은 노출되지 않고 가명/익명만 내려간다
+        assertThat(result.members()).extracting(PartnerBrief::nickname)
+                .containsExactlyInAnyOrder("민준", "익명");
+    }
+
+    @Test
     @DisplayName("참여자가 아닌 유저가 방 조회 시 ChatNotMemberException(403)이 발생한다")
     void getRoom_whenNotMember_throwsForbidden() {
         given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, ChatRoomType.DIRECT, null, 99L, LocalDateTime.now(clock)));
@@ -359,6 +384,31 @@ class ChatServiceTest {
         then(eventPublisher).should().publishEvent(new ChatMessageSentEvent(
                 42L, ROOM, ChatRoomType.DIRECT, null, ME,
                 List.of(2L), "하루", LocalDateTime.now(clock)));
+    }
+
+    @Test
+    @DisplayName("GROUP 채팅 메시지 발신자명은 실명이 아니라 방 세션 가명으로 이벤트에 실린다(#393)")
+    void givenGroupRoom_whenSendMessage_thenPublishesPseudonymAsSenderName() {
+        Long chatRoomId = 30L;
+        Long sourceRoomId = 77L;
+        given(chatRoomReader.getById(chatRoomId)).willReturn(groupRoom(chatRoomId, sourceRoomId));
+        given(chatRoomMemberReader.findMembership(chatRoomId, ME)).willReturn(Optional.of(membership(chatRoomId, ME, null)));
+        given(chatMessageWriter.save(any()))
+                .willReturn(new ChatMessage(50L, chatRoomId, ME, "안녕", LocalDateTime.now(clock)));
+        given(chatRoomMemberReader.findByChatRoomId(chatRoomId))
+                .willReturn(List.of(membership(chatRoomId, ME, null), membership(chatRoomId, 2L, null)));
+        // 발신자의 방 세션 가명
+        given(roomMemberReader.findByRoomIdAndUserId(sourceRoomId, ME))
+                .willReturn(Optional.of(new org.son.haruharu.domain.room.implement.RoomMember(
+                        1L, sourceRoomId, ME, "MALE", "민준", null, LocalDateTime.now(clock))));
+
+        chatService.sendMessage(chatRoomId, ME, "안녕");
+
+        then(eventPublisher).should().publishEvent(new ChatMessageSentEvent(
+                50L, chatRoomId, ChatRoomType.GROUP, sourceRoomId, ME,
+                List.of(2L), "민준", LocalDateTime.now(clock)));
+        // GROUP은 가명을 쓰므로 실명 조회(getNickname)를 하지 않는다
+        then(profileService).should(never()).getNickname(any());
     }
 
     @Test
@@ -582,7 +632,6 @@ class ChatServiceTest {
                 .willReturn(new ChatMessage(42L, ROOM, ME, "안녕", LocalDateTime.now(clock)));
         given(chatRoomMemberReader.findByChatRoomId(ROOM)).willReturn(List.of(
                 membership(ROOM, ME, null), membership(ROOM, 2L, null), membership(ROOM, 3L, null)));
-        given(profileService.getNickname(ME)).willReturn("하루");
 
         chatService.sendMessage(ROOM, ME, "안녕");
 
@@ -601,7 +650,6 @@ class ChatServiceTest {
         ChatRoomMember leftMember = membership(ROOM, 3L, null).leave(LocalDateTime.now(clock));
         given(chatRoomMemberReader.findByChatRoomId(ROOM)).willReturn(List.of(
                 membership(ROOM, ME, null), membership(ROOM, 2L, null), leftMember));
-        given(profileService.getNickname(ME)).willReturn("하루");
 
         chatService.sendMessage(ROOM, ME, "안녕");
 

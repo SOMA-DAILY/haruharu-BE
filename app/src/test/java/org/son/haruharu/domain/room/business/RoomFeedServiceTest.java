@@ -78,7 +78,7 @@ class RoomFeedServiceTest {
     }
 
     private RoomMember member(Long id, Long userId) {
-        return new RoomMember(id, 10L, userId, "MALE", null, LocalDateTime.now());
+        return new RoomMember(id, 10L, userId, "MALE", null, null, LocalDateTime.now());
     }
 
     private VideoPost post(Long postId, Long memberId, LocalDateTime slotStart, String url) {

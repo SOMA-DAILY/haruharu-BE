@@ -84,7 +84,7 @@ class ChatPartnerServiceTest {
         given(matchResultService.resolvePartner(MATCH, ME))
                 .willReturn(new PartnerMemberRef(ROOM, PARTNER_MEMBER, PARTNER_USER));
         MemberProfileResponse profile = new MemberProfileResponse(
-                PARTNER_MEMBER, "이나경", "FEMALE", "https://cdn/rep.jpg", true, List.of(), List.of());
+                PARTNER_MEMBER, "이나경", true, "FEMALE", "https://cdn/rep.jpg", true, List.of(), List.of());
         given(memberProfileService.getMemberProfile(ROOM, PARTNER_MEMBER, ME)).willReturn(profile);
         // getMemberVideos는 slot_start 오름차순으로 반환(스토리지 정렬). 서비스는 그 순서를 그대로 리스트로 노출한다.
         given(videoService.getMemberVideos(PARTNER_MEMBER)).willReturn(List.of(
@@ -109,7 +109,7 @@ class ChatPartnerServiceTest {
         given(matchResultService.resolvePartner(MATCH, ME))
                 .willReturn(new PartnerMemberRef(ROOM, PARTNER_MEMBER, PARTNER_USER));
         given(memberProfileService.getMemberProfile(ROOM, PARTNER_MEMBER, ME)).willReturn(
-                new MemberProfileResponse(PARTNER_MEMBER, "이나경", "FEMALE", null, true, List.of(), List.of()));
+                new MemberProfileResponse(PARTNER_MEMBER, "이나경", true, "FEMALE", null, true, List.of(), List.of()));
         given(videoService.getMemberVideos(PARTNER_MEMBER)).willReturn(List.of());
 
         PartnerProfileResponse result = service.getPartner(CHAT_ROOM, ME);
