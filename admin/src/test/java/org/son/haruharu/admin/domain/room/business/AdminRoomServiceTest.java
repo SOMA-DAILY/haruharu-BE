@@ -87,11 +87,12 @@ class AdminRoomServiceTest {
     }
 
     @Test
-    @DisplayName("방 상세의 참여자에 닉네임·나이(생년 파생)·지역이 채워지고, 프로필 없는 참여자는 null이다")
-    void getRoom_enrichesMembersWithProfile() {
+    @DisplayName("방 상세의 참여자에 실명(닉네임)·가명·나이(생년 파생)·지역이 채워지고, 없는 값은 null이다")
+    void getRoom_enrichesMembersWithProfileAndPseudonym() {
         given(adminRoomReader.getById(1L)).willReturn(room(1L, RoomStatus.ACTIVE, LocalDateTime.now(clock)));
+        // 910은 가명 배정됨, 911은 가명 미배정(null)
         given(adminRoomReader.membersOf(1L)).willReturn(List.of(
-                member(10L, 1L, "FEMALE"), member(11L, 1L, "MALE")));
+                member(10L, 1L, "FEMALE").withPseudonym("유진"), member(11L, 1L, "MALE")));
         // 910만 프로필 존재, 911은 없음
         given(adminRoomReader.profilesOf(List.of(910L, 911L))).willReturn(List.of(
                 new UserProfile(1L, 910L, "서울", null, null, null, "여울", null, null, null)));
@@ -103,11 +104,13 @@ class AdminRoomServiceTest {
         assertThat(result.maleCount()).isEqualTo(1);
         AdminRoomDetailResponse.MemberView m0 = result.members().get(0);
         assertThat(m0.userId()).isEqualTo(910L);
-        assertThat(m0.nickname()).isEqualTo("여울");
+        assertThat(m0.nickname()).isEqualTo("여울");   // 실명
+        assertThat(m0.pseudonym()).isEqualTo("유진");  // 가명
         assertThat(m0.region()).isEqualTo("서울");
         assertThat(m0.age()).isEqualTo(26); // 2000-01-01 ~ 2026-07-10
         AdminRoomDetailResponse.MemberView m1 = result.members().get(1);
         assertThat(m1.nickname()).isNull();
+        assertThat(m1.pseudonym()).isNull();  // 가명 미배정
         assertThat(m1.region()).isNull();
     }
 

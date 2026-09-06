@@ -78,11 +78,12 @@ class AdminRoomApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("방 상세는 방 정보 + 참여자 목록(닉네임·지역·나이 enrich)을 반환한다")
-    void roomDetail_returnsMembersWithProfile() throws Exception {
+    @DisplayName("방 상세는 방 정보 + 참여자 목록(실명·가명·지역·나이 enrich)을 반환한다")
+    void roomDetail_returnsMembersWithProfileAndPseudonym() throws Exception {
         LocalDateTime now = LocalDateTime.now();
         Long roomId = persistRoom(Room.create(LocalDate.now(), 3).started(now));
-        em.persist(RoomMemberEntity.from(RoomMember.of(roomId, 901L, "FEMALE", LocalDate.of(2000, 1, 1), now)));
+        em.persist(RoomMemberEntity.from(
+                RoomMember.of(roomId, 901L, "FEMALE", LocalDate.of(2000, 1, 1), now).withPseudonym("유진")));
         em.persist(UserProfileEntity.from(new UserProfile(null, 901L, "서울", "직장인", 168, "INFP", "여울", null, null, null)));
         em.flush();
 
@@ -91,7 +92,8 @@ class AdminRoomApiIntegrationTest {
                 .andExpect(jsonPath("$.data.room_id").value(roomId))
                 .andExpect(jsonPath("$.data.members.length()").value(1))
                 .andExpect(jsonPath("$.data.members[0].user_id").value(901))
-                .andExpect(jsonPath("$.data.members[0].nickname").value("여울"))
+                .andExpect(jsonPath("$.data.members[0].nickname").value("여울"))   // 실명
+                .andExpect(jsonPath("$.data.members[0].pseudonym").value("유진"))  // 가명
                 .andExpect(jsonPath("$.data.members[0].region").value("서울"))
                 .andExpect(jsonPath("$.data.members[0].age").isNumber());
     }
@@ -321,8 +323,8 @@ class AdminRoomApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("멤버 성별 부여 시 gender가 갱신되고 방 상세 성비에 반영된다")
-    void assignGender_updatesMemberAndGenderCount() throws Exception {
+    @DisplayName("멤버 성별 부여 시 gender가 갱신되고 가명이 백필되며 방 상세에 반영된다")
+    void assignGender_updatesMemberGenderAndBackfillsPseudonym() throws Exception {
         LocalDateTime now = LocalDateTime.now();
         Long roomId = persistRoom(Room.create(LocalDate.now(), 3).started(now));
         RoomMemberEntity member = RoomMemberEntity.from(RoomMember.of(roomId, 901L, null, null, now));
@@ -330,11 +332,13 @@ class AdminRoomApiIntegrationTest {
         em.flush();
         Long memberId = member.toDomain().id();
 
+        // 방에 여성 0명 → 성별 부여 시 여성 풀 첫 번째 "유진" 백필
         mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/members/{memberId}", roomId, memberId)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"gender\": \"FEMALE\"}")
                         .with(authentication(adminAuth())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.gender").value("FEMALE"));
+                .andExpect(jsonPath("$.data.gender").value("FEMALE"))
+                .andExpect(jsonPath("$.data.pseudonym").value("유진"));
 
         em.flush();
         em.clear();
@@ -342,7 +346,8 @@ class AdminRoomApiIntegrationTest {
         mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", roomId).with(authentication(adminAuth())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.female_count").value(1))
-                .andExpect(jsonPath("$.data.members[0].gender").value("FEMALE"));
+                .andExpect(jsonPath("$.data.members[0].gender").value("FEMALE"))
+                .andExpect(jsonPath("$.data.members[0].pseudonym").value("유진"));
     }
 
     @Test
