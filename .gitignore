@@ -61,3 +61,12 @@ http/
 scratch-dd/
 # 로컬 전용 개발일지 스킬(개인 노션 연동)
 .claude/skills/daily-log/
+
+# Airflow 로컬 환경 (#390)
+airflow/.env
+airflow/logs/*
+!airflow/logs/.gitkeep
+airflow/config/airflow.cfg
+airflow/dags/__pycache__/
+airflow/tests/__pycache__/
+airflow/.pytest_cache/
