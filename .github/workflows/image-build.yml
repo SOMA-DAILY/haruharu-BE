@@ -1,6 +1,8 @@
 name: Build & Push Image
 
 # develop 에 push(=PR 머지) 시 자동 빌드 → ECR 푸시. prod 는 develop 이미지 승격(main 빌드 없음).
+# airflow(#405)도 같은 잡에서 굽는다 — 베이스 이미지 + dags/ COPY 한 겹이라 캐시 후엔 수십 초. path filter 없이 항상 빌드해
+# app·admin·airflow 가 같은 SHA 태그를 갖게 한다(배포 시 "이 SHA 의 airflow" 를 고를 수 있어야 한다).
 # push 이벤트라 GHA 캐시 쓰기가 가능하다(pull_request 이벤트는 캐시 read-only 라 캐시가 저장 안 됨).
 on:
   push:
@@ -76,3 +78,16 @@ jobs:
             ${{ env.ECR_REGISTRY }}/haruharu-admin:${{ steps.meta.outputs.branch }}
           cache-from: type=gha,scope=admin
           cache-to: type=gha,mode=max,scope=admin,ignore-error=true
+
+      # Airflow(#405): airflow/Dockerfile 이 dags/ 를 이미지에 굽는다(Fargate 는 공유 볼륨이 없다). ECR 레포 haruharu-airflow.
+      - name: Build & push (airflow)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./airflow
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/haruharu-airflow:${{ steps.meta.outputs.sha }}
+            ${{ env.ECR_REGISTRY }}/haruharu-airflow:${{ steps.meta.outputs.branch }}
+          cache-from: type=gha,scope=airflow
+          cache-to: type=gha,mode=max,scope=airflow,ignore-error=true

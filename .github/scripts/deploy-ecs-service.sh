@@ -3,6 +3,7 @@
 # secrets/환경 등 나머지 컨테이너 정의는 현재 리비전에서 그대로 승계하고 image 태그만 교체한다.
 #
 # 사용: deploy-ecs-service.sh <family> <container> <image> <service>
+#   <container> 가 ALL 이면 모든 컨테이너의 image 를 교체한다 — airflow 태스크처럼 컨테이너 5개가 같은 이미지를 쓰는 경우(#405).
 #   CLUSTER, AWS_REGION 은 환경변수로 주입(기본 haruharu / ap-northeast-2).
 set -euo pipefail
 
@@ -16,10 +17,10 @@ echo "▶ ${SERVICE} ← ${IMAGE} (family=${FAMILY}, container=${CONTAINER})"
 aws ecs describe-task-definition --task-definition "$FAMILY" --region "$REGION" \
   --query 'taskDefinition' > td.json
 
-# 2) 컨테이너 image 만 교체 + register 가 거부하는 read-only 필드 제거
+# 2) 컨테이너 image 만 교체(ALL 이면 전부) + register 가 거부하는 read-only 필드 제거
 jq --arg IMAGE "$IMAGE" --arg C "$CONTAINER" '
   .containerDefinitions = (.containerDefinitions
-    | map(if .name == $C then .image = $IMAGE else . end))
+    | map(if ($C == "ALL" or .name == $C) then .image = $IMAGE else . end))
   | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
         .compatibilities, .registeredAt, .registeredBy)
 ' td.json > new-td.json
