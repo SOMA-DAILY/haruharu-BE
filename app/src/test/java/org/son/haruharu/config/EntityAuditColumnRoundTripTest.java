@@ -5,6 +5,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.son.haruharu.domain.block.implement.Block;
+import org.son.haruharu.domain.block.storage.BlockEntity;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
@@ -56,6 +58,16 @@ class EntityAuditColumnRoundTripTest {
                 CREATED_AT.plusHours(6), CREATED_AT.plusHours(6).plusMinutes(5), CREATED_AT);
 
         MissionOutcome restored = MissionOutcomeEntity.from(outcome).toDomain();
+
+        assertThat(restored.createdAt()).isEqualTo(CREATED_AT);
+    }
+
+    @Test
+    @DisplayName("BlockEntity.from()은 createdAt을 복원한다")
+    void givenBlockWithCreatedAt_whenFromThenToDomain_thenCreatedAtSurvives() {
+        Block block = new Block(1L, 10L, 20L, CREATED_AT);
+
+        Block restored = BlockEntity.from(block).toDomain();
 
         assertThat(restored.createdAt()).isEqualTo(CREATED_AT);
     }

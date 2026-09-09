@@ -10,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.implement.FinalSelection;
 import org.son.haruharu.domain.room.implement.FinalSelectionReader;
@@ -35,6 +36,7 @@ class FinalSelectionResolverTest {
     @Mock FinalSelectionReader finalSelectionReader;
     @Mock MatchResultReader matchResultReader;
     @Mock MatchResultWriter matchResultWriter;
+    @Mock BlockReader blockReader;
     @Mock ApplicationEventPublisher eventPublisher;
 
     FinalSelectionResolver resolver;
@@ -45,7 +47,7 @@ class FinalSelectionResolverTest {
     @BeforeEach
     void setUp() {
         resolver = new FinalSelectionResolver(roomMemberReader, finalSelectionReader,
-                matchResultReader, matchResultWriter, eventPublisher);
+                matchResultReader, matchResultWriter, blockReader, eventPublisher);
     }
 
     private RoomMember member(Long id, Long userId, String gender) {
@@ -88,6 +90,22 @@ class FinalSelectionResolverTest {
                 member(1L, 100L, "MALE"), member(2L, 200L, "FEMALE")));
         given(finalSelectionReader.findByRoomMemberIds(List.of(1L, 2L))).willReturn(List.of(
                 choice(1L, 2L))); // 2는 1을 안 고름
+
+        int matched = resolver.resolveForRoom(ROOM, NOW);
+
+        assertThat(matched).isZero();
+        then(matchResultWriter).should(never()).save(any());
+        then(eventPublisher).should(never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("차단 관계인 상호선택 쌍은 성사시키지 않는다(#408 — 어느 쪽이 차단했든 매칭 불성립)")
+    void givenBlockedMutualPair_whenResolve_thenNoMatch() {
+        given(roomMemberReader.getByRoomId(ROOM)).willReturn(List.of(
+                member(1L, 100L, "MALE"), member(2L, 200L, "FEMALE")));
+        given(finalSelectionReader.findByRoomMemberIds(List.of(1L, 2L))).willReturn(List.of(
+                choice(1L, 2L), choice(2L, 1L)));
+        given(blockReader.isBlockedBetween(anyLong(), anyLong())).willReturn(true);
 
         int matched = resolver.resolveForRoom(ROOM, NOW);
 

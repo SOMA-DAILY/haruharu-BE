@@ -14,7 +14,9 @@ import org.son.haruharu.domain.chat.business.dto.GroupChatRoomResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
+import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
+import org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
@@ -41,6 +43,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -63,6 +66,7 @@ class ChatServiceTest {
     @Mock ProfileService profileService;
     @Mock UserService userService;
     @Mock org.son.haruharu.domain.room.implement.RoomMemberReader roomMemberReader;
+    @Mock BlockReader blockReader;
     @Mock ApplicationEventPublisher eventPublisher;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-03T03:00:00Z"), ZoneOffset.UTC);
@@ -76,7 +80,7 @@ class ChatServiceTest {
     void setUp() {
         chatService = new ChatService(chatRoomReader, chatRoomWriter, chatRoomMemberReader,
                 chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, userService,
-                roomMemberReader, eventPublisher, clock);
+                roomMemberReader, blockReader, eventPublisher, clock);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -119,10 +123,10 @@ class ChatServiceTest {
                 .willReturn(List.of(membership(10L, ME, 5L), membership(10L, 2L, null)));
         given(profileService.getProfile(3L)).willReturn(profile("바다"));
         given(profileService.getProfile(2L)).willReturn(profile("하늘"));
-        given(chatMessageReader.findLast(20L)).willReturn(Optional.of(message(3L, 20L, 3L, "헤이", older)));
-        given(chatMessageReader.findLast(10L)).willReturn(Optional.of(message(8L, 10L, 2L, "안녕", newer)));
-        given(chatMessageReader.countUnread(20L, null, ME)).willReturn(1L);
-        given(chatMessageReader.countUnread(10L, 5L, ME)).willReturn(2L);
+        given(chatMessageReader.findLast(20L, Set.of())).willReturn(Optional.of(message(3L, 20L, 3L, "헤이", older)));
+        given(chatMessageReader.findLast(10L, Set.of())).willReturn(Optional.of(message(8L, 10L, 2L, "안녕", newer)));
+        given(chatMessageReader.countUnread(20L, null, Set.of(ME))).willReturn(1L);
+        given(chatMessageReader.countUnread(10L, 5L, Set.of(ME))).willReturn(2L);
 
         ChatRoomsResponse result = chatService.getMyRooms(ME);
 
@@ -149,8 +153,8 @@ class ChatServiceTest {
                 new ProfileResponse.ImageInfo(31L, "https://cdn/second.jpg", 2),
                 new ProfileResponse.ImageInfo(30L, "https://cdn/rep.jpg", 0),
                 new ProfileResponse.ImageInfo(32L, "https://cdn/third.jpg", 1)));
-        given(chatMessageReader.findLast(10L)).willReturn(Optional.empty());
-        given(chatMessageReader.countUnread(10L, null, ME)).willReturn(0L);
+        given(chatMessageReader.findLast(10L, Set.of())).willReturn(Optional.empty());
+        given(chatMessageReader.countUnread(10L, null, Set.of(ME))).willReturn(0L);
 
         ChatRoomsResponse result = chatService.getMyRooms(ME);
 
@@ -324,7 +328,7 @@ class ChatServiceTest {
         given(chatRoomMemberReader.findByChatRoomId(ROOM))
                 .willReturn(List.of(membership(ROOM, ME, 3L), membership(ROOM, 2L, null)));
         given(chatRoomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(chatMessageReader.countUnread(ROOM, 7L, ME)).willReturn(0L);
+        given(chatMessageReader.countUnread(ROOM, 7L, Set.of(ME))).willReturn(0L);
 
         ReadResponse result = chatService.markRead(ROOM, ME, 7L);
 
@@ -460,9 +464,9 @@ class ChatServiceTest {
         given(userService.isWithdrawn(3L)).willReturn(true);
         given(userService.isWithdrawn(2L)).willReturn(false);
         given(profileService.getProfile(2L)).willReturn(profile("하늘"));
-        given(chatMessageReader.findLast(10L))
+        given(chatMessageReader.findLast(10L, Set.of()))
                 .willReturn(Optional.of(message(8L, 10L, 2L, "안녕", LocalDateTime.of(2026, 7, 3, 11, 0))));
-        given(chatMessageReader.countUnread(10L, null, ME)).willReturn(2L);
+        given(chatMessageReader.countUnread(10L, null, Set.of(ME))).willReturn(2L);
 
         ChatRoomsResponse result = chatService.getMyRooms(ME);
 
@@ -528,6 +532,107 @@ class ChatServiceTest {
                 .isInstanceOf(ChatPartnerWithdrawnException.class);
         then(chatMessageWriter).should(never()).save(any());
         then(eventPublisher).should(never()).publishEvent(any());
+    }
+
+    // ── 차단(#408) — 1:1 양방향 제한 ──────────────────────────
+
+    @Test
+    @DisplayName("차단 관계인 DIRECT 방의 메시지는 조회할 수 없다(어느 쪽이 차단했든 403)")
+    void givenBlockedPartner_whenGetMessages_thenThrowsForbidden() {
+        given(chatRoomReader.getById(ROOM)).willReturn(directRoom(ROOM));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
+        given(blockReader.isBlockedBetween(ME, 2L)).willReturn(true);
+
+        assertThatThrownBy(() -> chatService.getMessages(ROOM, ME, null, 30))
+                .isInstanceOf(ChatPartnerBlockedException.class);
+    }
+
+    @Test
+    @DisplayName("차단 관계인 DIRECT 방에는 메시지를 전송할 수 없다(STOMP 직접 발행 경로 포함)")
+    void givenBlockedPartner_whenSendMessage_thenThrowsAndDoesNotSaveOrPublish() {
+        given(chatRoomReader.getById(ROOM)).willReturn(directRoom(ROOM));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
+        given(blockReader.isBlockedBetween(ME, 2L)).willReturn(true);
+
+        assertThatThrownBy(() -> chatService.sendMessage(ROOM, ME, "안녕"))
+                .isInstanceOf(ChatPartnerBlockedException.class);
+        then(chatMessageWriter).should(never()).save(any());
+        then(eventPublisher).should(never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("차단 관계인 DIRECT 방은 읽음 처리를 할 수 없다")
+    void givenBlockedPartner_whenMarkRead_thenThrowsForbidden() {
+        given(chatRoomReader.getById(ROOM)).willReturn(directRoom(ROOM));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
+        given(blockReader.isBlockedBetween(ME, 2L)).willReturn(true);
+
+        assertThatThrownBy(() -> chatService.markRead(ROOM, ME, 7L))
+                .isInstanceOf(ChatPartnerBlockedException.class);
+        then(chatRoomMemberWriter).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("차단 관계인 DIRECT 방은 채팅방 목록에서 제외된다(기록은 보존)")
+    void givenBlockedPartner_whenGetMyRooms_thenRoomExcluded() {
+        given(chatRoomMemberReader.findActiveByUserId(ME))
+                .willReturn(List.of(membership(ROOM, ME, null)));
+        given(chatRoomReader.getById(ROOM)).willReturn(directRoom(ROOM));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
+        given(blockReader.getRelatedUserIds(ME)).willReturn(Set.of(2L));
+
+        ChatRoomsResponse result = chatService.getMyRooms(ME);
+
+        assertThat(result.chatRooms()).isEmpty();
+        // 차단 방은 프로필·메시지 조회를 아예 건드리지 않는다
+        then(profileService).should(never()).getProfile(any());
+    }
+
+    // ── 차단(#408) — 그룹채팅 미리보기·안읽음 (내가 차단한 상대 기준 단방향) ──
+
+    @Test
+    @DisplayName("그룹채팅 목록에서 내가 차단한 상대의 메시지는 미리보기·안읽음 수에서 제외된다")
+    void givenBlockedSender_whenGetMyRooms_thenPreviewAndUnreadExcludeBlocked() {
+        LocalDateTime at = LocalDateTime.of(2026, 9, 9, 11, 0);
+        given(chatRoomMemberReader.findActiveByUserId(ME))
+                .willReturn(List.of(membership(10L, ME, null)));
+        given(chatRoomReader.getById(10L)).willReturn(groupRoom(10L, ROOM));
+        given(chatRoomMemberReader.findByChatRoomId(10L))
+                .willReturn(List.of(membership(10L, ME, null), membership(10L, 2L, null), membership(10L, 3L, null)));
+        given(roomMemberReader.getByRoomId(ROOM)).willReturn(List.of());
+        given(profileService.getProfile(2L)).willReturn(profile("하늘"));
+        given(profileService.getProfile(3L)).willReturn(profile("바다"));
+        given(blockReader.getBlockedUserIds(ME)).willReturn(Set.of(2L));
+        // 차단 발신자(2L)를 제외한 마지막 메시지·안읽음 수가 조회된다
+        given(chatMessageReader.findLast(10L, Set.of(2L))).willReturn(Optional.of(message(8L, 10L, 3L, "안녕", at)));
+        given(chatMessageReader.countUnread(10L, null, Set.of(ME, 2L))).willReturn(1L);
+
+        ChatRoomsResponse result = chatService.getMyRooms(ME);
+
+        ChatRoomsResponse.ChatRoomSummary summary = result.chatRooms().get(0);
+        assertThat(summary.lastMessage()).isEqualTo("안녕");
+        assertThat(summary.unreadCount()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("그룹채팅 읽음 처리의 안읽음 수에서도 내가 차단한 상대의 메시지가 제외된다")
+    void givenBlockedSender_whenMarkRead_thenUnreadExcludesBlocked() {
+        given(chatRoomReader.getById(10L)).willReturn(groupRoom(10L, ROOM));
+        given(chatRoomMemberReader.findMembership(10L, ME)).willReturn(Optional.of(membership(10L, ME, 3L)));
+        given(chatRoomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(blockReader.getBlockedUserIds(ME)).willReturn(Set.of(2L));
+        given(chatMessageReader.countUnread(10L, 7L, Set.of(ME, 2L))).willReturn(0L);
+
+        ReadResponse result = chatService.markRead(10L, ME, 7L);
+
+        assertThat(result.unreadCount()).isZero();
     }
 
     @Test

@@ -122,7 +122,7 @@ class VideoReactionServiceTest {
 
         service().toggle(userId, postId, ReactionType.LIKE);
 
-        then(eventPublisher).should().publishEvent(new VideoReactedEvent(2L, postId, "현우", "LIKE"));
+        then(eventPublisher).should().publishEvent(new VideoReactedEvent(2L, userId, postId, "현우", "LIKE"));
     }
 
     @Test

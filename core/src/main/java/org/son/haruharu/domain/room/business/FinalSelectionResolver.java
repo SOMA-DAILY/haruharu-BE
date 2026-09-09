@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.room.business;
 
+import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.room.business.event.MutualMatchEvent;
 import org.son.haruharu.domain.room.implement.FinalSelection;
 import org.son.haruharu.domain.room.implement.FinalSelectionReader;
@@ -38,15 +39,17 @@ public class FinalSelectionResolver {
     private final FinalSelectionReader finalSelectionReader;
     private final MatchResultReader matchResultReader;
     private final MatchResultWriter matchResultWriter;
+    private final BlockReader blockReader;
     private final ApplicationEventPublisher eventPublisher;
 
     public FinalSelectionResolver(RoomMemberReader roomMemberReader, FinalSelectionReader finalSelectionReader,
                                   MatchResultReader matchResultReader, MatchResultWriter matchResultWriter,
-                                  ApplicationEventPublisher eventPublisher) {
+                                  BlockReader blockReader, ApplicationEventPublisher eventPublisher) {
         this.roomMemberReader = roomMemberReader;
         this.finalSelectionReader = finalSelectionReader;
         this.matchResultReader = matchResultReader;
         this.matchResultWriter = matchResultWriter;
+        this.blockReader = blockReader;
         this.eventPublisher = eventPublisher;
     }
 
@@ -88,6 +91,10 @@ public class FinalSelectionResolver {
             }
             processed.add(meId);
             processed.add(theirId);
+            // 차단 관계면 매칭 불성립(#408) — MatchResult 자체를 만들지 않아 DIRECT 채팅방도 생성되지 않는다.
+            if (blockReader.isBlockedBetween(memberToUser.get(meId), memberToUser.get(theirId))) {
+                continue;
+            }
             // 멱등: 이미 성사된 쌍은 건너뛴다(재sweep 안전).
             if (matchResultReader.isMatched(meId, theirId)) {
                 continue;

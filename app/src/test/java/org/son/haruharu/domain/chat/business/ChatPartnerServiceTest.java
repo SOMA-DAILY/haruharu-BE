@@ -10,8 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
+import org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
@@ -45,6 +47,7 @@ class ChatPartnerServiceTest {
     @Mock MemberProfileService memberProfileService;
     @Mock VideoService videoService;
     @Mock UserService userService;
+    @Mock BlockReader blockReader;
     @Mock S3StoragePort s3StoragePort;
 
     ChatPartnerService service;
@@ -59,7 +62,7 @@ class ChatPartnerServiceTest {
     @BeforeEach
     void setUp() {
         service = new ChatPartnerService(chatRoomReader, chatRoomMemberReader,
-                matchResultService, memberProfileService, videoService, userService, s3StoragePort);
+                matchResultService, memberProfileService, videoService, userService, blockReader, s3StoragePort);
         // 비공개 영상 URL은 presigned GET URL로 서명해 응답한다(#162). 서명 적용 관찰용 접두사.
         lenient().when(s3StoragePort.createPresignedGetUrl(any()))
                 .thenAnswer(inv -> inv.getArgument(0) == null ? null : "signed:" + inv.getArgument(0));
@@ -99,6 +102,20 @@ class ChatPartnerServiceTest {
         assertThat(result.videos().get(0).videoUrl()).isEqualTo("signed:https://cdn/v11.mp4");
         assertThat(result.videos().get(0).slotStart()).isEqualTo(LocalDateTime.of(2026, 6, 24, 9, 0));
         assertThat(result.videos().get(3).slotStart()).isEqualTo(LocalDateTime.of(2026, 6, 26, 11, 0));
+    }
+
+    @Test
+    @DisplayName("차단 관계인 상대의 프로필 카드는 조회할 수 없다(#408, 어느 쪽이 차단했든 403)")
+    void givenBlockedPartner_whenGetPartner_thenThrowsForbidden() {
+        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, ChatRoomType.DIRECT, null, MATCH, LocalDateTime.now()));
+        given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME)).willReturn(Optional.of(membership(ME, null)));
+        given(matchResultService.resolvePartner(MATCH, ME))
+                .willReturn(new PartnerMemberRef(ROOM, PARTNER_MEMBER, PARTNER_USER));
+        given(blockReader.isBlockedBetween(ME, PARTNER_USER)).willReturn(true);
+
+        assertThatThrownBy(() -> service.getPartner(CHAT_ROOM, ME))
+                .isInstanceOf(ChatPartnerBlockedException.class);
+        then(memberProfileService).should(never()).getMemberProfile(any(), any(), any());
     }
 
     @Test
