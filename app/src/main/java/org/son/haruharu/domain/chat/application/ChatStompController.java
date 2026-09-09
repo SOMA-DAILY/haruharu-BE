@@ -6,12 +6,10 @@ import org.son.haruharu.common.exception.BusinessException;
 import org.son.haruharu.config.StompPrincipal;
 import org.son.haruharu.domain.chat.application.dto.SendMessageRequest;
 import org.son.haruharu.domain.chat.business.ChatService;
-import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.stereotype.Controller;
 
@@ -27,11 +25,9 @@ import java.security.Principal;
 public class ChatStompController {
 
     private final ChatService chatService;
-    private final SimpMessagingTemplate messagingTemplate;
 
-    public ChatStompController(ChatService chatService, SimpMessagingTemplate messagingTemplate) {
+    public ChatStompController(ChatService chatService) {
         this.chatService = chatService;
-        this.messagingTemplate = messagingTemplate;
     }
 
     @MessageMapping("/chat-rooms/{chatRoomId}/messages")
@@ -39,8 +35,8 @@ public class ChatStompController {
                      @Payload @Valid SendMessageRequest request,
                      Principal principal) {
         Long senderId = ((StompPrincipal) principal).userId();
-        ChatMessageBroadcast payload = chatService.sendMessage(chatRoomId, senderId, request.content());
-        messagingTemplate.convertAndSend("/sub/chat-rooms/" + chatRoomId, payload);
+        // 커밋 후 리스너가 종료 상태를 확인한 뒤 브로드캐스트한다.
+        chatService.sendMessage(chatRoomId, senderId, request.content());
     }
 
     /** 참여자 아님·방 없음 등 비즈니스 예외를 발신자 개인 큐(/user/queue/errors)로 알린다. */

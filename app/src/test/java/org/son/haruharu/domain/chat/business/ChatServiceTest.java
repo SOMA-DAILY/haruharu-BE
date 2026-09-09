@@ -114,8 +114,8 @@ class ChatServiceTest {
         LocalDateTime newer = LocalDateTime.of(2026, 7, 3, 11, 0);
         given(chatRoomMemberReader.findActiveByUserId(ME))
                 .willReturn(List.of(membership(20L, ME, null), membership(10L, ME, 5L)));
-        given(chatRoomReader.getById(20L)).willReturn(directRoom(20L));
-        given(chatRoomReader.getById(10L)).willReturn(directRoom(10L));
+        given(chatRoomReader.findById(20L)).willReturn(Optional.of(directRoom(20L)));
+        given(chatRoomReader.findById(10L)).willReturn(Optional.of(directRoom(10L)));
         // 상대 찾기
         given(chatRoomMemberReader.findByChatRoomId(20L))
                 .willReturn(List.of(membership(20L, ME, null), membership(20L, 3L, null)));
@@ -145,7 +145,7 @@ class ChatServiceTest {
     void getMyRooms_includesPartnerRepresentativeImage() {
         given(chatRoomMemberReader.findActiveByUserId(ME))
                 .willReturn(List.of(membership(10L, ME, null)));
-        given(chatRoomReader.getById(10L)).willReturn(directRoom(10L));
+        given(chatRoomReader.findById(10L)).willReturn(Optional.of(directRoom(10L)));
         given(chatRoomMemberReader.findByChatRoomId(10L))
                 .willReturn(List.of(membership(10L, ME, null), membership(10L, 2L, null)));
         // sorted_order가 뒤섞여 있어도 최소값(0)인 이미지가 대표로 선택된다
@@ -357,15 +357,18 @@ class ChatServiceTest {
     @Test
     @DisplayName("방 나가기 시 leftAt이 현재 시각으로 기록된다")
     void leaveRoom_recordsLeftAt() {
-        given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, ChatRoomType.DIRECT, null, 99L, LocalDateTime.now(clock)));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(new ChatRoom(ROOM, ChatRoomType.DIRECT, null, 99L, LocalDateTime.now(clock))));
         given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
-        given(chatRoomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
 
         chatService.leaveRoom(ROOM, ME);
 
         ArgumentCaptor<ChatRoomMember> captor = ArgumentCaptor.forClass(ChatRoomMember.class);
-        verify(chatRoomMemberWriter).save(captor.capture());
-        assertThat(captor.getValue().leftAt()).isEqualTo(LocalDateTime.now(clock));
+        verify(chatRoomMemberWriter, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).allSatisfy(m -> assertThat(m.leftAt()).isEqualTo(LocalDateTime.now(clock)));
+        verify(chatRoomWriter).delete(ROOM);
+        verify(eventPublisher).publishEvent(new org.son.haruharu.domain.chat.business.event.ChatRoomClosedEvent(ROOM, List.of(ME, 2L)));
     }
 
     @Test
@@ -432,7 +435,7 @@ class ChatServiceTest {
     void givenWithdrawnPartner_whenGetMyRooms_thenReturnsWithdrawnSummary() {
         given(chatRoomMemberReader.findActiveByUserId(ME))
                 .willReturn(List.of(membership(ROOM, ME, null)));
-        given(chatRoomReader.getById(ROOM)).willReturn(directRoom(ROOM));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(directRoom(ROOM)));
         given(chatRoomMemberReader.findByChatRoomId(ROOM))
                 .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
         given(userService.isWithdrawn(2L)).willReturn(true);
@@ -455,8 +458,8 @@ class ChatServiceTest {
     void givenWithdrawnPartner_whenGetMyRooms_thenOtherRoomsStillReturned() {
         given(chatRoomMemberReader.findActiveByUserId(ME))
                 .willReturn(List.of(membership(20L, ME, null), membership(10L, ME, null)));
-        given(chatRoomReader.getById(20L)).willReturn(directRoom(20L));
-        given(chatRoomReader.getById(10L)).willReturn(directRoom(10L));
+        given(chatRoomReader.findById(20L)).willReturn(Optional.of(directRoom(20L)));
+        given(chatRoomReader.findById(10L)).willReturn(Optional.of(directRoom(10L)));
         given(chatRoomMemberReader.findByChatRoomId(20L))
                 .willReturn(List.of(membership(20L, ME, null), membership(20L, 3L, null)));
         given(chatRoomMemberReader.findByChatRoomId(10L))
@@ -583,7 +586,7 @@ class ChatServiceTest {
     void givenBlockedPartner_whenGetMyRooms_thenRoomExcluded() {
         given(chatRoomMemberReader.findActiveByUserId(ME))
                 .willReturn(List.of(membership(ROOM, ME, null)));
-        given(chatRoomReader.getById(ROOM)).willReturn(directRoom(ROOM));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(directRoom(ROOM)));
         given(chatRoomMemberReader.findByChatRoomId(ROOM))
                 .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
         given(blockReader.getRelatedUserIds(ME)).willReturn(Set.of(2L));
@@ -603,7 +606,7 @@ class ChatServiceTest {
         LocalDateTime at = LocalDateTime.of(2026, 9, 9, 11, 0);
         given(chatRoomMemberReader.findActiveByUserId(ME))
                 .willReturn(List.of(membership(10L, ME, null)));
-        given(chatRoomReader.getById(10L)).willReturn(groupRoom(10L, ROOM));
+        given(chatRoomReader.findById(10L)).willReturn(Optional.of(groupRoom(10L, ROOM)));
         given(chatRoomMemberReader.findByChatRoomId(10L))
                 .willReturn(List.of(membership(10L, ME, null), membership(10L, 2L, null), membership(10L, 3L, null)));
         given(roomMemberReader.getByRoomId(ROOM)).willReturn(List.of());
@@ -638,21 +641,24 @@ class ChatServiceTest {
     @Test
     @DisplayName("상대가 탈퇴한 방도 나가기는 가능하다 — 목록에서 치울 수단이 필요하다")
     void givenWithdrawnPartner_whenLeaveRoom_thenSucceeds() {
-        given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, ChatRoomType.DIRECT, null, 99L, LocalDateTime.now(clock)));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(new ChatRoom(ROOM, ChatRoomType.DIRECT, null, 99L, LocalDateTime.now(clock))));
         given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
-        given(chatRoomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
 
         chatService.leaveRoom(ROOM, ME);
 
         ArgumentCaptor<ChatRoomMember> captor = ArgumentCaptor.forClass(ChatRoomMember.class);
-        verify(chatRoomMemberWriter).save(captor.capture());
-        assertThat(captor.getValue().leftAt()).isEqualTo(LocalDateTime.now(clock));
+        verify(chatRoomMemberWriter, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).allSatisfy(m -> assertThat(m.leftAt()).isEqualTo(LocalDateTime.now(clock)));
+        verify(chatRoomWriter).delete(ROOM);
+        verify(eventPublisher).publishEvent(new org.son.haruharu.domain.chat.business.event.ChatRoomClosedEvent(ROOM, List.of(ME, 2L)));
     }
 
     @Test
     @DisplayName("상호매칭 성사 시 DIRECT 채팅방과 두 참여자를 생성한다")
     void createRoomFromMatch_createsRoomAndTwoMembers() {
-        given(chatRoomReader.existsByMatchResultId(500L)).willReturn(false);
+        given(chatRoomReader.existsIncludingDeletedByMatchResultId(500L)).willReturn(false);
         given(chatRoomWriter.save(any())).willReturn(new ChatRoom(77L, ChatRoomType.DIRECT, null, 500L, LocalDateTime.now(clock)));
 
         chatService.createRoomFromMatch(500L, 1L, 2L);
@@ -669,7 +675,7 @@ class ChatServiceTest {
     @Test
     @DisplayName("이미 방이 있는 매칭이면 중복 생성하지 않는다(멱등)")
     void createRoomFromMatch_whenAlreadyExists_skips() {
-        given(chatRoomReader.existsByMatchResultId(500L)).willReturn(true);
+        given(chatRoomReader.existsIncludingDeletedByMatchResultId(500L)).willReturn(true);
 
         chatService.createRoomFromMatch(500L, 1L, 2L);
 
@@ -762,4 +768,51 @@ class ChatServiceTest {
         then(eventPublisher).should().publishEvent(captor.capture());
         assertThat(captor.getValue().recipientUserIds()).containsExactly(2L); // 나간 3L 제외
     }
+
+    @Test
+    @DisplayName("이미 종료된 방의 전 참여자 재시도는 변경이나 이벤트 없이 성공한다")
+    void givenClosedRoom_whenFormerMemberRetries_thenNoChanges() {
+        given(chatRoomMemberReader.findMembership(ROOM, ME))
+                .willReturn(Optional.of(membership(ROOM, ME, null).leave(LocalDateTime.now(clock))));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.empty());
+        chatService.leaveRoom(ROOM, ME);
+        then(chatRoomWriter).shouldHaveNoInteractions();
+        then(chatRoomMemberWriter).shouldHaveNoInteractions();
+        then(eventPublisher).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("비참여자는 방 종료를 요청할 수 없다")
+    void givenOutsider_whenLeave_thenForbidden() {
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.empty());
+        assertThatThrownBy(() -> chatService.leaveRoom(ROOM, ME)).isInstanceOf(ChatNotMemberException.class);
+        then(chatRoomWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("참여 상태만 남은 삭제된 방은 없는 방으로 응답한다")
+    void givenDeletedRoomWithActiveMembership_whenLeave_thenNotFound() {
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.empty());
+        assertThatThrownBy(() -> chatService.leaveRoom(ROOM, ME)).isInstanceOf(org.son.haruharu.domain.chat.storage.exception.ChatRoomNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("GROUP에서 이미 나간 참여자의 재시도는 기존대로 거절한다")
+    void givenLeftGroupMember_whenLeave_thenForbidden() {
+        given(chatRoomMemberReader.findMembership(ROOM, ME))
+                .willReturn(Optional.of(membership(ROOM, ME, null).leave(LocalDateTime.now(clock))));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(groupRoom(ROOM, 123L)));
+        assertThatThrownBy(() -> chatService.leaveRoom(ROOM, ME)).isInstanceOf(ChatNotMemberException.class);
+        then(chatRoomWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("목록 조회 중 종료된 방은 목록 전체 오류 대신 제외한다")
+    void givenRoomClosedDuringList_whenList_thenSkips() {
+        given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(membership(ROOM, ME, null)));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.empty());
+        assertThat(chatService.getMyRooms(ME).chatRooms()).isEmpty();
+    }
+
 }

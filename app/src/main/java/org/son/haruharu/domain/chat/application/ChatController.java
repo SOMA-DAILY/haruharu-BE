@@ -98,7 +98,7 @@ public class ChatController {
     }
 
     @Operation(summary = "채팅방 나가기",
-            description = "내 멤버십에 left_at을 기록한다. 방·메시지 데이터는 보존(양측이 나가면 종료로 간주).")
+            description = "DIRECT는 한 명이 나가면 양쪽 참여 종료와 방 소프트 삭제를 처리한다. 기존 참여자의 재요청은 성공한다. GROUP은 요청자만 퇴장한다.")
     @DeleteMapping("/{chatRoomId}/members/me")
     public ApiResponse<Void> leaveRoom(@Parameter(description = "채팅방 id") @PathVariable Long chatRoomId, Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
