@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.domain.video.business.event.VideoReactedEvent;
 
@@ -13,27 +14,39 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
 @ExtendWith(MockitoExtension.class)
 class VideoReactedEventListenerTest {
 
     @Mock PushSendService pushSendService;
+    @Mock BlockReader blockReader;
 
     VideoReactedEventListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new VideoReactedEventListener(pushSendService);
+        listener = new VideoReactedEventListener(pushSendService, blockReader);
     }
 
     @Test
     @DisplayName("반응 이벤트 수신 시 작성자에게 반응자 닉네임·반응 동사를 치환 인자로 REACTION_RECEIVED 푸시를 발송한다")
     void givenEvent_whenHandle_thenSendsReactionPushWithReactorNicknameAndVerb() {
-        listener.handle(new VideoReactedEvent(2L, 100L, "노을", "HEART"));
+        listener.handle(new VideoReactedEvent(2L, 5L, 100L, "노을", "HEART"));
 
         then(pushSendService).should().sendToUsers(
                 List.of(2L), NotificationType.REACTION_RECEIVED, Map.of("videoPostId", "100"), "노을", "마음에 들어해요");
+    }
+
+    @Test
+    @DisplayName("작성자가 반응자를 차단했으면 REACTION_RECEIVED 푸시를 발송하지 않는다(#408)")
+    void givenAuthorBlockedReactor_whenHandle_thenNoPush() {
+        given(blockReader.hasBlocked(2L, 5L)).willReturn(true);
+
+        listener.handle(new VideoReactedEvent(2L, 5L, 100L, "노을", "HEART"));
+
+        then(pushSendService).shouldHaveNoInteractions();
     }
 
     @Test

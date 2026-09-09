@@ -5,7 +5,9 @@ import java.util.List;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse.PartnerVideo;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
+import org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
+import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
@@ -35,17 +37,20 @@ public class ChatPartnerService {
     private final MemberProfileService memberProfileService;
     private final VideoService videoService;
     private final UserService userService;
+    private final BlockReader blockReader;
     private final S3StoragePort s3StoragePort;
 
     public ChatPartnerService(ChatRoomReader chatRoomReader, ChatRoomMemberReader chatRoomMemberReader,
                               MatchResultService matchResultService, MemberProfileService memberProfileService,
-                              VideoService videoService, UserService userService, S3StoragePort s3StoragePort) {
+                              VideoService videoService, UserService userService, BlockReader blockReader,
+                              S3StoragePort s3StoragePort) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomMemberReader = chatRoomMemberReader;
         this.matchResultService = matchResultService;
         this.memberProfileService = memberProfileService;
         this.videoService = videoService;
         this.userService = userService;
+        this.blockReader = blockReader;
         this.s3StoragePort = s3StoragePort;
     }
 
@@ -58,6 +63,9 @@ public class ChatPartnerService {
         PartnerMemberRef partner = matchResultService.resolvePartner(chatRoom.matchResultId(), userId);
         if (userService.isWithdrawn(partner.partnerUserId())) {
             throw new ChatPartnerWithdrawnException(); // 탈퇴 상대의 프로필 카드는 노출하지 않는다(#255)
+        }
+        if (blockReader.isBlockedBetween(userId, partner.partnerUserId())) {
+            throw new ChatPartnerBlockedException(); // 차단 관계의 프로필 카드도 양방향으로 노출하지 않는다(#408)
         }
         MemberProfileResponse profile =
                 memberProfileService.getMemberProfile(partner.roomId(), partner.partnerMemberId(), userId);

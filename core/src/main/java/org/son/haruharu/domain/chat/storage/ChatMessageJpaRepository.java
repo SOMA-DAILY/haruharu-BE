@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,8 +20,12 @@ public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageEntit
 
     Optional<ChatMessageEntity> findFirstByChatRoomIdOrderByIdDesc(Long chatRoomId);
 
-    long countByChatRoomIdAndIdGreaterThanAndSenderIdNot(
-            Long chatRoomId, Long lastReadMessageId, Long excludeSenderId);
+    // 차단한 발신자 제외 미리보기(#408). excludeSenderIds가 비어 있으면 위 메서드를 쓴다(NOT IN 빈 목록 방지).
+    Optional<ChatMessageEntity> findFirstByChatRoomIdAndSenderIdNotInOrderByIdDesc(
+            Long chatRoomId, Collection<Long> excludeSenderIds);
+
+    long countByChatRoomIdAndIdGreaterThanAndSenderIdNotIn(
+            Long chatRoomId, Long lastReadMessageId, Collection<Long> excludeSenderIds);
 
     // 네이티브 DELETE — 전역 @SoftDelete 우회(데모 재시드 시 이전 대화가 누적되지 않게 물리 삭제).
     @Modifying

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 @RequiredArgsConstructor
@@ -37,17 +38,20 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     }
 
     @Override
-    public Optional<ChatMessage> findLast(Long chatRoomId) {
-        return chatMessageJpaRepository.findFirstByChatRoomIdOrderByIdDesc(chatRoomId)
-                .map(ChatMessageEntity::toDomain);
+    public Optional<ChatMessage> findLast(Long chatRoomId, Set<Long> excludeSenderIds) {
+        Optional<ChatMessageEntity> row = excludeSenderIds.isEmpty()
+                ? chatMessageJpaRepository.findFirstByChatRoomIdOrderByIdDesc(chatRoomId)
+                : chatMessageJpaRepository.findFirstByChatRoomIdAndSenderIdNotInOrderByIdDesc(
+                        chatRoomId, excludeSenderIds);
+        return row.map(ChatMessageEntity::toDomain);
     }
 
     @Override
-    public long countUnread(Long chatRoomId, Long lastReadMessageId, Long excludeSenderId) {
+    public long countUnread(Long chatRoomId, Long lastReadMessageId, Set<Long> excludeSenderIds) {
         // 커서가 없으면(한 번도 안 읽음) 0L 기준 — IDENTITY id는 1부터라 전체가 안읽음으로 집계된다.
         long cursor = (lastReadMessageId == null) ? 0L : lastReadMessageId;
-        return chatMessageJpaRepository.countByChatRoomIdAndIdGreaterThanAndSenderIdNot(
-                chatRoomId, cursor, excludeSenderId);
+        return chatMessageJpaRepository.countByChatRoomIdAndIdGreaterThanAndSenderIdNotIn(
+                chatRoomId, cursor, excludeSenderIds);
     }
 
     @Override

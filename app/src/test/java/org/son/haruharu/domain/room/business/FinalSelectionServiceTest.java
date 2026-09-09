@@ -14,9 +14,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
 import org.son.haruharu.domain.room.business.dto.MyFinalSelectionResponse;
 import org.son.haruharu.domain.room.business.exception.AlreadySelectedException;
+import org.son.haruharu.domain.room.business.exception.CannotSelectBlockedException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSameGenderException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSelfException;
 import org.son.haruharu.domain.room.business.exception.NotFinalSelectionDayException;
@@ -46,6 +48,7 @@ class FinalSelectionServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock FinalSelectionReader finalSelectionReader;
     @Mock FinalSelectionWriter finalSelectionWriter;
+    @Mock BlockReader blockReader;
 
     FinalSelectionService service;
 
@@ -59,7 +62,7 @@ class FinalSelectionServiceTest {
     @BeforeEach
     void setUp() {
         service = new FinalSelectionService(roomReader, roomMemberReader, finalSelectionReader,
-                finalSelectionWriter, clock);
+                finalSelectionWriter, blockReader, clock);
     }
 
     private RoomMember member(Long id, Long memberUserId, Long memberRoomId) {
@@ -116,7 +119,19 @@ class FinalSelectionServiceTest {
 
     private FinalSelectionService serviceWith(Clock fixedClock) {
         return new FinalSelectionService(roomReader, roomMemberReader, finalSelectionReader,
-                finalSelectionWriter, fixedClock);
+                finalSelectionWriter, blockReader, fixedClock);
+    }
+
+    @Test
+    @DisplayName("차단 관계인 상대를 최종선택하면 CannotSelectBlockedException이 발생한다(#408)")
+    void givenBlockedPair_whenSelect_thenThrows() {
+        stubMeAndRoom();
+        given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
+        given(blockReader.isBlockedBetween(userId, 2L)).willReturn(true);
+
+        assertThatThrownBy(() -> service.select(roomId, selectedId, userId))
+                .isInstanceOf(CannotSelectBlockedException.class);
+        then(finalSelectionWriter).should(never()).save(any());
     }
 
     @Test

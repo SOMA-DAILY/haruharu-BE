@@ -63,7 +63,7 @@ public class VideoReactionService {
             if (!author.userId().equals(userId)) {
                 // 반응 알림도 매칭 전에는 실명이 아니라 방 세션 가명(없으면 익명)으로 표기한다(#393 — 그룹채팅과 동일 정책).
                 eventPublisher.publishEvent(new VideoReactedEvent(
-                        author.userId(), videoPostId, reactor.displayPseudonym(), reactionType.name()));
+                        author.userId(), userId, videoPostId, reactor.displayPseudonym(), reactionType.name()));
             }
             return new ReactionResponse(true, reactionType);
         }

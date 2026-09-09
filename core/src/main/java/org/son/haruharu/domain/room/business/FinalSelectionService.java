@@ -3,9 +3,11 @@ package org.son.haruharu.domain.room.business;
 import java.time.Clock;
 import java.time.LocalDateTime;
 
+import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.room.business.dto.FinalSelectionResponse;
 import org.son.haruharu.domain.room.business.dto.MyFinalSelectionResponse;
 import org.son.haruharu.domain.room.business.exception.AlreadySelectedException;
+import org.son.haruharu.domain.room.business.exception.CannotSelectBlockedException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSameGenderException;
 import org.son.haruharu.domain.room.business.exception.CannotSelectSelfException;
 import org.son.haruharu.domain.room.business.exception.NotFinalSelectionDayException;
@@ -34,15 +36,17 @@ public class FinalSelectionService {
     private final RoomMemberReader roomMemberReader;
     private final FinalSelectionReader finalSelectionReader;
     private final FinalSelectionWriter finalSelectionWriter;
+    private final BlockReader blockReader;
     private final Clock clock;
 
     public FinalSelectionService(RoomReader roomReader, RoomMemberReader roomMemberReader,
                                  FinalSelectionReader finalSelectionReader, FinalSelectionWriter finalSelectionWriter,
-                                 Clock clock) {
+                                 BlockReader blockReader, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.finalSelectionReader = finalSelectionReader;
         this.finalSelectionWriter = finalSelectionWriter;
+        this.blockReader = blockReader;
         this.clock = clock;
     }
 
@@ -78,6 +82,10 @@ public class FinalSelectionService {
         // 동성 선택 차단(#206). gender가 null인 스냅샷(구시드 데이터)은 검증을 건너뛴다 — 실유저는 인증 시 항상 채워진다.
         if (me.gender() != null && me.gender().equals(selected.gender())) {
             throw new CannotSelectSameGenderException();
+        }
+        // 차단 관계인 상대는 선택할 수 없다(#408, 어느 쪽이 차단했든). resolve 단계의 매칭 불성립과 이중 방어.
+        if (blockReader.isBlockedBetween(userId, selected.userId())) {
+            throw new CannotSelectBlockedException();
         }
         if (finalSelectionReader.hasSelected(me.id())) {
             throw new AlreadySelectedException(); // 1회 확정

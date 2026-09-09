@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.notification.business;
 
+import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.domain.video.business.event.VideoReactedEvent;
 import org.springframework.stereotype.Component;
@@ -13,14 +14,20 @@ import java.util.Map;
 public class VideoReactedEventListener {
 
     private final PushSendService pushSendService;
+    private final BlockReader blockReader;
 
-    public VideoReactedEventListener(PushSendService pushSendService) {
+    public VideoReactedEventListener(PushSendService pushSendService, BlockReader blockReader) {
         this.pushSendService = pushSendService;
+        this.blockReader = blockReader;
     }
 
     // 커밋 후 발송 — 반응 토글 트랜잭션이 푸시 실패로 롤백되지 않도록
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(VideoReactedEvent event) {
+        // 작성자가 반응자를 차단했으면 알림을 억제한다(#408 — 반응 자체는 허용, 알림만 차단).
+        if (blockReader.hasBlocked(event.authorUserId(), event.reactorUserId())) {
+            return;
+        }
         pushSendService.sendToUsers(List.of(event.authorUserId()),
                 NotificationType.REACTION_RECEIVED, Map.of("videoPostId", event.videoPostId().toString()),
                 event.reactorNickname(), reactionVerb(event.reactionType()));

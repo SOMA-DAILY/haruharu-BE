@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.chat.business;
 
+import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
@@ -9,6 +10,7 @@ import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
 import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
+import org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
@@ -33,9 +35,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -57,6 +62,7 @@ public class ChatService {
     private final ProfileService profileService;
     private final UserService userService;
     private final RoomMemberReader roomMemberReader;
+    private final BlockReader blockReader;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -69,6 +75,7 @@ public class ChatService {
                        ProfileService profileService,
                        UserService userService,
                        RoomMemberReader roomMemberReader,
+                       BlockReader blockReader,
                        ApplicationEventPublisher eventPublisher,
                        Clock clock) {
         this.chatRoomReader = chatRoomReader;
@@ -80,6 +87,7 @@ public class ChatService {
         this.profileService = profileService;
         this.userService = userService;
         this.roomMemberReader = roomMemberReader;
+        this.blockReader = blockReader;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -137,10 +145,13 @@ public class ChatService {
         return ChatMessageBroadcast.from(saved);
     }
 
-    /** 내 채팅방 목록. 마지막 메시지 최신순으로 정렬한다. */
+    /** 내 채팅방 목록. 마지막 메시지 최신순으로 정렬한다. 차단 관계 필터 세트는 루프 밖에서 한 번만 조회한다(#408, N+1 방지). */
     public ChatRoomsResponse getMyRooms(Long userId) {
+        Set<Long> myBlocked = blockReader.getBlockedUserIds(userId);
+        Set<Long> blockRelated = blockReader.getRelatedUserIds(userId);
         List<ChatRoomsResponse.ChatRoomSummary> summaries = chatRoomMemberReader.findActiveByUserId(userId).stream()
-                .map(me -> toSummary(me, userId))
+                .map(me -> toSummary(me, userId, myBlocked, blockRelated))
+                .filter(Objects::nonNull)
                 .sorted(Comparator.comparing(
                         ChatRoomsResponse.ChatRoomSummary::lastMessageAt,
                         Comparator.nullsLast(Comparator.reverseOrder())))
@@ -180,7 +191,10 @@ public class ChatService {
         ChatRoomMember member = requireMember(chatRoomId, userId);
         requireActiveIfDirect(chatRoomId, userId);
         ChatRoomMember updated = chatRoomMemberWriter.save(member.readUpTo(lastReadMessageId));
-        long unread = chatMessageReader.countUnread(chatRoomId, updated.lastReadMessageId(), userId);
+        // 안읽음 수에서 내 메시지 + 내가 차단한 상대의 메시지를 제외한다(#408 — 그룹채팅 반영, 단방향).
+        Set<Long> excludedSenders = new HashSet<>(blockReader.getBlockedUserIds(userId));
+        excludedSenders.add(userId);
+        long unread = chatMessageReader.countUnread(chatRoomId, updated.lastReadMessageId(), excludedSenders);
         return new ReadResponse(chatRoomId, unread);
     }
 
@@ -191,21 +205,31 @@ public class ChatService {
         chatRoomMemberWriter.save(member.leave(LocalDateTime.now(clock)));
     }
 
-    private ChatRoomsResponse.ChatRoomSummary toSummary(ChatRoomMember me, Long userId) {
+    /** null 반환 = 목록에서 제외(차단 관계 DIRECT 방, #408). */
+    private ChatRoomsResponse.ChatRoomSummary toSummary(ChatRoomMember me, Long userId,
+                                                        Set<Long> myBlocked, Set<Long> blockRelated) {
         Long chatRoomId = me.chatRoomId();
         ChatRoom room = chatRoomReader.getById(chatRoomId);
 
         // DIRECT 상대 탈퇴는 마지막 메시지 조회 전에 걸러야 목록 전체가 죽지 않는다(#255).
         Long directPartnerUserId = null;
+        Set<Long> excludedSenders = myBlocked; // GROUP 미리보기: 내가 차단한 상대만 제외(단방향)
         if (room.type() == ChatRoomType.DIRECT) {
             directPartnerUserId = partnerUserId(chatRoomId, userId);
+            // 차단 관계(양방향)인 DIRECT 방은 목록에서 제외한다(#408 — 기록은 보존).
+            if (blockRelated.contains(directPartnerUserId)) {
+                return null;
+            }
             if (userService.isWithdrawn(directPartnerUserId)) {
                 return ChatRoomsResponse.ChatRoomSummary.withdrawn(chatRoomId);
             }
+            excludedSenders = Set.of(); // 차단 방은 위에서 걸렀으므로 DIRECT 미리보기엔 필터 불필요
         }
 
-        Optional<ChatMessage> last = chatMessageReader.findLast(chatRoomId);
-        long unread = chatMessageReader.countUnread(chatRoomId, me.lastReadMessageId(), userId);
+        Set<Long> unreadExcluded = new HashSet<>(excludedSenders);
+        unreadExcluded.add(userId);
+        Optional<ChatMessage> last = chatMessageReader.findLast(chatRoomId, excludedSenders);
+        long unread = chatMessageReader.countUnread(chatRoomId, me.lastReadMessageId(), unreadExcluded);
         String lastMessage = last.map(ChatMessage::content).orElse(null);
         LocalDateTime lastMessageAt = last.map(ChatMessage::createdAt).orElse(null);
 
@@ -298,6 +322,10 @@ public class ChatService {
         Long partnerUserId = partnerUserId(chatRoomId, userId);
         if (userService.isWithdrawn(partnerUserId)) {
             throw new ChatPartnerWithdrawnException();
+        }
+        // 차단 관계면 어느 쪽이 차단했든 양방향으로 접근·전송을 막는다(#408).
+        if (blockReader.isBlockedBetween(userId, partnerUserId)) {
+            throw new ChatPartnerBlockedException();
         }
         return partnerUserId;
     }
