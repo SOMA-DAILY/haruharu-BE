@@ -1,0 +1,184 @@
+# Airflow 3.3.1 로컬 학습·검증 환경 (#390).
+# 공식 docker-compose.yaml(https://airflow.apache.org/docs/apache-airflow/3.3.1/docker-compose.yaml)을
+# LocalExecutor 로 축소한 것 — Celery worker·Redis·Flower 제거. triggerer 는 Deadline Alert(AsyncCallback) 실행 주체라 유지.
+#
+#   구성: postgres(메타DB) · airflow-init · airflow-apiserver(UI/REST :8080→호스트 :8081) · airflow-scheduler
+#         · airflow-dag-processor · airflow-triggerer · airflow-cli(profile debug)
+#   사용: cp .env.example .env → 값 채움 → docker compose up airflow-init → docker compose up -d
+#   운영(ECS)에서는 이 파일을 쓰지 않고 Dockerfile 로 DAG 를 이미지에 굽는다.
+---
+x-airflow-common:
+  &airflow-common
+  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.3.1}
+  # .env 는 compose 의 ${} 치환에만 쓴다(env_file 로 통째로 주입하지 않는다). 시크릿은 아래 x-*-env 로 필요한 서비스에만 넣는다.
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY:-}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: Asia/Seoul
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-apiserver:8080/execution/'
+    # 하드코딩 fallback 을 두지 않는다 — .env 에 없으면 기동 실패(:?). 이 compose 가 운영에 재사용되는 사고를 막는다.
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:?.env 에 AIRFLOW__API_AUTH__JWT_SECRET 를 설정하라 (임의 32자 이상)}
+    AIRFLOW__API_AUTH__JWT_ISSUER: ${AIRFLOW__API_AUTH__JWT_ISSUER:-airflow}
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    # 데드라인(분). 기본 15. DAG 정의에 쓰이므로 DAG 를 파싱하는 모든 컴포넌트에 같은 값이 있어야 한다.
+    HARUHARU_CLEANUP_DEADLINE_MINUTES: ${HARUHARU_CLEANUP_DEADLINE_MINUTES:-15}
+    HARUHARU_ALERT_DEADLINE_INCLUDE_BACKFILL: ${HARUHARU_ALERT_DEADLINE_INCLUDE_BACKFILL:-false}
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+    AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+    # dags/ 의 공용 모듈(haruharu_alerts 등)을 triggerer 도 import 할 수 있게 한다.
+    # 태스크(worker)는 DAGS_FOLDER 가 sys.path 에 오르지만 triggerer 는 아니라 Deadline AsyncCallback 이 모듈을 못 찾는다.
+    PYTHONPATH: /opt/airflow/dags
+  volumes:
+    - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+    - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+    - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+    - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+    - ${AIRFLOW_PROJ_DIR:-.}/tests:/opt/airflow/tests
+  user: "${AIRFLOW_UID:-50000}:0"
+  # 컨테이너 → 호스트(로컬 Spring 앱) 경로. 호스트의 다른 포트도 닿으므로 로컬 개발 전용이다(운영은 Service Connect).
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    &airflow-common-depends-on
+    postgres:
+      condition: service_healthy
+
+# 시크릿 스코프 — 읽을 수 있는 프로세스를 최소화한다.
+#   배치 토큰(Connection): 태스크를 실행하는 scheduler(LocalExecutor) 만.
+#   Slack 웹훅: 콜백을 실행하는 dag-processor(on_failure_callback)·triggerer(Deadline AsyncCallback) 만.
+x-batch-conn-env:
+  &batch-conn-env
+  # 하루하루 app 연결 — Connection 을 UI 대신 환경변수로 정의한다(AIRFLOW_CONN_<ID>, JSON 형식).
+  # host 는 로컬 Spring 앱(host.docker.internal:8080), password 는 X-Internal-Token 값(.env 의 INTERNAL_BATCH_TOKEN).
+  AIRFLOW_CONN_HARUHARU_APP: '{"conn_type":"http","host":"${HARUHARU_APP_BASE_URL:-http://host.docker.internal:8080}","password":"${INTERNAL_BATCH_TOKEN:-}"}'
+x-alert-env:
+  &alert-env
+  # 선택: Slack Incoming Webhook. 비어 있으면 알림은 로그로만 남는다.
+  HARUHARU_ALERT_SLACK_WEBHOOK_URL: ${HARUHARU_ALERT_SLACK_WEBHOOK_URL:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      # 로컬호스트에만 바인딩 — 기본 계정(airflow/airflow)이 LAN 에 노출되면 DAG 트리거 = 임의 코드 실행과 같다.
+      - "127.0.0.1:${AIRFLOW_UI_PORT:-8081}:8080"   # 호스트 8080 은 Spring 앱이 쓴다
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    environment:
+      <<: [*airflow-common-env, *batch-conn-env]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    environment:
+      <<: [*airflow-common-env, *alert-env]
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    environment:
+      <<: [*airflow-common-env, *alert-env]
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/{logs,dags,plugins,config}
+        chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/{logs,dags,plugins,config}
+        /entrypoint airflow config list >/dev/null
+        # start_job 직렬화용 Pool (슬롯 1). 멱등(set 은 upsert). 없으면 태스크가 scheduled 에서 멈춘다.
+        exec /entrypoint airflow pools set haruharu_batch_trigger 1 "하루하루 배치 트리거 직렬화 — 백필·수동·스케줄이 겹쳐도 start_job 은 한 번에 하나"
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+      _PIP_ADDITIONAL_REQUIREMENTS: ''
+    user: "0:0"
+
+  # 디버그·테스트용 일회성 CLI: docker compose run --rm airflow-cli airflow dags list
+  #                        pytest:  docker compose run --rm airflow-cli bash -c "pip install -q pytest && pytest /opt/airflow/tests"
+  airflow-cli:
+    <<: *airflow-common
+    profiles:
+      - debug
+    environment:
+      <<: *airflow-common-env
+      CONNECTION_CHECK_MAX_COUNT: "0"
+    command:
+      - bash
+      - -c
+      - airflow
+
+volumes:
+  postgres-db-volume:
