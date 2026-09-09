@@ -53,11 +53,16 @@ jobs:
             echo "admin_family=haruharu-admin"         >> "$GITHUB_OUTPUT"
             echo "app_service=haruharu-app-svc-prod"   >> "$GITHUB_OUTPUT"
             echo "admin_service=haruharu-admin-svc-prod" >> "$GITHUB_OUTPUT"
+            # airflow 는 아직 dev 만(#405). prod 는 dev 안정 후 별도 이슈.
+            echo "airflow_family="                     >> "$GITHUB_OUTPUT"
+            echo "airflow_service="                    >> "$GITHUB_OUTPUT"
           else
             echo "app_family=haruharu-app-dev"         >> "$GITHUB_OUTPUT"
             echo "admin_family=haruharu-admin-dev"      >> "$GITHUB_OUTPUT"
             echo "app_service=haruharu-app-svc-dev"     >> "$GITHUB_OUTPUT"
             echo "admin_service=haruharu-admin-svc-dev" >> "$GITHUB_OUTPUT"
+            echo "airflow_family=haruharu-airflow-dev"  >> "$GITHUB_OUTPUT"
+            echo "airflow_service=haruharu-airflow-svc-dev" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Deploy app
@@ -74,8 +79,17 @@ jobs:
             "${{ env.ECR_REGISTRY }}/haruharu-admin:${{ steps.map.outputs.tag }}" \
             "${{ steps.map.outputs.admin_service }}"
 
+      # Airflow(#405): 컨테이너 5개(init·api-server·scheduler·dag-processor·triggerer)가 같은 이미지라 ALL 로 전부 교체.
+      - name: Deploy airflow
+        if: steps.map.outputs.airflow_service != ''
+        run: |
+          bash .github/scripts/deploy-ecs-service.sh \
+            "${{ steps.map.outputs.airflow_family }}" "ALL" \
+            "${{ env.ECR_REGISTRY }}/haruharu-airflow:${{ steps.map.outputs.tag }}" \
+            "${{ steps.map.outputs.airflow_service }}"
+
       - name: Wait for services stable
         run: |
-          aws ecs wait services-stable --cluster "${{ env.CLUSTER }}" \
-            --services "${{ steps.map.outputs.app_service }}" "${{ steps.map.outputs.admin_service }}"
+          SERVICES="${{ steps.map.outputs.app_service }} ${{ steps.map.outputs.admin_service }} ${{ steps.map.outputs.airflow_service }}"
+          aws ecs wait services-stable --cluster "${{ env.CLUSTER }}" --services $SERVICES
           echo "✅ ${{ inputs.environment }} 배포 완료 (tag=${{ steps.map.outputs.tag }})"

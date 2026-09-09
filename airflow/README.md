@@ -98,8 +98,20 @@ REST API(v2)는 `POST /auth/token {username,password}` 로 JWT 를 받아 `Autho
 - 데드라인 콜백은 triggerer 이벤트 루프에서 돈다. 동기 HTTP 는 `asyncio.to_thread` 로 내려 루프를 막지 않는다.
 - 시크릿 스코프: 배치 토큰(Connection)은 태스크를 실행하는 scheduler(LocalExecutor)에만, Slack 웹훅은 콜백을 실행하는 dag-processor·triggerer 에만 주입한다. `.env` 는 compose 치환에만 쓰고 컨테이너에 통째로 넣지 않는다.
 
-## 운영 배포(후속 인프라 이슈)
+## 운영 배포 (dev, #405)
 
-`Dockerfile` 이 `dags/` 를 이미지에 굽는다(Fargate 는 공유 볼륨이 없다). DAG 수정 = PR = 이미지 빌드 = 롤링 배포.
-dev ECS Fargate 서비스 1개(api-server·scheduler·dag-processor·triggerer), 메타DB 는 dev RDS 의 `airflow` DB, 앱 호출은 Service Connect,
-ALB 에서 `/internal/*` 403 차단이 배포 게이트.
+`Dockerfile` 이 `dags/` 를 이미지에 굽는다(Fargate 는 공유 볼륨이 없다). DAG 수정 = PR = `image-build.yml` 이 `haruharu-airflow:{sha,develop}` 푸시 = `deploy-ecs.yml`(dev) 이 태스크 정의 새 리비전 + 롤링 배포.
+
+| 리소스 | 이름 |
+|---|---|
+| ECS 서비스 / 태스크 정의 | `haruharu-airflow-svc-dev` / `haruharu-airflow-dev` (클러스터 `haruharu`, Fargate ARM64, 1 vCPU / 2 GB) |
+| 컨테이너 | `airflow-init`(마이그레이션·UI 유저·Pool, 종료) → `airflow-apiserver`·`airflow-scheduler`·`airflow-dag-processor`·`airflow-triggerer` |
+| 메타DB | dev RDS `haruharu-dev-db` 의 데이터베이스 `airflow` (전용 유저) |
+| 시크릿 | Secrets Manager `haruharu/airflow-dev` — Connection JSON(`AIRFLOW_CONN_HARUHARU_APP`)·JWT·Fernet·DB URL·UI 비밀번호·(선택) Slack |
+| app 호출 경로 | Service Connect 네임스페이스 `haruharu.local` → `http://app-dev.haruharu.local:8080` (VPC 내부) |
+| 인터넷 차단 | ALB 443 리스너 우선순위 1: `/internal/*` → 403 고정 응답 (dev·prod 공통) |
+| 보안그룹 | `haruharu-ecs-airflow-sg` — 인바운드는 bastion→8080 뿐. app SG 8080·RDS SG 5432 에 소스로 등록 |
+| UI 접근 | 공개 안 함. bastion SSH 터널로 태스크 사설 IP:8080 |
+| 로그 | CloudWatch `/ecs/haruharu-airflow-dev` (스트림 prefix = 컨테이너명) |
+
+절차·롤백·감시 설정은 `haruharu-infra/airflow-dev-runbook.md`(레포 밖). prod 는 dev 안정 후 별도 이슈.
