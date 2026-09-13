@@ -103,8 +103,10 @@ class DemoLoginApiIntegrationTest {
                         org.hamcrest.Matchers.containsInAnyOrder("정석", "현우", "유진", "지우", "서연")))
                 .andExpect(jsonPath("$.data.members[?(@.me == false)].name_revealed",
                         org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(false))))
+                .andExpect(jsonPath("$.data.members[?(@.me == true)].nickname",
+                        org.hamcrest.Matchers.contains("민준")))
                 .andExpect(jsonPath("$.data.members[?(@.me == true)].name_revealed",
-                        org.hamcrest.Matchers.contains(true)));
+                        org.hamcrest.Matchers.contains(false)));
 
         // 데모 토큰으로 피드를 열면 과거 슬롯에 심어진 영상이 보인다(데모도 그 슬롯을 올려 게이트 통과).
         mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId).header("Authorization", "Bearer " + accessToken))
