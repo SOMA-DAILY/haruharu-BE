@@ -49,6 +49,16 @@ class EntityAuditColumnRoundTripTest {
     private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 6, 1, 12, 0);
 
     @Test
+    @DisplayName("질문 및 질문권 Entity는 생성 시각을 왕복 보존한다")
+    void givenQuestionAndGrant_whenRoundTrip_thenPreserveAllFields() {
+        var question = org.son.haruharu.domain.question.implement.Question.create(1L,10L,11L,100L,101L,
+                "달님","안녕",java.util.UUID.randomUUID(),CREATED_AT).answer("반가워",CREATED_AT.plusMinutes(1)).reportedBy(101L);
+        assertThat(org.son.haruharu.domain.question.storage.QuestionEntity.from(question).toDomain()).isEqualTo(question);
+        var grant = new org.son.haruharu.domain.question.implement.QuestionGrant(1L,1L,100L,true,CREATED_AT);
+        assertThat(org.son.haruharu.domain.question.storage.QuestionGrantEntity.from(grant).toDomain()).isEqualTo(grant);
+    }
+
+    @Test
     @DisplayName("MissionOutcomeEntity.from()은 createdAt을 복원한다")
     void givenMissionOutcomeWithCreatedAt_whenFromThenToDomain_thenCreatedAtSurvives() {
         MissionOutcome outcome = new MissionOutcome(

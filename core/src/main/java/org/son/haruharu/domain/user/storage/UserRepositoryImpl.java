@@ -1,5 +1,8 @@
 package org.son.haruharu.domain.user.storage;
 
+import java.util.Collection;
+import java.util.Set;
+
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserRepository;
 import org.springframework.stereotype.Repository;
@@ -25,6 +28,11 @@ public class UserRepositoryImpl implements UserRepository {
     public Optional<User> findByIdForUpdate(Long id) {
         return userJpaRepository.findByIdForUpdate(id)
                 .map(UserEntity::toDomain);
+    }
+
+    @Override
+    public Set<Long> findActiveIds(Collection<Long> ids) {
+        return userJpaRepository.findActiveIds(ids);
     }
 
     @Override

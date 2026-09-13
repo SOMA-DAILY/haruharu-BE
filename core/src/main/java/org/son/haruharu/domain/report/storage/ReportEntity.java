@@ -20,7 +20,7 @@ import org.son.haruharu.domain.report.implement.ReportStatus;
 @Entity
 @Table(name = "reports",
         uniqueConstraints = @UniqueConstraint(name = "uq_reports_reporter_reported",
-                columnNames = {"reporterUserId", "reportedUserId"}),
+                columnNames = {"reporterUserId", "reportedUserId", "reportScope"}),
         indexes = @Index(name = "idx_reports_reported_user", columnList = "reportedUserId"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ReportEntity extends BaseEntity {
@@ -34,6 +34,12 @@ public class ReportEntity extends BaseEntity {
 
     @Column(nullable = false)
     private Long reportedUserId;
+
+    @Column
+    private Long questionId;
+
+    @Column(nullable = false, length = 40)
+    private String reportScope;
 
     // enum 컬럼 길이는 EnumColumnLengthIntegrationTest가 전수 검증한다(#169) — 여유 있게 40
     @Enumerated(EnumType.STRING)
@@ -53,6 +59,8 @@ public class ReportEntity extends BaseEntity {
         entity.id = report.id();
         entity.reporterUserId = report.reporterUserId();
         entity.reportedUserId = report.reportedUserId();
+        entity.questionId = report.questionId();
+        entity.reportScope = report.questionId() == null ? "USER" : "QUESTION:" + report.questionId();
         entity.reason = report.reason();
         entity.status = report.status();
         entity.detail = report.detail();
@@ -61,6 +69,6 @@ public class ReportEntity extends BaseEntity {
     }
 
     public Report toDomain() {
-        return new Report(id, reporterUserId, reportedUserId, reason, detail, status, createdAt);
+        return new Report(id, reporterUserId, reportedUserId, reason, detail, status, createdAt, questionId);
     }
 }

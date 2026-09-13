@@ -23,6 +23,9 @@ public enum NotificationType {
     SELECTED_BY_SOMEONE("💕 설레는 소식이 있어요", "누군가 당신을 마음에 담았어요. 누굴까요?", true, NotificationCategory.ACTIVITY),
     // body의 %s는 발신자 닉네임(bodyArgs)으로 치환. 대화 내용은 잠금화면 노출 방지를 위해 미포함.
     CHAT("💬 새 메시지", "%s님이 메시지를 보냈어요", true, NotificationCategory.ACTIVITY),
+    QUESTION_AVAILABLE("💌 익명 질문이 열렸어요", "궁금했던 마음을 질문으로 전해보세요", true, NotificationCategory.ACTIVITY),
+    QUESTION_RECEIVED("💌 익명 질문이 도착했어요", "받은 질문을 확인해 보세요. 답변은 자유예요", true, NotificationCategory.ACTIVITY),
+    QUESTION_ANSWERED("💌 답변이 도착했어요", "보낸 질문에 새로운 답변이 도착했어요", true, NotificationCategory.ACTIVITY),
 
     // ── C. 시스템 / 거래 ──
     COIN_REFUNDED("☁️ 구름 %d개를 돌려드렸어요", "이번엔 인연이 닿지 않았지만, 다음 기회에 다시 만나요", true, NotificationCategory.TRANSACTIONAL),

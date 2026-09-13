@@ -1,5 +1,8 @@
 package org.son.haruharu.domain.user.implement;
 
+import java.util.Collection;
+import java.util.Set;
+
 import org.son.haruharu.domain.user.storage.exception.UserNotFoundException;
 import org.springframework.stereotype.Component;
 
@@ -10,6 +13,10 @@ public class UserReader {
 
     public UserReader(UserRepository userRepository) {
         this.userRepository = userRepository;
+    }
+
+    public Set<Long> findActiveIds(Collection<Long> ids) {
+        return ids.isEmpty() ? Set.of() : userRepository.findActiveIds(ids);
     }
 
     public User getById(Long id) {

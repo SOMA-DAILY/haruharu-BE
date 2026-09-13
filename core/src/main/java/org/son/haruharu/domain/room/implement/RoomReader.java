@@ -15,6 +15,10 @@ public class RoomReader {
 
     private final RoomRepository roomRepository;
 
+    public List<Room> findByIds(List<Long> ids) {
+        return ids.isEmpty() ? List.of() : roomRepository.findByIdIn(ids);
+    }
+
     public Optional<Room> findById(Long roomId) {
         return roomRepository.findById(roomId);
     }
