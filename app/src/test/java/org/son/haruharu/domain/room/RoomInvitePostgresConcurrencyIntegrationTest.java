@@ -65,10 +65,58 @@ class RoomInvitePostgresConcurrencyIntegrationTest {
     @Autowired RoomMemberJpaRepository roomMemberJpaRepository;
     @Autowired RoomInviteJpaRepository roomInviteJpaRepository;
     @Autowired JdbcTemplate jdbcTemplate;
+    @Autowired org.son.haruharu.domain.chat.business.ChatService chatService;
+    @Autowired org.son.haruharu.domain.chat.implement.ChatRoomReader chatRoomReader;
+    @Autowired org.son.haruharu.domain.chat.implement.ChatRoomMemberReader chatRoomMemberReader;
+
+    @Test
+    @DisplayName("PostgreSQL에서 방 시작과 입장이 겹쳐도 모든 입장자가 그룹채팅에 한 번씩 등록된다")
+    void givenRoomStarting_whenUsersJoinConcurrently_thenNoMissingGroupMembers() throws Exception {
+        LocalDateTime starts = LocalDateTime.now().minusMinutes(1);
+        Room room = roomWriter.save(Room.createScheduled(starts, starts.plusDays(2),
+                starts.plusDays(2).plusHours(1), starts.plusDays(2).plusHours(2), starts.plusDays(3), 3));
+        roomInviteService.issue(room.id(), "CHAT46", null, null, "test");
+        Queue<Throwable> failures = new ConcurrentLinkedQueue<>();
+        List<Runnable> tasks = new ArrayList<>();
+        tasks.add(() -> runAndCapture(() -> roomStatusTransitionService.transition(room, LocalDateTime.now()), failures));
+        for (long userId = 416L; userId < 422L; userId++) {
+            long id = userId;
+            tasks.add(() -> runAndCapture(() -> roomInviteService.join(id, "CHAT46"), failures));
+        }
+
+        runTogether(tasks);
+
+        assertThat(failures).isEmpty();
+        Long groupId = chatRoomReader.findByRoomId(room.id()).orElseThrow().id();
+        assertThat(chatRoomMemberReader.findByChatRoomId(groupId))
+                .extracting(member -> member.userId())
+                .containsExactlyInAnyOrder(416L, 417L, 418L, 419L, 420L, 421L);
+    }
+
+    @Test
+    @DisplayName("PostgreSQL에서 그룹채팅 생성 재시도와 중복 입장 이벤트가 겹쳐도 중복 등록하지 않는다")
+    void givenGroupRoom_whenCreationAndMembershipRetriedConcurrently_thenOneMembership() throws Exception {
+        Long roomId = newJoinableRoom();
+        roomInviteService.issue(roomId, "DUPE46", null, null, "test");
+        roomInviteService.join(416L, "DUPE46");
+        chatService.createGroupRoom(roomId);
+        Queue<Throwable> failures = new ConcurrentLinkedQueue<>();
+
+        runTogether(List.of(
+                () -> runAndCapture(() -> chatService.createGroupRoom(roomId), failures),
+                () -> runAndCapture(() -> chatService.addGroupRoomMember(roomId, 416L, LocalDateTime.now()), failures),
+                () -> runAndCapture(() -> chatService.addGroupRoomMember(roomId, 416L, LocalDateTime.now()), failures)));
+
+        assertThat(failures).isEmpty();
+        Long groupId = chatRoomReader.findByRoomId(roomId).orElseThrow().id();
+        assertThat(chatRoomMemberReader.findByChatRoomId(groupId))
+                .extracting(member -> member.userId()).containsExactly(416L);
+    }
 
     @BeforeEach
     void clean() {
-        jdbcTemplate.execute("TRUNCATE TABLE room_invites, room_members, rooms RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute("TRUNCATE TABLE chat_messages, chat_room_members, chat_rooms, "
+                + "room_invites, room_members, rooms RESTART IDENTITY CASCADE");
     }
 
     @Test

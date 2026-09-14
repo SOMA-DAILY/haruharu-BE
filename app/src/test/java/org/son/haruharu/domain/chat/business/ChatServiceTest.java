@@ -7,6 +7,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
@@ -66,6 +68,7 @@ class ChatServiceTest {
     @Mock ProfileService profileService;
     @Mock UserService userService;
     @Mock org.son.haruharu.domain.room.implement.RoomMemberReader roomMemberReader;
+    @Mock RoomReader roomReader;
     @Mock BlockReader blockReader;
     @Mock ApplicationEventPublisher eventPublisher;
 
@@ -80,7 +83,7 @@ class ChatServiceTest {
     void setUp() {
         chatService = new ChatService(chatRoomReader, chatRoomWriter, chatRoomMemberReader,
                 chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, userService,
-                roomMemberReader, blockReader, eventPublisher, clock);
+                roomMemberReader, roomReader, blockReader, eventPublisher, clock);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -679,14 +682,73 @@ class ChatServiceTest {
 
     // ── GROUP 채팅 ──────────────────────────────────────────
 
+    private Room sourceRoom() {
+        LocalDateTime start = LocalDateTime.now(clock);
+        return Room.createScheduled(start, start.plusDays(2), start.plusDays(2).plusHours(1),
+                start.plusDays(2).plusHours(2), start.plusDays(3), 3);
+    }
+
+    @Test
+    @DisplayName("그룹채팅이 있으면 입장 시각으로 새 멤버를 등록한다")
+    void givenGroupRoom_whenAddMember_thenSavesMembership() {
+        given(roomReader.findByIdForUpdate(ROOM)).willReturn(Optional.of(sourceRoom()));
+        given(chatRoomReader.findByRoomId(ROOM)).willReturn(Optional.of(groupRoom(88L, ROOM)));
+        LocalDateTime joinedAt = LocalDateTime.now(clock);
+
+        chatService.addGroupRoomMember(ROOM, ME, joinedAt);
+
+        then(chatRoomMemberWriter).should().save(ChatRoomMember.join(88L, ME, joinedAt));
+    }
+
+    @Test
+    @DisplayName("그룹채팅이 아직 없으면 멤버 등록은 방 생성 시점으로 미룬다")
+    void givenNoGroupRoom_whenAddMember_thenSkips() {
+        given(roomReader.findByIdForUpdate(ROOM)).willReturn(Optional.of(sourceRoom()));
+
+        chatService.addGroupRoomMember(ROOM, ME, LocalDateTime.now(clock));
+
+        then(chatRoomMemberWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("이미 등록된 채팅 멤버는 읽음 커서와 퇴장 상태를 유지한다")
+    void givenExistingMembership_whenAddMemberAgain_thenPreservesMembership() {
+        given(roomReader.findByIdForUpdate(ROOM)).willReturn(Optional.of(sourceRoom()));
+        given(chatRoomReader.findByRoomId(ROOM)).willReturn(Optional.of(groupRoom(88L, ROOM)));
+        given(chatRoomMemberReader.findMembership(88L, ME)).willReturn(Optional.of(
+                membership(88L, ME, 99L).leave(LocalDateTime.now(clock))));
+
+        chatService.addGroupRoomMember(ROOM, ME, LocalDateTime.now(clock));
+
+        then(chatRoomMemberWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("소개팅방이 없으면 지연된 그룹채팅 생성과 멤버 등록을 무시한다")
+    void givenMissingSourceRoom_whenCreateOrAdd_thenSkips() {
+        chatService.createGroupRoom(ROOM);
+        chatService.addGroupRoomMember(ROOM, ME, LocalDateTime.now(clock));
+
+        then(chatRoomWriter).shouldHaveNoInteractions();
+        then(chatRoomMemberWriter).shouldHaveNoInteractions();
+    }
+
+
     @Test
     @DisplayName("방 시작 시 GROUP 채팅방과 멤버 전원(6명 스냅샷)을 생성한다")
     void createGroupRoom_createsGroupRoomAndAllMembers() {
         given(chatRoomReader.existsByRoomId(ROOM)).willReturn(false);
         given(chatRoomWriter.save(any())).willReturn(groupRoom(88L, ROOM));
 
-        chatService.createGroupRoom(ROOM, List.of(1L, 2L, 3L, 4L, 5L, 6L));
+        given(roomReader.findByIdForUpdate(ROOM)).willReturn(Optional.of(sourceRoom()));
+        given(roomMemberReader.getByRoomId(ROOM)).willReturn(List.of(1L, 2L, 3L, 4L, 5L, 6L).stream()
+                .map(id -> org.son.haruharu.domain.room.implement.RoomMember.of(ROOM, id, null, null, LocalDateTime.now(clock)))
+                .toList());
+        chatService.createGroupRoom(ROOM);
 
+        var order = org.mockito.Mockito.inOrder(roomReader, roomMemberReader);
+        order.verify(roomReader).findByIdForUpdate(ROOM);
+        order.verify(roomMemberReader).getByRoomId(ROOM);
         ArgumentCaptor<ChatRoom> roomCaptor = ArgumentCaptor.forClass(ChatRoom.class);
         verify(chatRoomWriter).save(roomCaptor.capture());
         assertThat(roomCaptor.getValue().type()).isEqualTo(ChatRoomType.GROUP);
@@ -703,7 +765,8 @@ class ChatServiceTest {
     void createGroupRoom_whenAlreadyExists_skips() {
         given(chatRoomReader.existsByRoomId(ROOM)).willReturn(true);
 
-        chatService.createGroupRoom(ROOM, List.of(1L, 2L, 3L));
+        given(roomReader.findByIdForUpdate(ROOM)).willReturn(Optional.of(sourceRoom()));
+        chatService.createGroupRoom(ROOM);
 
         then(chatRoomWriter).should(never()).save(any());
         then(chatRoomMemberWriter).should(never()).save(any());

@@ -26,6 +26,7 @@ import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
+import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.user.business.UserService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -62,6 +63,7 @@ public class ChatService {
     private final ProfileService profileService;
     private final UserService userService;
     private final RoomMemberReader roomMemberReader;
+    private final RoomReader roomReader;
     private final BlockReader blockReader;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
@@ -75,6 +77,7 @@ public class ChatService {
                        ProfileService profileService,
                        UserService userService,
                        RoomMemberReader roomMemberReader,
+                       RoomReader roomReader,
                        BlockReader blockReader,
                        ApplicationEventPublisher eventPublisher,
                        Clock clock) {
@@ -87,6 +90,7 @@ public class ChatService {
         this.profileService = profileService;
         this.userService = userService;
         this.roomMemberReader = roomMemberReader;
+        this.roomReader = roomReader;
         this.blockReader = blockReader;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
@@ -112,19 +116,36 @@ public class ChatService {
 
     /**
      * 소개팅방 시작 시 방 전체 그룹채팅(GROUP)을 생성한다(RoomStartedEvent 커밋 후 호출).
-     * room_id 당 1방 멱등 — 이벤트 재발행에도 중복 생성하지 않는다(exists + UNIQUE). 멤버는 생성 시점 스냅샷.
+     * 입장과 같은 방 잠금 안에서 멤버를 조회하여 생성 중 입장한 멤버도 누락되지 않게 한다.
+     * room_id 당 1방 멱등 — 이벤트 재발행에도 중복 생성하지 않는다.
      *
      * AFTER_COMMIT 리스너에서 호출되므로 REQUIRES_NEW로 새 트랜잭션을 연다(#158, DIRECT와 동일).
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void createGroupRoom(Long roomId, List<Long> memberUserIds) {
+    public void createGroupRoom(Long roomId) {
+        if (roomReader.findByIdForUpdate(roomId).isEmpty()) {
+            return;
+        }
         if (chatRoomReader.existsByRoomId(roomId)) {
             return;
         }
         ChatRoom room = chatRoomWriter.save(ChatRoom.createGroup(roomId));
         LocalDateTime now = LocalDateTime.now(clock);
-        memberUserIds.forEach(userId ->
-                chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), userId, now)));
+        roomMemberReader.getByRoomId(roomId).forEach(member ->
+                chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), member.userId(), now)));
+    }
+
+    /** 입장 트랜잭션에 참여한다. 채팅방 생성 전이면 생성 시점의 잠금 내 스냅샷이 등록을 담당한다. */
+    @Transactional
+    public void addGroupRoomMember(Long roomId, Long userId, LocalDateTime joinedAt) {
+        if (roomReader.findByIdForUpdate(roomId).isEmpty()) {
+            return;
+        }
+        chatRoomReader.findByRoomId(roomId).ifPresent(group -> {
+            if (chatRoomMemberReader.findMembership(group.id(), userId).isEmpty()) {
+                chatRoomMemberWriter.save(ChatRoomMember.join(group.id(), userId, joinedAt));
+            }
+        });
     }
 
     /**
