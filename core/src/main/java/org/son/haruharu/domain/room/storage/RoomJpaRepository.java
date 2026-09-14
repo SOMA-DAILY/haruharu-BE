@@ -15,6 +15,18 @@ import org.springframework.data.repository.query.Param;
 
 public interface RoomJpaRepository extends JpaRepository<RoomEntity, Long> {
 
+    @Query("""
+            select r from RoomEntity r where r.id in :ids
+            and r.status <> :cancelled and (:beforeId is null or r.id < :beforeId)
+            and ((r.startsAt is not null and r.endsAt is not null and r.endsAt <= :now)
+                or ((r.startsAt is null or r.endsAt is null) and r.status = :ended))
+            order by r.id desc
+            """)
+    List<RoomEntity> findEnded(@Param("ids") List<Long> ids,
+            @Param("now") java.time.LocalDateTime now, @Param("beforeId") Long beforeId,
+            @Param("cancelled") RoomStatus cancelled, @Param("ended") RoomStatus ended,
+            org.springframework.data.domain.Pageable pageable);
+
     List<RoomEntity> findByIdIn(List<Long> ids);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

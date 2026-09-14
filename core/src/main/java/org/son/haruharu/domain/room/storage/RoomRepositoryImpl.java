@@ -17,6 +17,14 @@ public class RoomRepositoryImpl implements RoomRepository {
     private final RoomJpaRepository jpaRepository;
 
     @Override
+    public List<Room> findEnded(List<Long> ids, java.time.LocalDateTime now, Long beforeId, int size) {
+        if (ids.isEmpty()) return List.of();
+        return jpaRepository.findEnded(ids, now, beforeId, RoomStatus.CANCELLED, RoomStatus.ENDED,
+                org.springframework.data.domain.PageRequest.of(0, size)).stream()
+                .map(RoomEntity::toDomain).toList();
+    }
+
+    @Override
     public Room save(Room room) {
         return jpaRepository.save(RoomEntity.from(room)).toDomain();
     }

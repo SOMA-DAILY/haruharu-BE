@@ -280,6 +280,25 @@ class RoomListServiceTest {
         then(s3StoragePort).shouldHaveNoInteractions();
     }
 
+    @Test
+    @DisplayName("종료 방 포함 요청은 종료 경계의 방을 유지하고 취소 방은 제외한다")
+    void givenEndedAndCancelledRooms_whenIncludeEnded_thenReturnsEndedAfterCurrentRooms() {
+        Room active = scheduledRoom(10L, NOW.minusHours(1), NOW.plusHours(1), NOW.plusHours(2), NOW.plusHours(3), NOW.plusHours(4));
+        Room ended = scheduledRoom(20L, NOW.minusDays(3), NOW.minusHours(3), NOW.minusHours(2), NOW.minusHours(1), NOW);
+        given(roomMemberReader.findByUserId(USER_ID)).willReturn(List.of(member(1L, 10L, USER_ID), member(2L, 20L, USER_ID), member(3L, 30L, USER_ID)));
+        given(roomReader.findCurrentAll(List.of(10L, 20L, 30L), NOW)).willReturn(List.of(active));
+        given(roomReader.findEnded(List.of(10L, 20L, 30L), NOW, null, 21)).willReturn(List.of(ended));
+        given(roomMemberReader.findByRoomIds(anyCollection())).willReturn(List.of(member(1L, 10L, USER_ID), member(2L, 20L, USER_ID)));
+        given(userImageReader.getRepresentativeImageUrls(anyCollection())).willReturn(Map.of());
+
+        List<RoomsResponse.RoomSummary> rooms = roomListService.getRooms(USER_ID, true).rooms();
+
+        assertThat(rooms).extracting(RoomsResponse.RoomSummary::roomId).containsExactly(10L, 20L);
+        assertThat(rooms.get(1).status()).isEqualTo("ENDED");
+        assertThat(rooms.get(1).timerType()).isNull();
+        assertThat(rooms.get(1).refreshAt()).isNull();
+    }
+
     private static Room scheduledRoom(Long id, LocalDateTime starts, LocalDateTime opens,
                                       LocalDateTime closes, LocalDateTime result, LocalDateTime ends) {
         return new Room(id, RoomStatus.PENDING, starts.toLocalDate(), 3, starts, null,

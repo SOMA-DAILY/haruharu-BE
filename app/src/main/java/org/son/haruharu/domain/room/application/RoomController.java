@@ -85,11 +85,14 @@ public class RoomController {
                     + "방은 ACTIVE·SELECTING·PENDING, 다음 timer_target_at, room_id 순으로 정렬되며 "
                     + "profile_image_urls는 고정 상한이나 패딩 없이 본인을 먼저 두고 실제 방 참여자와 같은 수의 슬롯을 반환한다. "
                     + "사진이 없는 참여자의 null 위치를 보존하고, 방 참여자가 없으면 빈 배열을 반환한다. "
+                    + "include_ended=true이면 종료 방을 room_id 내림차순으로 20개씩 뒤에 포함하며 취소 방은 제외한다. next_ended_cursor를 ended_before로 전달해 다음 종료 방을 조회한다. "
                     + "참여 방 자체가 없을 때도 빈 rooms 배열을 200으로 반환한다.")
     @GetMapping
-    public ApiResponse<RoomsResponse> getRooms(Authentication authentication) {
+    public ApiResponse<RoomsResponse> getRooms(Authentication authentication,
+            @RequestParam(name = "include_ended", defaultValue = "false") boolean includeEnded,
+            @RequestParam(name = "ended_before", required = false) Long endedBefore) {
         Long userId = (Long) authentication.getPrincipal();
-        return ApiResponse.ok(roomListService.getRooms(userId));
+        return ApiResponse.ok(roomListService.getRooms(userId, includeEnded, endedBefore));
     }
 
     @Operation(summary = "초대코드로 방 입장",
