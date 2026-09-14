@@ -9,6 +9,8 @@ import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
 import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
+import org.son.haruharu.domain.chat.business.event.ChatMessageBroadcastEvent;
+import org.son.haruharu.domain.chat.business.event.ChatRoomClosedEvent;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
@@ -22,6 +24,7 @@ import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
+import org.son.haruharu.domain.chat.storage.exception.ChatRoomNotFoundException;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -101,7 +104,7 @@ public class ChatService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createRoomFromMatch(Long matchResultId, Long userIdA, Long userIdB) {
-        if (chatRoomReader.existsByMatchResultId(matchResultId)) {
+        if (chatRoomReader.existsIncludingDeletedByMatchResultId(matchResultId)) {
             return;
         }
         ChatRoom room = chatRoomWriter.save(ChatRoom.createDirect(matchResultId));
@@ -129,10 +132,11 @@ public class ChatService {
 
     /**
      * 메시지 전송(#60 STOMP). 발신자가 방 참여자인지 검증 후 저장하고, 브로드캐스트 payload를 반환한다.
-     * 실제 브로드캐스트(convertAndSend)는 application 계층(ChatStompController)이 담당한다.
+     * 실제 브로드캐스트(convertAndSend)는 커밋 후 application 계층(ChatLifecycleEventListener)이 담당한다.
      */
     @Transactional
     public ChatMessageBroadcast sendMessage(Long chatRoomId, Long senderId, String content) {
+        chatRoomReader.lockForUpdate(chatRoomId);
         requireMember(chatRoomId, senderId);
         ChatRoom chatRoom = chatRoomReader.getById(chatRoomId);
         List<Long> recipientIds = recipientsFor(chatRoom, senderId); // DIRECT=상대 1명, GROUP=나 제외 전원
@@ -142,7 +146,9 @@ public class ChatService {
         eventPublisher.publishEvent(new ChatMessageSentEvent(
                 saved.id(), chatRoomId, chatRoom.type(), chatRoom.roomId(), senderId,
                 recipientIds, senderNickname, saved.createdAt()));
-        return ChatMessageBroadcast.from(saved);
+        ChatMessageBroadcast broadcast = ChatMessageBroadcast.from(saved);
+        eventPublisher.publishEvent(new ChatMessageBroadcastEvent(broadcast));
+        return broadcast;
     }
 
     /** 내 채팅방 목록. 마지막 메시지 최신순으로 정렬한다. 차단 관계 필터 세트는 루프 밖에서 한 번만 조회한다(#408, N+1 방지). */
@@ -188,6 +194,8 @@ public class ChatService {
     /** 읽음 커서 갱신. 커서는 뒤로만 이동한다(역행 방지). */
     @Transactional
     public ReadResponse markRead(Long chatRoomId, Long userId, Long lastReadMessageId) {
+        // 나가기와 읽음 갱신이 경합해 이전 leftAt=null 값으로 퇴장을 덮어쓰지 않게 한다.
+        chatRoomReader.lockForUpdate(chatRoomId);
         ChatRoomMember member = requireMember(chatRoomId, userId);
         requireActiveIfDirect(chatRoomId, userId);
         ChatRoomMember updated = chatRoomMemberWriter.save(member.readUpTo(lastReadMessageId));
@@ -198,18 +206,38 @@ public class ChatService {
         return new ReadResponse(chatRoomId, unread);
     }
 
-    /** 채팅방 나가기. leftAt을 기록한다(방·메시지 데이터는 보존). */
+    /** DIRECT는 양쪽 참여 종료·방 소프트 삭제, GROUP은 기존 개인 퇴장. */
     @Transactional
     public void leaveRoom(Long chatRoomId, Long userId) {
-        ChatRoomMember member = requireMember(chatRoomId, userId);
-        chatRoomMemberWriter.save(member.leave(LocalDateTime.now(clock)));
+        chatRoomReader.lockForUpdate(chatRoomId);
+        ChatRoomMember member = chatRoomMemberReader.findMembership(chatRoomId, userId)
+                .orElseThrow(ChatNotMemberException::new);
+        Optional<ChatRoom> room = chatRoomReader.findById(chatRoomId);
+        if (room.isEmpty()) {
+            if (member.hasLeft()) return;
+            throw new ChatRoomNotFoundException();
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (room.orElseThrow(ChatRoomNotFoundException::new).type() == ChatRoomType.GROUP) {
+            if (member.hasLeft()) throw new ChatNotMemberException();
+            chatRoomMemberWriter.save(member.leave(now));
+            return;
+        }
+        List<ChatRoomMember> members = chatRoomMemberReader.findByChatRoomId(chatRoomId);
+        members.forEach(participant -> chatRoomMemberWriter.save(participant.leave(now)));
+        chatRoomWriter.delete(chatRoomId);
+        eventPublisher.publishEvent(new ChatRoomClosedEvent(chatRoomId,
+                members.stream().map(ChatRoomMember::userId).toList()));
     }
 
     /** null 반환 = 목록에서 제외(차단 관계 DIRECT 방, #408). */
     private ChatRoomsResponse.ChatRoomSummary toSummary(ChatRoomMember me, Long userId,
                                                         Set<Long> myBlocked, Set<Long> blockRelated) {
         Long chatRoomId = me.chatRoomId();
-        ChatRoom room = chatRoomReader.getById(chatRoomId);
+        Optional<ChatRoom> found = chatRoomReader.findById(chatRoomId);
+        // 활성 멤버 조회 직후 다른 트랜잭션이 종료했을 때 목록 전체를 실패시키지 않는다.
+        if (found.isEmpty()) return null;
+        ChatRoom room = found.orElseThrow(ChatRoomNotFoundException::new);
 
         // DIRECT 상대 탈퇴는 마지막 메시지 조회 전에 걸러야 목록 전체가 죽지 않는다(#255).
         Long directPartnerUserId = null;

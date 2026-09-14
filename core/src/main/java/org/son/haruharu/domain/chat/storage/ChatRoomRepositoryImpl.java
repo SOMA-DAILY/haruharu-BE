@@ -24,6 +24,21 @@ public class ChatRoomRepositoryImpl implements ChatRoomRepository {
     }
 
     @Override
+    public Optional<Long> lockByIdIncludingDeleted(Long id) {
+        return chatRoomJpaRepository.lockByIdIncludingDeleted(id);
+    }
+
+    @Override
+    public boolean existsIncludingDeletedByMatchResultId(Long matchResultId) {
+        return chatRoomJpaRepository.existsIncludingDeletedByMatchResultId(matchResultId);
+    }
+
+    @Override
+    public void deleteById(Long id) {
+        chatRoomJpaRepository.deleteById(id);
+    }
+
+    @Override
     public boolean existsByMatchResultId(Long matchResultId) {
         return chatRoomJpaRepository.existsByMatchResultId(matchResultId);
     }

@@ -23,6 +23,22 @@ public class ChatRoomReader {
         return chatRoomRepository.existsByMatchResultId(matchResultId);
     }
 
+    public Optional<ChatRoom> findById(Long id) {
+        return chatRoomRepository.findById(id);
+    }
+
+    public void lockForUpdate(Long id) {
+        chatRoomRepository.lockByIdIncludingDeleted(id).orElseThrow(ChatRoomNotFoundException::new);
+    }
+
+    public boolean lockIfPresent(Long id) {
+        return chatRoomRepository.lockByIdIncludingDeleted(id).isPresent();
+    }
+
+    public boolean existsIncludingDeletedByMatchResultId(Long matchResultId) {
+        return chatRoomRepository.existsIncludingDeletedByMatchResultId(matchResultId);
+    }
+
     /** 소개팅방(roomId)에 GROUP 채팅이 이미 있는지. RoomStartedEvent 재발행 멱등 게이트. */
     public boolean existsByRoomId(Long roomId) {
         return chatRoomRepository.existsByRoomId(roomId);
