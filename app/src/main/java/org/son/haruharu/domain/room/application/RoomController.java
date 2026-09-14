@@ -136,7 +136,7 @@ public class RoomController {
     }
 
     @Operation(summary = "방 멤버 목록 조회",
-            description = "방 참여자 목록을 반환한다. nickname은 기본 가명(미배정 시 익명)이며, 본인·상호매칭 상대만 닉네임을 공개한다(name_revealed=true). "
+            description = "방 참여자 목록을 반환한다. nickname은 본인을 포함해 기본 가명(미배정 시 익명)이며, 상호매칭 상대만 닉네임을 공개한다(name_revealed=true). "
                     + "gender는 항상 공개, location·age는 단건 프로필과 동일하게 "
                     + "3일차부터 공개한다(그 전에는 null, 본인 항목은 예외). 나머지 Day 게이트 항목은 멤버 단건 프로필 조회에서 다룬다. "
                     + "참여자가 아니면 403(ROOM_403_NOT_MEMBER), 방이 없으면 404(ROOM_404_NOT_FOUND).")

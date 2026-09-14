@@ -103,7 +103,7 @@ class RoomMembersServiceTest {
 
         MembersResponse.MemberView view = result.members().get(0);
         assertThat(view.me()).isTrue();
-        assertThat(view.nickname()).isEqualTo("철수");
+        assertThat(view.nickname()).isEqualTo("가명1");
         assertThat(view.location()).isEqualTo("서울");
         assertThat(view.age()).isEqualTo(26);
     }
@@ -138,9 +138,9 @@ class RoomMembersServiceTest {
         assertThat(otherView.nameRevealed()).isFalse();
         assertThat(otherView.gender()).isEqualTo("MALE");
         assertThat(otherView.profileImageUrl()).isEqualTo("https://cdn/other.jpg?sig");
-        // 본인은 게이트 제외 — 실명·지역·나이 그대로
-        assertThat(result.members().get(0).nickname()).isEqualTo("철수");
-        assertThat(result.members().get(0).nameRevealed()).isTrue();
+        // 본인 이름도 가명이며 지역·나이 공개는 유지
+        assertThat(result.members().get(0).nickname()).isEqualTo("가명1");
+        assertThat(result.members().get(0).nameRevealed()).isFalse();
         assertThat(result.members().get(0).location()).isEqualTo("서울");
         assertThat(result.members().get(0).age()).isEqualTo(26);
     }
@@ -188,9 +188,9 @@ class RoomMembersServiceTest {
 
         MembersResponse result = service().getMembers(roomId, myUserId);
 
-        // 본인은 실명, 매칭 안 한 상대는 가명(#393)
+        // 본인과 매칭 안 한 상대는 가명
         assertThat(result.members()).extracting(MembersResponse.MemberView::nickname)
-                .containsExactly("철수", "가명2");
+                .containsExactly("가명1", "가명2");
         assertThat(result.members()).extracting(MembersResponse.MemberView::location)
                 .containsExactly("서울", "부산");
         then(userProfileReader).should().findByUserIdIn(anyCollection());
@@ -198,7 +198,7 @@ class RoomMembersServiceTest {
     }
 
     @Test
-    @DisplayName("프로필이 없고 생년월일 스냅샷도 없으면 닉네임·지역·나이가 null로 내려간다")
+    @DisplayName("프로필이 없고 생년월일 스냅샷도 없으면 이름은 익명, 지역·나이는 null로 내려간다")
     void givenMemberWithoutProfile_whenGetMembers_thenNullFields() {
         Long userId = 1L;
         Long roomId = 12L;
@@ -213,7 +213,7 @@ class RoomMembersServiceTest {
         MembersResponse result = service().getMembers(roomId, userId);
 
         MembersResponse.MemberView view = result.members().get(0);
-        assertThat(view.nickname()).isNull();
+        assertThat(view.nickname()).isEqualTo("익명");
         assertThat(view.location()).isNull();
         assertThat(view.age()).isNull();
         assertThat(view.gender()).isEqualTo("MALE");

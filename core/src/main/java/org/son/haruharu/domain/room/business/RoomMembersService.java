@@ -80,8 +80,8 @@ public class RoomMembersService {
     private MemberView toView(RoomMember member, Long matchedPartnerMemberId, UserProfile profile, String imageUrl,
                               Long meUserId, LocalDate today, int currentDay) {
         boolean self = member.userId().equals(meUserId);
-        // 이름 공개(#393): 본인이거나 상호매칭 성립 시에만 실명(닉네임), 그 전에는 가명(없으면 익명). imageRevealed와 동일 게이트.
-        boolean nameRevealed = self || member.id().equals(matchedPartnerMemberId);
+        // 방 목록의 본인 이름도 가명으로 표시한다. 상호매칭 상대만 프로필 이름을 공개한다.
+        boolean nameRevealed = !self && member.id().equals(matchedPartnerMemberId);
         String displayName = nameRevealed
                 ? (profile == null ? null : profile.nickname())
                 : member.displayPseudonym();
