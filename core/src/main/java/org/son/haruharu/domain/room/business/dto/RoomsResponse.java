@@ -9,8 +9,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 public record RoomsResponse(
         LocalDateTime now,
-        List<RoomSummary> rooms
+        List<RoomSummary> rooms,
+        @JsonProperty("next_ended_cursor") Long nextEndedCursor
 ) {
+    public RoomsResponse(LocalDateTime now, List<RoomSummary> rooms) {
+        this(now, rooms, null);
+    }
+
     public record RoomSummary(
             @JsonProperty("room_id") Long roomId,
             String status,

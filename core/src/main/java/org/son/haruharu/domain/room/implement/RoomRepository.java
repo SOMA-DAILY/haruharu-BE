@@ -6,6 +6,8 @@ import java.util.Optional;
 
 public interface RoomRepository {
 
+    List<Room> findEnded(List<Long> ids, java.time.LocalDateTime now, Long beforeId, int size);
+
     Room save(Room room);
 
     Optional<Room> findById(Long id);

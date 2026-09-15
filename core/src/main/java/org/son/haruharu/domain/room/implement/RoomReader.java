@@ -19,6 +19,10 @@ public class RoomReader {
         return ids.isEmpty() ? List.of() : roomRepository.findByIdIn(ids);
     }
 
+    public List<Room> findEnded(List<Long> ids, LocalDateTime now, Long beforeId, int size) {
+        return ids.isEmpty() ? List.of() : roomRepository.findEnded(ids, now, beforeId, size);
+    }
+
     public Optional<Room> findById(Long roomId) {
         return roomRepository.findById(roomId);
     }

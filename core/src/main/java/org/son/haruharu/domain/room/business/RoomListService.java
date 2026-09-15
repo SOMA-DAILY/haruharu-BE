@@ -43,6 +43,14 @@ public class RoomListService {
     }
 
     public RoomsResponse getRooms(Long userId) {
+        return getRooms(userId, false);
+    }
+
+    public RoomsResponse getRooms(Long userId, boolean includeEnded) {
+        return getRooms(userId, includeEnded, null);
+    }
+
+    public RoomsResponse getRooms(Long userId, boolean includeEnded, Long endedBefore) {
         LocalDateTime now = LocalDateTime.now(clock);
         List<Long> candidateRoomIds = roomMemberReader.findByUserId(userId).stream()
                 .map(RoomMember::roomId)
@@ -52,7 +60,14 @@ public class RoomListService {
             return new RoomsResponse(now, List.of());
         }
 
-        List<Room> currentRooms = roomReader.findCurrentAll(candidateRoomIds, now);
+        List<Room> currentRooms = new ArrayList<>(includeEnded && endedBefore != null
+                ? List.of() : roomReader.findCurrentAll(candidateRoomIds, now));
+        Long nextEndedCursor = null;
+        if (includeEnded) {
+            List<Room> ended = roomReader.findEnded(candidateRoomIds, now, endedBefore, 21);
+            if (ended.size() > 20) nextEndedCursor = ended.get(19).id();
+            currentRooms.addAll(ended.stream().limit(20).toList());
+        }
         if (currentRooms.isEmpty()) {
             return new RoomsResponse(now, List.of());
         }
@@ -70,7 +85,7 @@ public class RoomListService {
                 .map(room -> summary(room, userId, now, membersByRoomId.getOrDefault(room.id(), List.of()), representativeUrls))
                 .sorted(roomSummaryComparator())
                 .toList();
-        return new RoomsResponse(now, summaries);
+        return new RoomsResponse(now, summaries, nextEndedCursor);
     }
 
     private RoomsResponse.RoomSummary summary(Room room, Long requesterId, LocalDateTime now,
@@ -95,7 +110,7 @@ public class RoomListService {
         return Comparator.comparingInt((RoomsResponse.RoomSummary room) -> statusRank(room.status()))
                 .thenComparing(RoomsResponse.RoomSummary::timerTargetAt,
                         Comparator.nullsLast(Comparator.naturalOrder()))
-                .thenComparing(RoomsResponse.RoomSummary::roomId);
+                .thenComparing(room -> "ENDED".equals(room.status()) ? -room.roomId() : room.roomId());
     }
 
     private int statusRank(String status) {

@@ -149,6 +149,49 @@ class RoomListApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("종료 방 포함 옵션은 내 종료 방만 반환하고 취소 및 다른 회원 방은 제외한다")
+    void givenHistoricalMemberships_whenIncludeEnded_thenReturnsOnlyMyNonCancelledRooms() throws Exception {
+        Long userId = 600L;
+        Long endedRoomId = saveRoom(NOW.minusHours(6), NOW.minusHours(5), NOW.minusHours(4), NOW.minusHours(3), NOW);
+        Long cancelledRoomId = saveRoom(RoomStatus.CANCELLED, NOW.minusHours(6), NOW.minusHours(5), NOW.minusHours(4), NOW.minusHours(3), NOW);
+        Long otherRoomId = saveRoom(NOW.minusHours(6), NOW.minusHours(5), NOW.minusHours(4), NOW.minusHours(3), NOW);
+        saveMember(endedRoomId, userId);
+        saveMember(cancelledRoomId, userId);
+        saveMember(otherRoomId, 601L);
+
+        mockMvc.perform(get("/api/v1/rooms").param("include_ended", "true").with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rooms.length()").value(1))
+                .andExpect(jsonPath("$.data.rooms[0].room_id").value(endedRoomId.intValue()))
+                .andExpect(jsonPath("$.data.rooms[0].status").value("ENDED"))
+                .andExpect(jsonPath("$.data.rooms[0].timer_type").value(nullValue()))
+                .andExpect(jsonPath("$.data.rooms[0].refresh_at").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("종료 방 이력은 20개씩 중복 없이 다음 커서로 조회한다")
+    void givenMoreThanTwentyEndedRooms_whenPaging_thenReturnsRemainingHistory() throws Exception {
+        Long userId = 610L;
+        List<Long> ids = new ArrayList<>();
+        for (int i = 0; i < 21; i++) {
+            Long id = saveRoom(NOW.minusHours(6), NOW.minusHours(5), NOW.minusHours(4), NOW.minusHours(3), NOW);
+            ids.add(id);
+            saveMember(id, userId);
+        }
+        mockMvc.perform(get("/api/v1/rooms").param("include_ended", "true").with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rooms.length()").value(20))
+                .andExpect(jsonPath("$.data.rooms[0].room_id").value(ids.get(20).intValue()))
+                .andExpect(jsonPath("$.data.next_ended_cursor").value(ids.get(1).intValue()));
+        mockMvc.perform(get("/api/v1/rooms").param("include_ended", "true")
+                        .param("ended_before", ids.get(1).toString()).with(authentication(auth(userId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rooms.length()").value(1))
+                .andExpect(jsonPath("$.data.rooms[0].room_id").value(ids.get(0).intValue()))
+                .andExpect(jsonPath("$.data.next_ended_cursor").value(nullValue()));
+    }
+
+    @Test
     @DisplayName("방 이력이 없으면 404 대신 빈 rooms 배열을 200으로 반환한다")
     void givenNoMembership_whenGetRooms_thenReturnsEmptyRoomsWith200() throws Exception {
         mockMvc.perform(get("/api/v1/rooms").with(authentication(auth(999L))))
