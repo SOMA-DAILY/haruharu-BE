@@ -25,10 +25,12 @@ import org.son.haruharu.domain.user.implement.UserWriter;
 import org.son.haruharu.infrastructure.oauth.OAuthProviderRegistry;
 import org.son.haruharu.infrastructure.oauth.OAuthUserInfo;
 import org.son.haruharu.utils.JwtProvider;
+import org.son.haruharu.utils.JwtValidation;
 import org.son.haruharu.utils.TokenHashUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -44,6 +46,14 @@ import java.time.temporal.ChronoUnit;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class AuthService {
+
+    /**
+     * 재사용 탐지 grace(#417). 앱이 refresh 를 병렬로 호출하면 늦게 도착한 요청은 첫 요청이 방금 revoke 한 토큰을
+     * 들고 온다. 이를 탈취 재사용으로 간주해 revokeAllByUserId 하면 정상 세션까지 전 기기 로그아웃된다.
+     * revoke 직후 이 창 안의 재제시는 401 만 주고 전체 폐기는 하지 않는다. 창 밖 재제시는 기존대로 전체 폐기.
+     * 창 안에서는 탈취 봉쇄가 꺼지는 셈이라 짧게 둔다 — 운영 실측 병렬 간격 87ms 를 넉넉히 덮는 2초.
+     */
+    static final Duration REUSE_DETECTION_GRACE = Duration.ofSeconds(2);
 
     private final OAuthProviderRegistry oAuthProviderRegistry;
     private final UserReader userReader;
@@ -112,23 +122,32 @@ public class AuthService {
         log.info("auth withdraw userId={}", userId);
     }
 
-    @Transactional
+    /**
+     * noRollbackFor: 재사용 탐지의 revokeAllByUserId 는 거절 응답과 함께 커밋돼야 한다. 기본 규칙대로면
+     * InvalidRefreshTokenException(RuntimeException) 이 트랜잭션을 롤백해 전체 폐기가 저장되지 않았다(#417 발견).
+     */
+    @Transactional(noRollbackFor = InvalidRefreshTokenException.class)
     public AuthTokenResponse refresh(TokenRefreshCommand command) {
-        if (!jwtProvider.isValid(command.refreshToken())) {
-            throw new InvalidRefreshTokenException();
+        JwtValidation validation = jwtProvider.validate(command.refreshToken());
+        if (validation != JwtValidation.VALID) {
+            throw rejectRefresh("JWT_" + validation, null);
         }
 
         String tokenHash = TokenHashUtils.sha256Hex(command.refreshToken());
         RefreshToken refreshToken = refreshTokenReader.findByTokenHash(tokenHash)
-            .orElseThrow(InvalidRefreshTokenException::new);
+            .orElseThrow(() -> rejectRefresh("NOT_FOUND", null));
+
+        if (refreshToken.isRevokedWithin(REUSE_DETECTION_GRACE)) {
+            throw rejectRefresh("REVOKED_IN_GRACE", refreshToken.userId());
+        }
 
         if (refreshToken.isRevoked()) {
             refreshTokenWriter.revokeAllByUserId(refreshToken.userId());
-            throw new InvalidRefreshTokenException();
+            throw rejectRefresh("REVOKED_REUSE", refreshToken.userId());
         }
 
         if (refreshToken.isExpired()) {
-            throw new InvalidRefreshTokenException();
+            throw rejectRefresh("EXPIRED", refreshToken.userId());
         }
 
         User user = userReader.getById(refreshToken.userId());
@@ -136,8 +155,21 @@ public class AuthService {
             throw new InactiveMemberException();
         }
 
-        refreshTokenWriter.revokeByTokenHash(tokenHash);
+        // 조회~여기 사이에 다른 요청이 먼저 소비했을 수 있다. 원자적 소비에 실패한 쪽은 병렬 재발급의 패자다 —
+        // 방금 revoke 된 토큰이므로 grace 재제시와 같이 401 만 주고 전체 폐기는 하지 않는다.
+        if (!refreshTokenWriter.revokeByTokenHash(tokenHash)) {
+            throw rejectRefresh("CONSUMED_CONCURRENTLY", user.id());
+        }
         return issueNewTokenPair(user.id(), routingStatus(user));
+    }
+
+    /**
+     * refresh 거절 사유를 서버 로그에만 남긴다(#417, #259 패턴). 응답은 단일 코드(AUTH_INVALID_REFRESH_TOKEN)를
+     * 유지한다 — 사유를 노출하면 계정 열거에 악용된다. 토큰 원문·해시는 남기지 않는다.
+     */
+    private InvalidRefreshTokenException rejectRefresh(String reason, Long userId) {
+        log.warn("auth refresh rejected reason={} userId={}", reason, userId);
+        return new InvalidRefreshTokenException();
     }
 
     /**
@@ -167,7 +199,10 @@ public class AuthService {
             throw new InvalidTokenException();
         }
 
-        refreshTokenWriter.revokeByTokenHash(tokenHash);
+        // 조회~여기 사이에 refresh 가 먼저 소비했으면 조회 시 revoked 로 본 것과 같은 결과(#417)
+        if (!refreshTokenWriter.revokeByTokenHash(tokenHash)) {
+            throw new InvalidTokenException();
+        }
     }
 
     private AuthTokenResponse issueNewTokenPair(Long userId, String userStatus) {

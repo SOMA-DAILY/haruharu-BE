@@ -31,13 +31,10 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
         refreshTokenJpaRepository.deleteByUserId(userId);
     }
 
+    /** revokedAt 은 시스템 시각 기준(RefreshToken.isExpired 와 동일). */
     @Override
-    public void revokeByTokenHash(String tokenHash) {
-        refreshTokenJpaRepository.findByTokenHash(tokenHash)
-            .ifPresent(entity -> {
-                entity.revoke();
-                refreshTokenJpaRepository.save(entity);
-            });
+    public boolean revokeByTokenHash(String tokenHash) {
+        return refreshTokenJpaRepository.revokeIfActive(tokenHash, LocalDateTime.now()) == 1;
     }
 
     @Override

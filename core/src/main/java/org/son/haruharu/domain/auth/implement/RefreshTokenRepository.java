@@ -12,7 +12,8 @@ public interface RefreshTokenRepository {
 
     void revokeAllByUserId(Long userId);
 
-    void revokeByTokenHash(String tokenHash);
+    /** 살아 있는 토큰을 revoke 했으면 true, 이미 revoke 됐거나 없으면 false (원자적 소비, #417). */
+    boolean revokeByTokenHash(String tokenHash);
 
     List<Long> findUserIdsLastActiveBetween(LocalDateTime from, LocalDateTime to);
 }

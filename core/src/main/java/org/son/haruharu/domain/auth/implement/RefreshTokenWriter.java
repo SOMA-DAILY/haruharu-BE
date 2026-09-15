@@ -17,7 +17,8 @@ public class RefreshTokenWriter {
         refreshTokenRepository.revokeAllByUserId(userId);
     }
 
-    public void revokeByTokenHash(String tokenHash) {
-        refreshTokenRepository.revokeByTokenHash(tokenHash);
+    /** 토큰을 원자적으로 소비한다. 이미 소비된 토큰이면 false (#417). */
+    public boolean revokeByTokenHash(String tokenHash) {
+        return refreshTokenRepository.revokeByTokenHash(tokenHash);
     }
 }

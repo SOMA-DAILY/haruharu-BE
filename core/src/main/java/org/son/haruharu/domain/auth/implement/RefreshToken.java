@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.auth.implement;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 public record RefreshToken(
@@ -22,5 +23,10 @@ public record RefreshToken(
 
     public boolean isRevoked() {
         return revokedAt != null;
+    }
+
+    /** revoke 된 지 grace 이내인지. 병렬 재발급의 늦은 요청을 탈취 재사용과 구분하는 데 쓴다(#417). 시스템 시각 기준(isExpired 와 동일). */
+    public boolean isRevokedWithin(Duration grace) {
+        return isRevoked() && revokedAt.plus(grace).isAfter(LocalDateTime.now());
     }
 }
