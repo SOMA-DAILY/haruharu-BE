@@ -58,7 +58,7 @@ x-batch-conn-env:
   AIRFLOW_CONN_HARUHARU_APP: '{"conn_type":"http","host":"${HARUHARU_APP_BASE_URL:-http://host.docker.internal:8080}","password":"${INTERNAL_BATCH_TOKEN:-}"}'
 x-alert-env:
   &alert-env
-  # 선택: Slack Incoming Webhook. 비어 있으면 알림은 로그로만 남는다.
+  # 선택: Slack 또는 Discord Incoming Webhook URL(URL 로 자동 판별, #411). 비어 있으면 알림은 로그로만 남는다.
   HARUHARU_ALERT_SLACK_WEBHOOK_URL: ${HARUHARU_ALERT_SLACK_WEBHOOK_URL:-}
 
 services:
