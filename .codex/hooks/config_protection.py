@@ -20,6 +20,8 @@ def block_reason(payload: dict) -> str | None:
         if path is None:
             continue
 
+        if path.startswith("scripts/agent-hooks/"):
+            return "Shared verification hooks are protected infrastructure."
         if path == ".githooks" or path.startswith(".githooks/"):
             return ".githooks/ is verification infrastructure and cannot be edited by the agent."
         if path == ".claude/settings.json" or path.startswith(".claude/hooks/"):
