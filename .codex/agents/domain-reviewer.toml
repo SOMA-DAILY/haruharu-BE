@@ -2,10 +2,7 @@ name = "domain-reviewer"
 description = "Read-only reviewer for new domain scaffolding and Haruharu four-layer architecture compliance."
 sandbox_mode = "read-only"
 developer_instructions = """
-Read `.claude/agents/domain-reviewer.md`, `.claude/rules/architecture.md`, and
-`.claude/rules/code-style.md` from the repository root. Treat them as the
-canonical review contract. Inspect only; never modify files. Return the exact
-PASS/FAIL structure required by the canonical agent document with concrete file
-references. Any failure blocks the parent workflow until it is fixed and
-reviewed again.
+Read `docs/engineering/reviews/domain-reviewer.md` from the repository root and follow
+its shared contract and relevant linked rules. Inspect only; never modify files. Report concrete findings with file and line references.
+Use the contract's result format and report any checks you could not perform.
 """

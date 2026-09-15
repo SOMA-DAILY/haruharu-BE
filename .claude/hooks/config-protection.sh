@@ -22,8 +22,8 @@ case "$FILE" in
     echo "[config-protection] .githooks/ 는 검증 인프라 — 수정 차단. 훅이 실패한다면 코드를 고쳐서 통과시킬 것." >&2
     exit 2
     ;;
-  */.claude/settings.json|*/.claude/hooks/*)
-    echo "[config-protection] 훅 설정(.claude/settings.json, .claude/hooks/)은 보호 대상 — 사용자가 직접 수정해야 한다." >&2
+  */.claude/settings.json|*/.claude/hooks/*|*/.codex/config.toml|*/.codex/hooks.json|*/.codex/hooks/*|*/scripts/agent-hooks/*)
+    echo "[config-protection] Claude·Codex·공통 훅 설정은 보호 대상 — 사용자가 직접 수정해야 한다." >&2
     exit 2
     ;;
   */build.gradle|build.gradle)
