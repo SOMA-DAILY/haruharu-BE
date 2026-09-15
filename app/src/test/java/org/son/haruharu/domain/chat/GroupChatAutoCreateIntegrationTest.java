@@ -2,6 +2,7 @@ package org.son.haruharu.domain.chat;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
@@ -75,7 +76,10 @@ class GroupChatAutoCreateIntegrationTest {
     @Test
     @DisplayName("PENDING 방 입장은 채팅을 만들지 않고 방 시작 시 스냅샷으로 참여한다")
     void givenPendingRoom_whenJoinThenStart_thenGroupMembershipExists() {
-        LocalDateTime startsAt = LocalDateTime.now().plusHours(1);
+        // 초 단위 절삭 필수 — H2 TIMESTAMP(6)가 나노초를 마이크로초로 반올림해 저장하므로, 절삭 없이 원본
+        // startsAt을 transition(now)으로 넘기면 Linux(나노 시계)에서 DB 값이 1μs 미래가 되어 전이가
+        // no-op이 된다(약 50% 플레이크). macOS는 시계가 마이크로초 단위라 재현되지 않는다.
+        LocalDateTime startsAt = LocalDateTime.now().plusHours(1).truncatedTo(ChronoUnit.SECONDS);
         Room room = persistActivatingRoom(startsAt);
         roomInviteService.issue(room.id(), "WAJT46", null, null, "test");
         roomInviteService.join(9417L, "WAJT46");
