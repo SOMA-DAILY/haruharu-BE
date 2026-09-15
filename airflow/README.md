@@ -66,7 +66,7 @@ REST API(v2)는 `POST /auth/token {username,password}` 로 JWT 를 받아 `Autho
 | `INTERNAL_BATCH_TOKEN` | 앱의 X-Internal-Token 과 같은 값. Connection `haruharu_app` 의 password 로 주입(`AIRFLOW_CONN_HARUHARU_APP`) |
 | `HARUHARU_APP_BASE_URL` | 로컬은 `http://host.docker.internal:8080`. ECS 에선 Service Connect 주소 |
 | `AIRFLOW__API_AUTH__JWT_SECRET` | Airflow 세션 JWT 서명 키. 필수 |
-| `HARUHARU_ALERT_SLACK_WEBHOOK_URL` | 비우면 알림은 로그로만. 채우면 Slack Incoming Webhook 으로도 전송(필드 화이트리스트만 — 예외 원문·exit_message 는 싣지 않는다, 상세는 태스크 로그) |
+| `HARUHARU_ALERT_SLACK_WEBHOOK_URL` | 비우면 알림은 로그로만. **Slack 또는 Discord** Incoming Webhook URL — URL 로 판별해 본문 형식(`text` / `content`, Discord 2000자)을 맞춘다(#411). 필드 화이트리스트만 전송(예외 원문·exit_message 는 싣지 않는다) |
 | `HARUHARU_CLEANUP_DEADLINE_MINUTES` | 데드라인(기본 15). 로컬 실험 시 1~2 |
 | `HARUHARU_ALERT_DEADLINE_INCLUDE_BACKFILL` | 기본 false. 백필 실행의 데드라인 초과(구조적으로 항상 초과)를 알릴지 |
 
@@ -74,7 +74,7 @@ REST API(v2)는 `POST /auth/token {username,password}` 로 JWT 를 받아 `Autho
 
 | 상황 | 감지 주체 |
 |---|---|
-| 태스크 실패(재시도 소진), DAG Run 실패 | Airflow `on_failure_callback` → `haruharu_alerts.dag_failed` |
+| 태스크 실패(재시도 소진), DAG Run 실패 | Airflow `on_failure_callback` → `haruharu_alerts.dag_failed` → 로그 + Slack/Discord 웹훅 |
 | 04:15 까지 미완료 | Airflow Deadline Alert → `haruharu_alerts.deadline_missed` (triggerer) |
 | **Airflow 스케줄러/triggerer 자체가 죽음** | Airflow 는 못 알린다. ECS 헬스체크(`/api/v2/monitor/health`) + CloudWatch, 또는 Datadog 로그 부재 감지 — 인프라 이슈 |
 
