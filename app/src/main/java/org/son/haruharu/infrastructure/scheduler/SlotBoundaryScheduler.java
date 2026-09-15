@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 
 /**
  * 매시 정각에 SLOT_START 트리거를 스캔한다. 슬롯은 방마다 starts_at 상대 정시(slot_start)라 방마다 경계 시각이
@@ -25,12 +26,18 @@ public class SlotBoundaryScheduler {
 
     @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
     public void onSlotBoundary() {
-        LocalDateTime now = LocalDateTime.now(SEOUL);
+        // 정각 반올림 필수(#421) — notifier가 slot_start와 equals 비교하므로 나노초가 남으면 영원히 미발송.
+        // 절삭이 아니라 반올림인 이유: cron이 경계 직전에 발화할 수 있어(실측 10:29:59.988) 절삭은 이전 경계로 떨어진다.
+        LocalDateTime now = nearestHour(LocalDateTime.now(SEOUL));
         try {
             int started = slotStartNotifier.notifyOpeningSlots(now);
             log.info("슬롯 시작 알림 완료: {}명 대상", started);
         } catch (Exception e) {
             log.error("슬롯 시작 알림 실패", e);
         }
+    }
+
+    static LocalDateTime nearestHour(LocalDateTime raw) {
+        return raw.plusMinutes(30).truncatedTo(ChronoUnit.HOURS);
     }
 }
