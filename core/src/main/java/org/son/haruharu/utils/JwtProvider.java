@@ -13,6 +13,7 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 
 @Component
 public class JwtProvider {
@@ -76,9 +77,15 @@ public class JwtProvider {
         }
     }
 
+    /**
+     * jti 를 넣어 발급마다 유일한 토큰을 보장한다(#417). iat·exp 가 초 단위라 같은 유저가 같은 초에
+     * 재발급하면 바이트 동일한 토큰이 나왔고, 그 해시가 refresh_tokens.token_hash UNIQUE 에 충돌해
+     * 병렬 재발급의 두 번째 요청이 409 로 죽었다. 검증부(parseClaims)는 jti 를 보지 않으므로 기존 토큰과 호환된다.
+     */
     private String buildToken(Long userId, long expiryMs, String type) {
         Instant now = Instant.now();
         return Jwts.builder()
+            .id(UUID.randomUUID().toString())
             .subject(userId.toString())
             .claim("type", type)
             .issuedAt(Date.from(now))
