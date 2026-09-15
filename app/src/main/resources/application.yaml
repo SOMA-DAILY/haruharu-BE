@@ -68,6 +68,12 @@ haruharu:
     notification-cleanup:
       scheduler:
         enabled: ${NOTIFICATION_CLEANUP_SCHEDULER_ENABLED:true}
+  notification:
+    # 야간 푸시 차단(#429). [start, end) KST 에는 FCM 발송만 건너뛴다(알림함 저장은 유지, 막힌 푸시는 버림).
+    quiet-hours:
+      enabled: ${NOTIFICATION_QUIET_HOURS_ENABLED:true}
+      start: ${NOTIFICATION_QUIET_HOURS_START:00:00}
+      end: ${NOTIFICATION_QUIET_HOURS_END:08:00}
   mission:
     assignment:
       enabled: ${MISSION_ASSIGNMENT_ENABLED:true}
