@@ -9,7 +9,11 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
-/** 매일 20:00(22:00 매칭 확정 2시간 전)에 잠수 3일째 유저에게 매칭 신청 유도(WINBACK) 알림을 트리거한다. */
+/**
+ * 잠수 3일째 유저에게 매칭 신청 유도(WINBACK) 알림을 트리거한다.
+ * 기본 비활성(#422) — 카피·대상 선정이 폐기된 자동매칭 모델 기준이라 초대코드 모델에선 거짓 안내.
+ * 재개하려면 env로 haruharu.notification.winback-cron 지정 (구 스케줄: "0 0 20 * * *").
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -19,7 +23,7 @@ public class WinbackScheduler {
 
     private final WinbackNotifier winbackNotifier;
 
-    @Scheduled(cron = "0 0 20 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "${haruharu.notification.winback-cron:-}", zone = "Asia/Seoul")
     public void notifyInactiveUsers() {
         try {
             int notified = winbackNotifier.notifyInactiveUsers(LocalDateTime.now(SEOUL));

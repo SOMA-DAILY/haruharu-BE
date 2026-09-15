@@ -2,6 +2,7 @@ package org.son.haruharu.domain.chat;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
@@ -75,7 +76,8 @@ class GroupChatAutoCreateIntegrationTest {
     @Test
     @DisplayName("PENDING 방 입장은 채팅을 만들지 않고 방 시작 시 스냅샷으로 참여한다")
     void givenPendingRoom_whenJoinThenStart_thenGroupMembershipExists() {
-        LocalDateTime startsAt = LocalDateTime.now().plusHours(1);
+        // DB timestamp precision must not round the start boundary past the transition time.
+        LocalDateTime startsAt = LocalDateTime.now().plusHours(1).truncatedTo(ChronoUnit.SECONDS);
         Room room = persistActivatingRoom(startsAt);
         roomInviteService.issue(room.id(), "WAJT46", null, null, "test");
         roomInviteService.join(9417L, "WAJT46");
