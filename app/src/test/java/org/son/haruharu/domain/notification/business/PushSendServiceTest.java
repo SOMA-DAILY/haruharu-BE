@@ -1,5 +1,9 @@
 package org.son.haruharu.domain.notification.business;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -38,12 +42,15 @@ class PushSendServiceTest {
     @Mock NotificationHistoryService notificationHistoryService;
     @Mock PushPort pushPort;
 
+    static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    static final QuietHoursProperties QUIET_00_08 = new QuietHoursProperties(true, LocalTime.MIDNIGHT, LocalTime.of(8, 0));
+
     PushSendService service;
 
     @BeforeEach
     void setUp() {
-        service = new PushSendService(deviceTokenReader, deviceTokenWriter,
-                notificationSettingReader, notificationHistoryService, pushPort);
+        // 기본은 주간(12:00 KST) — 야간 차단 시나리오는 별도 서비스 인스턴스로 만든다
+        service = serviceAt(LocalTime.NOON, QUIET_00_08);
         // 기본: 활동 알림을 끈 유저 없음(전원 수신), 혜택 알림을 켠 유저 없음(전원 미수신)
         lenient().when(notificationSettingReader.findActivityDisabledUserIds(anyList())).thenReturn(List.of());
         lenient().when(notificationSettingReader.findMarketingEnabledUserIds(anyList())).thenReturn(List.of());
@@ -218,5 +225,76 @@ class PushSendServiceTest {
 
         then(notificationHistoryService).should().saveAll(eq(List.of(1L)), any(), any(), any(), any());
         then(pushPort).should(never()).send(any());
+    }
+
+    // ===================== 야간 차단(#429) =====================
+
+    private PushSendService serviceAt(LocalTime kstTime, QuietHoursProperties quietHours) {
+        Clock clock = Clock.fixed(LocalDateTime.of(2026, 9, 16, kstTime.getHour(), kstTime.getMinute())
+                .atZone(SEOUL).toInstant(), SEOUL);
+        return new PushSendService(deviceTokenReader, deviceTokenWriter,
+                notificationSettingReader, notificationHistoryService, pushPort, quietHours, clock);
+    }
+
+    @Test
+    @DisplayName("야간(03:00 KST)에는 어떤 타입이든 알림함에는 저장하되 푸시는 보내지 않는다")
+    void givenQuietHours_whenSend_thenSavesInboxButSkipsPush() {
+        PushSendService night = serviceAt(LocalTime.of(3, 0), QUIET_00_08);
+
+        night.sendToUsers(List.of(1L), NotificationType.CHAT, Map.of(), "민준");
+        night.sendToUsers(List.of(1L), NotificationType.COIN_REFUNDED, Map.of(), 5L); // TRANSACTIONAL 도 차단
+
+        then(notificationHistoryService).should().saveAll(eq(List.of(1L)), eq(NotificationType.CHAT), any(), any(), any());
+        then(notificationHistoryService).should().saveAll(eq(List.of(1L)), eq(NotificationType.COIN_REFUNDED), any(), any(), any());
+        then(deviceTokenReader).should(never()).findAllByUserIds(anyList());
+        then(pushPort).should(never()).send(any());
+    }
+
+    @Test
+    @DisplayName("차단 구간 경계: 00:00은 차단, 08:00과 23:59는 발송한다")
+    void givenBoundaryTimes_whenSend_thenOnlyInsideWindowIsBlocked() {
+        given(deviceTokenReader.findAllByUserIds(List.of(1L)))
+                .willReturn(List.of(new DeviceToken(10L, 1L, "token-1")));
+        given(pushPort.send(any())).willReturn(List.of());
+
+        serviceAt(LocalTime.MIDNIGHT, QUIET_00_08).sendToUsers(List.of(1L), NotificationType.SLOT_START, Map.of());
+        then(pushPort).should(never()).send(any());
+
+        serviceAt(LocalTime.of(8, 0), QUIET_00_08).sendToUsers(List.of(1L), NotificationType.SLOT_START, Map.of());
+        serviceAt(LocalTime.of(23, 59), QUIET_00_08).sendToUsers(List.of(1L), NotificationType.SLOT_START, Map.of());
+        then(pushPort).should(org.mockito.Mockito.times(2)).send(any());
+    }
+
+    @Test
+    @DisplayName("quiet-hours.enabled=false 면 야간에도 발송한다")
+    void givenQuietHoursDisabled_whenSendAtNight_thenSends() {
+        given(deviceTokenReader.findAllByUserIds(List.of(1L)))
+                .willReturn(List.of(new DeviceToken(10L, 1L, "token-1")));
+        given(pushPort.send(any())).willReturn(List.of());
+        QuietHoursProperties disabled = new QuietHoursProperties(false, LocalTime.MIDNIGHT, LocalTime.of(8, 0));
+
+        serviceAt(LocalTime.of(3, 0), disabled).sendToUsers(List.of(1L), NotificationType.SLOT_START, Map.of());
+
+        then(pushPort).should().send(any());
+    }
+
+    @Test
+    @DisplayName("자정을 넘는 구간(23:00~07:00)도 올바르게 판정한다")
+    void givenOvernightWindow_whenIsQuiet_thenWrapsMidnight() {
+        QuietHoursProperties overnight = new QuietHoursProperties(true, LocalTime.of(23, 0), LocalTime.of(7, 0));
+
+        assertThat(overnight.isQuiet(LocalTime.of(23, 0))).isTrue();
+        assertThat(overnight.isQuiet(LocalTime.of(2, 30))).isTrue();
+        assertThat(overnight.isQuiet(LocalTime.of(7, 0))).isFalse();
+        assertThat(overnight.isQuiet(LocalTime.of(22, 59))).isFalse();
+    }
+
+    @Test
+    @DisplayName("start == end 는 0폭 구간이라 어느 시각에도 차단하지 않는다")
+    void givenEmptyWindow_whenIsQuiet_thenNeverQuiet() {
+        QuietHoursProperties empty = new QuietHoursProperties(true, LocalTime.of(8, 0), LocalTime.of(8, 0));
+
+        assertThat(empty.isQuiet(LocalTime.of(8, 0))).isFalse();
+        assertThat(empty.isQuiet(LocalTime.of(3, 0))).isFalse();
     }
 }
