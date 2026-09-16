@@ -28,6 +28,10 @@ public enum NotificationType {
     QUESTION_AVAILABLE("💌 익명 질문이 열렸어요", "궁금했던 마음을 질문으로 전해보세요", true, NotificationCategory.ACTIVITY),
     QUESTION_RECEIVED("💌 익명 질문이 도착했어요", "받은 질문을 확인해 보세요. 답변은 자유예요", true, NotificationCategory.ACTIVITY),
     QUESTION_ANSWERED("💌 답변이 도착했어요", "보낸 질문에 새로운 답변이 도착했어요", true, NotificationCategory.ACTIVITY),
+    // 마감 2시간 전 재촉(#432). 시한성이라 알림함 미저장 — 마감 후 남으면 안내가 거짓이 된다.
+    // 문구의 "2시간"은 QuestionDeadlineNotifier.DEADLINE_LEAD_HOURS 와 같이 바꿔야 한다.
+    QUESTION_ANSWER_DEADLINE_SOON("⏰ 답을 기다리는 질문이 있어요", "2시간 뒤 마감되면 답할 수 없어요", false, NotificationCategory.ACTIVITY),
+    QUESTION_SEND_DEADLINE_SOON("⏰ 질문할 시간이 2시간 남았어요", "궁금했던 걸 지금 물어보세요", false, NotificationCategory.ACTIVITY),
 
     // ── C. 시스템 / 거래 ──
     COIN_REFUNDED("☁️ 구름 %d개를 돌려드렸어요", "이번엔 인연이 닿지 않았지만, 다음 기회에 다시 만나요", true, NotificationCategory.TRANSACTIONAL),
