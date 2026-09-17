@@ -155,30 +155,79 @@ class RoomTodayServiceTest {
     }
 
     @Test
-    @DisplayName("SELECTING(최종선택 진행 중)이면 결과 발표 시각을 DEADLINE으로 반환하고 현재 슬롯은 없다")
-    void givenSelecting_whenGetToday_thenResultDeadlineAndNoOpenSlot() {
-        // opensAt 20:00, resultAt 22:00, now 20:30 → statusAt=SELECTING
+    @DisplayName("SELECTING 중에도 방 종료 전이면 현재 슬롯이 열려 있고 다음 슬롯을 NEXT_SLOT으로 센다(#436)")
+    void givenSelecting_whenGetToday_thenCurrentSlotOpenAndNextSlotTimer() {
+        // opensAt 20:00, resultAt 다음날 01:00, now 22:10 → SELECTING. 다음 슬롯 23:00이 결과 발표보다 먼저
         Room room = new Room(100L, RoomStatus.ACTIVE, DATE, 3, STARTS, null,
-                STARTS, DATE.atTime(20, 0), DATE.atTime(21, 0),
-                DATE.atTime(22, 0), DATE.atTime(23, 0));
+                STARTS, DATE.atTime(20, 0), DATE.plusDays(1).atTime(0, 0),
+                DATE.plusDays(1).atTime(1, 0), DATE.plusDays(2).atTime(0, 0));
         given(roomMemberReader.getByRoomIdAndUserId(100L, 1L)).willReturn(member(200L, 1L));
         given(roomReader.findById(100L)).willReturn(Optional.of(room));
-        // 최종선택 오픈 이후 시작 슬롯은 창에서 제외되어 window가 비므로 getUploadedSlotStarts는 호출되지 않는다
+        given(roomMemberReader.getByRoomId(100L))
+                .willReturn(List.of(member(200L, 1L), member(201L, 2L)));
+        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S20, S21, S22)))
+                .willReturn(List.of(S21));
+        given(videoPostReader.getUploadedSlotStarts(200L, List.of(S21, S22))).willReturn(List.of());
 
-        TodayResponse result = serviceAt(DATE.atTime(20, 30)).getToday(100L, 1L);
+        TodayResponse result = serviceAt(DATE.atTime(22, 10)).getToday(100L, 1L);
 
         assertThat(result.status()).isEqualTo(RoomStatus.SELECTING.name());
-        assertThat(result.timerType()).isEqualTo(TimerType.DEADLINE);
-        assertThat(result.timerTargetAt()).isEqualTo(DATE.atTime(22, 0));
-        assertThat(result.slots()).noneMatch(TodayResponse.SlotView::openNow); // 촬영 불가
+        assertThat(result.slots()).extracting(TodayResponse.SlotView::slotStart)
+                .containsExactly(S21, S22); // 빈 지난 슬롯(20시)은 제외, 빈 현재 슬롯은 유지
+        assertThat(result.slots()).filteredOn(TodayResponse.SlotView::openNow)
+                .extracting(TodayResponse.SlotView::slotStart).containsExactly(S22);
+        assertThat(result.timerType()).isEqualTo(TimerType.NEXT_SLOT);
+        assertThat(result.timerTargetAt()).isEqualTo(DATE.atTime(23, 0));
     }
 
     @Test
-    @DisplayName("SELECTING 중에는 공개 영상이 있는 지난 슬롯만 유지하고 현재 슬롯은 없다")
-    void givenSelectingWithVisiblePast_whenGetToday_thenOmitsEmptyPastAndNoCurrent() {
+    @DisplayName("SELECTING 중 결과 발표가 다음 슬롯보다 먼저면 결과 발표 시각을 DEADLINE으로 센다")
+    void givenSelectingResultBeforeNextSlot_whenGetToday_thenResultDeadline() {
+        // resultAt 22:30, now 22:10 → 다음 슬롯(23:00)보다 발표가 먼저
         Room room = new Room(100L, RoomStatus.ACTIVE, DATE, 3, STARTS, null,
-                STARTS, DATE.atTime(22, 0), DATE.atTime(23, 0),
-                DATE.plusDays(1).atTime(0, 0), DATE.plusDays(1).atTime(1, 0));
+                STARTS, DATE.atTime(21, 0), DATE.atTime(22, 20),
+                DATE.atTime(22, 30), DATE.plusDays(1).atTime(0, 0));
+        given(roomMemberReader.getByRoomIdAndUserId(100L, 1L)).willReturn(member(200L, 1L));
+        given(roomReader.findById(100L)).willReturn(Optional.of(room));
+        given(roomMemberReader.getByRoomId(100L))
+                .willReturn(List.of(member(200L, 1L), member(201L, 2L)));
+        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S20, S21, S22)))
+                .willReturn(List.of());
+        given(videoPostReader.getUploadedSlotStarts(eq(200L), anyList())).willReturn(List.of());
+
+        TodayResponse result = serviceAt(DATE.atTime(22, 10)).getToday(100L, 1L);
+
+        assertThat(result.timerType()).isEqualTo(TimerType.DEADLINE);
+        assertThat(result.timerTargetAt()).isEqualTo(DATE.atTime(22, 30));
+    }
+
+    @Test
+    @DisplayName("결과 발표 후 방 종료 전이면 다음 슬롯을 NEXT_SLOT으로 센다")
+    void givenAfterResultBeforeEnd_whenGetToday_thenNextSlotTimer() {
+        Room room = new Room(100L, RoomStatus.SELECTING, DATE, 3, STARTS, null,
+                STARTS, DATE.atTime(20, 30), DATE.atTime(21, 0),
+                DATE.atTime(21, 30), DATE.plusDays(1).atTime(0, 0));
+        given(roomMemberReader.getByRoomIdAndUserId(100L, 1L)).willReturn(member(200L, 1L));
+        given(roomReader.findById(100L)).willReturn(Optional.of(room));
+        given(roomMemberReader.getByRoomId(100L))
+                .willReturn(List.of(member(200L, 1L), member(201L, 2L)));
+        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S20, S21, S22)))
+                .willReturn(List.of());
+        given(videoPostReader.getUploadedSlotStarts(eq(200L), anyList())).willReturn(List.of());
+
+        TodayResponse result = serviceAt(DATE.atTime(22, 10)).getToday(100L, 1L);
+
+        assertThat(result.timerType()).isEqualTo(TimerType.NEXT_SLOT);
+        assertThat(result.timerTargetAt()).isEqualTo(DATE.atTime(23, 0));
+    }
+
+    @Test
+    @DisplayName("방 종료(ends_at) 후에는 현재 슬롯이 없고 종료 이후 시작 슬롯은 창에서 제외된다")
+    void givenEnded_whenGetToday_thenNoCurrentAndCappedAtEnd() {
+        // ends_at 22:00, now 22:10 → ENDED. 창 [20,21,22] 중 22:00(종료 이후 시작)은 제외
+        Room room = new Room(100L, RoomStatus.SELECTING, DATE, 3, STARTS, null,
+                STARTS, DATE.atTime(20, 30), DATE.atTime(21, 0),
+                DATE.atTime(21, 30), DATE.atTime(22, 0));
         given(roomMemberReader.getByRoomIdAndUserId(100L, 1L)).willReturn(member(200L, 1L));
         given(roomReader.findById(100L)).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(100L))
@@ -189,9 +238,9 @@ class RoomTodayServiceTest {
 
         TodayResponse result = serviceAt(DATE.atTime(22, 10)).getToday(100L, 1L);
 
-        assertThat(result.slots()).extracting(TodayResponse.SlotView::slotStart)
-                .containsExactly(S21);
+        assertThat(result.slots()).extracting(TodayResponse.SlotView::slotStart).containsExactly(S21);
         assertThat(result.slots()).noneMatch(TodayResponse.SlotView::openNow);
+        assertThat(result.timerType()).isNull();
     }
 
     @Test

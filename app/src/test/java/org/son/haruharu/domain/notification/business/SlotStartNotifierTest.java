@@ -76,6 +76,35 @@ class SlotStartNotifierTest {
     }
 
     @Test
+    @DisplayName("최종선택 진행 중(SELECTING)이어도 방 종료 전 슬롯 경계면 발송한다(#436)")
+    void givenSelectingRoom_whenNotify_thenPushes() {
+        // opensAt 22:00 → 23:00은 SELECTING, 종료는 다음날
+        Room selecting = new Room(7L, RoomStatus.SELECTING, STARTS.toLocalDate(), 3, STARTS, null,
+                STARTS, STARTS.plusHours(2), STARTS.plusHours(5), STARTS.plusHours(6), STARTS.plusDays(1));
+        given(roomReader.getReconcilable()).willReturn(List.of(selecting));
+        given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L)));
+
+        int notified = notifier.notifyOpeningSlots(STARTS.plusHours(3));
+
+        assertThat(notified).isEqualTo(1);
+        then(pushSendService).should().sendToUsers(
+                List.of(1L), NotificationType.SLOT_START, Map.of("roomId", "7"));
+    }
+
+    @Test
+    @DisplayName("방 종료(ends_at) 시각의 슬롯 경계에는 발송하지 않는다")
+    void givenEndedRoom_whenNotify_thenSkips() {
+        Room ended = new Room(7L, RoomStatus.SELECTING, STARTS.toLocalDate(), 3, STARTS, null,
+                STARTS, STARTS.plusHours(1), STARTS.plusHours(2), STARTS.plusHours(2), STARTS.plusHours(3));
+        given(roomReader.getReconcilable()).willReturn(List.of(ended));
+
+        int notified = notifier.notifyOpeningSlots(STARTS.plusHours(3));
+
+        assertThat(notified).isZero();
+        then(pushSendService).should(never()).sendToUsers(anyList(), any(), anyMap());
+    }
+
+    @Test
     @DisplayName("첫 슬롯 시작(now==starts_at)에도 발송한다")
     void givenFirstSlot_whenNotify_thenPushes() {
         given(roomReader.getReconcilable()).willReturn(List.of(activeRoom()));

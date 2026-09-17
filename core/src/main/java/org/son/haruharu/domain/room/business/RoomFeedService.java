@@ -9,7 +9,6 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
-import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.implement.ReactionCount;
 import org.son.haruharu.domain.video.implement.ReactionType;
 import org.son.haruharu.domain.video.implement.SlotClock;
@@ -71,16 +70,16 @@ public class RoomFeedService {
         if (room.startsAt() == null) {
             return empty(); // 구 모델 방(slot_start 피드 없음)
         }
-        // 최종선택 오픈 이후 시작하는 슬롯은 업로드가 불가능했으므로 창에서 제외한다.
+        // 방 종료 이후 시작하는 슬롯은 업로드가 불가능했으므로 창에서 제외한다.
         List<LocalDateTime> window = SlotClock.visibleSlotStarts(
-                room.startsAt(), now, room.finalSelectionOpensAt());
+                room.startsAt(), now, room.videoUploadableUntil());
         if (window.isEmpty()) {
-            // 노출 슬롯은 없지만(최종선택 이후·방 종료 후 등) 과거 이력이 있으면 회고를 시작할 커서를 시드한다.
+            // 노출 슬롯은 없지만(방 종료 후 등) 과거 이력이 있으면 회고를 시작할 커서를 시드한다.
             // 안 그러면 클라가 next_cursor(=null)만 보고 과거를 열 방법이 없다(#350 리뷰). 시작 전이면 이력 없음 → null.
             return new FeedResponse(List.of(), List.of(), archiveSeedCursor(room, now));
         }
-        // 촬영 CTA 대상인 현재 슬롯은 ACTIVE일 때만(오늘 화면 openNow와 동일 규칙).
-        LocalDateTime currentSlotStart = room.statusAt(now) == RoomStatus.ACTIVE
+        // 촬영 CTA 대상인 현재 슬롯은 영상 슬롯이 흐르는 동안만(오늘 화면 openNow와 동일 규칙).
+        LocalDateTime currentSlotStart = room.isVideoSlotOpenAt(now)
                 ? SlotClock.currentSlotStart(room.startsAt(), now)
                 : null;
         return buildFeed(roomId, userId, me, room, window, currentSlotStart);
@@ -105,7 +104,7 @@ public class RoomFeedService {
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDateTime cappedBefore = before.isAfter(now) ? now : before;
         List<LocalDateTime> window = SlotClock.pastSlotStarts(
-                room.startsAt(), cappedBefore, capped, room.finalSelectionOpensAt());
+                room.startsAt(), cappedBefore, capped, room.videoUploadableUntil());
         if (window.isEmpty()) {
             return empty(); // 방 시작 도달 등 더 과거 슬롯 없음
         }
@@ -117,11 +116,11 @@ public class RoomFeedService {
     }
 
     /**
-     * 노출 창이 빈 방에서 과거 회고를 시작할 커서. 업로드 가능했던 구간의 상한(min(now, 최종선택 오픈))을 커서로 주면
+     * 노출 창이 빈 방에서 과거 회고를 시작할 커서. 업로드 가능했던 구간의 상한(min(now, 방 종료))을 커서로 주면
      * 클라가 그걸 before로 넘겨 가장 최근 과거 슬롯부터 되짚어볼 수 있다. 상한이 방 시작 이하면 이력이 없어 null.
      */
     private LocalDateTime archiveSeedCursor(Room room, LocalDateTime now) {
-        LocalDateTime cutoff = room.finalSelectionOpensAt();
+        LocalDateTime cutoff = room.videoUploadableUntil();
         LocalDateTime upperBound = (cutoff != null && cutoff.isBefore(now)) ? cutoff : now;
         return upperBound.isAfter(room.startsAt()) ? upperBound : null;
     }

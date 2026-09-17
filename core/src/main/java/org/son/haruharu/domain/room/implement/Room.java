@@ -85,6 +85,24 @@ public record Room(
     }
 
     /**
+     * 영상 슬롯이 흐르는(업로드·촬영 CTA·슬롯 푸시 대상) 중인지(#436). 새 모델 방의 {@code [starts_at, ends_at)} =
+     * ACTIVE·SELECTING. 최종선택은 영상 슬롯과 별개로 진행되므로 최종선택 오픈으로 슬롯을 멈추지 않는다.
+     * 구 모델 방(startsAt=null)은 대상이 아니다.
+     */
+    public boolean isVideoSlotOpenAt(LocalDateTime now) {
+        if (startsAt == null) {
+            return false;
+        }
+        RoomStatus derived = statusAt(now);
+        return derived == RoomStatus.ACTIVE || derived == RoomStatus.SELECTING;
+    }
+
+    /** 영상 업로드가 가능한 구간의 상한 = 방 종료(ends_at). 이 시각 이상에서 시작하는 슬롯은 업로드 불가였다(#436). */
+    public LocalDateTime videoUploadableUntil() {
+        return endsAt;
+    }
+
+    /**
      * reconciler 가 파생 상태를 저장 컬럼에 materialize 할 때 쓴다(#320).
      * <p>
      * 새 모델 방이 <b>진행 이후 상태</b>로 가면 startedAt 을 startsAt 으로 앵커한다. 평소엔

@@ -145,6 +145,46 @@ class VideoServiceTest {
     }
 
     @Test
+    @DisplayName("최종선택 진행 중(SELECTING)에도 방 종료 전이면 현재 slot_start로 업로드된다(#436)")
+    void givenSelectingRoom_whenUpload_thenSavesAtCurrentSlot() {
+        Long userId = 1L;
+        Long roomId = 13L;
+        Long memberId = 22L;
+        String url = BASE + "users/" + userId + "/videos/v.mp4";
+        var command = new VideoUploadCommand(url, null, null);
+        // opensAt 11:00 → serviceAt(12)엔 SELECTING, 종료는 다음날
+        Room selecting = new Room(roomId, RoomStatus.ACTIVE, DATE, 3, STARTS, null,
+                STARTS, DATE.atTime(11, 0), DATE.atTime(13, 0), DATE.atTime(14, 0), STARTS.plusDays(1));
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(selecting));
+        given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
+        given(videoPostReader.hasActiveUpload(memberId, SLOT_AT_12)).willReturn(false);
+        given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        VideoPostResponse result = serviceAt(12).upload(userId, roomId, command);
+
+        assertThat(result.slotStart()).isEqualTo(SLOT_AT_12);
+    }
+
+    @Test
+    @DisplayName("방 종료(ends_at) 이후 업로드 시 RoomNotActiveException")
+    void givenEndedRoom_whenUpload_thenThrows() {
+        Long userId = 1L;
+        Long roomId = 14L;
+        var command = new VideoUploadCommand(BASE + "x", null, null);
+        // ends_at 12:00 → serviceAt(12)엔 ENDED
+        Room ended = new Room(roomId, RoomStatus.SELECTING, DATE, 3, STARTS, null,
+                STARTS, DATE.atTime(10, 0), DATE.atTime(10, 30), DATE.atTime(11, 0), DATE.atTime(12, 0));
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(501L, userId));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(ended));
+
+        assertThatThrownBy(() -> serviceAt(12).upload(userId, roomId, command))
+            .isInstanceOf(RoomNotActiveException.class);
+    }
+
+    @Test
     @DisplayName("현재 슬롯에 활성 영상이 이미 있으면 DuplicateSlotUploadException")
     void givenActiveExists_whenUpload_thenThrows() {
         Long userId = 1L;

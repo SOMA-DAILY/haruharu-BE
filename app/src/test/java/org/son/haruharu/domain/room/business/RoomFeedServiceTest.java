@@ -180,20 +180,36 @@ class RoomFeedServiceTest {
     }
 
     @Test
-    @DisplayName("SELECTING(최종선택 진행 중) 방은 촬영 불가라 모든 슬롯 current=false다")
-    void givenSelecting_whenFeed_thenNoCurrentSlot() {
+    @DisplayName("SELECTING(최종선택 진행 중)이어도 방 종료 전이면 현재 슬롯이 current=true로 유지된다(#436)")
+    void givenSelecting_whenFeed_thenCurrentSlotKept() {
         given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
-        // opensAt 22:00 → now(22:10)엔 SELECTING. 창은 최종선택 오픈 이전 슬롯(20:00·21:00)만
+        // opensAt 21:00 → now(22:10)엔 SELECTING. 종료 23:00 전이라 창은 [20,21,22] 그대로
         Room selecting = new Room(10L, RoomStatus.ACTIVE, DATE, 3, STARTS, null,
-                STARTS, S22, DATE.atTime(22, 15), DATE.atTime(22, 30), DATE.atTime(23, 0));
+                STARTS, S21, DATE.atTime(22, 15), DATE.atTime(22, 30), DATE.atTime(23, 0));
         given(roomReader.findById(10L)).willReturn(Optional.of(selecting));
+        given(roomMemberReader.getByRoomId(10L)).willReturn(List.of(member(20L, 1L), member(30L, 2L)));
+        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S20, S21, S22))).willReturn(List.of());
+
+        FeedResponse result = service.getFeed(10L, 1L);
+
+        assertThat(result.slots()).extracting(SlotStatus::slotStart).containsExactly(S22);
+        assertThat(currentOf(result, S22)).isTrue();
+    }
+
+    @Test
+    @DisplayName("방 종료(ends_at) 후에는 current 슬롯이 없고 종료 이후 시작 슬롯은 창에서 제외된다")
+    void givenEnded_whenFeed_thenNoCurrentAndCappedAtEnd() {
+        given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
+        // ends_at 22:00 → now(22:10)엔 ENDED. 창은 종료 전 시작 슬롯(20·21시)만
+        Room ended = new Room(10L, RoomStatus.SELECTING, DATE, 3, STARTS, null,
+                STARTS, DATE.atTime(20, 30), DATE.atTime(21, 0), DATE.atTime(21, 30), S22);
+        given(roomReader.findById(10L)).willReturn(Optional.of(ended));
         given(roomMemberReader.getByRoomId(10L)).willReturn(List.of(member(20L, 1L), member(30L, 2L)));
         given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S20, S21))).willReturn(List.of());
 
         FeedResponse result = service.getFeed(10L, 1L);
 
         assertThat(result.slots()).isEmpty();
-        assertThat(result.slots()).noneMatch(SlotStatus::current);
     }
 
     @Test
@@ -329,12 +345,12 @@ class RoomFeedServiceTest {
     }
 
     @Test
-    @DisplayName("노출 창이 비었어도(최종선택 이후) 과거 이력이 있으면 회고 시작 커서를 시드한다")
+    @DisplayName("노출 창이 비었어도(방 종료 이후) 과거 이력이 있으면 회고 시작 커서를 시드한다")
     void givenWindowExpiredButHistory_whenFeed_thenSeedsArchiveCursor() {
-        // starts 18:00, opensAt 20:00, now 22:10 → 노출 창은 전부 상한 이후라 빈다. 하지만 18·19시 이력 존재
-        LocalDateTime opensAt = DATE.atTime(20, 0);
+        // starts 18:00, endsAt 20:00, now 22:10 → 노출 창은 전부 종료 이후라 빈다. 하지만 18·19시 이력 존재
+        LocalDateTime endsAt = DATE.atTime(20, 0);
         Room room = new Room(10L, RoomStatus.ACTIVE, DATE, 3, DATE.atTime(18, 0), null,
-                DATE.atTime(18, 0), opensAt, opensAt.plusHours(2), opensAt.plusHours(3), DATE.plusDays(1).atTime(0, 0));
+                DATE.atTime(18, 0), DATE.atTime(19, 0), DATE.atTime(19, 20), DATE.atTime(19, 30), endsAt);
         given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
         given(roomReader.findById(10L)).willReturn(Optional.of(room));
 
@@ -342,7 +358,24 @@ class RoomFeedServiceTest {
 
         assertThat(result.slots()).isEmpty();
         assertThat(result.posts()).isEmpty();
-        assertThat(result.nextCursor()).isEqualTo(opensAt); // 상한(20:00)을 커서로 → 클라가 before로 넘겨 과거 조회
+        assertThat(result.nextCursor()).isEqualTo(endsAt); // 상한(20:00)을 커서로 → 클라가 before로 넘겨 과거 조회
+    }
+
+    @Test
+    @DisplayName("과거 회고 페이지는 최종선택 오픈 이후 슬롯도 포함하고 방 종료에서만 자른다(#436)")
+    void givenBeforeAfterSelectionOpen_whenFeedBefore_thenIncludesSelectingSlots() {
+        // starts 18:00, opensAt 19:00, endsAt 21:00, before 22:00 → [18,19,20] (상한 21:00 직전부터)
+        Room room = new Room(10L, RoomStatus.ACTIVE, DATE, 3, DATE.atTime(18, 0), null,
+                DATE.atTime(18, 0), DATE.atTime(19, 0), DATE.atTime(19, 20), DATE.atTime(19, 30), S21);
+        given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
+        given(roomReader.findById(10L)).willReturn(Optional.of(room));
+        given(roomMemberReader.getByRoomId(10L)).willReturn(List.of(member(20L, 1L)));
+        given(videoPostReader.getFeed(List.of(20L), List.of(DATE.atTime(18, 0), DATE.atTime(19, 0), S20)))
+                .willReturn(List.of());
+
+        FeedResponse result = service.getFeedBefore(10L, 1L, S22, 3);
+
+        assertThat(result.nextCursor()).isNull(); // 가장 과거가 방 시작(18:00)
     }
 
     @Test

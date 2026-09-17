@@ -11,7 +11,6 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
-import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
 import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
 import org.son.haruharu.domain.video.business.dto.VideoUploadUrlResponse;
@@ -83,8 +82,8 @@ public class VideoService {
         Room room = roomReader.findById(roomId)
                 .orElseThrow(RoomNotFoundException::new);
         LocalDateTime now = LocalDateTime.now(clock);
-        // 시각 파생 상태로 판정(저장 status는 배치 지연될 수 있음). 새 모델(starts_at) 방만 업로드 대상.
-        if (room.startsAt() == null || room.statusAt(now) != RoomStatus.ACTIVE) {
+        // 시각 파생 상태로 판정(저장 status는 배치 지연될 수 있음). 새 모델 방의 진행·최종선택 구간(방 종료 전)만 업로드 대상.
+        if (!room.isVideoSlotOpenAt(now)) {
             throw new RoomNotActiveException();
         }
 

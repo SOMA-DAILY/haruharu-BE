@@ -5,7 +5,6 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
-import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.implement.SlotClock;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
 import org.springframework.stereotype.Service;
@@ -15,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 슬롯 마감 30분 전(slot_start+30분), ACTIVE 방의 해당 슬롯 미업로드 멤버에게만 마감 임박 푸시를 보낸다.
+ * 슬롯 마감 30분 전(slot_start+30분), 영상 슬롯이 흐르는(ACTIVE·SELECTING, 방 종료 전) 방의 해당 슬롯 미업로드 멤버에게만 마감 임박 푸시를 보낸다.
  * 초대코드(새 모델) 방만 대상 — 방마다 시각이 달라 매시 :30 스캔하며 slot_start+30분==now 인 방만 보낸다.
  * 의도적으로 @Transactional 없음 — 트랜잭션을 열면 FCM 발송 IO가 묶이고, 발송 중 무효 토큰
  * 삭제(REQUIRED 전파)가 readOnly 트랜잭션에 조인되어 실패한다. 읽기 간 정합성도 불필요(베스트에포트 알림).
@@ -48,7 +47,7 @@ public class SlotDeadlineNotifier {
     }
 
     private int notifyRoom(Room room, LocalDateTime now) {
-        if (room.startsAt() == null || room.statusAt(now) != RoomStatus.ACTIVE) {
+        if (!room.isVideoSlotOpenAt(now)) {
             return 0;
         }
         LocalDateTime slotStart = SlotClock.currentSlotStart(room.startsAt(), now);

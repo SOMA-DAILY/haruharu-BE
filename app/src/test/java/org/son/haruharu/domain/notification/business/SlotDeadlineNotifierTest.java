@@ -72,6 +72,23 @@ class SlotDeadlineNotifierTest {
     }
 
     @Test
+    @DisplayName("최종선택 진행 중(SELECTING)이어도 방 종료 전이면 미업로드 멤버에게 발송한다(#436)")
+    void givenSelectingRoom_whenNotify_thenPushes() {
+        LocalDateTime slotStart = STARTS.plusHours(3);   // 23:00 슬롯
+        Room selecting = new Room(7L, RoomStatus.SELECTING, STARTS.toLocalDate(), 3, STARTS, null,
+                STARTS, STARTS.plusHours(2), STARTS.plusHours(5), STARTS.plusHours(6), STARTS.plusDays(1));
+        given(roomReader.getReconcilable()).willReturn(List.of(selecting));
+        given(roomMemberReader.getByRoomId(7L)).willReturn(List.of(member(100L, 1L)));
+        given(videoPostReader.hasActiveUpload(100L, slotStart)).willReturn(false);
+
+        int notified = notifier.notifyClosingSlots(slotStart.plusMinutes(30));
+
+        assertThat(notified).isEqualTo(1);
+        then(pushSendService).should().sendToUsers(
+                List.of(1L), NotificationType.SLOT_DEADLINE_SOON, Map.of("roomId", "7"));
+    }
+
+    @Test
     @DisplayName("모든 멤버가 업로드했으면 발송하지 않는다")
     void givenAllUploaded_whenNotify_thenNoPush() {
         LocalDateTime slotStart = STARTS.plusHours(1);

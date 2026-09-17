@@ -63,7 +63,7 @@ public final class SlotClock {
     }
 
     /**
-     * 가시 슬롯 목록에서 업로드 가능 구간을 벗어난 슬롯을 뺀다. {@code uploadableUntil}(예: 최종선택 오픈 시각)
+     * 가시 슬롯 목록에서 업로드 가능 구간을 벗어난 슬롯을 뺀다. {@code uploadableUntil}(예: 방 종료 시각)
      * 이상에서 시작하는 슬롯은 애초에 업로드가 불가능하므로(방이 ACTIVE가 아님) 피드·오늘 창에서 제외한다.
      * uploadableUntil이 null이면 캡하지 않는다.
      */
@@ -80,7 +80,7 @@ public final class SlotClock {
      * {@code before} 슬롯보다 과거의 슬롯 시작 시각들을 최대 {@code size}개(오름차순). 과거 회고 페이지네이션(#350)용.
      * <ul>
      *   <li>{@code startsAt} 미만은 제외 — 방 시작 이전 슬롯은 없다.</li>
-     *   <li>{@code uploadableUntil} 이상은 제외 — 업로드 불가였던 구간(방이 ACTIVE 아님).</li>
+     *   <li>{@code uploadableUntil} 이상은 제외 — 업로드 불가였던 구간(방 종료 이후).</li>
      *   <li>{@code before}가 startsAt 이하이거나 size≤0이면 빈 목록.</li>
      * </ul>
      * before는 그리드에 정렬돼 있지 않아도 된다(before "미만"의 슬롯을 그리드에서 고른다).
