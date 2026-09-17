@@ -33,6 +33,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.coin.storage",
         "org.son.haruharu.domain.payment.storage",
         "org.son.haruharu.domain.mission.storage",
+        "org.son.haruharu.domain.video.storage",
+        "org.son.haruharu.domain.chat.storage",
+        "org.son.haruharu.domain.question.storage",
         "org.son.haruharu.domain.demoaccess.storage"
 })
 @EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.room.storage",
