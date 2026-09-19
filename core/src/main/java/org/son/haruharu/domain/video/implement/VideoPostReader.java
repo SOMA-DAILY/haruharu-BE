@@ -39,4 +39,9 @@ public class VideoPostReader {
     public List<VideoPost> findActiveByRoomMember(Long roomMemberId) {
         return videoPostRepository.findActiveByRoomMember(roomMemberId);
     }
+
+    /** 주어진 방의 멤버들 중에 해당 슬롯들에 활성(미삭제) 영상을 올린 멤버 id **/
+    public List<Long> getUploadedRoomMemberIds(List<Long> roomMemberIds, List<LocalDateTime> slotStarts) {
+        return videoPostRepository.findUploadedRoomMemberIds(roomMemberIds, slotStarts);
+    }
 }

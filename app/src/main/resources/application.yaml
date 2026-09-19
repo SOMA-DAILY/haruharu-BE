@@ -74,6 +74,11 @@ haruharu:
       enabled: ${NOTIFICATION_QUIET_HOURS_ENABLED:true}
       start: ${NOTIFICATION_QUIET_HOURS_START:00:00}
       end: ${NOTIFICATION_QUIET_HOURS_END:08:00}
+    # 슬롯 시작 푸시 배치 런처(#440). enabled=false 면 스케줄 launch 만 끈다(Job 빈은 남음).
+    # cron: 미션 배정(매분 0초)·outcome(매분 30초)과 같은 초에 두지 말 것 — JobRepository SERIALIZABLE 충돌로 한쪽이 실행되지 못한다.
+    slot-start:
+      enabled: ${SLOT_START_NOTIFICATION_ENABLED:true}
+      cron: ${SLOT_START_NOTIFICATION_CRON:15 0 * * * *}
   mission:
     assignment:
       enabled: ${MISSION_ASSIGNMENT_ENABLED:true}
