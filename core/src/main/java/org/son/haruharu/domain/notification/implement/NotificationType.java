@@ -22,6 +22,7 @@ public enum NotificationType {
     MUTUAL_MATCH("💞 서로의 마음이 닿았어요", "두 분 다 서로를 선택했어요! 지금 대화를 시작해보세요", true, NotificationCategory.ACTIVITY),
     SELECTED_BY_SOMEONE("💕 설레는 소식이 있어요", "누군가 당신을 마음에 담았어요. 누굴까요?", true, NotificationCategory.ACTIVITY),
     // body의 %s는 발신자 닉네임(bodyArgs)으로 치환. 대화 내용은 잠금화면 노출 방지를 위해 미포함.
+    VIDEO_REPLY("하루하루", "%s님이 회원님의 영상에 메시지를 남겼어요", true, NotificationCategory.ACTIVITY),
     CHAT("💬 새 메시지", "%s님이 메시지를 보냈어요", true, NotificationCategory.ACTIVITY),
     // title의 %s는 업로더의 방 가명(pseudonym). 고볼륨·시한성이라 알림함 미저장(#422).
     VIDEO_UPLOADED("🎬 %s님이 하루를 남겼어요", "지금 영상을 확인해보세요", false, NotificationCategory.ACTIVITY),

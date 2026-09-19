@@ -15,10 +15,15 @@ public record MessagePageResponse(
             @Schema(description = "메시지 id", example = "1024") Long messageId,
             @Schema(description = "보낸 사람 유저 id", example = "102") Long senderId,
             @Schema(description = "메시지 내용", example = "내일 만나요!") String content,
-            @Schema(description = "전송 시각") LocalDateTime sentAt
+            @Schema(description = "전송 시각") LocalDateTime sentAt,
+            Long videoPostId
     ) {
+        public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt) {
+            this(messageId, senderId, content, sentAt, null);
+        }
+
         public static MessageItem from(ChatMessage message) {
-            return new MessageItem(message.id(), message.senderId(), message.content(), message.createdAt());
+            return new MessageItem(message.id(), message.senderId(), message.content(), message.createdAt(), message.videoPostId());
         }
     }
 

@@ -8,8 +8,14 @@ public record ChatMessage(
         Long chatRoomId,
         Long senderId,
         String content,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        Long videoPostId,
+        String clientRequestId
 ) {
+    public ChatMessage(Long id, Long chatRoomId, Long senderId, String content, LocalDateTime createdAt) {
+        this(id, chatRoomId, senderId, content, createdAt, null, null);
+    }
+
     public static ChatMessage create(Long chatRoomId, Long senderId, String content) {
         return new ChatMessage(null, chatRoomId, senderId, content, null);
     }

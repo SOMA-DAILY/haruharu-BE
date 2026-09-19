@@ -10,10 +10,15 @@ public record ChatMessageBroadcast(
         Long chatRoomId,
         Long senderId,
         String content,
-        LocalDateTime sentAt
+        LocalDateTime sentAt,
+            Long videoPostId
 ) {
+    public ChatMessageBroadcast(Long messageId, Long chatRoomId, Long senderId, String content, LocalDateTime sentAt) {
+        this(messageId, chatRoomId, senderId, content, sentAt, null);
+    }
+
     public static ChatMessageBroadcast from(ChatMessage message) {
         return new ChatMessageBroadcast(
-                message.id(), message.chatRoomId(), message.senderId(), message.content(), message.createdAt());
+                message.id(), message.chatRoomId(), message.senderId(), message.content(), message.createdAt(), message.videoPostId());
     }
 }
