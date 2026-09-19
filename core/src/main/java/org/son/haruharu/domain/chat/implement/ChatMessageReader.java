@@ -15,6 +15,10 @@ public class ChatMessageReader {
         this.chatMessageRepository = chatMessageRepository;
     }
 
+    public Optional<ChatMessage> findByRequest(Long chatRoomId, Long senderId, String requestId) {
+        return chatMessageRepository.findByRequest(chatRoomId, senderId, requestId);
+    }
+
     public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
         return chatMessageRepository.findPage(chatRoomId, cursorId, limit);
     }

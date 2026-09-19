@@ -5,6 +5,8 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface ChatMessageRepository {
+    Optional<ChatMessage> findByRequest(Long chatRoomId, Long senderId, String requestId);
+
     ChatMessage save(ChatMessage message);
     Optional<ChatMessage> findById(Long id);
     /**

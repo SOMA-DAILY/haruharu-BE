@@ -12,6 +12,8 @@ import java.util.Optional;
 
 public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageEntity, Long> {
 
+    Optional<ChatMessageEntity> findByChatRoomIdAndSenderIdAndClientRequestId(Long chatRoomId, Long senderId, String clientRequestId);
+
     // 삭제된(deleted_at) 메시지 제외는 BaseEntity @SoftDelete 전역 필터가 처리한다.
     List<ChatMessageEntity> findByChatRoomIdOrderByIdDesc(Long chatRoomId, Pageable pageable);
 

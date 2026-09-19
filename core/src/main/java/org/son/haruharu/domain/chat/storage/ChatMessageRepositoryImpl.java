@@ -18,6 +18,11 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     private final ChatMessageJpaRepository chatMessageJpaRepository;
 
     @Override
+    public Optional<ChatMessage> findByRequest(Long chatRoomId, Long senderId, String requestId) {
+        return chatMessageJpaRepository.findByChatRoomIdAndSenderIdAndClientRequestId(chatRoomId, senderId, requestId).map(ChatMessageEntity::toDomain);
+    }
+
+    @Override
     public ChatMessage save(ChatMessage message) {
         return chatMessageJpaRepository.save(ChatMessageEntity.from(message)).toDomain();
     }
