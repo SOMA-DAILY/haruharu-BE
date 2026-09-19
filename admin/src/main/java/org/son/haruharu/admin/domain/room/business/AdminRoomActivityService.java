@@ -24,8 +24,9 @@ public class AdminRoomActivityService {
         this.media = media;
     }
 
-    public PageResponse<AdminRoomActivityResponse> list(Long roomId, Integer day, Long userId,
-                                                       String type, int page, int size, String order) {
+    // 방 활동을 조건에 따라 조회하고, 영상/썸네일에는 서명된 조회 URL을 적용해 페이지로 반환
+    public PageResponse<AdminRoomActivityResponse> getActivities(Long roomId, Integer day, Long userId,
+                                                                String type, int page, int size, String order) {
         var room = rooms.getById(roomId);
         activities.validatePage(page, size, order);
         var filter = activities.filter(room, day, userId, type);
@@ -34,15 +35,16 @@ public class AdminRoomActivityService {
         var content = events.stream()
                 .map(a -> new AdminRoomActivityResponse(a.type(), a.id(), a.occurredAt(), activities.dayOf(room,
                         a.type().equals("VIDEO") && a.slotStart() != null ? a.slotStart() : a.occurredAt()),
-                        participant(activities.participant(members, a.actorUserId())),
-                        participant(activities.participant(members, a.targetUserId())), a.content(),
+                        toParticipant(activities.participant(members, a.actorUserId())),
+                        toParticipant(activities.participant(members, a.targetUserId())), a.content(),
                         a.videoId() == null ? null : new Video(a.videoId(), media.createPresignedGetUrl(a.videoUrl()),
                                 media.createPresignedImageGetUrl(a.thumbnailUrl()), a.caption(), a.hidden(), a.missionId(), a.slotStart()),
                         a.reactionType(), a.answer(), a.answeredAt())).toList();
         return PageResponse.of(content, page, size, activities.count(filter));
     }
 
-    public Summary summary(Long roomId, Integer day, Long userId) {
+    // 선택한 일차, 참여자 조건에 해당하는 전체 활동 수와 참여자별 활동 수를 반환
+    public Summary getSummary(Long roomId, Integer day, Long userId) {
         var room = rooms.getById(roomId);
         var counts = activities.counts(activities.filter(room, day, userId, null));
         var stats = activities.statistics(counts, null);
@@ -54,7 +56,8 @@ public class AdminRoomActivityService {
         return new Summary(new Counts(stats.videos(), stats.chats(), stats.reactions(), stats.questions()), members);
     }
 
-    private Participant participant(RoomActivity.Participant p) {
+    // 내부 참여자 프로젝션을 관리자 API 응답 타입으로 변환
+    private Participant toParticipant(RoomActivity.Participant p) {
         return p == null ? null : new Participant(p.userId(), p.name());
     }
 }

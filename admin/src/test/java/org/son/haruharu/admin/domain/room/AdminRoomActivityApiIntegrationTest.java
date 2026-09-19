@@ -99,8 +99,22 @@ class AdminRoomActivityApiIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void givenAdminRoles_whenReadSensitiveRoomApis_thenOnlySuperAndOperatorAllowed() throws Exception {
+        long room = room();
+        for (String endpoint : List.of("activities", "activity/summary", "selections")) {
+            for (String role : List.of("SUPER", "OPERATOR", "CS")) {
+                var authentication = new UsernamePasswordAuthenticationToken(1L, null,
+                        List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+                mvc.perform(get("/api/v1/admin/rooms/{id}/" + endpoint, room)
+                                .with(authentication(authentication)))
+                        .andExpect(role.equals("CS") ? status().isForbidden() : status().isOk());
+            }
+        }
+    }
+
     private static UsernamePasswordAuthenticationToken auth() {
-        return new UsernamePasswordAuthenticationToken(1L, null, List.of(new SimpleGrantedAuthority("ROLE_CS")));
+        return new UsernamePasswordAuthenticationToken(1L, null, List.of(new SimpleGrantedAuthority("ROLE_OPERATOR")));
     }
 
     private long room() {

@@ -37,7 +37,7 @@ class AdminRoomActivityServiceTest {
         given(media.createPresignedGetUrl(video)).willReturn("https://signed.example.test/video");
         given(media.createPresignedImageGetUrl(thumbnail)).willReturn("https://signed.example.test/thumbnail");
 
-        var result = service.list(1L, null, null, null, 0, 24, "desc");
+        var result = service.getActivities(1L, null, null, null, 0, 24, "desc");
         assertThat(result.content().getFirst().video().videoUrl()).isEqualTo("https://signed.example.test/video");
         assertThat(result.content().getFirst().video().thumbnailUrl()).isEqualTo("https://signed.example.test/thumbnail");
         verify(media).createPresignedGetUrl(video);
