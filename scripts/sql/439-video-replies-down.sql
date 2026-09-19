@@ -1,5 +1,7 @@
 BEGIN;
 DO $$ BEGIN IF EXISTS (SELECT 1 FROM notification_history WHERE type='VIDEO_REPLY') OR EXISTS (SELECT 1 FROM chat_messages WHERE video_post_id IS NOT NULL) THEN RAISE EXCEPTION 'Video reply data exists; archive it before rollback'; END IF; END $$;
+-- ddl-auto=update 로 Hibernate 가 먼저 만든 경우 인덱스가 아닌 unique 제약이므로 제약부터 제거한다.
+ALTER TABLE chat_messages DROP CONSTRAINT IF EXISTS uq_chat_messages_reply_request;
 DROP INDEX IF EXISTS uq_chat_messages_reply_request;
 ALTER TABLE chat_messages DROP COLUMN IF EXISTS client_request_id;
 ALTER TABLE chat_messages DROP COLUMN IF EXISTS video_post_id;

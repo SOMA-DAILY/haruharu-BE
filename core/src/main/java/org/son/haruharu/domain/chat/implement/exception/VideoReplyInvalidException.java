@@ -1,4 +1,4 @@
-package org.son.haruharu.domain.chat.business.exception;
+package org.son.haruharu.domain.chat.implement.exception;
 
 import org.son.haruharu.common.exception.BadRequestException;
 
