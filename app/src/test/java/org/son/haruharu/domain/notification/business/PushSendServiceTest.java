@@ -237,16 +237,59 @@ class PushSendServiceTest {
     }
 
     @Test
-    @DisplayName("야간(03:00 KST)에는 어떤 타입이든 알림함에는 저장하되 푸시는 보내지 않는다")
+    @DisplayName("야간(03:00 KST)에는 야간 예외가 아닌 타입은 알림함에는 저장하되 푸시는 보내지 않는다")
     void givenQuietHours_whenSend_thenSavesInboxButSkipsPush() {
         PushSendService night = serviceAt(LocalTime.of(3, 0), QUIET_00_08);
 
-        night.sendToUsers(List.of(1L), NotificationType.CHAT, Map.of(), "민준");
+        night.sendToUsers(List.of(1L), NotificationType.FINAL_SELECTION_OPEN, Map.of());
         night.sendToUsers(List.of(1L), NotificationType.COIN_REFUNDED, Map.of(), 5L); // TRANSACTIONAL 도 차단
 
-        then(notificationHistoryService).should().saveAll(eq(List.of(1L)), eq(NotificationType.CHAT), any(), any(), any());
+        then(notificationHistoryService).should().saveAll(eq(List.of(1L)), eq(NotificationType.FINAL_SELECTION_OPEN), any(), any(), any());
         then(notificationHistoryService).should().saveAll(eq(List.of(1L)), eq(NotificationType.COIN_REFUNDED), any(), any(), any());
         then(deviceTokenReader).should(never()).findAllByUserIds(anyList());
+        then(pushPort).should(never()).send(any());
+    }
+
+    // ===================== 야간 차단 예외(#446) =====================
+
+    @Test
+    @DisplayName("야간 예외 타입은 채팅·영상 반응·영상 메시지·영상 업로드·질문 도착·답변 도착 6종뿐이다")
+    void givenNotificationTypes_whenInspectQuietHoursExempt_thenOnlyUserInteractionTypes() {
+        assertThat(java.util.Arrays.stream(NotificationType.values()).filter(NotificationType::quietHoursExempt))
+                .containsExactlyInAnyOrder(
+                        NotificationType.CHAT, NotificationType.REACTION_RECEIVED, NotificationType.VIDEO_REPLY,
+                        NotificationType.VIDEO_UPLOADED, NotificationType.QUESTION_RECEIVED,
+                        NotificationType.QUESTION_ANSWERED);
+    }
+
+    @Test
+    @DisplayName("야간(03:00 KST)에도 야간 예외 타입은 푸시를 발송한다")
+    void givenQuietHoursAndExemptType_whenSend_thenSendsPush() {
+        given(deviceTokenReader.findAllByUserIds(List.of(1L)))
+                .willReturn(List.of(new DeviceToken(10L, 1L, "token-1")));
+        given(pushPort.send(any())).willReturn(List.of());
+        PushSendService night = serviceAt(LocalTime.of(3, 0), QUIET_00_08);
+
+        night.sendToUsers(List.of(1L), NotificationType.CHAT, Map.of(), "민준");
+        night.sendToUsers(List.of(1L), NotificationType.REACTION_RECEIVED, Map.of(), "노을", "마음에 들어해요", "❤️");
+        night.sendToUsers(List.of(1L), NotificationType.VIDEO_REPLY, Map.of(), "노을");
+        night.sendToUsers(List.of(1L), NotificationType.VIDEO_UPLOADED, Map.of(), "하늘");
+        night.sendToUsers(List.of(1L), NotificationType.QUESTION_RECEIVED, Map.of());
+        night.sendToUsers(List.of(1L), NotificationType.QUESTION_ANSWERED, Map.of());
+
+        ArgumentCaptor<PushMessage> captor = ArgumentCaptor.forClass(PushMessage.class);
+        then(pushPort).should(org.mockito.Mockito.times(6)).send(captor.capture());
+        assertThat(captor.getAllValues()).extracting(m -> m.data().get("type")).containsExactly(
+                "CHAT", "REACTION_RECEIVED", "VIDEO_REPLY", "VIDEO_UPLOADED", "QUESTION_RECEIVED", "QUESTION_ANSWERED");
+    }
+
+    @Test
+    @DisplayName("야간 예외 타입이라도 활동 알림을 끈 유저에게는 푸시를 보내지 않는다")
+    void givenQuietHoursExemptTypeAndActivityDisabled_whenSend_thenSkipsPush() {
+        given(notificationSettingReader.findActivityDisabledUserIds(List.of(1L))).willReturn(List.of(1L));
+
+        serviceAt(LocalTime.of(3, 0), QUIET_00_08).sendToUsers(List.of(1L), NotificationType.CHAT, Map.of(), "민준");
+
         then(pushPort).should(never()).send(any());
     }
 
