@@ -21,6 +21,7 @@ import java.util.Map;
  * 깨뜨리면 안 된다. 트랜잭션도 열지 않는다(발송 IO를 트랜잭션에 묶지 않기 위함).
  * 알림함(inboxVisible) 저장은 푸시 수신 설정과 무관하게 대상 유저 전원에게 남긴다.
  * 야간(QuietHoursProperties, 기본 00~08시 KST)에는 푸시만 건너뛰고 알림함 저장은 유지한다(#429).
+ * 단 NotificationType.quietHoursExempt 타입(유저 간 실시간 상호작용)은 야간에도 푸시를 보낸다(#446).
  * 시각은 주입 Clock(ClockConfig, Asia/Seoul) 기준 — local·dev 에선 AdjustableClock 으로 야간을 흉내낼 수 있다.
  */
 @Slf4j
@@ -76,7 +77,7 @@ public class PushSendService {
 
     private void dispatchPush(List<Long> userIds, NotificationType type,
                               String title, String body, Map<String, String> data) {
-        if (quietHours.isQuiet(LocalTime.now(clock))) {
+        if (!type.quietHoursExempt() && quietHours.isQuiet(LocalTime.now(clock))) {
             log.info("야간 푸시 차단: type={} users={}", type, userIds.size());
             return;
         }
