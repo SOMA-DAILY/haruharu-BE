@@ -13,7 +13,8 @@ Base package: `org.son.haruharu`
 
 운영진이 신청폼으로 모집 → 방 생성 + 초대코드 발급 → 관리자가 설정한 참가자가 코드로 입장 → 1시간 슬롯 영상(3시간 노출)·방 전체 그룹채팅·주기별 미션 → Day3 최종선택(어드민 지정 시각) → 상호 성사 시 1:1 채팅.
 
-- **폐기:** matching(자동매칭) · coin · payment(IAP) · daily_upload_reward
+- **제거 완료(#451):** 기존 대기열 자동매칭. 큐·FIFO·배치·API·개발 실행·매칭 유도 알림·운영 통계 제거. 최종 상호 선택과 1:1 채팅은 유지한다.
+- **폐기/별도 정리 대상:** coin · payment(IAP) · daily_upload_reward
 - **보류(비활성 잔존):** identity(PASS → 지연인증) · value(가치관)
 - **개편:** room(초대코드·어드민 스케줄·status) · video(슬롯 시간창) · chat(그룹채팅) · mission(활성화)
 - **확정 설계 상세:** 노션 "새 MVP 재설계 — 초대코드 모델" + 메모리 `mvp-pivot-invite-code`

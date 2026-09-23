@@ -1,7 +1,5 @@
 package org.son.haruharu.domain.meta.business;
 
-import org.son.haruharu.domain.matching.business.MatchingExecutor;
-import org.son.haruharu.domain.matching.business.MatchingProperties;
 import org.son.haruharu.domain.meta.business.dto.MetaResponse;
 import org.son.haruharu.domain.room.implement.Room;
 import org.springframework.stereotype.Service;
@@ -10,16 +8,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class MetaService {
 
-    private final MatchingProperties matchingProperties;
-
-    public MetaService(MatchingProperties matchingProperties) {
-        this.matchingProperties = matchingProperties;
-    }
-
     public MetaResponse getMeta() {
         return new MetaResponse(
-                new MetaResponse.MatchingMeta(matchingProperties.enterCost()),
                 // 방 시작 시각·세션 일수의 원본 상수를 그대로 노출한다(하드코딩 중복 금지)
-                new MetaResponse.SessionMeta(Room.DAY_START_HOUR, MatchingExecutor.ROOM_TOTAL_DAYS));
+                new MetaResponse.SessionMeta(Room.DAY_START_HOUR, Room.DEFAULT_TOTAL_DAYS));
     }
 }

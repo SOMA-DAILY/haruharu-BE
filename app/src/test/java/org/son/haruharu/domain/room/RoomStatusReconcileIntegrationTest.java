@@ -107,18 +107,6 @@ class RoomStatusReconcileIntegrationTest {
     }
 
     @Test
-    @DisplayName("getScheduledPending 은 새 모델 PENDING 방을 반환하지 않는다 (09:00 조기 flip 차단)")
-    void getScheduledPending_excludesScheduledRoom() {
-        LocalDateTime startsAt = LocalDateTime.now().plusHours(6);
-        Room scheduled = persistScheduledRoom(startsAt);
-        Room legacyPending = roomWriter.save(Room.create(startsAt.toLocalDate(), 3));
-
-        assertThat(roomReader.getScheduledPending(startsAt.toLocalDate()))
-                .noneMatch(r -> r.id().equals(scheduled.id()))
-                .anyMatch(r -> r.id().equals(legacyPending.id()));
-    }
-
-    @Test
     @DisplayName("ACTIVE 전이 시 startedAt 이 starts_at 으로 채워져 오늘 화면 계산이 NPE 없이 동작한다")
     void reconcile_anchorsStartedAt() {
         LocalDateTime startsAt = LocalDateTime.now().minusHours(1).withNano(0);

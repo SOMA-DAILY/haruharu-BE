@@ -280,7 +280,9 @@ public static UserEntity from(User user) {
 - `value` — value_questions · user_value_answers. 가치관(MVP 온보딩 제외)
 
 **폐기 (새 MVP 비활성/제거 대상):**
-- `matching`(자동매칭) · `coin` · `payment`(IAP)
+- `coin` · `payment`(IAP)
+
+**제거 완료(#451):** `matching`(대기열 자동매칭). 구형 방 활성화·종료 배치도 제거하며 초대코드 방 생명주기는 `RoomStatusReconciler`가 처리한다. 기존 원장·알림 이력의 enum 값과 과거 SQL은 데이터 호환성을 위해 보존한다.
 
 **도메인 간 호출 방향:**
 - `auth/` → OAuth 로그인 시 userId 확인 후 `user/UserReader.getById()` 위임

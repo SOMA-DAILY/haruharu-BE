@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.devsupport.dto.DevClockResponse;
-import org.son.haruharu.devsupport.dto.DevMatchingRunResponse;
 import org.son.haruharu.devsupport.dto.DevRoomCreateRequest;
 import org.son.haruharu.devsupport.dto.DevRoomResponse;
 import org.son.haruharu.devsupport.dto.DevRoomTimeRequest;
@@ -17,10 +16,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDate;
 import java.util.Map;
 
 /**
@@ -64,7 +61,7 @@ public class DevSupportController {
         return ApiResponse.ok(devRoomService.setRoomTime(roomId, request.day(), request.time()));
     }
 
-    @Operation(summary = "방 수동 종료", description = "ACTIVE 방을 즉시 ENDED로 전환(09:00 종료 배치 대체).")
+    @Operation(summary = "방 수동 종료", description = "ACTIVE 테스트 방을 즉시 ENDED로 전환.")
     @PostMapping("/rooms/{roomId}/terminate")
     public ApiResponse<Void> terminateRoom(@PathVariable Long roomId) {
         devRoomService.terminateRoom(roomId);
@@ -76,13 +73,6 @@ public class DevSupportController {
     @PostMapping("/consolation")
     public ApiResponse<Map<String, Integer>> grantConsolation() {
         return ApiResponse.ok(Map.of("granted", devRoomService.grantConsolation()));
-    }
-
-    @Operation(summary = "매칭 배치 수동 실행", description = "큐의 남3·여3 확정 + 잔여 신청자 EXPIRED·환불 후 해당 날짜 방 즉시 활성화(22:00 배치 대체).")
-    @PostMapping("/matching/run")
-    public ApiResponse<DevMatchingRunResponse> runMatching(
-            @RequestParam(required = false) LocalDate date) {
-        return ApiResponse.ok(devRoomService.runMatching(date));
     }
 
     @Operation(summary = "가상 시계 상태 조회", description = "fixed=true면 고정 중. 테스트 시작 전 다른 사람이 쓰는 중인지 확인 용도.")

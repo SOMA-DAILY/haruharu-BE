@@ -16,10 +16,8 @@ import org.son.haruharu.devsupport.exception.InvalidDevDayException;
 import org.son.haruharu.devsupport.exception.InvalidDevMembersException;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
-import org.son.haruharu.domain.matching.business.MatchingExecutor;
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.room.business.ConsolationRewardService;
-import org.son.haruharu.domain.room.business.RoomActivator;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -56,8 +54,6 @@ class DevRoomServiceTest {
     @Mock RoomReader roomReader;
     @Mock RoomWriter roomWriter;
     @Mock RoomMemberWriter roomMemberWriter;
-    @Mock MatchingExecutor matchingExecutor;
-    @Mock RoomActivator roomActivator;
     @Mock ConsolationRewardService consolationRewardService;
     @Mock RoomMissionSlotService roomMissionSlotService;
     @Mock DevRoomCleaner devRoomCleaner;
@@ -69,7 +65,7 @@ class DevRoomServiceTest {
     void setUp() {
         adjustableClock = new AdjustableClock(Clock.fixed(REAL_NOW.atZone(SEOUL).toInstant(), SEOUL));
         devRoomService = new DevRoomService(identityService, roomService, roomReader, roomWriter,
-                roomMemberWriter, matchingExecutor, roomActivator, consolationRewardService,
+                roomMemberWriter, consolationRewardService,
                 roomMissionSlotService, devRoomCleaner, adjustableClock);
     }
 
@@ -259,7 +255,7 @@ class DevRoomServiceTest {
                 .isInstanceOf(DevRoomNotActiveException.class);
     }
 
-    // ── terminate / consolation / matching ─────────────────────
+    // ── terminate / consolation ─────────────────────
 
     @Test
     @DisplayName("ACTIVE 방을 수동 종료하면 ENDED로 저장된다")
@@ -296,16 +292,4 @@ class DevRoomServiceTest {
         assertThat(granted).isEqualTo(4);
     }
 
-    @Test
-    @DisplayName("매칭 수동 실행은 확정과 활성화를 순서대로 호출한다")
-    void givenQueuedUsers_whenRunMatching_thenExecutesAndActivates() {
-        given(matchingExecutor.execute(any(LocalDate.class), any(LocalDateTime.class))).willReturn(1);
-        given(roomActivator.activate(any(LocalDate.class), any(LocalDateTime.class))).willReturn(1);
-
-        var result = devRoomService.runMatching(null);
-
-        assertThat(result.roomsCreated()).isEqualTo(1);
-        assertThat(result.roomsActivated()).isEqualTo(1);
-        verify(matchingExecutor).execute(LocalDate.of(2026, 7, 10), REAL_NOW);
-    }
 }

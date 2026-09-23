@@ -21,7 +21,7 @@ public class MetaController {
     }
 
     @Operation(summary = "정책 상수 메타 조회",
-            description = "유저 상태와 무관한 전역 정책 상수를 반환한다(matching.enter_cost 등). 인증이 필요 없는 공개 API다.")
+            description = "유저 상태와 무관한 세션 정책 상수를 반환한다. 인증이 필요 없는 공개 API다.")
     @GetMapping
     public ApiResponse<MetaResponse> getMeta() {
         return ApiResponse.ok(metaService.getMeta());
