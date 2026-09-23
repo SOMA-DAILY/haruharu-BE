@@ -22,5 +22,13 @@ public interface S3StoragePort {
     /** 공개 객체 URL 베이스(끝 / 포함). URL 소유권 검증·키 변환에 사용. */
     String publicBaseUrl();
 
+    record ObjectMetadata(long bytes, String contentType, String etag) {
+        public ObjectMetadata(long bytes, String contentType) { this(bytes,contentType,null); }
+    }
+    /** 검증한 버전만 PUT 주소를 발급하지 않는 최종 경로로 복사한다. */
+    void promote(String sourceKey, String destinationKey, String etag);
+    /** 서버가 소유한 키만 받는다. 없으면 null. */
+    ObjectMetadata head(String key);
+
     void deleteObjects(Collection<String> keys);
 }

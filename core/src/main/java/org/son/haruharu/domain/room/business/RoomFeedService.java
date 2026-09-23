@@ -164,7 +164,8 @@ public class RoomFeedService {
                         s3StoragePort.createPresignedGetUrl(p.thumbnailUrl()),
                         p.caption(), p.createdAt(),
                         countsByPost.getOrDefault(p.id(), List.of()),
-                        myReactionByPost.get(p.id())))
+                        myReactionByPost.get(p.id()),
+                        s3StoragePort.createPresignedGetUrl(p.feedVideoUrl())))
                 .toList();
         return new FeedResponse(slots, posts, nextCursor);
     }

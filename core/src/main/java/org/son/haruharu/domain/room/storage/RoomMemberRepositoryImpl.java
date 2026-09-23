@@ -14,6 +14,12 @@ import java.util.Optional;
 public class RoomMemberRepositoryImpl implements RoomMemberRepository {
 
     private final RoomMemberJpaRepository jpaRepository;
+    private final jakarta.persistence.EntityManager entityManager;
+
+    @Override
+    public void lockById(Long id) {
+        entityManager.find(RoomMemberEntity.class, id, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+    }
 
     @Override
     public List<RoomMember> saveAll(List<RoomMember> members) {

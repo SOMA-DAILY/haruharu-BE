@@ -48,6 +48,9 @@ public class VideoPostEntity {
     @Column(length = 500)
     private String thumbnailUrl;
 
+    @Column(length = 500)
+    private String feedVideoUrl;
+
     @Column(nullable = false)
     private boolean isHidden;
 
@@ -69,6 +72,7 @@ public class VideoPostEntity {
         entity.caption = post.caption();
         entity.videoUrl = post.videoUrl();
         entity.thumbnailUrl = post.thumbnailUrl();
+        entity.feedVideoUrl = post.feedVideoUrl();
         entity.isHidden = post.isHidden();
         entity.hiddenReason = post.hiddenReason();
         entity.deletedAt = post.deletedAt();
@@ -78,6 +82,6 @@ public class VideoPostEntity {
 
     public VideoPost toDomain() {
         return new VideoPost(id, roomMemberId, slotStart, missionId, caption, videoUrl,
-                thumbnailUrl, isHidden, hiddenReason, deletedAt, createdAt);
+                thumbnailUrl, isHidden, hiddenReason, deletedAt, createdAt, feedVideoUrl);
     }
 }

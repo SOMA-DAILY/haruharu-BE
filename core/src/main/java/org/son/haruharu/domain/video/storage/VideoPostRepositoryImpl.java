@@ -14,9 +14,16 @@ import java.util.Optional;
 public class VideoPostRepositoryImpl implements VideoPostRepository {
 
     private final VideoPostJpaRepository jpaRepository;
+    private final org.son.haruharu.domain.room.implement.RoomMemberRepository members;
 
     @Override
     public VideoPost save(VideoPost post) {
+        if (post.id() == null) {
+            members.lockById(post.roomMemberId());
+            if (jpaRepository.existsByRoomMemberIdAndSlotStartAndDeletedAtIsNull(post.roomMemberId(), post.slotStart())) {
+                throw new org.son.haruharu.domain.video.business.exception.DuplicateSlotUploadException();
+            }
+        }
         return jpaRepository.save(VideoPostEntity.from(post)).toDomain();
     }
 

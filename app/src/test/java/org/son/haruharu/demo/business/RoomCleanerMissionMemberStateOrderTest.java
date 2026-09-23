@@ -22,6 +22,7 @@ class RoomCleanerMissionMemberStateOrderTest {
 
         assertRoomLockComesFirst(jdbcTemplate);
         assertMissionFkOrder(jdbcTemplate);
+        assertVideoUploadFkOrder(jdbcTemplate);
     }
 
     @Test
@@ -33,6 +34,7 @@ class RoomCleanerMissionMemberStateOrderTest {
 
         assertRoomLockComesFirst(jdbcTemplate);
         assertMissionFkOrder(jdbcTemplate);
+        assertVideoUploadFkOrder(jdbcTemplate);
     }
 
     private void assertRoomLockComesFirst(JdbcTemplate jdbcTemplate) {
@@ -48,5 +50,12 @@ class RoomCleanerMissionMemberStateOrderTest {
                 "DELETE FROM mission_member_states WHERE room_mission_id IN (SELECT id FROM room_missions WHERE room_id = ?)",
                 1L);
         order.verify(jdbcTemplate).update("DELETE FROM room_missions WHERE room_id = ?", 1L);
+    }
+
+    private void assertVideoUploadFkOrder(JdbcTemplate jdbcTemplate) {
+        InOrder order = inOrder(jdbcTemplate);
+        order.verify(jdbcTemplate).update("DELETE FROM video_upload_sessions WHERE room_id = ?", 1L);
+        order.verify(jdbcTemplate).update(contains("DELETE FROM video_posts"), eq(1L));
+        order.verify(jdbcTemplate).update("DELETE FROM room_members WHERE room_id = ?", 1L);
     }
 }

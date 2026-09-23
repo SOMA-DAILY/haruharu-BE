@@ -85,6 +85,28 @@ public class S3StorageAdapter implements S3StoragePort {
     }
 
     @Override
+    public void promote(String sourceKey, String destinationKey, String etag) {
+        s3Client.copyObject(software.amazon.awssdk.services.s3.model.CopyObjectRequest.builder()
+                .sourceBucket(properties.s3().bucket()).sourceKey(sourceKey)
+                .destinationBucket(properties.s3().bucket()).destinationKey(destinationKey)
+                .copySourceIfMatch(etag).build());
+    }
+
+    @Override
+    public ObjectMetadata head(String key) {
+        try {
+            var response = s3Client.headObject(software.amazon.awssdk.services.s3.model.HeadObjectRequest.builder()
+                    .bucket(properties.s3().bucket()).key(key).build());
+            return new ObjectMetadata(response.contentLength(), response.contentType(), response.eTag());
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+            // S3 may hide missing keys with 403 when the role has no ListBucket permission.
+            // Both are unverified objects; neither can pass publication checks.
+            if (e.statusCode() == 404 || e.statusCode() == 403) return null;
+            throw e;
+        }
+    }
+
+    @Override
     public void deleteObjects(Collection<String> keys) {
         if (keys.isEmpty()) {
             return;
@@ -92,9 +114,12 @@ public class S3StorageAdapter implements S3StoragePort {
         List<ObjectIdentifier> objects = keys.stream()
                 .map(key -> ObjectIdentifier.builder().key(key).build())
                 .toList();
-        s3Client.deleteObjects(DeleteObjectsRequest.builder()
+        var response = s3Client.deleteObjects(DeleteObjectsRequest.builder()
                 .bucket(properties.s3().bucket())
                 .delete(Delete.builder().objects(objects).build())
                 .build());
+        if (!response.errors().isEmpty()) {
+            throw new IllegalStateException("S3 could not delete " + response.errors().size() + " object(s)");
+        }
     }
 }
