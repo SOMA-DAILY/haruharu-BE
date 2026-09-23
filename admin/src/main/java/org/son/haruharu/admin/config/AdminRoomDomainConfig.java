@@ -1,7 +1,9 @@
 package org.son.haruharu.admin.config;
 
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
+import org.son.haruharu.domain.mission.implement.RoomMissionSettingWriter;
 import org.son.haruharu.domain.mission.implement.RoomMissionSlotWriter;
+import org.son.haruharu.domain.mission.storage.RoomMissionSettingRepositoryImpl;
 import org.son.haruharu.domain.mission.storage.RoomMissionSlotRepositoryImpl;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.profile.storage.UserProfileRepositoryImpl;
@@ -45,6 +47,7 @@ import org.springframework.context.annotation.Import;
         RoomInviteWriter.class,
         InviteCodeGenerator.class,
         RoomMissionSlotWriter.class,
+        RoomMissionSettingWriter.class,
         // #392: RoomInviteService.join 이 프로필 gender 를 방 멤버로 스냅샷하는 데 필요.
         UserProfileReader.class,
         UserProfileRepositoryImpl.class,
@@ -52,7 +55,8 @@ import org.springframework.context.annotation.Import;
         RoomRepositoryImpl.class,
         RoomMemberRepositoryImpl.class,
         RoomInviteRepositoryImpl.class,
-        RoomMissionSlotRepositoryImpl.class
+        RoomMissionSlotRepositoryImpl.class,
+        RoomMissionSettingRepositoryImpl.class
 })
 public class AdminRoomDomainConfig {
 }

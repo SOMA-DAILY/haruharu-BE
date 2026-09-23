@@ -32,12 +32,16 @@ public record CreateAdminRoomRequest(
         @Positive Integer maxUses,
         @Schema(description = "초대코드 만료 시각(null이면 무기한)", nullable = true)
         LocalDateTime inviteExpiresAt,
-        @Schema(description = "Day별 오전·오후 미션 슬롯. total_days × 2개를 전달한다.")
-        @NotNull List<@NotNull @Valid MissionSlotRequest> missionSlots
+        @Schema(description = "미션 사용 여부. true면 mission_slots 필수, false면 mission_slots를 보내지 않는다.",
+                example = "true")
+        @NotNull Boolean missionEnabled,
+        @Schema(description = "Day별 오전·오후 미션 슬롯. mission_enabled=true일 때 total_days × 2개를 전달한다.",
+                nullable = true)
+        List<@NotNull @Valid MissionSlotRequest> missionSlots
 ) {
     public CreateAdminRoomCommand toCommand() {
         return new CreateAdminRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
-                resultAt, endsAt, totalDays, maxUses, inviteExpiresAt,
+                resultAt, endsAt, totalDays, maxUses, inviteExpiresAt, missionEnabled,
                 missionSlots == null ? null : missionSlots.stream().map(MissionSlotRequest::toCommand).toList());
     }
 

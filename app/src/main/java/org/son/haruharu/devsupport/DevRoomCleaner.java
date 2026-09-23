@@ -53,6 +53,7 @@ public class DevRoomCleaner {
                 roomId);
         jdbcTemplate.update("DELETE FROM room_missions WHERE room_id = ?", roomId);
         jdbcTemplate.update("DELETE FROM room_mission_slots WHERE room_id = ?", roomId);
+        jdbcTemplate.update("DELETE FROM room_mission_settings WHERE room_id = ?", roomId);
         // 영상(리액션 → 포스트)
         jdbcTemplate.update("""
                 DELETE FROM video_reactions WHERE video_post_id IN (

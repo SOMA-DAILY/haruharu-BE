@@ -20,6 +20,7 @@ public record CreateAdminRoomCommand(
         int totalDays,
         Integer maxUses,
         LocalDateTime inviteExpiresAt,
+        boolean missionEnabled,
         List<CreateRoomMissionSlotCommand> missionSlots
 ) {
     public CreateRoomCommand toRoomCommand() {

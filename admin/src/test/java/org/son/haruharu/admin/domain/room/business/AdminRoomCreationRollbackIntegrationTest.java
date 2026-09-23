@@ -41,10 +41,11 @@ class AdminRoomCreationRollbackIntegrationTest {
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    @DisplayName("초대코드 저장 실패 시 먼저 저장한 방과 미션 슬롯도 모두 롤백된다")
+    @DisplayName("초대코드 저장 실패 시 먼저 저장한 방과 미션 설정·슬롯도 모두 롤백된다")
     void givenInviteSaveFailure_whenCreateRoom_thenRollsBackRoomAndMissionSlots() {
         long roomCount = roomCount();
         long slotCount = roomMissionSlotCount();
+        long settingCount = roomMissionSettingCount();
         given(roomInviteWriter.save(any())).willThrow(new IllegalStateException("invite save failed"));
 
         assertThatThrownBy(() -> service.createRoomWithInvite(command(), 1L))
@@ -52,6 +53,12 @@ class AdminRoomCreationRollbackIntegrationTest {
 
         assertThat(roomCount()).isEqualTo(roomCount);
         assertThat(roomMissionSlotCount()).isEqualTo(slotCount);
+        assertThat(roomMissionSettingCount()).isEqualTo(settingCount);
+    }
+
+    private long roomMissionSettingCount() {
+        return entityManager.createQuery("select count(s) from RoomMissionSettingEntity s", Long.class)
+                .getSingleResult();
     }
 
     private CreateAdminRoomCommand command() {
@@ -64,6 +71,7 @@ class AdminRoomCreationRollbackIntegrationTest {
                 3,
                 6,
                 null,
+                true,
                 List.of(
                         slot(1, MissionPeriod.MORNING, 1, 6),
                         slot(1, MissionPeriod.AFTERNOON, 9, 14),

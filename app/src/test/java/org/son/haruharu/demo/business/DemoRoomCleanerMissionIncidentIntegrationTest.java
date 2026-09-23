@@ -8,6 +8,7 @@ import org.son.haruharu.domain.mission.implement.MissionAssignmentIncidentReason
 import org.son.haruharu.domain.mission.implement.MissionAssignmentIncidentStatus;
 import org.son.haruharu.domain.mission.implement.RoomMissionSlot;
 import org.son.haruharu.domain.mission.storage.MissionAssignmentIncidentJpaRepository;
+import org.son.haruharu.domain.mission.storage.RoomMissionSettingJpaRepository;
 import org.son.haruharu.domain.mission.storage.RoomMissionSlotJpaRepository;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomWriter;
@@ -33,6 +34,7 @@ class DemoRoomCleanerMissionIncidentIntegrationTest {
     @Autowired DemoRoomCleaner cleaner;
     @Autowired MissionAssignmentIncidentJpaRepository incidentRepository;
     @Autowired RoomMissionSlotJpaRepository slotRepository;
+    @Autowired RoomMissionSettingJpaRepository settingRepository;
     @Autowired RoomJpaRepository roomRepository;
 
     @Test
@@ -49,10 +51,13 @@ class DemoRoomCleanerMissionIncidentIntegrationTest {
                 MissionAssignmentIncidentReason.SAFE_FALLBACK_MISSING,
                 "NoMissionCandidateException", startsAt.plusHours(2));
 
+        assertThat(settingRepository.findByRoomId(room.id())).isPresent();
+
         cleaner.deleteRoomCascade(room.id());
 
         assertThat(incidentRepository.findByRoomMissionSlotId(slot.id())).isEmpty();
         assertThat(slotRepository.findById(slot.id())).isEmpty();
+        assertThat(settingRepository.findByRoomId(room.id())).isEmpty();
         assertThat(roomRepository.findById(room.id())).isEmpty();
     }
 }
