@@ -1,34 +1,28 @@
 package org.son.haruharu.domain.profile.implement;
 
-import java.util.function.Function;
-
 /**
- * 방 세션에서 currentDay에 따라 자동 공개하는 프로필 항목. field_key ↔ 라벨 ↔ 공개Day ↔ UserProfile 값 추출을 정의한다.
- * currentDay >= availableFromDay 이면 전원에게 노출된다(재화·해금 없음). 항목 추가 시 상수 1줄만 추가한다.
+ * 방 멤버 프로필 시트에 보이는 항목(#457, F2). 선언 순서가 시트 표시 순서다(MBTI, 요즘 빠져 있는 것, 나이, 학과).
+ * 공개 시각은 방 편성(room_schedule_items.reveal_fields)이 정하고, 편성에 공개 행이 없는 옛 방은 DAY3(availableFromDay) 규칙을 쓴다.
+ * key 는 enum 이름(roomschedule RevealField 와 같은 이름). AGE 값은 계정 프로필 밖(birth_year / RoomMember.birthday)에서 계산한다.
  */
 public enum ProfileField {
 
-    LOCATION("location", "지역", 3, UserProfile::location),
-    AFFILIATION("affiliation", "직업", 3, UserProfile::affiliation),
-    HEIGHT("height", "키", 3, p -> p.height() == null ? null : String.valueOf(p.height())),
-    MBTI("mbti", "MBTI", 3, UserProfile::mbti),
-    DRINKING("drinking", "음주", 3, p -> p.drinkingStatus() == null ? null : p.drinkingStatus().displayName()),
-    SMOKING("smoking", "흡연", 3, p -> p.smokingStatus() == null ? null : p.smokingStatus().displayName());
+    MBTI("MBTI"),
+    INTO_NOW("요즘 빠져 있는 것"),
+    AGE("나이"),
+    DEPARTMENT("학과");
 
-    private final String key;
+    /** 편성에 공개 행이 없는 옛 방의 공개 Day. */
+    public static final int LEGACY_REVEAL_DAY = 3;
+
     private final String label;
-    private final int availableFromDay;
-    private final Function<UserProfile, String> extractor;
 
-    ProfileField(String key, String label, int availableFromDay, Function<UserProfile, String> extractor) {
-        this.key = key;
+    ProfileField(String label) {
         this.label = label;
-        this.availableFromDay = availableFromDay;
-        this.extractor = extractor;
     }
 
     public String key() {
-        return key;
+        return name();
     }
 
     public String label() {
@@ -36,10 +30,19 @@ public enum ProfileField {
     }
 
     public int availableFromDay() {
-        return availableFromDay;
+        return LEGACY_REVEAL_DAY;
     }
 
+    /** 계정 프로필에서 바로 읽는 값. AGE 는 null(호출자가 계산). */
     public String extract(UserProfile profile) {
-        return profile == null ? null : extractor.apply(profile);
+        if (profile == null) {
+            return null;
+        }
+        return switch (this) {
+            case MBTI -> profile.mbti();
+            case INTO_NOW -> profile.intoNow();
+            case DEPARTMENT -> profile.department();
+            case AGE -> null;
+        };
     }
 }

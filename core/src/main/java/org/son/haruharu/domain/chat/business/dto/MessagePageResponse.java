@@ -11,7 +11,10 @@ public record MessagePageResponse(
         @Schema(description = "메시지 목록(최신순)") List<MessageItem> messages,
         @Schema(description = "다음 페이지 조회에 넘길 커서(마지막 메시지 id). 다음 페이지 없으면 null", example = "995") Long nextCursor
 ) {
-    /** 필드는 추가만 한다(#456: reactions, my_reaction, reply_to). */
+    /**
+     * 필드는 추가만 한다(#456: reactions, my_reaction, reply_to / #457: message_type, sender_name, deleted).
+     * sender_id 는 운영 글에서도 시스템 유저 id(양수)로 채우고, content 는 운영자가 지웠으면 '삭제된 메시지'.
+     */
     public record MessageItem(
             @Schema(description = "메시지 id", example = "1024") Long messageId,
             @Schema(description = "보낸 사람 유저 id", example = "102") Long senderId,
@@ -20,18 +23,33 @@ public record MessagePageResponse(
             Long videoPostId,
             @Schema(description = "반응 타입별 개수(많은 순)") List<ReactionCountItem> reactions,
             @Schema(description = "내 반응(없으면 null)", example = "LAUGH", nullable = true) String myReaction,
-            @Schema(description = "답장 인용(답장 아니면 null)", nullable = true) ReplyToView replyTo
+            @Schema(description = "답장 인용(답장 아니면 null)", nullable = true) ReplyToView replyTo,
+            @Schema(description = "TEXT 또는 ADMIN(운영 글)", example = "TEXT") String messageType,
+            @Schema(description = "운영 글이면 '하루', 아니면 null(앱이 members 에서 찾음)", nullable = true) String senderName,
+            @Schema(description = "운영자가 지운 메시지면 true(content 는 '삭제된 메시지')") boolean deleted
     ) {
         public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt) {
             this(messageId, senderId, content, sentAt, null);
         }
 
         public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt, Long videoPostId) {
-            this(messageId, senderId, content, sentAt, videoPostId, List.of(), null, null);
+            this(messageId, senderId, content, sentAt, videoPostId, List.of(), null, null, "TEXT", null, false);
+        }
+
+        public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt, Long videoPostId,
+                           List<ReactionCountItem> reactions, String myReaction, ReplyToView replyTo) {
+            this(messageId, senderId, content, sentAt, videoPostId, reactions, myReaction, replyTo, "TEXT", null, false);
         }
 
         public static MessageItem from(ChatMessage message) {
-            return new MessageItem(message.id(), message.senderId(), message.content(), message.createdAt(), message.videoPostId());
+            return of(message, List.of(), null, null);
+        }
+
+        public static MessageItem of(ChatMessage message, List<ReactionCountItem> reactions, String myReaction,
+                                     ReplyToView replyTo) {
+            return new MessageItem(message.id(), message.senderId(), message.displayContent(), message.createdAt(),
+                    message.videoPostId(), reactions, myReaction, replyTo, message.messageType().name(),
+                    message.senderName(), message.isAdminDeleted());
         }
     }
 

@@ -4,6 +4,7 @@ import org.son.haruharu.domain.chat.business.ChatDeliveryService;
 import org.son.haruharu.domain.chat.business.event.ChatMessageBroadcastEvent;
 import org.son.haruharu.domain.chat.business.dto.ReactionCountItem;
 import org.son.haruharu.domain.chat.business.event.ChatRoomClosedEvent;
+import org.son.haruharu.domain.chat.business.event.MessageDeletedEvent;
 import org.son.haruharu.domain.chat.business.event.ReactionUpdatedEvent;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
@@ -47,11 +48,21 @@ public class ChatLifecycleEventListener {
                         new ReactionUpdatedPayload("REACTION_UPDATED", event.messageId(), event.counts())));
     }
 
+    /** 운영 글 삭제(#457). 앱은 해당 말풍선을 '삭제된 메시지' 로 바꾼다. */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void messageDeleted(MessageDeletedEvent event) {
+        chatDeliveryService.deliverIfActive(event.chatRoomId(), () ->
+                messagingTemplate.convertAndSend(eventsTopic(event.chatRoomId()),
+                        new MessageDeletedPayload("MESSAGE_DELETED", event.messageId())));
+    }
+
     static String eventsTopic(Long chatRoomId) {
         return "/sub/chat-rooms/" + chatRoomId + "/events";
     }
 
     public record RoomClosedPayload(String type, Long chatRoomId) {}
+
+    public record MessageDeletedPayload(String type, Long messageId) {}
 
     public record ReactionUpdatedPayload(String type, Long messageId, List<ReactionCountItem> counts) {}
 }

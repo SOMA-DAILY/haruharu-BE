@@ -22,13 +22,22 @@ public record MemberProfileResponse(
         List<ValueAnswerView> valueAnswers
 ) {
 
+    /**
+     * 항목 1줄. key 는 MBTI, INTO_NOW, AGE, DEPARTMENT(#457, 시트 표시 순서). value 는 항상 문자열(AGE 도 "23").
+     * reveal_at(#457 추가) = 편성상 공개 시각(없으면 null), available_from_day 는 그 시각의 DAY(달력 날짜 기준, 옛 방은 3).
+     */
     public record ProfileFieldView(
             String key,
             String label,
             int availableFromDay,
             boolean visible,
-            String value
-    ) {}
+            String value,
+            java.time.LocalDateTime revealAt
+    ) {
+        public ProfileFieldView(String key, String label, int availableFromDay, boolean visible, String value) {
+            this(key, label, availableFromDay, visible, value, null);
+        }
+    }
 
     /** answerText는 answer(A/B)를 질문의 option_a/option_b 텍스트로 변환한 값(응답 시점 조인, visible=false면 null). */
     public record ValueAnswerView(

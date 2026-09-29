@@ -7,7 +7,6 @@ import java.time.Period;
 import java.util.List;
 import java.util.Map;
 
-import org.son.haruharu.domain.profile.implement.ProfileField;
 import org.son.haruharu.domain.profile.implement.UserImageReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
@@ -85,8 +84,8 @@ public class RoomMembersService {
         String displayName = nameRevealed
                 ? (profile == null ? null : profile.nickname())
                 : member.displayPseudonym();
-        // 지역·나이 공개 기준은 단건 프로필(ProfileField.LOCATION / AGE_REVEAL_DAY)과 동일 소스 — 목록으로 우회 노출되지 않게 한다(#214)
-        boolean locationRevealed = self || currentDay >= ProfileField.LOCATION.availableFromDay();
+        // 지역·나이 공개 기준(#214). 지역은 #457 에서 단건 프로필 항목에서 빠졌지만 목록은 기존 DAY3 규칙을 그대로 쓴다.
+        boolean locationRevealed = self || currentDay >= MemberProfileService.LOCATION_REVEAL_DAY;
         boolean ageRevealed = self || currentDay >= MemberProfileService.AGE_REVEAL_DAY;
         String location = !locationRevealed || profile == null ? null : profile.location();
         Integer age = !ageRevealed || member.birthday() == null

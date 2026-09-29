@@ -54,6 +54,7 @@ class MemberProfileServiceTest {
     @Mock UserValueAnswerReader userValueAnswerReader;
     @Mock MatchResultReader matchResultReader;
     @Mock S3StoragePort s3StoragePort;
+    @Mock org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader roomScheduleItemReader;
 
     MemberProfileService service;
 
@@ -63,7 +64,7 @@ class MemberProfileServiceTest {
     @BeforeEach
     void setUp() {
         service = new MemberProfileService(roomReader, roomMemberReader, userProfileReader, userImageReader,
-                valueQuestionReader, userValueAnswerReader, matchResultReader, s3StoragePort, clock);
+                valueQuestionReader, userValueAnswerReader, matchResultReader, s3StoragePort, roomScheduleItemReader, clock);
     }
 
     private RoomMember member(Long id, Long roomId, Long userId) {
@@ -78,7 +79,8 @@ class MemberProfileServiceTest {
 
     private UserProfile profile(Long userId) {
         return new UserProfile(1L, userId,
-                "서울", "카카오", 165, "INFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null);
+                "서울", "카카오", 165, "INFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null)
+                .withRoomProfile(null, "INFP", "전자공학과", "러닝");
     }
 
     private ProfileFieldView field(MemberProfileResponse res, String key) {
@@ -130,18 +132,19 @@ class MemberProfileServiceTest {
         assertThat(result.nameRevealed()).isFalse();
         assertThat(result.gender()).isEqualTo("FEMALE");
 
-        assertThat(field(result, "location").visible()).isFalse();
-        assertThat(field(result, "location").value()).isNull();
-        assertThat(field(result, "age").visible()).isFalse();
-        assertThat(field(result, "age").value()).isNull();
-        ProfileFieldView height = field(result, "height");
-        assertThat(height.visible()).isFalse();
-        assertThat(height.value()).isNull();
-        assertThat(height.availableFromDay()).isEqualTo(3);
+        assertThat(field(result, "MBTI").visible()).isFalse();
+        assertThat(field(result, "MBTI").value()).isNull();
+        assertThat(field(result, "AGE").visible()).isFalse();
+        assertThat(field(result, "AGE").value()).isNull();
+        ProfileFieldView department = field(result, "DEPARTMENT");
+        assertThat(department.visible()).isFalse();
+        assertThat(department.value()).isNull();
+        assertThat(department.availableFromDay()).isEqualTo(3);
+        assertThat(department.revealAt()).isNull();
     }
 
     @Test
-    @DisplayName("Day3에는 지역·나이·직업·키·MBTI·음주·흡연이 전원에게 자동 공개된다")
+    @DisplayName("편성 없는 옛 방은 Day3에 MBTI·요즘 빠져 있는 것·나이·학과가 시트 순서대로 전원에게 공개된다")
     void givenDay3_whenGetProfile_thenAllFieldsVisible() {
         Long userId = 1L;
         Long targetUserId = 2L;
@@ -153,13 +156,12 @@ class MemberProfileServiceTest {
 
         MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
 
-        assertThat(field(result, "location").value()).isEqualTo("서울");
-        assertThat(field(result, "affiliation").value()).isEqualTo("카카오");
-        assertThat(field(result, "height").value()).isEqualTo("165");
-        assertThat(field(result, "mbti").value()).isEqualTo("INFP");
-        assertThat(field(result, "drinking").value()).isEqualTo("가끔");
-        assertThat(field(result, "smoking").value()).isEqualTo("안 피움");
-        assertThat(field(result, "age").value()).isEqualTo("26");
+        assertThat(result.fields()).extracting(ProfileFieldView::key)
+                .containsExactly("MBTI", "INTO_NOW", "AGE", "DEPARTMENT");
+        assertThat(field(result, "MBTI").value()).isEqualTo("INFP");
+        assertThat(field(result, "INTO_NOW").value()).isEqualTo("러닝");
+        assertThat(field(result, "DEPARTMENT").value()).isEqualTo("전자공학과");
+        assertThat(field(result, "AGE").value()).isEqualTo("26");
         assertThat(result.fields()).allMatch(ProfileFieldView::visible);
     }
 
@@ -180,8 +182,8 @@ class MemberProfileServiceTest {
 
         MemberProfileResponse result = service.getMemberProfile(roomId, targetId, userId);
 
-        assertThat(field(result, "affiliation").value()).isEqualTo("카카오");
-        assertThat(field(result, "age").value()).isEqualTo("26");
+        assertThat(field(result, "DEPARTMENT").value()).isEqualTo("전자공학과");
+        assertThat(field(result, "AGE").value()).isEqualTo("26");
         assertThat(result.fields()).allMatch(ProfileFieldView::visible);
         // 본인은 항상 실명(가명 아님)·nameRevealed=true (#393)
         assertThat(result.nickname()).isEqualTo("하루");
@@ -215,10 +217,10 @@ class MemberProfileServiceTest {
         assertThat(result.nickname()).isEqualTo("익명");
         assertThat(result.nameRevealed()).isFalse();
         // Day3라 visible=true지만 프로필이 없어 값은 null
-        assertThat(field(result, "affiliation").visible()).isTrue();
-        assertThat(field(result, "affiliation").value()).isNull();
-        assertThat(field(result, "age").visible()).isTrue();
-        assertThat(field(result, "age").value()).isNull();
+        assertThat(field(result, "DEPARTMENT").visible()).isTrue();
+        assertThat(field(result, "DEPARTMENT").value()).isNull();
+        assertThat(field(result, "AGE").visible()).isTrue();
+        assertThat(field(result, "AGE").value()).isNull();
     }
 
     @Test
@@ -290,8 +292,8 @@ class MemberProfileServiceTest {
 
         // 매칭이면 currentDay=0이어도 전 항목 공개
         assertThat(result.fields()).allMatch(ProfileFieldView::visible);
-        assertThat(field(result, "location").value()).isEqualTo("서울");
-        assertThat(field(result, "age").value()).isEqualTo("26");
+        assertThat(field(result, "MBTI").value()).isEqualTo("INFP");
+        assertThat(field(result, "AGE").value()).isEqualTo("26");
         assertThat(result.valueAnswers()).hasSize(1);
         assertThat(result.valueAnswers().get(0).visible()).isTrue();
         assertThat(result.valueAnswers().get(0).answer()).isEqualTo("A");
@@ -369,6 +371,62 @@ class MemberProfileServiceTest {
         assertThat(result.valueAnswers().get(0).visible()).isFalse();
         assertThat(result.valueAnswers().get(0).answer()).isNull();
         assertThat(result.valueAnswers().get(0).answerText()).isNull();
+    }
+
+    // ── #457 F2: 편성 기준 공개 ──
+
+    private void stubScheduledRoom(Long roomId, Long userId, Long meId, Long targetId, Long targetUserId) {
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, roomId, userId));
+        given(roomMemberReader.getById(targetId)).willReturn(member(targetId, roomId, targetUserId));
+        // 방 시작 2026-06-26 09:00, 지금(clock) 19:00 = DAY1
+        LocalDateTime start = LocalDateTime.of(2026, 6, 26, 9, 0);
+        Room scheduled = Room.createScheduled(start, start.plusHours(56), start.plusHours(59), start.plusHours(60),
+                start.plusHours(72), 3);
+        given(roomReader.findById(roomId)).willReturn(Optional.of(new Room(roomId, scheduled.status(),
+                scheduled.scheduledDate(), 3, null, null, scheduled.startsAt(), scheduled.finalSelectionOpensAt(),
+                scheduled.finalSelectionClosesAt(), scheduled.resultAt(), scheduled.endsAt())));
+        given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
+        given(valueQuestionReader.getAllActive()).willReturn(List.of());
+        given(userValueAnswerReader.getAllByUserId(targetUserId)).willReturn(List.of());
+    }
+
+    @Test
+    @DisplayName("편성 공개 시각이 지난 항목만 값이 보이고, 안 지난 항목은 value=null + reveal_at + DAY(달력 기준)")
+    void givenScheduledReveals_whenGetProfile_thenOnlyPastRevealsVisible() {
+        stubScheduledRoom(10L, 1L, 20L, 30L, 2L);
+        given(roomScheduleItemReader.findRevealTimes(10L)).willReturn(java.util.Map.of(
+                org.son.haruharu.domain.roomschedule.implement.RevealField.MBTI, LocalDateTime.of(2026, 6, 26, 18, 0),
+                org.son.haruharu.domain.roomschedule.implement.RevealField.INTO_NOW, LocalDateTime.of(2026, 6, 26, 18, 0),
+                org.son.haruharu.domain.roomschedule.implement.RevealField.AGE, LocalDateTime.of(2026, 6, 27, 12, 0)));
+
+        MemberProfileResponse result = service.getMemberProfile(10L, 30L, 1L);
+
+        assertThat(field(result, "MBTI").value()).isEqualTo("INFP");
+        assertThat(field(result, "INTO_NOW").visible()).isTrue();
+        ProfileFieldView age = field(result, "AGE");
+        assertThat(age.visible()).isFalse();
+        assertThat(age.value()).isNull();
+        assertThat(age.revealAt()).isEqualTo(LocalDateTime.of(2026, 6, 27, 12, 0));
+        assertThat(age.availableFromDay()).isEqualTo(2);
+        // 편성에 없는(취소된) 항목은 끝까지 안 열린다
+        ProfileFieldView department = field(result, "DEPARTMENT");
+        assertThat(department.visible()).isFalse();
+        assertThat(department.revealAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("편성이 있어도 매칭 상대는 시각과 상관없이 전부 공개, 나이는 올해 − birth_year")
+    void givenScheduledRoomAndMatched_whenGetProfile_thenAllVisible() {
+        stubScheduledRoom(10L, 1L, 20L, 30L, 2L);
+        given(userProfileReader.findByUserId(2L)).willReturn(Optional.of(profile(2L).withRoomProfile(2003, "INFP", "전자공학과", "러닝")));
+        given(roomScheduleItemReader.findRevealTimes(10L)).willReturn(java.util.Map.of(
+                org.son.haruharu.domain.roomschedule.implement.RevealField.AGE, LocalDateTime.of(2026, 6, 27, 12, 0)));
+        given(matchResultReader.isMatched(20L, 30L)).willReturn(true);
+
+        MemberProfileResponse result = service.getMemberProfile(10L, 30L, 1L);
+
+        assertThat(result.fields()).allMatch(ProfileFieldView::visible);
+        assertThat(field(result, "AGE").value()).isEqualTo("23");
     }
 
     @Test

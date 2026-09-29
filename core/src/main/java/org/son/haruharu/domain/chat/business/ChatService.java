@@ -177,7 +177,7 @@ public class ChatService {
         ChatMessage original = replyToMessageId == null ? null : requireReplyable(chatRoomId, replyToMessageId);
         ChatMessage toSave = original == null
                 ? ChatMessage.create(chatRoomId, senderId, content)
-                : ChatMessage.reply(chatRoomId, senderId, content, original, chatDisplayName(chatRoom, original.senderId()));
+                : ChatMessage.reply(chatRoomId, senderId, content, original, replySenderName(chatRoom, original));
         ChatMessage saved = chatMessageWriter.save(toSave);
         // 발신자 표시 이름(#393): GROUP은 방 세션 가명, DIRECT는 매칭쌍이라 실명. 푸시 본문("OO님이…")에 그대로 실린다.
         String senderNickname = chatDisplayName(chatRoom, senderId);
@@ -189,10 +189,16 @@ public class ChatService {
         return broadcast;
     }
 
-    /** 답장 원문: 같은 채팅방의 (삭제되지 않은) 메시지여야 한다. */
+    /** 운영 글 원문은 '하루'(시스템 유저는 방 멤버가 아니라 가명이 없다, #457). */
+    private String replySenderName(ChatRoom chatRoom, ChatMessage original) {
+        return original.isAdmin() ? original.senderName() : chatDisplayName(chatRoom, original.senderId());
+    }
+
+    /** 답장 원문: 같은 채팅방의 (삭제되지 않은, 운영자가 지우지 않은) 메시지여야 한다. */
     private ChatMessage requireReplyable(Long chatRoomId, Long replyToMessageId) {
         return chatMessageReader.findById(replyToMessageId)
                 .filter(original -> original.chatRoomId().equals(chatRoomId))
+                .filter(original -> !original.isAdminDeleted())
                 .orElseThrow(ChatReplyInvalidException::new);
     }
 
