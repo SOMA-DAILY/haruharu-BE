@@ -60,13 +60,14 @@ class AdminRoomCommandServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock AdminRoomReader adminRoomReader;
+    @Mock org.son.haruharu.domain.roomschedule.business.RoomScheduleService roomScheduleService;
 
     AdminRoomCommandService service;
 
     @BeforeEach
     void setUp() {
         service = new AdminRoomCommandService(roomService, roomInviteService, roomMissionSlotService,
-                roomMemberReader, roomMemberWriter, adminRoomReader);
+                roomMemberReader, roomMemberWriter, adminRoomReader, roomScheduleService);
     }
 
     private CreateAdminRoomCommand createCommand() {

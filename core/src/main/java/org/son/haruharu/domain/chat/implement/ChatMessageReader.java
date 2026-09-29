@@ -27,6 +27,10 @@ public class ChatMessageReader {
         return chatMessageRepository.findAllByIds(ids);
     }
 
+    public List<ChatMessage> findPendingDeleteBroadcasts(int limit) {
+        return chatMessageRepository.findPendingDeleteBroadcasts(limit);
+    }
+
     public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
         return chatMessageRepository.findPage(chatRoomId, cursorId, limit);
     }

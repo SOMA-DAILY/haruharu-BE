@@ -68,6 +68,22 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     }
 
     @Override
+    public int markAdminDeleted(Long id, java.time.LocalDateTime now) {
+        return chatMessageJpaRepository.markAdminDeleted(id, now);
+    }
+
+    @Override
+    public List<ChatMessage> findPendingDeleteBroadcasts(int limit) {
+        return chatMessageJpaRepository.findPendingDeleteBroadcasts(PageRequest.of(0, limit)).stream()
+                .map(ChatMessageEntity::toDomain).toList();
+    }
+
+    @Override
+    public int markDeleteBroadcast(Long id, java.time.LocalDateTime now) {
+        return chatMessageJpaRepository.markDeleteBroadcast(id, now);
+    }
+
+    @Override
     public void hardDeleteByChatRoomId(Long chatRoomId) {
         chatMessageJpaRepository.hardDeleteByChatRoomId(chatRoomId);
     }

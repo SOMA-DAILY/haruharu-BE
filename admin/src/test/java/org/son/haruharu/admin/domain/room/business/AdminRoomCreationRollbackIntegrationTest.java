@@ -54,6 +54,31 @@ class AdminRoomCreationRollbackIntegrationTest {
         assertThat(roomMissionSlotCount()).isEqualTo(slotCount);
     }
 
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("채팅 편성 줄 검증에 실패하면 방, 미션 슬롯, 초대코드, 편성 모두 롤백된다(#457)")
+    void givenInvalidChatSchedule_whenCreateRoom_thenRollsBackEverything() {
+        long roomCount = roomCount();
+        long slotCount = roomMissionSlotCount();
+        given(roomInviteWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+        CreateAdminRoomCommand base = command();
+        CreateAdminRoomCommand withSchedule = new CreateAdminRoomCommand(base.startsAt(), base.finalSelectionOpensAt(),
+                base.finalSelectionClosesAt(), base.resultAt(), base.endsAt(), base.totalDays(), base.maxUses(),
+                base.inviteExpiresAt(), base.missionSlots(),
+                List.of(new org.son.haruharu.domain.roomschedule.business.command.ScheduleItemCommand(
+                        STARTS_AT, List.of(), "ok", false, null, null),
+                        new org.son.haruharu.domain.roomschedule.business.command.ScheduleItemCommand(
+                                STARTS_AT, List.of(), null, false, null, null)));
+
+        assertThatThrownBy(() -> service.createRoomWithInvite(withSchedule, 1L))
+                .isInstanceOf(org.son.haruharu.domain.roomschedule.implement.exception.InvalidScheduleItemException.class);
+
+        assertThat(roomCount()).isEqualTo(roomCount);
+        assertThat(roomMissionSlotCount()).isEqualTo(slotCount);
+        assertThat(entityManager.createQuery("select count(i) from RoomScheduleItemEntity i", Long.class)
+                .getSingleResult()).isZero();
+    }
+
     private CreateAdminRoomCommand command() {
         return new CreateAdminRoomCommand(
                 STARTS_AT,

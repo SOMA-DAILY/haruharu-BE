@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.son.haruharu.domain.mission.business.command.CreateRoomMissionSlotCommand;
 import org.son.haruharu.domain.room.business.command.CreateRoomCommand;
+import org.son.haruharu.domain.roomschedule.business.command.ScheduleItemCommand;
 
 /**
  * 어드민 방 생성 입력(#318). 스케줄 시각 5개 + totalDays 는 core 방 생성으로,
@@ -20,8 +21,19 @@ public record CreateAdminRoomCommand(
         int totalDays,
         Integer maxUses,
         LocalDateTime inviteExpiresAt,
-        List<CreateRoomMissionSlotCommand> missionSlots
+        List<CreateRoomMissionSlotCommand> missionSlots,
+        // 채팅 편성(#457). 비면 0줄.
+        List<ScheduleItemCommand> chatSchedule
 ) {
+    /** 편성 이전(#457) 9-arg 호환. 편성 없음. */
+    public CreateAdminRoomCommand(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
+                                  LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt, LocalDateTime endsAt,
+                                  int totalDays, Integer maxUses, LocalDateTime inviteExpiresAt,
+                                  List<CreateRoomMissionSlotCommand> missionSlots) {
+        this(startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, totalDays, maxUses,
+                inviteExpiresAt, missionSlots, List.of());
+    }
+
     public CreateRoomCommand toRoomCommand() {
         return new CreateRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
                 resultAt, endsAt, totalDays);
