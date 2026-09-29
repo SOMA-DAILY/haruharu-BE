@@ -25,12 +25,7 @@ public record ChatMessageBroadcast(
         boolean deleted
 ) {
     public ChatMessageBroadcast(Long messageId, Long chatRoomId, Long senderId, String content, LocalDateTime sentAt) {
-        this(messageId, chatRoomId, senderId, content, sentAt, null);
-    }
-
-    public ChatMessageBroadcast(Long messageId, Long chatRoomId, Long senderId, String content, LocalDateTime sentAt,
-                                Long videoPostId) {
-        this(messageId, chatRoomId, senderId, content, sentAt, videoPostId, List.of(), null, null, "TEXT", null, false);
+        this(messageId, chatRoomId, senderId, content, sentAt, null, List.of(), null, null, "TEXT", null, false);
     }
 
     public static ChatMessageBroadcast from(ChatMessage message) {

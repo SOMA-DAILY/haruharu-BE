@@ -34,9 +34,6 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
 
     @Override
     public List<ChatMessage> findAllByIds(java.util.Collection<Long> ids) {
-        if (ids.isEmpty()) {
-            return List.of();
-        }
         return chatMessageJpaRepository.findAllById(ids).stream().map(ChatMessageEntity::toDomain).toList();
     }
 

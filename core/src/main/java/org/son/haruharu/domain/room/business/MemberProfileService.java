@@ -2,7 +2,6 @@ package org.son.haruharu.domain.room.business;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +22,7 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
+import org.son.haruharu.domain.roomschedule.business.dto.RoomScheduleItemResponse;
 import org.son.haruharu.domain.roomschedule.implement.RevealField;
 import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader;
 import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
@@ -132,11 +132,8 @@ public class MemberProfileService {
 
     /** reveal_at 의 DAY(달력 날짜 차 + 1). 편성 시각이 없으면 옛 기본값(3). 지금 앱이 숫자로 파싱해서 계속 채운다. */
     private static int availableFromDay(ProfileField field, LocalDateTime revealAt, Room room) {
-        LocalDateTime anchor = room.startsAt() != null ? room.startsAt() : room.startedAt();
-        if (revealAt == null || anchor == null) {
-            return field.availableFromDay();
-        }
-        return (int) ChronoUnit.DAYS.between(anchor.toLocalDate(), revealAt.toLocalDate()) + 1;
+        Integer day = RoomScheduleItemResponse.dayOf(revealAt, room);
+        return day != null ? day : field.availableFromDay();
     }
 
     /**

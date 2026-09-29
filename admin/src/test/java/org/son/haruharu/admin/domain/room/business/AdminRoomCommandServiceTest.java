@@ -77,7 +77,7 @@ class AdminRoomCommandServiceTest {
                 STARTS_AT.plusHours(63),
                 STARTS_AT.plusHours(64),
                 STARTS_AT.plusHours(72),
-                3, 6, null, slotCommands());
+                3, 6, null, slotCommands(), List.of());
     }
 
     private RoomInvite issuedInvite(String code) {

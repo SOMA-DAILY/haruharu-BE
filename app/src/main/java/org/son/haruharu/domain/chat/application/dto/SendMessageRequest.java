@@ -9,8 +9,4 @@ import jakarta.validation.constraints.NotBlank;
 public record SendMessageRequest(
         @NotBlank String content,
         Long replyToMessageId
-) {
-    public SendMessageRequest(String content) {
-        this(content, null);
-    }
-}
+) {}

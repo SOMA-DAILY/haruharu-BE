@@ -23,10 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * 방 편성 관리(#457, F3/F4). 어드민 서버가 쓴다 — 저장만 하고 발송은 app 서버 잡(RoomScheduleDispatchService)이 한다.
@@ -176,16 +176,9 @@ public class RoomScheduleService {
     /** sent_message_id → chat_messages.admin_deleted_at (지운 것만). 목록 전체를 쿼리 1번으로. */
     private Map<Long, LocalDateTime> messageDeletedAt(List<RoomScheduleItem> items) {
         List<Long> ids = items.stream().map(RoomScheduleItem::sentMessageId).filter(Objects::nonNull).distinct().toList();
-        Map<Long, LocalDateTime> result = new HashMap<>();
-        if (ids.isEmpty()) {
-            return result;
-        }
-        for (ChatMessage message : chatMessageReader.findAllByIds(ids)) {
-            if (message.adminDeletedAt() != null) {
-                result.put(message.id(), message.adminDeletedAt());
-            }
-        }
-        return result;
+        return chatMessageReader.findAllByIds(ids).stream()
+                .filter(ChatMessage::isAdminDeleted)
+                .collect(Collectors.toMap(ChatMessage::id, ChatMessage::adminDeletedAt));
     }
 
     private ScheduleContent contentOf(ScheduleItemCommand command, String prefix) {

@@ -53,12 +53,6 @@ public interface RoomScheduleItemJpaRepository extends JpaRepository<RoomSchedul
     boolean existsByRoomIdAndRevealFieldsIsNotNull(Long roomId);
 
     @Modifying(clearAutomatically = true)
-    @Query("update RoomScheduleItemEntity i set i.status = :to, i.updatedAt = :now "
-            + "where i.id = :id and i.status = :from")
-    int transition(@Param("id") Long id, @Param("from") RoomScheduleStatus from, @Param("to") RoomScheduleStatus to,
-                   @Param("now") LocalDateTime now);
-
-    @Modifying(clearAutomatically = true)
     @Query("update RoomScheduleItemEntity i set i.status = :to, i.sentMessageId = :messageId, i.sentAt = :now, "
             + "i.updatedAt = :now where i.id = :id and i.status = :from")
     int markSent(@Param("id") Long id, @Param("messageId") Long messageId, @Param("now") LocalDateTime now,

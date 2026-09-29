@@ -29,20 +29,7 @@ public record MessagePageResponse(
             @Schema(description = "운영자가 지운 메시지면 true(content 는 '삭제된 메시지')") boolean deleted
     ) {
         public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt) {
-            this(messageId, senderId, content, sentAt, null);
-        }
-
-        public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt, Long videoPostId) {
-            this(messageId, senderId, content, sentAt, videoPostId, List.of(), null, null, "TEXT", null, false);
-        }
-
-        public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt, Long videoPostId,
-                           List<ReactionCountItem> reactions, String myReaction, ReplyToView replyTo) {
-            this(messageId, senderId, content, sentAt, videoPostId, reactions, myReaction, replyTo, "TEXT", null, false);
-        }
-
-        public static MessageItem from(ChatMessage message) {
-            return of(message, List.of(), null, null);
+            this(messageId, senderId, content, sentAt, null, List.of(), null, null, "TEXT", null, false);
         }
 
         public static MessageItem of(ChatMessage message, List<ReactionCountItem> reactions, String myReaction,
@@ -51,10 +38,6 @@ public record MessagePageResponse(
                     message.videoPostId(), reactions, myReaction, replyTo, message.messageType().name(),
                     message.senderName(), message.isAdminDeleted());
         }
-    }
-
-    public static MessagePageResponse of(List<ChatMessage> messages, int size) {
-        return of(messages, size, messages.stream().map(MessageItem::from).toList());
     }
 
     /** 항목은 호출자가 만든다(반응·답장 배치 조회 결과를 채운 채로). messages 와 items 는 같은 순서. */

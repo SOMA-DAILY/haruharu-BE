@@ -33,11 +33,7 @@ public record MemberProfileResponse(
             boolean visible,
             String value,
             java.time.LocalDateTime revealAt
-    ) {
-        public ProfileFieldView(String key, String label, int availableFromDay, boolean visible, String value) {
-            this(key, label, availableFromDay, visible, value, null);
-        }
-    }
+    ) {}
 
     /** answerText는 answer(A/B)를 질문의 option_a/option_b 텍스트로 변환한 값(응답 시점 조인, visible=false면 null). */
     public record ValueAnswerView(

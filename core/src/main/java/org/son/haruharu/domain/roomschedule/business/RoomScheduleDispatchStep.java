@@ -41,7 +41,7 @@ public class RoomScheduleDispatchStep {
 
     /** 운영 글 저장(있으면) + SENT. 푸시 대상(GROUP 채팅 활성 멤버)을 돌려준다. 실패하면 전부 롤백된다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public SentItem send(RoomScheduleItem item, Long chatRoomId, LocalDateTime now) {
+    public List<Long> send(RoomScheduleItem item, Long chatRoomId, LocalDateTime now) {
         Long messageId = null;
         if (item.hasMessage()) {
             ChatMessage saved = adminChatMessageService.sendAsSystem(chatRoomId, item.messageContent(), item.id());
@@ -50,17 +50,14 @@ public class RoomScheduleDispatchStep {
         if (!itemWriter.markSent(item.id(), messageId, now)) {
             throw new IllegalStateException("편성 행이 SENDING 이 아닙니다: id=" + item.id());
         }
-        List<Long> recipients = chatRoomMemberReader.findByChatRoomId(chatRoomId).stream()
+        return chatRoomMemberReader.findByChatRoomId(chatRoomId).stream()
                 .filter(member -> !member.hasLeft())
                 .map(ChatRoomMember::userId)
                 .toList();
-        return new SentItem(messageId, recipients);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean fail(Long itemId, RoomScheduleStatus from, String reason, LocalDateTime now) {
         return itemWriter.markFailed(itemId, from, reason, now);
     }
-
-    public record SentItem(Long messageId, List<Long> recipientUserIds) {}
 }

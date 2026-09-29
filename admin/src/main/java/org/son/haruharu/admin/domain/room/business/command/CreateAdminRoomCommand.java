@@ -25,15 +25,6 @@ public record CreateAdminRoomCommand(
         // 채팅 편성(#457). 비면 0줄.
         List<ScheduleItemCommand> chatSchedule
 ) {
-    /** 편성 이전(#457) 9-arg 호환. 편성 없음. */
-    public CreateAdminRoomCommand(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
-                                  LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt, LocalDateTime endsAt,
-                                  int totalDays, Integer maxUses, LocalDateTime inviteExpiresAt,
-                                  List<CreateRoomMissionSlotCommand> missionSlots) {
-        this(startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, totalDays, maxUses,
-                inviteExpiresAt, missionSlots, List.of());
-    }
-
     public CreateRoomCommand toRoomCommand() {
         return new CreateRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
                 resultAt, endsAt, totalDays);

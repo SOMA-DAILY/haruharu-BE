@@ -95,7 +95,8 @@ class AdminRoomCreationRollbackIntegrationTest {
                         slot(2, MissionPeriod.MORNING, 25, 30),
                         slot(2, MissionPeriod.AFTERNOON, 33, 38),
                         slot(3, MissionPeriod.MORNING, 49, 54),
-                        slot(3, MissionPeriod.AFTERNOON, 55, 58)));
+                        slot(3, MissionPeriod.AFTERNOON, 55, 58)),
+                List.of());
     }
 
     private CreateRoomMissionSlotCommand slot(int dayNumber, MissionPeriod period,

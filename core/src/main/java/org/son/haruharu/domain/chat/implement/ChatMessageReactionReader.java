@@ -22,14 +22,11 @@ public class ChatMessageReactionReader {
     }
 
     public List<MessageReactionCount> countByMessageIds(Collection<Long> messageIds) {
-        return messageIds.isEmpty() ? List.of() : repository.countByMessageIds(messageIds);
+        return repository.countByMessageIds(messageIds);
     }
 
     /** messageId → 내 반응 타입. */
     public Map<Long, String> findMyTypes(Collection<Long> messageIds, Long userId) {
-        if (messageIds.isEmpty()) {
-            return Map.of();
-        }
         return repository.findMineByMessageIds(messageIds, userId).stream()
                 .collect(Collectors.toMap(ChatMessageReaction::messageId, ChatMessageReaction::reactionType,
                         (a, b) -> a));

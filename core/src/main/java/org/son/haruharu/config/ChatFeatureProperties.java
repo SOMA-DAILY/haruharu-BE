@@ -25,13 +25,4 @@ public record ChatFeatureProperties(
     public boolean replyPushEnabled() {
         return replyPush != null && replyPush.enabled();
     }
-
-    public boolean adminMessageEnabled() {
-        return adminMessage != null && adminMessage.enabled();
-    }
-
-    /** 운영 글 발신자인지. 시스템 유저 id 가 설정되지 않았으면 항상 false. */
-    public boolean isSystemUser(Long userId) {
-        return systemUserId != null && systemUserId.equals(userId);
-    }
 }

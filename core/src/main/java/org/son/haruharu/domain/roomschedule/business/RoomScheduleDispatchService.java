@@ -9,7 +9,6 @@ import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
-import org.son.haruharu.domain.roomschedule.business.RoomScheduleDispatchStep.SentItem;
 import org.son.haruharu.domain.roomschedule.implement.RevealField;
 import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItem;
 import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader;
@@ -116,15 +115,15 @@ public class RoomScheduleDispatchService {
         }
         // 조회 스냅샷 대신 claim 뒤의 행으로 보낸다(조회와 claim 사이 어드민 PATCH 반영).
         RoomScheduleItem claimed = itemReader.findById(item.id()).orElse(item);
-        SentItem sent;
+        List<Long> recipients;
         try {
-            sent = step.send(claimed, chatRoom.get().id(), now);
+            recipients = step.send(claimed, chatRoom.get().id(), now);
         } catch (Exception e) {
             step.fail(item.id(), RoomScheduleStatus.SENDING, failReason(e), now);
             log.error("방 편성 발송 실패: itemId={}", item.id(), e);
             return false;
         }
-        push(claimed, chatRoom.get().id(), sent);
+        push(claimed, chatRoom.get().id(), recipients);
         return true;
     }
 
@@ -140,20 +139,20 @@ public class RoomScheduleDispatchService {
         return at;
     }
 
-    private void push(RoomScheduleItem item, Long chatRoomId, SentItem sent) {
-        if (sent.recipientUserIds().isEmpty()) {
+    private void push(RoomScheduleItem item, Long chatRoomId, List<Long> recipients) {
+        if (recipients.isEmpty()) {
             return;
         }
         Map<String, String> data = Map.of("chatRoomId", chatRoomId.toString(), "roomId", item.roomId().toString());
         // 운영 글 원문은 보내지 않는다. 00~08시엔 PushSendService 가 알림함에만 남긴다(quietHoursExempt=false).
         if (item.push() && item.hasMessage()) {
-            pushSendService.sendToUsers(sent.recipientUserIds(), NotificationType.ADMIN_MESSAGE, data,
+            pushSendService.sendToUsers(recipients, NotificationType.ADMIN_MESSAGE, data,
                     orDefault(item.pushTitle(), DEFAULT_PUSH_TITLE), orDefault(item.pushBody(), DEFAULT_PUSH_BODY));
         }
         // 같은 항목이 더 이른 행에서 이미 공개됐으면 그 항목은 공개 알림에서 뺀다(같은 항목 여러 행은 허용이라 푸시만 막음).
         List<RevealField> newlyRevealed = newlyRevealed(item);
         if (!newlyRevealed.isEmpty()) {
-            pushSendService.sendToUsers(sent.recipientUserIds(), NotificationType.PROFILE_REVEAL, data,
+            pushSendService.sendToUsers(recipients, NotificationType.PROFILE_REVEAL, data,
                     RevealField.pushTitleOf(newlyRevealed), RevealField.pushBodyOf(newlyRevealed));
         }
     }
