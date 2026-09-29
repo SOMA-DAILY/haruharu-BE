@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.roomschedule.business;
 
+import org.son.haruharu.domain.chat.implement.ChatMessage;
+import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
@@ -21,7 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * 방 편성 관리(#457, F3/F4). 어드민 서버가 쓴다 — 저장만 하고 발송은 app 서버 잡(RoomScheduleDispatchService)이 한다.
@@ -35,14 +40,17 @@ public class RoomScheduleService {
     private final RoomReader roomReader;
     private final RoomScheduleItemReader itemReader;
     private final RoomScheduleItemWriter itemWriter;
+    private final ChatMessageReader chatMessageReader;
     private final ChatMessageWriter chatMessageWriter;
     private final Clock clock;
 
     public RoomScheduleService(RoomReader roomReader, RoomScheduleItemReader itemReader,
-                               RoomScheduleItemWriter itemWriter, ChatMessageWriter chatMessageWriter, Clock clock) {
+                               RoomScheduleItemWriter itemWriter, ChatMessageReader chatMessageReader,
+                               ChatMessageWriter chatMessageWriter, Clock clock) {
         this.roomReader = roomReader;
         this.itemReader = itemReader;
         this.itemWriter = itemWriter;
+        this.chatMessageReader = chatMessageReader;
         this.chatMessageWriter = chatMessageWriter;
         this.clock = clock;
     }
@@ -82,7 +90,11 @@ public class RoomScheduleService {
 
     public List<RoomScheduleItemResponse> list(Long roomId) {
         Room room = requireRoom(roomId);
-        return itemReader.findByRoomId(roomId).stream().map(item -> RoomScheduleItemResponse.of(item, room)).toList();
+        List<RoomScheduleItem> items = itemReader.findByRoomId(roomId);
+        Map<Long, LocalDateTime> deletedAt = messageDeletedAt(items);
+        return items.stream()
+                .map(item -> RoomScheduleItemResponse.of(item, room, deletedAt.get(item.sentMessageId())))
+                .toList();
     }
 
     /** 행 추가. run_at 이 null 이면 지금(다음 틱에 나감). */
@@ -109,7 +121,7 @@ public class RoomScheduleService {
         if (!itemWriter.updateIfScheduled(itemId, roomId, runAt, content, actor, now())) {
             throw new ScheduleItemNotEditableException();
         }
-        return RoomScheduleItemResponse.of(itemReader.getInRoom(roomId, itemId), room);
+        return responseOf(itemReader.getInRoom(roomId, itemId), room);
     }
 
     /** 지금 보내기 = run_at 을 지금으로(내부 API 없음, 1분 잡이 집는다). */
@@ -120,7 +132,7 @@ public class RoomScheduleService {
         if (!itemWriter.rescheduleIfScheduled(itemId, roomId, now(), actor, now())) {
             throw new ScheduleItemNotEditableException();
         }
-        return RoomScheduleItemResponse.of(itemReader.getInRoom(roomId, itemId), room);
+        return responseOf(itemReader.getInRoom(roomId, itemId), room);
     }
 
     @Transactional
@@ -130,7 +142,7 @@ public class RoomScheduleService {
         if (!itemWriter.cancelIfScheduled(itemId, roomId, actor, now())) {
             throw new ScheduleItemNotEditableException();
         }
-        return RoomScheduleItemResponse.of(itemReader.getInRoom(roomId, itemId), room);
+        return responseOf(itemReader.getInRoom(roomId, itemId), room);
     }
 
     /**
@@ -145,7 +157,26 @@ public class RoomScheduleService {
             throw new ScheduleItemNotEditableException();
         }
         chatMessageWriter.markAdminDeleted(item.sentMessageId(), now());
-        return RoomScheduleItemResponse.of(item, room);
+        return responseOf(item, room);
+    }
+
+    private RoomScheduleItemResponse responseOf(RoomScheduleItem item, Room room) {
+        return RoomScheduleItemResponse.of(item, room, messageDeletedAt(List.of(item)).get(item.sentMessageId()));
+    }
+
+    /** sent_message_id → chat_messages.admin_deleted_at (지운 것만). 목록 전체를 쿼리 1번으로. */
+    private Map<Long, LocalDateTime> messageDeletedAt(List<RoomScheduleItem> items) {
+        List<Long> ids = items.stream().map(RoomScheduleItem::sentMessageId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, LocalDateTime> result = new HashMap<>();
+        if (ids.isEmpty()) {
+            return result;
+        }
+        for (ChatMessage message : chatMessageReader.findAllByIds(ids)) {
+            if (message.adminDeletedAt() != null) {
+                result.put(message.id(), message.adminDeletedAt());
+            }
+        }
+        return result;
     }
 
     private ScheduleContent contentOf(ScheduleItemCommand command, String prefix) {

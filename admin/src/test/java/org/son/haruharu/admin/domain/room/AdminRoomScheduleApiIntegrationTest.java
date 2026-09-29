@@ -218,8 +218,16 @@ class AdminRoomScheduleApiIntegrationTest {
         em.flush();
         em.clear();
 
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}/schedule", roomId).with(authentication(operator())))
+                .andExpect(jsonPath("$.data[0].sent_message_id").value(messageId))
+                .andExpect(jsonPath("$.data[0].message_deleted_at").isEmpty());
+        mockMvc.perform(delete(url).with(authentication(operator())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.message_deleted_at").isString());
         mockMvc.perform(delete(url).with(authentication(operator()))).andExpect(status().isOk());
-        mockMvc.perform(delete(url).with(authentication(operator()))).andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}/schedule", roomId).with(authentication(operator())))
+                .andExpect(jsonPath("$.data[0].message_deleted_at").isString())
+                .andExpect(jsonPath("$.data[1].message_deleted_at").isEmpty());
         LocalDateTime deletedAt = em.createQuery(
                         "select m.adminDeletedAt from ChatMessageEntity m where m.id = :id", LocalDateTime.class)
                 .setParameter("id", messageId).getSingleResult();

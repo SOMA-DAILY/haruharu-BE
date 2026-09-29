@@ -24,13 +24,19 @@ public record RoomScheduleItemResponse(
         @Schema(description = "실패 사유(EXPIRED, ROOM_ENDED, STUCK 또는 예외 앞 200자)", nullable = true) String failReason,
         @Schema(description = "보낸 운영 글 메시지 id", nullable = true) Long sentMessageId,
         @Schema(description = "만든 사람", example = "admin:4") String createdBy,
-        @Schema(description = "보낸 시각", nullable = true) LocalDateTime sentAt
+        @Schema(description = "보낸 시각", nullable = true) LocalDateTime sentAt,
+        @Schema(description = "보낸 운영 글을 운영자가 지운 시각(chat_messages.admin_deleted_at, 없으면 null)", nullable = true)
+        LocalDateTime messageDeletedAt
 ) {
     public static RoomScheduleItemResponse of(RoomScheduleItem item, Room room) {
+        return of(item, room, null);
+    }
+
+    public static RoomScheduleItemResponse of(RoomScheduleItem item, Room room, LocalDateTime messageDeletedAt) {
         return new RoomScheduleItemResponse(item.id(), item.runAt(), dayOf(item.runAt(), room),
                 item.revealFields().stream().map(RevealField::name).toList(), item.messageContent(), item.push(),
                 item.pushTitle(), item.pushBody(), item.status().name(), item.failReason(), item.sentMessageId(),
-                item.createdBy(), item.sentAt());
+                item.createdBy(), item.sentAt(), messageDeletedAt);
     }
 
     /** Room.currentDayAt 은 시각 기준(24시간)이라 쓰지 않는다 — 09:00 시작 방의 DAY2 08:00 행이 DAY1 로 나온다. */

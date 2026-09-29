@@ -18,7 +18,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 
 /**
@@ -139,10 +141,20 @@ public class RoomScheduleDispatchService {
             pushSendService.sendToUsers(sent.recipientUserIds(), NotificationType.ADMIN_MESSAGE, data,
                     orDefault(item.pushTitle(), DEFAULT_PUSH_TITLE), orDefault(item.pushBody(), DEFAULT_PUSH_BODY));
         }
-        if (item.hasReveal()) {
+        // 같은 항목이 더 이른 행에서 이미 공개됐으면 그 항목은 공개 알림에서 뺀다(같은 항목 여러 행은 허용이라 푸시만 막음).
+        List<RevealField> newlyRevealed = newlyRevealed(item);
+        if (!newlyRevealed.isEmpty()) {
             pushSendService.sendToUsers(sent.recipientUserIds(), NotificationType.PROFILE_REVEAL, data,
-                    RevealField.pushTitleOf(item.revealFields()), RevealField.pushBodyOf(item.revealFields()));
+                    RevealField.pushTitleOf(newlyRevealed), RevealField.pushBodyOf(newlyRevealed));
         }
+    }
+
+    private List<RevealField> newlyRevealed(RoomScheduleItem item) {
+        if (!item.hasReveal()) {
+            return List.of();
+        }
+        Set<RevealField> already = itemReader.findRevealedBefore(item);
+        return item.revealFields().stream().filter(field -> !already.contains(field)).toList();
     }
 
     private static String orDefault(String value, String fallback) {

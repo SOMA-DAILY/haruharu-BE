@@ -1,5 +1,6 @@
 package org.son.haruharu.admin.config;
 
+import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.storage.ChatMessageRepositoryImpl;
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
@@ -64,6 +65,7 @@ import org.springframework.context.annotation.Import;
         RoomScheduleItemReader.class,
         RoomScheduleItemWriter.class,
         RoomScheduleItemRepositoryImpl.class,
+        ChatMessageReader.class,
         ChatMessageWriter.class,
         ChatMessageRepositoryImpl.class
 })

@@ -154,6 +154,28 @@ class RoomScheduleDispatchIntegrationTest {
     }
 
     @Test
+    @DisplayName("더 이른 행에서 이미 공개된 항목은 PROFILE_REVEAL 에서 빠지고, 남는 게 없으면 공개 알림 없이 운영 글만 나간다")
+    void revealPushSkipsAlreadyRevealedFields() {
+        jdbc.update("delete from notification_history");
+        Long first = addItem(roomId, now.minusMinutes(4), List.of("MBTI", "INTO_NOW"), null, false);
+        Long second = addItem(roomId, now.minusMinutes(3), List.of("MBTI", "AGE"), null, false);
+        Long third = addItem(roomId, now.minusMinutes(2), List.of("MBTI"), "MBTI 다시 확인해봐요", true);
+        Long canceled = addItem(roomId, now.minusMinutes(5), List.of("DEPARTMENT"), null, false);
+        scheduleService.cancel(roomId, canceled, "admin:1");
+        Long department = addItem(roomId, now.minusMinutes(1), List.of("DEPARTMENT"), null, false);
+
+        dispatcher.dispatchDue();
+
+        assertThat(List.of(first, second, third, department)).allSatisfy(id -> assertThat(item(id).get("status")).isEqualTo("SENT"));
+        assertThat(jdbc.queryForList("select title from notification_history where type='PROFILE_REVEAL' and user_id=?",
+                String.class, alice))
+                .containsExactlyInAnyOrder("새 정보가 공개됐어요", "영상 보고 몇 살 같았어요?", "문과일까, 이과일까?");
+        assertThat(inbox("PROFILE_REVEAL")).isEqualTo(9);
+        assertThat(inbox("ADMIN_MESSAGE")).isEqualTo(3);
+        assertThat(adminMessages(chatId)).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("30분 지난 행은 EXPIRED, 방 종료 뒤 남은 행은 ROOM_ENDED, 시작 전 방의 행은 기다린다")
     void expiredEndedAndPending() {
         Long expired = addItem(roomId, now.minusMinutes(31), List.of(), "늦음", false);

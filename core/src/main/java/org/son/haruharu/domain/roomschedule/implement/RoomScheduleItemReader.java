@@ -5,6 +5,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +36,22 @@ public class RoomScheduleItemReader {
 
     public List<RoomScheduleItem> findSendingSince(LocalDateTime threshold, int limit) {
         return repository.findSendingSince(threshold, limit);
+    }
+
+    /**
+     * 이 행보다 먼저 공개된 항목(같은 방, 취소 아님, run_at 이 더 이른 행 — 같은 시각이면 id 가 작은 행).
+     * 발송 잡이 같은 항목의 PROFILE_REVEAL 을 두 번 보내지 않게 한다.
+     */
+    public Set<RevealField> findRevealedBefore(RoomScheduleItem item) {
+        Set<RevealField> revealed = EnumSet.noneOf(RevealField.class);
+        for (RoomScheduleItem other : repository.findRevealRows(item.roomId())) {
+            boolean earlier = other.runAt().isBefore(item.runAt())
+                    || (other.runAt().isEqual(item.runAt()) && other.id() < item.id());
+            if (!other.id().equals(item.id()) && earlier) {
+                revealed.addAll(other.revealFields());
+            }
+        }
+        return revealed;
     }
 
     /**
