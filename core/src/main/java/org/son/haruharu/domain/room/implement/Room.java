@@ -139,6 +139,29 @@ public record Room(
         return (int) Math.min(totalDays, rawDayAt(now));
     }
 
+    /**
+     * 시각의 DAY 표기 = 달력 날짜 차 + 1(방 시작 전이면 0 이하). 앵커는 startsAt, 없으면 startedAt, 둘 다 없으면 null.
+     * currentDayAt 은 24시간 단위라 09:00 시작 방의 DAY2 08:00 이 DAY1 로 나오므로 편성·공개 시각 표기엔 이걸 쓴다.
+     */
+    public Integer calendarDayOf(LocalDateTime at) {
+        LocalDateTime anchor = startsAt != null ? startsAt : startedAt;
+        if (at == null || anchor == null) {
+            return null;
+        }
+        return (int) ChronoUnit.DAYS.between(anchor.toLocalDate(), at.toLocalDate()) + 1;
+    }
+
+    /**
+     * 마지막 날(totalDays)이 지나 세션이 끝났는지. Day+1의 하루 경계를 넘긴 ACTIVE 방이 true.
+     * currentDayAt은 totalDays로 캡되어 "경과"를 구분할 수 없으므로 캡 이전 raw day로 판정한다.(구 모델 전용)
+     */
+    public boolean hasEndedBy(LocalDateTime now) {
+        if (status != RoomStatus.ACTIVE || startedAt == null) {
+            return false;
+        }
+        return rawDayAt(now) > totalDays;
+    }
+
     private long rawDayAt(LocalDateTime now) {
         long elapsedDays = ChronoUnit.DAYS.between(
                 dateOfDay(1),

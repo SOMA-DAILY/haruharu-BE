@@ -101,6 +101,23 @@ haruharu:
   room:
     consolation-reward:
       amount: 5
+  # 채팅 P0(#455). 플래그는 기본 OFF 로 배포하고 앱 배포 뒤 켠다(지금 앱은 새 푸시 타입과 운영 말풍선을 모른다).
+  chat:
+    admin-message:
+      # 방 편성 발송 잡 — 운영 글, ADMIN_MESSAGE / PROFILE_REVEAL 푸시
+      enabled: ${CHAT_ADMIN_MESSAGE_ENABLED:false}
+      # cron: 미션 배정(0초)·슬롯 알림(15초)·outcome(30초)과 같은 초에 두지 말 것
+      cron: ${CHAT_ADMIN_MESSAGE_CRON:20 * * * * *}
+      batch-size: ${CHAT_ADMIN_MESSAGE_BATCH_SIZE:1000}
+      # run_at·방 시작·행 수정 중 늦은 시각에서 이만큼 지나면 FAILED(EXPIRED)
+      expire-minutes: ${CHAT_ADMIN_MESSAGE_EXPIRE_MINUTES:30}
+      # SENDING 인 채 이만큼 지나면 FAILED(STUCK)
+      stuck-minutes: ${CHAT_ADMIN_MESSAGE_STUCK_MINUTES:5}
+    reply-push:
+      # 답장 받은 사람에게 CHAT 대신 CHAT_REPLY
+      enabled: ${CHAT_REPLY_PUSH_ENABLED:false}
+    # 운영 글 발신자(닉네임 '하루'). scripts/sql/455-chat-p0-base-verify.sql 로 확인한 id
+    system-user-id: ${CHAT_SYSTEM_USER_ID:}
 
 oauth:
   providers:

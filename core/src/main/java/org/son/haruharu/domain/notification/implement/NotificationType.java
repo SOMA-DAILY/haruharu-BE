@@ -37,6 +37,14 @@ public enum NotificationType {
     QUESTION_ANSWER_DEADLINE_SOON("⏰ 답을 기다리는 질문이 있어요", "2시간 뒤 마감되면 답할 수 없어요", false, NotificationCategory.ACTIVITY),
     QUESTION_SEND_DEADLINE_SOON("⏰ 질문할 시간이 2시간 남았어요", "궁금했던 걸 지금 물어보세요", false, NotificationCategory.ACTIVITY),
 
+    // ── E. 채팅 P0(#455) ──
+    // 운영 글 푸시. bodyArgs = [제목, 본문] — PushSendService 가 title/body 에 같은 인자를 넣으므로 자리를 지정한다.
+    ADMIN_MESSAGE("%1$s", "%2$s", true, NotificationCategory.ACTIVITY),
+    // 프로필 항목 공개 푸시. bodyArgs = [제목, 본문](RevealField 문구). 00~08시엔 알림함에만 남는다.
+    PROFILE_REVEAL("%1$s", "%2$s", true, NotificationCategory.ACTIVITY),
+    // 답장 푸시. body 의 %s 는 답장한 사람 표시 이름(GROUP 가명 / DIRECT 실명). 유저 간 실시간 상호작용이라 야간 예외.
+    CHAT_REPLY("💬 답장", "%s님이 답장했어요", true, NotificationCategory.ACTIVITY, true),
+
     // ── C. 시스템 / 거래 ──
     // 폐기된 자동매칭 환불 알림의 이력 호환용. 발송 트리거는 제거됨.
     COIN_REFUNDED("☁️ 구름 %d개를 돌려드렸어요", "이번엔 인연이 닿지 않았지만, 다음 기회에 다시 만나요", true, NotificationCategory.TRANSACTIONAL),

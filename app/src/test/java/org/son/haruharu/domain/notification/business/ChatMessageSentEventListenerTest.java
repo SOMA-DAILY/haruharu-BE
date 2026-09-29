@@ -13,6 +13,8 @@ import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 
 import java.util.List;
+
+import org.son.haruharu.config.ChatFeatureProperties;
 import java.util.Map;
 import java.util.Set;
 import java.time.LocalDateTime;
@@ -30,7 +32,8 @@ class ChatMessageSentEventListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService);
+        listener = new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService,
+                new ChatFeatureProperties(null, null, null));
     }
 
     @Test
@@ -91,6 +94,56 @@ class ChatMessageSentEventListenerTest {
         then(chatDeliveryService).shouldHaveNoInteractions();
         then(pushSendService).shouldHaveNoInteractions();
         then(blockReader).shouldHaveNoInteractions();
+    }
+
+    private static ChatFeatureProperties replyPush(boolean enabled) {
+        return new ChatFeatureProperties(null, new ChatFeatureProperties.ReplyPush(enabled), 999L);
+    }
+
+    private static ChatMessageSentEvent replyEvent(Long replyToSender) {
+        return new ChatMessageSentEvent(20L, 10L, ChatRoomType.GROUP, 5L, 1L,
+                List.of(2L, 3L, 4L), "윤슬", LocalDateTime.of(2026, 9, 29, 15, 0), replyToSender);
+    }
+
+    @Test
+    @DisplayName("답장 푸시 ON: 원문 주인은 CHAT_REPLY 1건만, 나머지는 CHAT (같은 사람에게 두 번 안 감, #456)")
+    void givenReplyPushOn_whenReply_thenOwnerGetsReplyOthersGetChat() {
+        listener = new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService, replyPush(true));
+        allowDelivery();
+
+        listener.handle(replyEvent(3L));
+
+        then(pushSendService).should().sendToUsers(
+                List.of(3L), NotificationType.CHAT_REPLY, Map.of("chatRoomId", "10"), "윤슬");
+        then(pushSendService).should().sendToUsers(
+                List.of(2L, 4L), NotificationType.CHAT, Map.of("chatRoomId", "10"), "윤슬");
+        then(pushSendService).shouldHaveNoMoreInteractions();
+    }
+
+    @Test
+    @DisplayName("답장 푸시 OFF: 원문 주인 포함 전부 기존 CHAT (#456)")
+    void givenReplyPushOff_whenReply_thenAllGetChat() {
+        listener = new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService, replyPush(false));
+        allowDelivery();
+
+        listener.handle(replyEvent(3L));
+
+        then(pushSendService).should().sendToUsers(
+                List.of(2L, 3L, 4L), NotificationType.CHAT, Map.of("chatRoomId", "10"), "윤슬");
+        then(pushSendService).shouldHaveNoMoreInteractions();
+    }
+
+    @Test
+    @DisplayName("원문 주인이 수신자가 아니면(운영 글 시스템 유저, 본인, 차단) 답장 푸시 없이 CHAT 만 (#456)")
+    void givenReplyToNonRecipient_whenReply_thenNoReplyPush() {
+        listener = new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService, replyPush(true));
+        allowDelivery();
+
+        listener.handle(replyEvent(999L));
+
+        then(pushSendService).should().sendToUsers(
+                List.of(2L, 3L, 4L), NotificationType.CHAT, Map.of("chatRoomId", "10"), "윤슬");
+        then(pushSendService).shouldHaveNoMoreInteractions();
     }
 
     private void allowDelivery() {
