@@ -15,7 +15,8 @@ import org.son.haruharu.domain.chat.implement.ChatMessage;
 
 @Entity
 @Table(name = "chat_messages", uniqueConstraints = @UniqueConstraint(name="uq_chat_messages_reply_request", columnNames={"chat_room_id", "sender_id", "client_request_id"}), indexes = {
-        @Index(name = "idx_chat_messages_room_id", columnList = "chat_room_id, id")
+        @Index(name = "idx_chat_messages_room_id", columnList = "chat_room_id, id"),
+        @Index(name = "idx_chat_messages_reply_to", columnList = "reply_to_message_id")
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatMessageEntity extends BaseEntity {
@@ -39,6 +40,15 @@ public class ChatMessageEntity extends BaseEntity {
     @Column(name = "client_request_id", length = 36)
     private String clientRequestId;
 
+    @Column(name = "reply_to_message_id")
+    private Long replyToMessageId;
+
+    @Column(name = "reply_preview_sender", length = 20)
+    private String replyPreviewSender;
+
+    @Column(name = "reply_preview_content", length = 50)
+    private String replyPreviewContent;
+
     public static ChatMessageEntity from(ChatMessage message) {
         ChatMessageEntity entity = new ChatMessageEntity();
         entity.id = message.id();
@@ -47,11 +57,15 @@ public class ChatMessageEntity extends BaseEntity {
         entity.content = message.content();
         entity.videoPostId = message.videoPostId();
         entity.clientRequestId = message.clientRequestId();
+        entity.replyToMessageId = message.replyToMessageId();
+        entity.replyPreviewSender = message.replyPreviewSender();
+        entity.replyPreviewContent = message.replyPreviewContent();
         entity.createdAt = message.createdAt();
         return entity;
     }
 
     public ChatMessage toDomain() {
-        return new ChatMessage(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId);
+        return new ChatMessage(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId,
+                replyToMessageId, replyPreviewSender, replyPreviewContent);
     }
 }

@@ -33,6 +33,14 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     }
 
     @Override
+    public List<ChatMessage> findAllByIds(java.util.Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return chatMessageJpaRepository.findAllById(ids).stream().map(ChatMessageEntity::toDomain).toList();
+    }
+
+    @Override
     public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
         List<ChatMessageEntity> rows = (cursorId == null)

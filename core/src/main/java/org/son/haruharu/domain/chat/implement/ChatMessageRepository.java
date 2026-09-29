@@ -9,6 +9,8 @@ public interface ChatMessageRepository {
 
     ChatMessage save(ChatMessage message);
     Optional<ChatMessage> findById(Long id);
+    /** 답장 원문 배치 조회(#456). 삭제된(deleted_at) 메시지는 빠진다. */
+    List<ChatMessage> findAllByIds(java.util.Collection<Long> ids);
     /**
      * 최신순 페이지. cursorId가 null이면 첫 페이지, 아니면 그 id보다 이전(작은) 메시지를 limit개.
      * 삭제된(deletedAt) 메시지는 제외.

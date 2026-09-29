@@ -14,6 +14,7 @@ import org.son.haruharu.domain.chat.business.event.ChatRoomClosedEvent;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnException;
+import org.son.haruharu.domain.chat.business.exception.ChatReplyInvalidException;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
@@ -68,6 +69,7 @@ public class ChatService {
     private final RoomMemberReader roomMemberReader;
     private final RoomReader roomReader;
     private final BlockReader blockReader;
+    private final ChatMessageViews chatMessageViews;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -82,6 +84,7 @@ public class ChatService {
                        RoomMemberReader roomMemberReader,
                        RoomReader roomReader,
                        BlockReader blockReader,
+                       ChatMessageViews chatMessageViews,
                        ApplicationEventPublisher eventPublisher,
                        Clock clock) {
         this.chatRoomReader = chatRoomReader;
@@ -95,6 +98,7 @@ public class ChatService {
         this.roomMemberReader = roomMemberReader;
         this.roomReader = roomReader;
         this.blockReader = blockReader;
+        this.chatMessageViews = chatMessageViews;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -157,19 +161,39 @@ public class ChatService {
      */
     @Transactional
     public ChatMessageBroadcast sendMessage(Long chatRoomId, Long senderId, String content) {
+        return sendMessage(chatRoomId, senderId, content, null);
+    }
+
+    /**
+     * 메시지 전송. replyToMessageId 가 있으면 답장(#456): 원문이 같은 채팅방 메시지여야 하고(아니면 CHAT_REPLY_INVALID),
+     * 원문 보낸 사람 표시 이름과 앞 50자를 스냅샷으로 남긴다. 내 메시지에 답장하는 것도 허용한다.
+     */
+    @Transactional
+    public ChatMessageBroadcast sendMessage(Long chatRoomId, Long senderId, String content, Long replyToMessageId) {
         chatRoomReader.lockForUpdate(chatRoomId);
         requireMember(chatRoomId, senderId);
         ChatRoom chatRoom = chatRoomReader.getById(chatRoomId);
         List<Long> recipientIds = recipientsFor(chatRoom, senderId); // DIRECT=상대 1명, GROUP=나 제외 전원
-        ChatMessage saved = chatMessageWriter.save(ChatMessage.create(chatRoomId, senderId, content));
+        ChatMessage original = replyToMessageId == null ? null : requireReplyable(chatRoomId, replyToMessageId);
+        ChatMessage toSave = original == null
+                ? ChatMessage.create(chatRoomId, senderId, content)
+                : ChatMessage.reply(chatRoomId, senderId, content, original, chatDisplayName(chatRoom, original.senderId()));
+        ChatMessage saved = chatMessageWriter.save(toSave);
         // 발신자 표시 이름(#393): GROUP은 방 세션 가명, DIRECT는 매칭쌍이라 실명. 푸시 본문("OO님이…")에 그대로 실린다.
         String senderNickname = chatDisplayName(chatRoom, senderId);
         eventPublisher.publishEvent(new ChatMessageSentEvent(
                 saved.id(), chatRoomId, chatRoom.type(), chatRoom.roomId(), senderId,
-                recipientIds, senderNickname, saved.createdAt()));
+                recipientIds, senderNickname, saved.createdAt(), original == null ? null : original.senderId()));
         ChatMessageBroadcast broadcast = ChatMessageBroadcast.from(saved);
         eventPublisher.publishEvent(new ChatMessageBroadcastEvent(broadcast));
         return broadcast;
+    }
+
+    /** 답장 원문: 같은 채팅방의 (삭제되지 않은) 메시지여야 한다. */
+    private ChatMessage requireReplyable(Long chatRoomId, Long replyToMessageId) {
+        return chatMessageReader.findById(replyToMessageId)
+                .filter(original -> original.chatRoomId().equals(chatRoomId))
+                .orElseThrow(ChatReplyInvalidException::new);
     }
 
     /** 내 채팅방 목록. 마지막 메시지 최신순으로 정렬한다. 차단 관계 필터 세트는 루프 밖에서 한 번만 조회한다(#408, N+1 방지). */
@@ -209,7 +233,7 @@ public class ChatService {
         requireActiveIfDirect(chatRoomId, userId);
         int limit = Math.min(Math.max(size, 1), MAX_MESSAGE_PAGE_SIZE);
         List<ChatMessage> messages = chatMessageReader.findPage(chatRoomId, cursor, limit);
-        return MessagePageResponse.of(messages, limit);
+        return MessagePageResponse.of(messages, limit, chatMessageViews.toItems(messages, userId));
     }
 
     /** 읽음 커서 갱신. 커서는 뒤로만 이동한다(역행 방지). */
@@ -345,7 +369,7 @@ public class ChatService {
     }
 
     /** 채팅 표시 이름. GROUP은 방 세션 가명(없으면 익명 플레이스홀더) — 매칭 전 실명 노출 금지(#393). DIRECT는 매칭쌍이라 실명. */
-    private String chatDisplayName(ChatRoom chatRoom, Long userId) {
+    public String chatDisplayName(ChatRoom chatRoom, Long userId) {
         if (chatRoom.type() == ChatRoomType.GROUP) {
             return roomMemberReader.findByRoomIdAndUserId(chatRoom.roomId(), userId)
                     .map(RoomMember::displayPseudonym)
