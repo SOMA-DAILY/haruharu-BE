@@ -8,10 +8,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 방 편성 발송 잡(#457). 매분 20초 — 미션 배정 0초, 슬롯 알림 15초, outcome 30초와 겹치지 않게.
- * 플래그 haruharu.chat.admin-message.enabled 가 true 일 때만 빈이 뜬다(기본 OFF, 앱 배포 뒤 켬).
- * 인스턴스가 여러 개여도 행 단위 claim(조건부 UPDATE)으로 한 번만 보낸다.
- * 플래그를 켰는데 시스템 유저 id(CHAT_SYSTEM_USER_ID)가 없으면 기동을 막는다 — 켜진 채 모든 행이 FAILED 가 되지 않게.
+ * 방 편성 발송 잡(#457). 매분 20초(다른 잡 0/15/30초와 분리). 플래그 haruharu.chat.admin-message.enabled 가 true 일 때만 뜬다.
+ * 시스템 유저 id(CHAT_SYSTEM_USER_ID)가 없으면 기동을 막는다.
  */
 @Slf4j
 @Component

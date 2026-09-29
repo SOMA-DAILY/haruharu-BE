@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 /**
  * 방 편성 관리(#457, F3/F4). 어드민 서버가 쓴다 — 저장만 하고 발송은 app 서버 잡(RoomScheduleDispatchService)이 한다.
  * 상태 전이는 전부 SCHEDULED 행에서만(조건부 UPDATE, 0행이면 409 SCHEDULE_ITEM_NOT_EDITABLE).
- * 시각 검증은 하지 않는다(방 시작 전·종료 후·같은 공개 항목 여러 행 전부 허용, 9/29 결정).
+ * 시각 검증은 하지 않는다(방 시작 전·종료 후·같은 공개 항목 여러 행 허용).
  */
 @Service
 @Transactional(readOnly = true)

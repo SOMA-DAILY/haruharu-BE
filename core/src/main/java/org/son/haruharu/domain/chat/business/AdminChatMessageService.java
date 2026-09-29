@@ -16,9 +16,8 @@ import java.time.LocalDateTime;
 
 /**
  * 운영 글(#457, F3). app 서버의 편성 발송 잡만 부른다.
- * 시스템 유저('하루')는 채팅방 멤버가 아니므로 멤버십 검증을 하지 않는다. ChatMessageSentEvent 를 발행하지 않아
- * 참가자용 CHAT 푸시와 미션 활동 집계에 섞이지 않는다 — 브로드캐스트(ChatMessageBroadcastEvent)만 발행한다.
- * 이벤트는 @TransactionalEventListener(AFTER_COMMIT)라 반드시 트랜잭션 안에서 발행해야 한다.
+ * 시스템 유저('하루')는 채팅방 멤버가 아니라 멤버십 검증이 없고, ChatMessageSentEvent 대신 ChatMessageBroadcastEvent 만 발행한다
+ * (참가자 CHAT 푸시·미션 집계 제외). 리스너가 AFTER_COMMIT 이라 트랜잭션 안에서만 부른다.
  */
 @Service
 @Transactional(readOnly = true)
@@ -53,8 +52,7 @@ public class AdminChatMessageService {
     }
 
     /**
-     * 운영자가 지웠지만 아직 알리지 않은 메시지를 MESSAGE_DELETED 로 방송하고 delete_broadcast_at 을 찍는다.
-     * admin 서버엔 STOMP 가 없어서 app 잡이 대신 한다. 인스턴스 2개가 겹쳐도 조건부 UPDATE 로 한 번만 발행한다.
+     * 운영자가 지웠지만 아직 알리지 않은 메시지를 MESSAGE_DELETED 로 방송하고 delete_broadcast_at 을 찍는다(조건부 UPDATE 로 1회).
      */
     @Transactional
     public int broadcastPendingDeletes(int limit, LocalDateTime now) {

@@ -23,17 +23,10 @@ import java.util.Set;
 import java.util.Optional;
 
 /**
- * 방 편성 발송(#457). app 서버 1분 잡(RoomScheduleDispatchScheduler, 플래그 haruharu.chat.admin-message.enabled)이 부른다.
- * 트랜잭션은 행 단위로 RoomScheduleDispatchStep 이 연다. 푸시는 커밋 뒤 트랜잭션 밖에서 보낸다(PushSendService 가 실패를 삼킴).
- * <ol>
- *   <li>SENDING 인 채 5분 넘은 행(크래시) → FAILED(STUCK)</li>
- *   <li>status=SCHEDULED and run_at<=now 오래된 순. max(run_at, 방 시작, 행 수정 시각) 이 30분 넘게 지났으면 FAILED(EXPIRED)
- *       — 플래그 OFF 동안 손 안 댄 옛 행이 켜는 순간 한꺼번에 나가지 않게. 방금 만들거나 고친 행은 과거 시각이어도 나간다</li>
- *   <li>방 상태는 statusAt(now): PENDING 이면 다음 틱, ENDED/CANCELLED 면 FAILED(ROOM_ENDED). GROUP 채팅방이 아직 없으면 다음 틱</li>
- *   <li>claim(SCHEDULED 이고 run_at<=now → SENDING) 이긴 인스턴스만, 행을 다시 읽은 내용으로 보낸다 → 운영 글 저장 + SENT → 커밋 후 푸시</li>
- *   <li>예외는 FAILED(예외 앞 200자). 재시도 없음(운영자가 글을 다시 추가)</li>
- *   <li>운영자가 지운 운영 글을 MESSAGE_DELETED 로 방송</li>
- * </ol>
+ * 방 편성 발송(#457). app 서버 1분 잡이 부른다. 행 단위 트랜잭션은 RoomScheduleDispatchStep, 푸시는 커밋 뒤.
+ * 한 틱: SENDING 5분 초과 → FAILED(STUCK) / max(run_at, 방 시작, 수정 시각) + 30분 경과 → FAILED(EXPIRED)
+ * / 방 PENDING 이거나 GROUP 채팅방 없음 → 다음 틱 / 방 종료 → FAILED(ROOM_ENDED)
+ * / claim 이긴 인스턴스만 운영 글 저장 + SENT + 푸시 / 예외 → FAILED, 재시도 없음 / 끝에 지운 운영 글 MESSAGE_DELETED 방송.
  */
 @Slf4j
 @Service
