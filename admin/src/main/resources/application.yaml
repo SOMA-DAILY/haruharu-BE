@@ -42,6 +42,15 @@ admin:
     # 브라우저 어드민 프런트 오리진 화이트리스트(콤마 구분). 기본은 로컬 Vite dev, prod는 env로 주입.
     allowed-origins: ${ADMIN_CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
+# 채팅 P0(#455). admin 서버는 편성 저장만 하고 발송은 app 서버 잡이 한다 — 이 블록은 app 과 값을 맞춰두는 용도(바인딩 안 함).
+haruharu:
+  chat:
+    admin-message:
+      enabled: ${CHAT_ADMIN_MESSAGE_ENABLED:false}
+    reply-push:
+      enabled: ${CHAT_REPLY_PUSH_ENABLED:false}
+    system-user-id: ${CHAT_SYSTEM_USER_ID:}
+
 # 유저 서버(8080)와 포트 분리.
 aws:
   region: ${AWS_REGION:ap-northeast-2}

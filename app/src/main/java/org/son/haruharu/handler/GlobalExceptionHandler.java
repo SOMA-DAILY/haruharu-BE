@@ -8,6 +8,7 @@ import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.common.exception.BadGatewayException;
 import org.son.haruharu.common.exception.BadRequestException;
 import org.son.haruharu.common.exception.ConflictException;
+import org.son.haruharu.common.exception.FieldValidationException;
 import org.son.haruharu.common.exception.ForbiddenException;
 import org.son.haruharu.common.exception.NotFoundException;
 import org.son.haruharu.common.exception.UnauthorizedException;
@@ -73,6 +74,19 @@ public class GlobalExceptionHandler {
         warn(400, request, e.getCode(), e.getMessage());
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
+    }
+
+    /** 칸별 메시지를 error.fields 로 내린다(#455). BadRequestException 보다 구체적이라 먼저 잡힌다. 값은 PII 라 칸 이름만 남긴다. */
+    @ExceptionHandler(FieldValidationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleFieldValidation(FieldValidationException e,
+                                                                   HttpServletRequest request) {
+        String fields = e.getFieldErrors().stream()
+                .map(error -> error.field())
+                .reduce((a, b) -> a + "," + b)
+                .orElse("-");
+        warn(400, request, e.getCode(), "fields=" + fields);
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage(), e.getFieldErrors())));
     }
 
     @ExceptionHandler(NotFoundException.class)

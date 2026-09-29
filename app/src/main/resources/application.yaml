@@ -107,6 +107,16 @@ haruharu:
   room:
     consolation-reward:
       amount: 5
+  # 채팅 P0(#455). 플래그는 기본 OFF 로 배포하고 앱 배포 뒤 켠다(지금 앱은 새 푸시 타입과 운영 말풍선을 모른다).
+  chat:
+    admin-message:
+      # 방 편성 발송 잡(매분 20초) — 운영 글, ADMIN_MESSAGE / PROFILE_REVEAL 푸시
+      enabled: ${CHAT_ADMIN_MESSAGE_ENABLED:false}
+    reply-push:
+      # 답장 받은 사람에게 CHAT 대신 CHAT_REPLY
+      enabled: ${CHAT_REPLY_PUSH_ENABLED:false}
+    # 운영 글 발신자(닉네임 '하루'). scripts/sql/455-chat-p0-base-verify.sql 로 확인한 id
+    system-user-id: ${CHAT_SYSTEM_USER_ID:}
 
 oauth:
   providers:
