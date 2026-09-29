@@ -71,6 +71,7 @@ class ChatServiceTest {
     @Mock RoomReader roomReader;
     @Mock BlockReader blockReader;
     @Mock ApplicationEventPublisher eventPublisher;
+    @Mock org.son.haruharu.domain.chat.implement.ChatMessageReactionReader chatMessageReactionReader;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-03T03:00:00Z"), ZoneOffset.UTC);
 
@@ -83,7 +84,10 @@ class ChatServiceTest {
     void setUp() {
         chatService = new ChatService(chatRoomReader, chatRoomWriter, chatRoomMemberReader,
                 chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, userService,
-                roomMemberReader, roomReader, blockReader, eventPublisher, clock);
+                roomMemberReader, roomReader, blockReader,
+                new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader),
+                new ChatParticipantPolicy(chatRoomReader, chatRoomMemberReader, roomMemberReader, profileService, userService, blockReader),
+                eventPublisher, clock);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -419,6 +423,53 @@ class ChatServiceTest {
                 List.of(2L), "민준", LocalDateTime.now(clock)));
         // GROUP은 가명을 쓰므로 실명 조회(getNickname)를 하지 않는다
         then(profileService).should(never()).getNickname(any());
+    }
+
+    @Test
+    @DisplayName("답장은 원문 보낸 사람 표시 이름과 앞 50자를 스냅샷으로 남기고 이벤트에 원문 주인을 싣는다(#456)")
+    void givenReplyInSameRoom_whenSendMessage_thenSnapshotsAndPublishesReplyTarget() {
+        given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, ChatRoomType.DIRECT, null, 99L, LocalDateTime.now(clock)));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
+        String longText = "가".repeat(60);
+        given(chatMessageReader.findById(880L)).willReturn(Optional.of(message(880L, ROOM, 2L, longText, LocalDateTime.now(clock))));
+        given(profileService.getNickname(2L)).willReturn("선우");
+        given(profileService.getNickname(ME)).willReturn("윤슬");
+        given(chatMessageWriter.save(any())).willAnswer(inv -> {
+            ChatMessage m = inv.getArgument(0);
+            return new ChatMessage(900L, m.chatRoomId(), m.senderId(), m.content(), LocalDateTime.now(clock), null, null,
+                    m.replyToMessageId(), m.replyPreviewSender(), m.replyPreviewContent());
+        });
+
+        ChatMessageBroadcast result = chatService.sendMessage(ROOM, ME, "ㅋㅋ", 880L);
+
+        ArgumentCaptor<ChatMessage> saved = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(chatMessageWriter).save(saved.capture());
+        assertThat(saved.getValue().replyToMessageId()).isEqualTo(880L);
+        assertThat(saved.getValue().replyPreviewSender()).isEqualTo("선우");
+        assertThat(saved.getValue().replyPreviewContent()).isEqualTo("가".repeat(50));
+        assertThat(result.replyTo().available()).isTrue();
+        assertThat(result.replyTo().senderName()).isEqualTo("선우");
+        then(eventPublisher).should().publishEvent(new ChatMessageSentEvent(
+                900L, ROOM, ChatRoomType.DIRECT, null, ME, List.of(2L), "윤슬", LocalDateTime.now(clock), 2L));
+    }
+
+    @Test
+    @DisplayName("다른 채팅방 메시지나 없는 메시지에 답장하면 CHAT_REPLY_INVALID 이고 저장하지 않는다(#456)")
+    void givenReplyToOtherRoom_whenSendMessage_thenThrowsInvalid() {
+        given(chatRoomReader.getById(ROOM)).willReturn(new ChatRoom(ROOM, ChatRoomType.DIRECT, null, 99L, LocalDateTime.now(clock)));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatRoomMemberReader.findByChatRoomId(ROOM))
+                .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
+        given(chatMessageReader.findById(880L)).willReturn(Optional.of(message(880L, 77L, 2L, "x", LocalDateTime.now(clock))));
+        given(chatMessageReader.findById(881L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> chatService.sendMessage(ROOM, ME, "ㅋㅋ", 880L))
+                .isInstanceOf(org.son.haruharu.domain.chat.business.exception.ChatReplyInvalidException.class);
+        assertThatThrownBy(() -> chatService.sendMessage(ROOM, ME, "ㅋㅋ", 881L))
+                .isInstanceOf(org.son.haruharu.domain.chat.business.exception.ChatReplyInvalidException.class);
+        then(chatMessageWriter).should(never()).save(any());
     }
 
     @Test

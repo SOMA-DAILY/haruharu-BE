@@ -33,6 +33,11 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     }
 
     @Override
+    public List<ChatMessage> findAllByIds(java.util.Collection<Long> ids) {
+        return chatMessageJpaRepository.findAllById(ids).stream().map(ChatMessageEntity::toDomain).toList();
+    }
+
+    @Override
     public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
         List<ChatMessageEntity> rows = (cursorId == null)
@@ -57,6 +62,22 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
         long cursor = (lastReadMessageId == null) ? 0L : lastReadMessageId;
         return chatMessageJpaRepository.countByChatRoomIdAndIdGreaterThanAndSenderIdNotIn(
                 chatRoomId, cursor, excludeSenderIds);
+    }
+
+    @Override
+    public int markAdminDeleted(Long id, java.time.LocalDateTime now) {
+        return chatMessageJpaRepository.markAdminDeleted(id, now);
+    }
+
+    @Override
+    public List<ChatMessage> findPendingDeleteBroadcasts(int limit) {
+        return chatMessageJpaRepository.findPendingDeleteBroadcasts(PageRequest.of(0, limit)).stream()
+                .map(ChatMessageEntity::toDomain).toList();
+    }
+
+    @Override
+    public int markDeleteBroadcast(Long id, java.time.LocalDateTime now) {
+        return chatMessageJpaRepository.markDeleteBroadcast(id, now);
     }
 
     @Override
