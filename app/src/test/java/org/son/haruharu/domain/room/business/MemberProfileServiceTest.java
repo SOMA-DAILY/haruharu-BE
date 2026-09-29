@@ -54,7 +54,7 @@ class MemberProfileServiceTest {
     @Mock UserValueAnswerReader userValueAnswerReader;
     @Mock MatchResultReader matchResultReader;
     @Mock S3StoragePort s3StoragePort;
-    @Mock org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader roomScheduleItemReader;
+    @Mock org.son.haruharu.domain.room.implement.ProfileRevealSchedule profileRevealSchedule;
 
     MemberProfileService service;
 
@@ -64,7 +64,7 @@ class MemberProfileServiceTest {
     @BeforeEach
     void setUp() {
         service = new MemberProfileService(roomReader, roomMemberReader, userProfileReader, userImageReader,
-                valueQuestionReader, userValueAnswerReader, matchResultReader, s3StoragePort, roomScheduleItemReader, clock);
+                valueQuestionReader, userValueAnswerReader, matchResultReader, s3StoragePort, profileRevealSchedule, clock);
     }
 
     private RoomMember member(Long id, Long roomId, Long userId) {
@@ -388,15 +388,15 @@ class MemberProfileServiceTest {
         given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
         given(valueQuestionReader.getAllActive()).willReturn(List.of());
         given(userValueAnswerReader.getAllByUserId(targetUserId)).willReturn(List.of());
-        given(roomScheduleItemReader.hasRevealSchedule(roomId)).willReturn(true);
+        given(profileRevealSchedule.isScheduled(roomId)).willReturn(true);
     }
 
     @Test
     @DisplayName("AGE 행만 있던 방에서 그 행을 취소하면 옛 DAY3 규칙으로 돌아가지 않고 DAY3 에도 AGE 는 안 열린다")
     void givenOnlyAgeRowCanceled_whenDay3_thenAgeStaysHidden() {
         stubBasics(10L, 1L, 20L, 30L, 2L, 3);
-        given(roomScheduleItemReader.hasRevealSchedule(10L)).willReturn(true); // 취소 행 포함
-        given(roomScheduleItemReader.findRevealTimes(10L)).willReturn(java.util.Map.of()); // 취소 제외하면 없음
+        given(profileRevealSchedule.isScheduled(10L)).willReturn(true); // 취소 행 포함
+        given(profileRevealSchedule.revealTimes(10L)).willReturn(java.util.Map.of()); // 취소 제외하면 없음
 
         MemberProfileResponse result = service.getMemberProfile(10L, 30L, 1L);
 
@@ -409,10 +409,10 @@ class MemberProfileServiceTest {
     @DisplayName("편성 공개 시각이 지난 항목만 값이 보이고, 안 지난 항목은 value=null + reveal_at + DAY(달력 기준)")
     void givenScheduledReveals_whenGetProfile_thenOnlyPastRevealsVisible() {
         stubScheduledRoom(10L, 1L, 20L, 30L, 2L);
-        given(roomScheduleItemReader.findRevealTimes(10L)).willReturn(java.util.Map.of(
-                org.son.haruharu.domain.roomschedule.implement.RevealField.MBTI, LocalDateTime.of(2026, 6, 26, 18, 0),
-                org.son.haruharu.domain.roomschedule.implement.RevealField.INTO_NOW, LocalDateTime.of(2026, 6, 26, 18, 0),
-                org.son.haruharu.domain.roomschedule.implement.RevealField.AGE, LocalDateTime.of(2026, 6, 27, 12, 0)));
+        given(profileRevealSchedule.revealTimes(10L)).willReturn(java.util.Map.of(
+                org.son.haruharu.domain.profile.implement.ProfileField.MBTI, LocalDateTime.of(2026, 6, 26, 18, 0),
+                org.son.haruharu.domain.profile.implement.ProfileField.INTO_NOW, LocalDateTime.of(2026, 6, 26, 18, 0),
+                org.son.haruharu.domain.profile.implement.ProfileField.AGE, LocalDateTime.of(2026, 6, 27, 12, 0)));
 
         MemberProfileResponse result = service.getMemberProfile(10L, 30L, 1L);
 
@@ -434,8 +434,8 @@ class MemberProfileServiceTest {
     void givenScheduledRoomAndMatched_whenGetProfile_thenAllVisible() {
         stubScheduledRoom(10L, 1L, 20L, 30L, 2L);
         given(userProfileReader.findByUserId(2L)).willReturn(Optional.of(profile(2L).withRoomProfile(2003, "INFP", "전자공학과", "러닝")));
-        given(roomScheduleItemReader.findRevealTimes(10L)).willReturn(java.util.Map.of(
-                org.son.haruharu.domain.roomschedule.implement.RevealField.AGE, LocalDateTime.of(2026, 6, 27, 12, 0)));
+        given(profileRevealSchedule.revealTimes(10L)).willReturn(java.util.Map.of(
+                org.son.haruharu.domain.profile.implement.ProfileField.AGE, LocalDateTime.of(2026, 6, 27, 12, 0)));
         given(matchResultReader.isMatched(20L, 30L)).willReturn(true);
 
         MemberProfileResponse result = service.getMemberProfile(10L, 30L, 1L);

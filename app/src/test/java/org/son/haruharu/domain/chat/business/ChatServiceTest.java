@@ -85,7 +85,9 @@ class ChatServiceTest {
         chatService = new ChatService(chatRoomReader, chatRoomWriter, chatRoomMemberReader,
                 chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, userService,
                 roomMemberReader, roomReader, blockReader,
-                new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader), eventPublisher, clock);
+                new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader),
+                new ChatParticipantPolicy(chatRoomReader, chatRoomMemberReader, roomMemberReader, profileService, userService, blockReader),
+                eventPublisher, clock);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {

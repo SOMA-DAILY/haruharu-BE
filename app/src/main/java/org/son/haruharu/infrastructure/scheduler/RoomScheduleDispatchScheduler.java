@@ -8,7 +8,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 방 편성 발송 잡(#457). 매분 20초(다른 잡 0/15/30초와 분리). 플래그 haruharu.chat.admin-message.enabled 가 true 일 때만 뜬다.
+ * 방 편성 발송 잡(#457). 플래그 haruharu.chat.admin-message.enabled 가 true 일 때만 뜬다.
+ * 행 단위 claim(조건부 UPDATE)이 멱등을 잡아 Spring Batch JobRepository 없이 app/batch 밖에 둔다.
  * 시스템 유저 id(CHAT_SYSTEM_USER_ID)가 없으면 기동을 막는다.
  */
 @Slf4j
@@ -27,7 +28,7 @@ public class RoomScheduleDispatchScheduler {
         this.dispatchService = dispatchService;
     }
 
-    @Scheduled(cron = "20 * * * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "${haruharu.chat.admin-message.cron:20 * * * * *}", zone = "Asia/Seoul")
     public void dispatch() {
         try {
             int sent = dispatchService.dispatchDue();

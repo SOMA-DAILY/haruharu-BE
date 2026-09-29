@@ -22,9 +22,7 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
-import org.son.haruharu.domain.roomschedule.business.dto.RoomScheduleItemResponse;
-import org.son.haruharu.domain.roomschedule.implement.RevealField;
-import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader;
+import org.son.haruharu.domain.room.implement.ProfileRevealSchedule;
 import org.son.haruharu.domain.value.implement.UserValueAnswerReader;
 import org.son.haruharu.domain.value.implement.ValueQuestion;
 import org.son.haruharu.domain.value.implement.ValueQuestionReader;
@@ -54,7 +52,7 @@ public class MemberProfileService {
     private final UserValueAnswerReader userValueAnswerReader;
     private final MatchResultReader matchResultReader;
     private final S3StoragePort s3StoragePort;
-    private final RoomScheduleItemReader roomScheduleItemReader;
+    private final ProfileRevealSchedule profileRevealSchedule;
     private final Clock clock;
 
     public MemberProfileService(RoomReader roomReader, RoomMemberReader roomMemberReader,
@@ -62,7 +60,7 @@ public class MemberProfileService {
                                 ValueQuestionReader valueQuestionReader,
                                 UserValueAnswerReader userValueAnswerReader,
                                 MatchResultReader matchResultReader, S3StoragePort s3StoragePort,
-                                RoomScheduleItemReader roomScheduleItemReader, Clock clock) {
+                                ProfileRevealSchedule profileRevealSchedule, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.userProfileReader = userProfileReader;
@@ -71,7 +69,7 @@ public class MemberProfileService {
         this.userValueAnswerReader = userValueAnswerReader;
         this.matchResultReader = matchResultReader;
         this.s3StoragePort = s3StoragePort;
-        this.roomScheduleItemReader = roomScheduleItemReader;
+        this.profileRevealSchedule = profileRevealSchedule;
         this.clock = clock;
     }
 
@@ -118,11 +116,11 @@ public class MemberProfileService {
     private List<ProfileFieldView> toFields(Room room, UserProfile profile, RoomMember target, LocalDateTime now,
                                             int currentDay, boolean fullyRevealed) {
         // 편성 방 여부는 취소 행도 포함해서 본다 — 공개 행을 전부 취소한 방이 DAY3 규칙으로 되돌아가면 안 된다.
-        boolean scheduled = roomScheduleItemReader.hasRevealSchedule(room.id());
-        Map<RevealField, LocalDateTime> revealTimes = scheduled ? roomScheduleItemReader.findRevealTimes(room.id()) : Map.of();
+        boolean scheduled = profileRevealSchedule.isScheduled(room.id());
+        Map<ProfileField, LocalDateTime> revealTimes = scheduled ? profileRevealSchedule.revealTimes(room.id()) : Map.of();
         List<ProfileFieldView> views = new ArrayList<>();
         for (ProfileField field : ProfileField.values()) {
-            LocalDateTime revealAt = scheduled ? revealTimes.get(RevealField.valueOf(field.name())) : null;
+            LocalDateTime revealAt = scheduled ? revealTimes.get(field) : null;
             boolean visible = fullyRevealed || isRevealed(field, scheduled, revealAt, now, currentDay);
             views.add(new ProfileFieldView(field.key(), field.label(), availableFromDay(field, revealAt, room),
                     visible, visible ? valueOf(field, profile, target, now) : null, revealAt));
@@ -132,7 +130,7 @@ public class MemberProfileService {
 
     /** reveal_at 의 DAY(달력 날짜 차 + 1). 편성 시각이 없으면 옛 기본값(3). 지금 앱이 숫자로 파싱해서 계속 채운다. */
     private static int availableFromDay(ProfileField field, LocalDateTime revealAt, Room room) {
-        Integer day = RoomScheduleItemResponse.dayOf(revealAt, room);
+        Integer day = room.calendarDayOf(revealAt);
         return day != null ? day : field.availableFromDay();
     }
 

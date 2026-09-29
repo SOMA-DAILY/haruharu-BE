@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.roomschedule.business;
 
 import lombok.extern.slf4j.Slf4j;
+import org.son.haruharu.config.ChatFeatureProperties;
 import org.son.haruharu.domain.chat.business.AdminChatMessageService;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
@@ -32,10 +33,6 @@ import java.util.Optional;
 @Service
 public class RoomScheduleDispatchService {
 
-    // PENDING 방 행이 창을 차지해 다른 방이 밀리지 않게 넉넉히.
-    static final int BATCH_SIZE = 1000;
-    static final int EXPIRE_MINUTES = 30;
-    static final int STUCK_MINUTES = 5;
     static final String DEFAULT_PUSH_TITLE = "📢 하루 공지";
     static final String DEFAULT_PUSH_BODY = "방 채팅에 새 공지가 올라왔어요";
 
@@ -45,29 +42,32 @@ public class RoomScheduleDispatchService {
     private final ChatRoomReader chatRoomReader;
     private final AdminChatMessageService adminChatMessageService;
     private final PushSendService pushSendService;
+    private final ChatFeatureProperties.AdminMessage settings;
     private final Clock clock;
 
     public RoomScheduleDispatchService(RoomScheduleItemReader itemReader, RoomScheduleDispatchStep step,
                                        RoomReader roomReader, ChatRoomReader chatRoomReader,
                                        AdminChatMessageService adminChatMessageService,
-                                       PushSendService pushSendService, Clock clock) {
+                                       PushSendService pushSendService, ChatFeatureProperties chatFeatureProperties,
+                                       Clock clock) {
         this.itemReader = itemReader;
         this.step = step;
         this.roomReader = roomReader;
         this.chatRoomReader = chatRoomReader;
         this.adminChatMessageService = adminChatMessageService;
         this.pushSendService = pushSendService;
+        this.settings = chatFeatureProperties.adminMessage();
         this.clock = clock;
     }
 
     /** 한 틱. 보낸 행 수를 돌려준다. */
     public int dispatchDue() {
         LocalDateTime now = LocalDateTime.now(clock);
-        for (RoomScheduleItem stuck : itemReader.findSendingSince(now.minusMinutes(STUCK_MINUTES), BATCH_SIZE)) {
+        for (RoomScheduleItem stuck : itemReader.findSendingSince(now.minusMinutes(settings.stuckMinutes()), settings.batchSize())) {
             step.fail(stuck.id(), RoomScheduleStatus.SENDING, "STUCK", now);
         }
         int sent = 0;
-        for (RoomScheduleItem item : itemReader.findDue(now, BATCH_SIZE)) {
+        for (RoomScheduleItem item : itemReader.findDue(now, settings.batchSize())) {
             try {
                 if (dispatchOne(item, now)) {
                     sent++;
@@ -76,7 +76,7 @@ public class RoomScheduleDispatchService {
                 log.error("방 편성 발송 실패: itemId={} roomId={}", item.id(), item.roomId(), e);
             }
         }
-        adminChatMessageService.broadcastPendingDeletes(BATCH_SIZE, now);
+        adminChatMessageService.broadcastPendingDeletes(settings.batchSize(), now);
         return sent;
     }
 
@@ -87,7 +87,7 @@ public class RoomScheduleDispatchService {
             return false;
         }
         Room room = found.get();
-        if (effectiveAt(item, room).isBefore(now.minusMinutes(EXPIRE_MINUTES))) {
+        if (effectiveAt(item, room).isBefore(now.minusMinutes(settings.expireMinutes()))) {
             step.fail(item.id(), RoomScheduleStatus.SCHEDULED, "EXPIRED", now);
             return false;
         }

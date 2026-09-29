@@ -45,7 +45,7 @@ class ChatMessageReactionServiceTest {
     @Mock ChatMessageReader chatMessageReader;
     @Mock ChatMessageReactionReader reactionReader;
     @Mock ChatMessageReactionWriter reactionWriter;
-    @Mock ChatService chatService;
+    @Mock ChatParticipantPolicy participants;
     @Mock ApplicationEventPublisher eventPublisher;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-09-29T03:00:00Z"), ZoneOffset.UTC);
@@ -55,7 +55,7 @@ class ChatMessageReactionServiceTest {
     @BeforeEach
     void setUp() {
         service = new ChatMessageReactionService(chatRoomReader, chatRoomMemberReader, chatMessageReader,
-                reactionReader, reactionWriter, chatService, eventPublisher, clock);
+                reactionReader, reactionWriter, participants, eventPublisher, clock);
     }
 
     private void memberAndMessage(Long userId) {
@@ -160,7 +160,7 @@ class ChatMessageReactionServiceTest {
         given(chatRoomMemberReader.findActiveMembership(CHAT, ME))
                 .willReturn(Optional.of(new ChatRoomMember(1L, CHAT, ME, LocalDateTime.now(clock), null, null)));
         org.mockito.BDDMockito.willThrow(new org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException())
-                .given(chatService).requireActiveIfDirect(CHAT, ME);
+                .given(participants).requireActiveIfDirect(CHAT, ME);
 
         assertThatThrownBy(() -> service.toggle(ME, CHAT, MSG, ReactionType.LIKE))
                 .isInstanceOf(org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException.class);
@@ -179,7 +179,7 @@ class ChatMessageReactionServiceTest {
         given(chatRoomMemberReader.findActiveMembership(CHAT, OWNER))
                 .willReturn(Optional.of(new ChatRoomMember(2L, CHAT, OWNER, LocalDateTime.now(clock), null, null)));
         given(reactionReader.findByMessageId(MSG)).willReturn(List.of(reaction("HEART")));
-        given(chatService.chatDisplayName(group, ME)).willReturn("선우");
+        given(participants.displayName(group, ME)).willReturn("선우");
 
         assertThat(service.getReactors(OWNER, CHAT, MSG)).containsExactly(new MessageReactorResponse("선우", "HEART"));
     }

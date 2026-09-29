@@ -5,9 +5,7 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.roomschedule.implement.RevealField;
 import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItem;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /** 편성 행(#457). day = run_at 달력 날짜 − 방 시작 달력 날짜 + 1(방 시작 전이면 0 이하 그대로). */
@@ -33,19 +31,10 @@ public record RoomScheduleItemResponse(
     }
 
     public static RoomScheduleItemResponse of(RoomScheduleItem item, Room room, LocalDateTime messageDeletedAt) {
-        return new RoomScheduleItemResponse(item.id(), item.runAt(), dayOf(item.runAt(), room),
+        return new RoomScheduleItemResponse(item.id(), item.runAt(), room.calendarDayOf(item.runAt()),
                 item.revealFields().stream().map(RevealField::name).toList(), item.messageContent(), item.push(),
                 item.pushTitle(), item.pushBody(), item.status().name(), item.failReason(), item.sentMessageId(),
                 item.createdBy(), item.sentAt(), messageDeletedAt);
     }
 
-    /** Room.currentDayAt 은 시각 기준(24시간)이라 쓰지 않는다 — 09:00 시작 방의 DAY2 08:00 행이 DAY1 로 나온다. */
-    public static Integer dayOf(LocalDateTime at, Room room) {
-        LocalDateTime anchor = room.startsAt() != null ? room.startsAt() : room.startedAt();
-        if (at == null || anchor == null) {
-            return null;
-        }
-        LocalDate start = anchor.toLocalDate();
-        return (int) ChronoUnit.DAYS.between(start, at.toLocalDate()) + 1;
-    }
 }

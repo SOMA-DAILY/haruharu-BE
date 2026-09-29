@@ -12,11 +12,10 @@ import org.son.haruharu.domain.room.business.dto.MembersResponse;
 import org.son.haruharu.domain.room.business.dto.MembersResponse.MemberView;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.MatchResultReader;
+import org.son.haruharu.domain.room.implement.ProfileRevealSchedule;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.profile.implement.ProfileField;
-import org.son.haruharu.domain.roomschedule.implement.RevealField;
-import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
@@ -38,20 +37,20 @@ public class RoomMembersService {
     private final UserImageReader userImageReader;
     private final MatchResultReader matchResultReader;
     private final S3StoragePort s3StoragePort;
-    private final RoomScheduleItemReader roomScheduleItemReader;
+    private final ProfileRevealSchedule profileRevealSchedule;
     private final Clock clock;
 
     public RoomMembersService(RoomReader roomReader, RoomMemberReader roomMemberReader,
                               UserProfileReader userProfileReader, UserImageReader userImageReader,
                               MatchResultReader matchResultReader, S3StoragePort s3StoragePort,
-                              RoomScheduleItemReader roomScheduleItemReader, Clock clock) {
+                              ProfileRevealSchedule profileRevealSchedule, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.userProfileReader = userProfileReader;
         this.userImageReader = userImageReader;
         this.matchResultReader = matchResultReader;
         this.s3StoragePort = s3StoragePort;
-        this.roomScheduleItemReader = roomScheduleItemReader;
+        this.profileRevealSchedule = profileRevealSchedule;
         this.clock = clock;
     }
 
@@ -62,8 +61,8 @@ public class RoomMembersService {
         LocalDateTime now = LocalDateTime.now(clock);
         int currentDay = room.currentDayAt(now);
         // 나이 공개는 프로필 시트 AGE 항목과 같은 판정(#457): 편성 방이면 AGE 공개 시각(취소 행 규칙 포함), 옛 방은 DAY3.
-        boolean scheduled = roomScheduleItemReader.hasRevealSchedule(roomId);
-        LocalDateTime ageRevealAt = scheduled ? roomScheduleItemReader.findRevealTimes(roomId).get(RevealField.AGE) : null;
+        boolean scheduled = profileRevealSchedule.isScheduled(roomId);
+        LocalDateTime ageRevealAt = scheduled ? profileRevealSchedule.revealTimes(roomId).get(ProfileField.AGE) : null;
         boolean ageOpen = MemberProfileService.isRevealed(ProfileField.AGE, scheduled, ageRevealAt, now, currentDay);
 
         List<RoomMember> members = roomMemberReader.getByRoomId(roomId);

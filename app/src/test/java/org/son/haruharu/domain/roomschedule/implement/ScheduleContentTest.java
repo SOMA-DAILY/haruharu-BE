@@ -4,7 +4,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.common.ApiFieldError;
 import org.son.haruharu.domain.room.implement.Room;
-import org.son.haruharu.domain.roomschedule.business.dto.RoomScheduleItemResponse;
 import org.son.haruharu.domain.roomschedule.implement.exception.InvalidScheduleItemException;
 
 import java.time.LocalDateTime;
@@ -57,13 +56,13 @@ class ScheduleContentTest {
 
     @Test
     @DisplayName("DAY 는 달력 날짜 차 + 1 — 09:00 시작 방의 둘째 날 08:00 은 DAY2, 시작 전날은 0")
-    void givenCalendarDates_whenDayOf_thenCalendarRule() {
+    void givenCalendarDates_whenCalendarDayOf_thenCalendarRule() {
         LocalDateTime start = LocalDateTime.of(2026, 10, 11, 9, 0);
         Room room = Room.createScheduled(start, start.plusHours(56), start.plusHours(59), start.plusHours(60),
                 start.plusHours(72), 3);
 
-        assertThat(RoomScheduleItemResponse.dayOf(LocalDateTime.of(2026, 10, 12, 8, 0), room)).isEqualTo(2);
-        assertThat(RoomScheduleItemResponse.dayOf(LocalDateTime.of(2026, 10, 11, 8, 0), room)).isEqualTo(1);
-        assertThat(RoomScheduleItemResponse.dayOf(LocalDateTime.of(2026, 10, 10, 20, 0), room)).isEqualTo(0);
+        assertThat(room.calendarDayOf(LocalDateTime.of(2026, 10, 12, 8, 0))).isEqualTo(2);
+        assertThat(room.calendarDayOf(LocalDateTime.of(2026, 10, 11, 8, 0))).isEqualTo(1);
+        assertThat(room.calendarDayOf(LocalDateTime.of(2026, 10, 10, 20, 0))).isEqualTo(0);
     }
 }

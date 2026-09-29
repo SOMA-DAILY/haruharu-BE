@@ -54,7 +54,7 @@ class RoomMembersServiceTest {
     @Mock UserImageReader userImageReader;
     @Mock MatchResultReader matchResultReader;
     @Mock S3StoragePort s3StoragePort;
-    @Mock org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader roomScheduleItemReader;
+    @Mock org.son.haruharu.domain.room.implement.ProfileRevealSchedule profileRevealSchedule;
 
     @BeforeEach
     void setUp() {
@@ -66,7 +66,7 @@ class RoomMembersServiceTest {
 
     private RoomMembersService service() {
         return new RoomMembersService(roomReader, roomMemberReader, userProfileReader, userImageReader,
-                matchResultReader, s3StoragePort, roomScheduleItemReader, clock);
+                matchResultReader, s3StoragePort, profileRevealSchedule, clock);
     }
 
     /** clock(2026-06-26 12:00) 기준 currentDay가 원하는 값이 되도록 startedAt을 역산해 ACTIVE 방을 스텁한다. */
@@ -160,13 +160,13 @@ class RoomMembersServiceTest {
         given(userProfileReader.findByUserIdIn(anyCollection()))
                 .willReturn(Map.of(myUserId, profile(myUserId, "철수", "서울"),
                         otherUserId, profile(otherUserId, "영희", "부산").withRoomProfile(2004, "INTJ", "경영", "요가")));
-        given(roomScheduleItemReader.hasRevealSchedule(roomId)).willReturn(true);
-        given(roomScheduleItemReader.findRevealTimes(roomId)).willReturn(Map.of()); // AGE 행은 취소됨
+        given(profileRevealSchedule.isScheduled(roomId)).willReturn(true);
+        given(profileRevealSchedule.revealTimes(roomId)).willReturn(Map.of()); // AGE 행은 취소됨
 
         assertThat(service().getMembers(roomId, myUserId).members().get(1).age()).isNull();
 
-        given(roomScheduleItemReader.findRevealTimes(roomId)).willReturn(Map.of(
-                org.son.haruharu.domain.roomschedule.implement.RevealField.AGE, LocalDateTime.of(2026, 6, 26, 11, 0)));
+        given(profileRevealSchedule.revealTimes(roomId)).willReturn(Map.of(
+                org.son.haruharu.domain.profile.implement.ProfileField.AGE, LocalDateTime.of(2026, 6, 26, 11, 0)));
         assertThat(service().getMembers(roomId, myUserId).members().get(1).age()).isEqualTo(22);
     }
 

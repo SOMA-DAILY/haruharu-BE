@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.roomschedule.implement;
 
+import org.son.haruharu.domain.profile.implement.ProfileField;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
@@ -60,6 +62,16 @@ public enum RevealField {
             return null;
         }
         return EnumSet.copyOf(fields).stream().map(Enum::name).collect(Collectors.joining(","));
+    }
+
+    /** 이 항목이 여는 프로필 시트 칸. 항목을 추가하면 여기서 컴파일이 막힌다. */
+    public ProfileField profileField() {
+        return switch (this) {
+            case MBTI -> ProfileField.MBTI;
+            case INTO_NOW -> ProfileField.INTO_NOW;
+            case AGE -> ProfileField.AGE;
+            case DEPARTMENT -> ProfileField.DEPARTMENT;
+        };
     }
 
     /** PROFILE_REVEAL 제목. 1개면 항목 고정 문구, 2개 이상이면 합친 문구. */

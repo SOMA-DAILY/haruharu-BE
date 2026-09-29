@@ -18,7 +18,12 @@ public record ChatFeatureProperties(
         @DefaultValue ReplyPush replyPush,
         Long systemUserId
 ) {
-    public record AdminMessage(@DefaultValue("false") boolean enabled) {}
+    /** 발송 잡 설정. cron 은 다른 매분 잡(0/15/30초)과 겹치지 않게 20초. */
+    public record AdminMessage(@DefaultValue("false") boolean enabled,
+                               @DefaultValue("20 * * * * *") String cron,
+                               @DefaultValue("1000") int batchSize,
+                               @DefaultValue("30") int expireMinutes,
+                               @DefaultValue("5") int stuckMinutes) {}
 
     public record ReplyPush(@DefaultValue("false") boolean enabled) {}
 

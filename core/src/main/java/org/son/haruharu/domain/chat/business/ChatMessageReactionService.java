@@ -41,20 +41,20 @@ public class ChatMessageReactionService {
     private final ChatMessageReader chatMessageReader;
     private final ChatMessageReactionReader reactionReader;
     private final ChatMessageReactionWriter reactionWriter;
-    private final ChatService chatService;
+    private final ChatParticipantPolicy participants;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public ChatMessageReactionService(ChatRoomReader chatRoomReader, ChatRoomMemberReader chatRoomMemberReader,
                                       ChatMessageReader chatMessageReader, ChatMessageReactionReader reactionReader,
-                                      ChatMessageReactionWriter reactionWriter, ChatService chatService,
+                                      ChatMessageReactionWriter reactionWriter, ChatParticipantPolicy participants,
                                       ApplicationEventPublisher eventPublisher, Clock clock) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomMemberReader = chatRoomMemberReader;
         this.chatMessageReader = chatMessageReader;
         this.reactionReader = reactionReader;
         this.reactionWriter = reactionWriter;
-        this.chatService = chatService;
+        this.participants = participants;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -109,14 +109,14 @@ public class ChatMessageReactionService {
             throw new ChatReactionOwnerOnlyException();
         }
         return reactionReader.findByMessageId(messageId).stream()
-                .map(r -> new MessageReactorResponse(chatService.chatDisplayName(chatRoom, r.userId()), r.reactionType()))
+                .map(r -> new MessageReactorResponse(participants.displayName(chatRoom, r.userId()), r.reactionType()))
                 .toList();
     }
 
     private ChatRoom requireActiveMember(Long chatRoomId, Long userId) {
         ChatRoom chatRoom = chatRoomReader.getById(chatRoomId);
         chatRoomMemberReader.findActiveMembership(chatRoomId, userId).orElseThrow(ChatNotMemberException::new);
-        chatService.requireActiveIfDirect(chatRoomId, userId); // DIRECT: 상대 탈퇴·차단이면 토글·조회 불가(메시지 목록과 같은 규칙)
+        participants.requireActiveIfDirect(chatRoomId, userId); // DIRECT: 상대 탈퇴·차단이면 토글·조회 불가(메시지 목록과 같은 규칙)
         return chatRoom;
     }
 
