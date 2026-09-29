@@ -22,7 +22,9 @@ public record RoomScheduleItem(
         String createdBy,
         String updatedBy,
         LocalDateTime sentAt,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        // 마지막 변경 시각(생성·어드민 수정·상태 전이). 만료 판정에 쓴다.
+        LocalDateTime updatedAt
 ) {
     public RoomScheduleItem {
         revealFields = revealFields == null ? List.of() : List.copyOf(revealFields);
@@ -31,7 +33,7 @@ public record RoomScheduleItem(
     public static RoomScheduleItem scheduled(Long roomId, ScheduleContent content, LocalDateTime runAt, String actor) {
         return new RoomScheduleItem(null, roomId, runAt, content.revealFields(), content.messageContent(),
                 content.push(), content.pushTitle(), content.pushBody(), RoomScheduleStatus.SCHEDULED,
-                null, null, actor, actor, null, null);
+                null, null, actor, actor, null, null, null);
     }
 
     public boolean hasMessage() {

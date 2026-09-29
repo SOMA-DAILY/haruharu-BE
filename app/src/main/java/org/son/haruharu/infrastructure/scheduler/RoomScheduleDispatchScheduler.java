@@ -1,6 +1,7 @@
 package org.son.haruharu.infrastructure.scheduler;
 
 import lombok.extern.slf4j.Slf4j;
+import org.son.haruharu.config.ChatFeatureProperties;
 import org.son.haruharu.domain.roomschedule.business.RoomScheduleDispatchService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
  * 방 편성 발송 잡(#457). 매분 20초 — 미션 배정 0초, 슬롯 알림 15초, outcome 30초와 겹치지 않게.
  * 플래그 haruharu.chat.admin-message.enabled 가 true 일 때만 빈이 뜬다(기본 OFF, 앱 배포 뒤 켬).
  * 인스턴스가 여러 개여도 행 단위 claim(조건부 UPDATE)으로 한 번만 보낸다.
+ * 플래그를 켰는데 시스템 유저 id(CHAT_SYSTEM_USER_ID)가 없으면 기동을 막는다 — 켜진 채 모든 행이 FAILED 가 되지 않게.
  */
 @Slf4j
 @Component
@@ -18,7 +20,12 @@ public class RoomScheduleDispatchScheduler {
 
     private final RoomScheduleDispatchService dispatchService;
 
-    public RoomScheduleDispatchScheduler(RoomScheduleDispatchService dispatchService) {
+    public RoomScheduleDispatchScheduler(RoomScheduleDispatchService dispatchService,
+                                         ChatFeatureProperties chatFeatureProperties) {
+        if (chatFeatureProperties.systemUserId() == null) {
+            throw new IllegalStateException("haruharu.chat.admin-message.enabled=true 인데 haruharu.chat.system-user-id"
+                    + "(CHAT_SYSTEM_USER_ID) 가 없습니다. scripts/sql/455-chat-p0-base-verify.sql 로 시스템 유저 id 를 확인해 설정하세요.");
+        }
         this.dispatchService = dispatchService;
     }
 

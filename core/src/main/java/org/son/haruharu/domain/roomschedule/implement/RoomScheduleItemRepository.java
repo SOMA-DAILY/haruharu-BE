@@ -23,7 +23,7 @@ public interface RoomScheduleItemRepository {
 
     int cancelIfScheduled(Long id, Long roomId, String actor, LocalDateTime now);
 
-    /** SCHEDULED → SENDING. 1 이면 이 인스턴스가 보낼 차례. */
+    /** SCHEDULED 이고 run_at <= now 인 행만 SENDING. 1 이면 이 인스턴스가 보낼 차례. */
     int claim(Long id, LocalDateTime now);
 
     /** SENDING → SENT. */
@@ -40,4 +40,7 @@ public interface RoomScheduleItemRepository {
 
     /** 공개 판정용: 취소가 아니고 공개 항목이 있는 행. */
     List<RoomScheduleItem> findRevealRows(Long roomId);
+
+    /** 공개 항목이 있는 행이 하나라도 있는지(취소 포함). 없으면 편성 없는 옛 방(DAY3 규칙). */
+    boolean existsRevealRow(Long roomId);
 }

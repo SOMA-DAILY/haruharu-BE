@@ -138,6 +138,38 @@ class ChatMessageReactionServiceTest {
     }
 
     @Test
+    @DisplayName("운영자가 지운 메시지에는 반응할 수 없다(400 계열)")
+    void givenAdminDeletedMessage_whenToggle_thenRejected() {
+        given(chatRoomReader.getById(CHAT)).willReturn(group);
+        given(chatRoomMemberReader.findActiveMembership(CHAT, ME))
+                .willReturn(Optional.of(new ChatRoomMember(1L, CHAT, ME, LocalDateTime.now(clock), null, null)));
+        given(chatMessageReader.findById(MSG)).willReturn(Optional.of(new ChatMessage(MSG, CHAT, 900L, "공지",
+                LocalDateTime.now(clock), null, null, null, null, null, ChatMessageType.ADMIN, 5L,
+                LocalDateTime.now(clock), null)));
+
+        assertThatThrownBy(() -> service.toggle(ME, CHAT, MSG, ReactionType.LIKE))
+                .isInstanceOf(org.son.haruharu.domain.chat.business.exception.CannotReactToDeletedMessageException.class);
+        then(reactionWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("DIRECT 방은 상대가 차단/탈퇴면 토글과 조회 모두 막힌다(메시지 목록과 같은 규칙)")
+    void givenBlockedDirect_whenToggleOrReactors_thenRejected() {
+        ChatRoom direct = new ChatRoom(CHAT, ChatRoomType.DIRECT, null, 99L, LocalDateTime.now(clock));
+        given(chatRoomReader.getById(CHAT)).willReturn(direct);
+        given(chatRoomMemberReader.findActiveMembership(CHAT, ME))
+                .willReturn(Optional.of(new ChatRoomMember(1L, CHAT, ME, LocalDateTime.now(clock), null, null)));
+        org.mockito.BDDMockito.willThrow(new org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException())
+                .given(chatService).requireActiveIfDirect(CHAT, ME);
+
+        assertThatThrownBy(() -> service.toggle(ME, CHAT, MSG, ReactionType.LIKE))
+                .isInstanceOf(org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException.class);
+        assertThatThrownBy(() -> service.getReactors(ME, CHAT, MSG))
+                .isInstanceOf(org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException.class);
+        then(reactionWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
     @DisplayName("누가 반응했는지는 메시지 주인만 본다 — 주인 아니면 403, 주인은 표시 이름과 타입")
     void givenOwnerOrNot_whenGetReactors_thenOwnerOnly() {
         memberAndMessage(ME);

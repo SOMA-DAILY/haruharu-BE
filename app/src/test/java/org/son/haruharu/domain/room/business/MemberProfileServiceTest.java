@@ -388,6 +388,21 @@ class MemberProfileServiceTest {
         given(userProfileReader.findByUserId(targetUserId)).willReturn(Optional.of(profile(targetUserId)));
         given(valueQuestionReader.getAllActive()).willReturn(List.of());
         given(userValueAnswerReader.getAllByUserId(targetUserId)).willReturn(List.of());
+        given(roomScheduleItemReader.hasRevealSchedule(roomId)).willReturn(true);
+    }
+
+    @Test
+    @DisplayName("AGE 행만 있던 방에서 그 행을 취소하면 옛 DAY3 규칙으로 돌아가지 않고 DAY3 에도 AGE 는 안 열린다")
+    void givenOnlyAgeRowCanceled_whenDay3_thenAgeStaysHidden() {
+        stubBasics(10L, 1L, 20L, 30L, 2L, 3);
+        given(roomScheduleItemReader.hasRevealSchedule(10L)).willReturn(true); // 취소 행 포함
+        given(roomScheduleItemReader.findRevealTimes(10L)).willReturn(java.util.Map.of()); // 취소 제외하면 없음
+
+        MemberProfileResponse result = service.getMemberProfile(10L, 30L, 1L);
+
+        assertThat(field(result, "AGE").visible()).isFalse();
+        assertThat(field(result, "AGE").value()).isNull();
+        assertThat(result.fields()).noneMatch(ProfileFieldView::visible);
     }
 
     @Test

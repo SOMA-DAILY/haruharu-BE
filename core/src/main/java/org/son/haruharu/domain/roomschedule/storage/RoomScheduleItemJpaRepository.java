@@ -43,6 +43,15 @@ public interface RoomScheduleItemJpaRepository extends JpaRepository<RoomSchedul
                          @Param("to") RoomScheduleStatus to, @Param("actor") String actor,
                          @Param("now") LocalDateTime now);
 
+    // claim: run_at 도 다시 확인한다 — 조회 뒤 어드민이 시각을 미래로 미뤘으면 집지 않는다.
+    @Modifying(clearAutomatically = true)
+    @Query("update RoomScheduleItemEntity i set i.status = :to, i.updatedAt = :now "
+            + "where i.id = :id and i.status = :from and i.runAt <= :now")
+    int claimDue(@Param("id") Long id, @Param("from") RoomScheduleStatus from, @Param("to") RoomScheduleStatus to,
+                 @Param("now") LocalDateTime now);
+
+    boolean existsByRoomIdAndRevealFieldsIsNotNull(Long roomId);
+
     @Modifying(clearAutomatically = true)
     @Query("update RoomScheduleItemEntity i set i.status = :to, i.updatedAt = :now "
             + "where i.id = :id and i.status = :from")

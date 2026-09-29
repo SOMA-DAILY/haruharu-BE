@@ -41,8 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class MemberProfileService {
 
-    /** 나이 공개 Day. 나이는 UserProfile이 아닌 본인인증 스냅샷(RoomMember.birthday)에서 파생한다. 목록(RoomMembersService)도 같은 기준을 참조한다(#214). */
-    static final int AGE_REVEAL_DAY = 3;
     /** 방 멤버 목록의 지역 공개 Day(#214). 지역은 #457 에서 단건 프로필 항목에서 빠졌고 목록만 이 기준을 쓴다. */
     static final int LOCATION_REVEAL_DAY = 3;
     /** 가치관 답변 공개 Day. */
@@ -119,15 +117,13 @@ public class MemberProfileService {
 
     private List<ProfileFieldView> toFields(Room room, UserProfile profile, RoomMember target, LocalDateTime now,
                                             int currentDay, boolean fullyRevealed) {
-        Map<RevealField, LocalDateTime> revealTimes = roomScheduleItemReader.findRevealTimes(room.id());
-        boolean scheduled = !revealTimes.isEmpty();
+        // 편성 방 여부는 취소 행도 포함해서 본다 — 공개 행을 전부 취소한 방이 DAY3 규칙으로 되돌아가면 안 된다.
+        boolean scheduled = roomScheduleItemReader.hasRevealSchedule(room.id());
+        Map<RevealField, LocalDateTime> revealTimes = scheduled ? roomScheduleItemReader.findRevealTimes(room.id()) : Map.of();
         List<ProfileFieldView> views = new ArrayList<>();
         for (ProfileField field : ProfileField.values()) {
             LocalDateTime revealAt = scheduled ? revealTimes.get(RevealField.valueOf(field.name())) : null;
-            boolean revealed = scheduled
-                    ? revealAt != null && !revealAt.isAfter(now) // 취소만 된 항목은 끝까지 안 열린다
-                    : currentDay >= field.availableFromDay();   // 편성 없는 옛 방: DAY3
-            boolean visible = fullyRevealed || revealed;
+            boolean visible = fullyRevealed || isRevealed(field, scheduled, revealAt, now, currentDay);
             views.add(new ProfileFieldView(field.key(), field.label(), availableFromDay(field, revealAt, room),
                     visible, visible ? valueOf(field, profile, target, now) : null, revealAt));
         }
@@ -143,14 +139,30 @@ public class MemberProfileService {
         return (int) ChronoUnit.DAYS.between(anchor.toLocalDate(), revealAt.toLocalDate()) + 1;
     }
 
+    /**
+     * 항목 공개 판정(#457). 편성 방이면 취소 아닌 행의 가장 이른 run_at 이 지났을 때(취소만 된 항목은 끝까지 안 열림),
+     * 편성 없는 옛 방은 DAY3. 방 멤버 목록(RoomMembersService)의 나이도 같은 판정을 쓴다.
+     */
+    static boolean isRevealed(ProfileField field, boolean scheduled, LocalDateTime revealAt, LocalDateTime now,
+                              int currentDay) {
+        return scheduled
+                ? revealAt != null && !revealAt.isAfter(now)
+                : currentDay >= field.availableFromDay();
+    }
+
     /** 나이 = 올해 − 출생연도(만 나이 아님). birth_year 가 없는 기존 참가자는 본인인증 생일(RoomMember.birthday)의 연도로. */
+    static Integer ageOf(UserProfile profile, RoomMember member, LocalDateTime now) {
+        Integer birthYear = profile != null && profile.birthYear() != null ? profile.birthYear()
+                : member.birthday() != null ? member.birthday().getYear() : null;
+        return birthYear == null ? null : now.getYear() - birthYear;
+    }
+
     private static String valueOf(ProfileField field, UserProfile profile, RoomMember target, LocalDateTime now) {
         if (field != ProfileField.AGE) {
             return field.extract(profile);
         }
-        Integer birthYear = profile != null && profile.birthYear() != null ? profile.birthYear()
-                : target.birthday() != null ? target.birthday().getYear() : null;
-        return birthYear == null ? null : String.valueOf(now.getYear() - birthYear);
+        Integer age = ageOf(profile, target, now);
+        return age == null ? null : String.valueOf(age);
     }
 
     private List<ValueAnswerView> toValueAnswers(Long targetUserId, int currentDay, boolean fullyRevealed) {

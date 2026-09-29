@@ -63,6 +63,8 @@ class RoomScheduleDispatchIntegrationTest {
     @Autowired RoomScheduleDispatchService dispatcher;
     @Autowired MemberProfileService memberProfiles;
     @Autowired Clock clock;
+    @Autowired org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader itemReader;
+    @Autowired org.son.haruharu.domain.roomschedule.business.RoomScheduleDispatchStep step;
 
     LocalDateTime now;
     Long roomId, chatId, alice, bob, carol, bobMemberId;
@@ -179,6 +181,7 @@ class RoomScheduleDispatchIntegrationTest {
     @DisplayName("30분 지난 행은 EXPIRED, 방 종료 뒤 남은 행은 ROOM_ENDED, 시작 전 방의 행은 기다린다")
     void expiredEndedAndPending() {
         Long expired = addItem(roomId, now.minusMinutes(31), List.of(), "늦음", false);
+        jdbc.update("update room_schedule_items set updated_at=? where id=?", now.minusMinutes(31), expired);
         Long endedRoom = room(now.minusHours(80), now.minusMinutes(20));
         Long ended = addItem(endedRoom, now.minusMinutes(10), List.of(), "끝난 방", false);
         Long pendingRoom = room(now.plusHours(1), now.plusHours(73));
@@ -192,6 +195,40 @@ class RoomScheduleDispatchIntegrationTest {
         assertThat(item(ended).get("fail_reason")).isEqualTo("ROOM_ENDED");
         assertThat(item(waiting).get("status")).isEqualTo("SCHEDULED");
         assertThat(adminMessages(chatId)).isZero();
+    }
+
+    @Test
+    @DisplayName("만료 기준 = max(run_at, 방 시작, updated_at): 손 안 댄 옛 행만 EXPIRED, 방금 만들거나 고친 행은 과거 시각이어도 나간다")
+    void expiryUsesUpdatedAt() {
+        Long untouched = addItem(roomId, now.minusMinutes(90), List.of(), "옛 행", false);
+        jdbc.update("update room_schedule_items set updated_at=? where id=?", now.minusMinutes(31), untouched);
+        Long touchedRecently = addItem(roomId, now.minusMinutes(90), List.of(), "29분 전에 고친 행", false);
+        jdbc.update("update room_schedule_items set updated_at=? where id=?", now.minusMinutes(29), touchedRecently);
+        Long justCreated = addItem(roomId, now.minusHours(5), List.of(), "방금 만든 과거 시각 행", false);
+
+        dispatcher.dispatchDue();
+
+        assertThat(item(untouched).get("fail_reason")).isEqualTo("EXPIRED");
+        assertThat(item(touchedRecently).get("status")).isEqualTo("SENT");
+        assertThat(item(justCreated).get("status")).isEqualTo("SENT");
+    }
+
+    @Test
+    @DisplayName("조회 뒤 어드민이 run_at 을 내일로 미루면 claim 이 실패하고, claim 뒤엔 다시 읽은 문구로 보낸다")
+    void claimRechecksRunAtAndUsesFreshRow() {
+        Long id = addItem(roomId, now.minusMinutes(1), List.of(), "옛 문구", false);
+        var snapshot = itemReader.findDue(LocalDateTime.now(clock), 10);
+        assertThat(snapshot).extracting(i -> i.id()).contains(id);
+
+        scheduleService.update(roomId, id, new ScheduleItemCommand(now.plusDays(1), null, null, null, null, null), "admin:1");
+        assertThat(step.claim(id, LocalDateTime.now(clock))).isFalse();
+        assertThat(item(id).get("status")).isEqualTo("SCHEDULED");
+
+        scheduleService.update(roomId, id, new ScheduleItemCommand(now.minusMinutes(1), null, "새 문구", null, null, null),
+                "admin:1");
+        dispatcher.dispatchDue();
+        assertThat(jdbc.queryForObject("select content from chat_messages where id=?", String.class,
+                item(id).get("sent_message_id"))).isEqualTo("새 문구");
     }
 
     @Test

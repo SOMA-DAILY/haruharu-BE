@@ -28,10 +28,10 @@ import java.util.Optional;
  * 트랜잭션은 행 단위로 RoomScheduleDispatchStep 이 연다. 푸시는 커밋 뒤 트랜잭션 밖에서 보낸다(PushSendService 가 실패를 삼킴).
  * <ol>
  *   <li>SENDING 인 채 5분 넘은 행(크래시) → FAILED(STUCK)</li>
- *   <li>status=SCHEDULED and run_at<=now 오래된 순. max(run_at, 방 시작) 이 30분 넘게 지났으면 FAILED(EXPIRED)
- *       — 플래그 OFF 동안 쌓인 행이 켜는 순간 한꺼번에 나가지 않게</li>
+ *   <li>status=SCHEDULED and run_at<=now 오래된 순. max(run_at, 방 시작, 행 수정 시각) 이 30분 넘게 지났으면 FAILED(EXPIRED)
+ *       — 플래그 OFF 동안 손 안 댄 옛 행이 켜는 순간 한꺼번에 나가지 않게. 방금 만들거나 고친 행은 과거 시각이어도 나간다</li>
  *   <li>방 상태는 statusAt(now): PENDING 이면 다음 틱, ENDED/CANCELLED 면 FAILED(ROOM_ENDED). GROUP 채팅방이 아직 없으면 다음 틱</li>
- *   <li>claim(SCHEDULED→SENDING) 이긴 인스턴스만 보낸다 → 운영 글 저장 + SENT → 커밋 후 푸시</li>
+ *   <li>claim(SCHEDULED 이고 run_at<=now → SENDING) 이긴 인스턴스만, 행을 다시 읽은 내용으로 보낸다 → 운영 글 저장 + SENT → 커밋 후 푸시</li>
  *   <li>예외는 FAILED(예외 앞 200자). 재시도 없음(운영자가 글을 다시 추가)</li>
  *   <li>운영자가 지운 운영 글을 MESSAGE_DELETED 로 방송</li>
  * </ol>
@@ -40,7 +40,8 @@ import java.util.Optional;
 @Service
 public class RoomScheduleDispatchService {
 
-    static final int BATCH_SIZE = 100;
+    // PENDING 방 행이 창을 차지해 다른 방이 밀리지 않게 넉넉히.
+    static final int BATCH_SIZE = 1000;
     static final int EXPIRE_MINUTES = 30;
     static final int STUCK_MINUTES = 5;
     static final String DEFAULT_PUSH_TITLE = "📢 하루 공지";
@@ -111,24 +112,32 @@ public class RoomScheduleDispatchService {
             return false; // GROUP 채팅방은 RoomStartedEvent 뒤에 생긴다 — 다음 틱
         }
         if (!step.claim(item.id(), now)) {
-            return false; // 다른 인스턴스가 집었거나 어드민이 방금 바꿈
+            return false; // 다른 인스턴스가 집었거나 어드민이 방금 취소·시각 변경
         }
+        // 조회 스냅샷 대신 claim 뒤의 행으로 보낸다(조회와 claim 사이 어드민 PATCH 반영).
+        RoomScheduleItem claimed = itemReader.findById(item.id()).orElse(item);
         SentItem sent;
         try {
-            sent = step.send(item, chatRoom.get().id(), now);
+            sent = step.send(claimed, chatRoom.get().id(), now);
         } catch (Exception e) {
             step.fail(item.id(), RoomScheduleStatus.SENDING, failReason(e), now);
             log.error("방 편성 발송 실패: itemId={}", item.id(), e);
             return false;
         }
-        push(item, chatRoom.get().id(), sent);
+        push(claimed, chatRoom.get().id(), sent);
         return true;
     }
 
-    /** 방 시작 전 행은 방이 열린 시각부터 30분 유효하다. */
-    private static LocalDateTime effectiveAt(RoomScheduleItem item, Room room) {
-        LocalDateTime startsAt = room.startsAt();
-        return startsAt != null && startsAt.isAfter(item.runAt()) ? startsAt : item.runAt();
+    /** 만료 기준 = max(run_at, 방 시작, 행 수정 시각). 방 시작 전 행은 방이 열린 뒤, 방금 고친 행은 고친 뒤 30분 유효. */
+    static LocalDateTime effectiveAt(RoomScheduleItem item, Room room) {
+        LocalDateTime at = item.runAt();
+        if (room.startsAt() != null && room.startsAt().isAfter(at)) {
+            at = room.startsAt();
+        }
+        if (item.updatedAt() != null && item.updatedAt().isAfter(at)) {
+            at = item.updatedAt();
+        }
+        return at;
     }
 
     private void push(RoomScheduleItem item, Long chatRoomId, SentItem sent) {

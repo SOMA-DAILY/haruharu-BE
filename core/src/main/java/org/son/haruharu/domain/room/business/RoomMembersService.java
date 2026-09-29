@@ -1,9 +1,7 @@
 package org.son.haruharu.domain.room.business;
 
 import java.time.Clock;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Period;
 import java.util.List;
 import java.util.Map;
 
@@ -16,6 +14,9 @@ import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.MatchResultReader;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
+import org.son.haruharu.domain.profile.implement.ProfileField;
+import org.son.haruharu.domain.roomschedule.implement.RevealField;
+import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
@@ -37,17 +38,20 @@ public class RoomMembersService {
     private final UserImageReader userImageReader;
     private final MatchResultReader matchResultReader;
     private final S3StoragePort s3StoragePort;
+    private final RoomScheduleItemReader roomScheduleItemReader;
     private final Clock clock;
 
     public RoomMembersService(RoomReader roomReader, RoomMemberReader roomMemberReader,
                               UserProfileReader userProfileReader, UserImageReader userImageReader,
-                              MatchResultReader matchResultReader, S3StoragePort s3StoragePort, Clock clock) {
+                              MatchResultReader matchResultReader, S3StoragePort s3StoragePort,
+                              RoomScheduleItemReader roomScheduleItemReader, Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.userProfileReader = userProfileReader;
         this.userImageReader = userImageReader;
         this.matchResultReader = matchResultReader;
         this.s3StoragePort = s3StoragePort;
+        this.roomScheduleItemReader = roomScheduleItemReader;
         this.clock = clock;
     }
 
@@ -57,6 +61,10 @@ public class RoomMembersService {
                 .orElseThrow(RoomNotFoundException::new);
         LocalDateTime now = LocalDateTime.now(clock);
         int currentDay = room.currentDayAt(now);
+        // 나이 공개는 프로필 시트 AGE 항목과 같은 판정(#457): 편성 방이면 AGE 공개 시각(취소 행 규칙 포함), 옛 방은 DAY3.
+        boolean scheduled = roomScheduleItemReader.hasRevealSchedule(roomId);
+        LocalDateTime ageRevealAt = scheduled ? roomScheduleItemReader.findRevealTimes(roomId).get(RevealField.AGE) : null;
+        boolean ageOpen = MemberProfileService.isRevealed(ProfileField.AGE, scheduled, ageRevealAt, now, currentDay);
 
         List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
         List<Long> userIds = members.stream().map(RoomMember::userId).toList();
@@ -70,14 +78,14 @@ public class RoomMembersService {
         List<MemberView> views = members.stream()
                 .map(member -> toView(member, matchedPartnerMemberId,
                         profiles.get(member.userId()), imageUrls.get(member.userId()),
-                        userId, now.toLocalDate(), currentDay))
+                        userId, now, currentDay, ageOpen))
                 .toList();
 
         return new MembersResponse(views);
     }
 
     private MemberView toView(RoomMember member, Long matchedPartnerMemberId, UserProfile profile, String imageUrl,
-                              Long meUserId, LocalDate today, int currentDay) {
+                              Long meUserId, LocalDateTime now, int currentDay, boolean ageOpen) {
         boolean self = member.userId().equals(meUserId);
         // 방 목록의 본인 이름도 가명으로 표시한다. 상호매칭 상대만 프로필 이름을 공개한다.
         boolean nameRevealed = !self && member.id().equals(matchedPartnerMemberId);
@@ -86,10 +94,9 @@ public class RoomMembersService {
                 : member.displayPseudonym();
         // 지역·나이 공개 기준(#214). 지역은 #457 에서 단건 프로필 항목에서 빠졌지만 목록은 기존 DAY3 규칙을 그대로 쓴다.
         boolean locationRevealed = self || currentDay >= MemberProfileService.LOCATION_REVEAL_DAY;
-        boolean ageRevealed = self || currentDay >= MemberProfileService.AGE_REVEAL_DAY;
+        boolean ageRevealed = self || ageOpen;
         String location = !locationRevealed || profile == null ? null : profile.location();
-        Integer age = !ageRevealed || member.birthday() == null
-                ? null : Period.between(member.birthday(), today).getYears();
+        Integer age = ageRevealed ? MemberProfileService.ageOf(profile, member, now) : null;
         // 대표사진은 presigned GET URL로 항상 반환하고 블러 처리는 클라이언트 담당(단건 프로필과 동일 정책)
         String profileImageUrl = s3StoragePort.createPresignedImageGetUrl(imageUrl);
 

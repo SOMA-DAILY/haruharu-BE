@@ -57,7 +57,7 @@ public class RoomScheduleItemRepositoryImpl implements RoomScheduleItemRepositor
 
     @Override
     public int claim(Long id, LocalDateTime now) {
-        return jpaRepository.transition(id, SCHEDULED, SENDING, now);
+        return jpaRepository.claimDue(id, SCHEDULED, SENDING, now);
     }
 
     @Override
@@ -80,6 +80,11 @@ public class RoomScheduleItemRepositoryImpl implements RoomScheduleItemRepositor
     public List<RoomScheduleItem> findSendingSince(LocalDateTime threshold, int limit) {
         return jpaRepository.findStatusUpdatedBefore(SENDING, threshold, PageRequest.of(0, limit)).stream()
                 .map(RoomScheduleItemEntity::toDomain).toList();
+    }
+
+    @Override
+    public boolean existsRevealRow(Long roomId) {
+        return jpaRepository.existsByRoomIdAndRevealFieldsIsNotNull(roomId);
     }
 
     @Override

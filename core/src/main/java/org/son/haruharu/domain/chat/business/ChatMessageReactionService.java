@@ -4,6 +4,7 @@ import org.son.haruharu.domain.chat.business.dto.MessageReactionResponse;
 import org.son.haruharu.domain.chat.business.dto.MessageReactorResponse;
 import org.son.haruharu.domain.chat.business.dto.ReactionCountItem;
 import org.son.haruharu.domain.chat.business.event.ReactionUpdatedEvent;
+import org.son.haruharu.domain.chat.business.exception.CannotReactToDeletedMessageException;
 import org.son.haruharu.domain.chat.business.exception.CannotReactToOwnMessageException;
 import org.son.haruharu.domain.chat.business.exception.ChatMessageNotFoundException;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
@@ -65,6 +66,9 @@ public class ChatMessageReactionService {
         if (message.senderId().equals(userId)) {
             throw new CannotReactToOwnMessageException();
         }
+        if (message.isAdminDeleted()) {
+            throw new CannotReactToDeletedMessageException();
+        }
         String myReaction = apply(userId, messageId, type.name());
         List<ReactionCountItem> counts = ReactionCountItem.sorted(reactionReader.countByMessageIds(List.of(messageId)));
         eventPublisher.publishEvent(new ReactionUpdatedEvent(chatRoomId, messageId, counts));
@@ -112,6 +116,7 @@ public class ChatMessageReactionService {
     private ChatRoom requireActiveMember(Long chatRoomId, Long userId) {
         ChatRoom chatRoom = chatRoomReader.getById(chatRoomId);
         chatRoomMemberReader.findActiveMembership(chatRoomId, userId).orElseThrow(ChatNotMemberException::new);
+        chatService.requireActiveIfDirect(chatRoomId, userId); // DIRECT: 상대 탈퇴·차단이면 토글·조회 불가(메시지 목록과 같은 규칙)
         return chatRoom;
     }
 

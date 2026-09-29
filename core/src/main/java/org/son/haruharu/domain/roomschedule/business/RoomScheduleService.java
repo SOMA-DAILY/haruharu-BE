@@ -111,12 +111,17 @@ public class RoomScheduleService {
     public RoomScheduleItemResponse update(Long roomId, Long itemId, ScheduleItemCommand command, String actor) {
         Room room = requireRoom(roomId);
         RoomScheduleItem current = itemReader.getInRoom(roomId, itemId);
+        if (current.status() != RoomScheduleStatus.SCHEDULED) {
+            throw new ScheduleItemNotEditableException(); // 검증보다 409 먼저
+        }
+        // 모든 칸: null 이면 기존 값 유지. 운영 글·푸시 제목·본문을 지우려면 빈 문자열(trim 후 빈 값 → null 저장).
         List<String> revealFields = command.revealFields() != null
                 ? command.revealFields()
                 : current.revealFields().stream().map(RevealField::name).toList();
         Boolean push = command.push() != null ? command.push() : current.push();
-        ScheduleContent content = ScheduleContent.validated(revealFields, command.messageContent(), push,
-                command.pushTitle(), command.pushBody(), "");
+        ScheduleContent content = ScheduleContent.validated(revealFields,
+                keep(command.messageContent(), current.messageContent()), push,
+                keep(command.pushTitle(), current.pushTitle()), keep(command.pushBody(), current.pushBody()), "");
         LocalDateTime runAt = command.runAt() != null ? command.runAt() : current.runAt();
         if (!itemWriter.updateIfScheduled(itemId, roomId, runAt, content, actor, now())) {
             throw new ScheduleItemNotEditableException();
@@ -158,6 +163,10 @@ public class RoomScheduleService {
         }
         chatMessageWriter.markAdminDeleted(item.sentMessageId(), now());
         return responseOf(item, room);
+    }
+
+    private static String keep(String requested, String current) {
+        return requested != null ? requested : current;
     }
 
     private RoomScheduleItemResponse responseOf(RoomScheduleItem item, Room room) {

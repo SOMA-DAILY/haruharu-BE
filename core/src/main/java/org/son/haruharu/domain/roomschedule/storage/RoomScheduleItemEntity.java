@@ -93,6 +93,7 @@ public class RoomScheduleItemEntity extends BaseEntity {
 
     public RoomScheduleItem toDomain() {
         return new RoomScheduleItem(id, roomId, runAt, RevealField.parseCsv(revealFields), messageContent, push,
-                pushTitle, pushBody, status, failReason, sentMessageId, createdBy, updatedBy, sentAt, createdAt);
+                pushTitle, pushBody, status, failReason, sentMessageId, createdBy, updatedBy, sentAt, createdAt,
+                updatedAt);
     }
 }

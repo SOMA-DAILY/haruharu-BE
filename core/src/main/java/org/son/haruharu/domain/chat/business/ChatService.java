@@ -348,7 +348,7 @@ public class ChatService {
     }
 
     /** DIRECT 방만 상대 탈퇴를 검사한다(GROUP은 상대 단수 개념이 없어 통과). */
-    private void requireActiveIfDirect(Long chatRoomId, Long userId) {
+    void requireActiveIfDirect(Long chatRoomId, Long userId) {
         if (chatRoomReader.getById(chatRoomId).type() == ChatRoomType.DIRECT) {
             requireActivePartner(chatRoomId, userId);
         }

@@ -199,6 +199,42 @@ class AdminRoomScheduleApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("PATCH: null 칸은 기존 값 유지, 빈 문자열은 지움, 합친 결과로 검증, SCHEDULED 아니면 검증보다 409 먼저")
+    void patchKeepsNullAndClearsEmpty() throws Exception {
+        Long roomId = createRoom(defaultFive());
+        String list = mockMvc.perform(get("/api/v1/admin/rooms/{roomId}/schedule", roomId).with(authentication(operator())))
+                .andReturn().getResponse().getContentAsString();
+        Long revealRow = JsonPath.parse(list).read("$.data[1].id", Long.class);   // MBTI+INTO_NOW + 글
+        Long textOnlyRow = JsonPath.parse(list).read("$.data[4].id", Long.class); // 글 + 푸시
+        String base = "/api/v1/admin/rooms/" + roomId + "/schedule/";
+
+        mockMvc.perform(patch(base + textOnlyRow).with(authentication(operator())).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"run_at\":\"%s\"}".formatted(day(3, 15))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.run_at").value(day(3, 15)))
+                .andExpect(jsonPath("$.data.message_content").value("2시간 뒤면 벌써 최종 선택이에요 ⏰"))
+                .andExpect(jsonPath("$.data.push").value(true))
+                .andExpect(jsonPath("$.data.push_title").value("📢 하루 공지"));
+
+        mockMvc.perform(patch(base + revealRow).with(authentication(operator())).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message_content\":\"  \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.message_content").isEmpty())
+                .andExpect(jsonPath("$.data.reveal_fields[0]").value("MBTI"));
+
+        mockMvc.perform(patch(base + textOnlyRow).with(authentication(operator())).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message_content\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields[0].field").value("message_content"));
+
+        mockMvc.perform(post(base + textOnlyRow + "/cancel").with(authentication(operator()))).andExpect(status().isOk());
+        mockMvc.perform(patch(base + textOnlyRow).with(authentication(operator())).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message_content\":\"\",\"push_title\":\"가나다라마바사아자차카타파하가나\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("SCHEDULE_ITEM_NOT_EDITABLE"));
+    }
+
+    @Test
     @DisplayName("보낸 운영 글 삭제: 보내기 전엔 409, SENT 면 admin_deleted_at 을 찍고 두 번째도 200")
     void deleteSentMessage() throws Exception {
         Long roomId = createRoom(defaultFive());

@@ -26,6 +26,17 @@ public class RoomScheduleItemReader {
                 .orElseThrow(ScheduleItemNotFoundException::new);
     }
 
+    public java.util.Optional<RoomScheduleItem> findById(Long itemId) {
+        return repository.findById(itemId);
+    }
+
+    /**
+     * 편성으로 공개를 정하는 방인지(#457). 공개 행을 전부 취소한 방도 true — 취소한 항목이 옛 DAY3 규칙으로 열리면 안 된다.
+     */
+    public boolean hasRevealSchedule(Long roomId) {
+        return repository.existsRevealRow(roomId);
+    }
+
     public List<RoomScheduleItem> findByRoomId(Long roomId) {
         return repository.findByRoomId(roomId);
     }
@@ -56,7 +67,7 @@ public class RoomScheduleItemReader {
 
     /**
      * 항목별 공개 시각(F2) = 취소가 아닌 행 중 그 항목을 가진 가장 이른 run_at. 잡이 못 보냈어도(플래그 OFF, EXPIRED)
-     * 시각이 지나면 열린다. 편성에 공개 행이 하나도 없으면 빈 맵(옛 방 → 기존 DAY3 규칙).
+     * 시각이 지나면 열린다. 편성 방인지(옛 DAY3 규칙 여부)는 hasRevealSchedule 로 따로 본다(취소 행 포함).
      */
     public Map<RevealField, LocalDateTime> findRevealTimes(Long roomId) {
         Map<RevealField, LocalDateTime> times = new EnumMap<>(RevealField.class);
