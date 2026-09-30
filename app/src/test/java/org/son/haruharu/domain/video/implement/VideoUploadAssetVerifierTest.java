@@ -1,56 +1,81 @@
 package org.son.haruharu.domain.video.implement;
-import org.junit.jupiter.api.Test;
-import org.son.haruharu.infrastructure.s3.S3StoragePort;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import static org.mockito.Mockito.*;
-import static org.assertj.core.api.Assertions.*;
+
+import org.junit.jupiter.api.Test;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
+import org.son.haruharu.infrastructure.s3.S3StoragePort.ObjectMetadata;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.son.haruharu.domain.video.implement.VideoUploadVariant.FEED;
+import static org.son.haruharu.domain.video.implement.VideoUploadVariant.THUMBNAIL;
+import static org.son.haruharu.domain.video.implement.VideoUploadVariant.VIEWER;
+
 class VideoUploadAssetVerifierTest {
-    @Test void givenQuickTimeCameraOriginal_whenCheckingViewer_thenAcceptsOnlyViewerVariant() {
-        var storage=mock(S3StoragePort.class);
-        var job=VideoUploadSession.create(UUID.randomUUID(),1L,2L,3L,LocalDateTime.now(),LocalDateTime.now(),null);
-        when(storage.head(job.key("viewer"))).thenReturn(new S3StoragePort.ObjectMetadata(1_000_000,"video/quicktime","mov"));
-        when(storage.head(job.key("feed"))).thenReturn(new S3StoragePort.ObjectMetadata(1_000_000,"video/quicktime","mov"));
-        var verifier=new VideoUploadAssetVerifier(storage);
-        assertThat(verifier.ready(job,"viewer")).isTrue();
-        assertThat(verifier.ready(job,"feed")).isFalse();
-        assertThat(verifier.contentType("viewer")).isEqualTo("video/mp4");
-        assertThat(verifier.contentType("viewer","video/quicktime")).isEqualTo("video/quicktime");
-        assertThatThrownBy(()->verifier.contentType("feed","video/quicktime")).hasMessageContaining("확인");
-        assertThatThrownBy(()->verifier.contentType("viewer","video/webm")).hasMessageContaining("확인");
+
+    private final S3StoragePort storage = mock(S3StoragePort.class);
+    private final VideoUploadAssetVerifier verifier = new VideoUploadAssetVerifier(storage);
+    private final VideoUploadSession job = VideoUploadSession.create(
+            UUID.randomUUID(), 1L, 2L, 3L, LocalDateTime.now(), LocalDateTime.now(), null);
+
+    @Test
+    void givenQuickTimeCameraOriginal_whenCheckingUploaded_thenAcceptsOnlyViewer() {
+        when(storage.head(job.stagingKey(VIEWER))).thenReturn(new ObjectMetadata(1_000_000, "video/quicktime", "mov"));
+        when(storage.head(job.stagingKey(FEED))).thenReturn(new ObjectMetadata(1_000_000, "video/quicktime", "mov"));
+
+        assertThat(verifier.ready(job, VIEWER)).isTrue();
+        assertThat(verifier.ready(job, FEED)).isFalse();
     }
 
-    @Test void givenChangedEtag_whenPromoting_thenFailsWithoutPromotingOtherFiles() {
-        var storage=mock(S3StoragePort.class);
-        var job=VideoUploadSession.create(UUID.randomUUID(),1L,2L,3L,LocalDateTime.now(),LocalDateTime.now(),null);
-        when(storage.head(job.key("viewer"))).thenReturn(new S3StoragePort.ObjectMetadata(100,"video/mp4","original"));
-        when(storage.head(job.key("feed"))).thenReturn(new S3StoragePort.ObjectMetadata(100,"video/mp4","feed"));
-        when(storage.head(job.key("thumbnail"))).thenReturn(new S3StoragePort.ObjectMetadata(100,"image/jpeg","thumbnail"));
-        doThrow(new IllegalStateException("conditional copy failed")).when(storage).promote(job.key("viewer"),job.publishedKey("viewer"),"original");
-        assertThatThrownBy(()->new VideoUploadAssetVerifier(storage).promote(job)).hasMessageContaining("conditional copy failed");
-        verify(storage,never()).promote(eq(job.key("feed")),anyString(),anyString());
-        verify(storage).deleteObjects(List.of(job.publishedKey("viewer"),job.publishedKey("feed"),job.publishedKey("thumbnail")));
+    @Test
+    void givenChangedEtag_whenPromoting_thenFailsWithoutPromotingOtherFiles() {
+        when(storage.head(job.stagingKey(VIEWER))).thenReturn(new ObjectMetadata(100, "video/mp4", "original"));
+        when(storage.head(job.stagingKey(FEED))).thenReturn(new ObjectMetadata(100, "video/mp4", "feed"));
+        when(storage.head(job.stagingKey(THUMBNAIL))).thenReturn(new ObjectMetadata(100, "image/jpeg", "thumbnail"));
+        doThrow(new IllegalStateException("conditional copy failed"))
+                .when(storage).promote(job.stagingKey(VIEWER), job.publishedKey(VIEWER), "original");
+
+        assertThatThrownBy(() -> verifier.promote(job)).hasMessageContaining("conditional copy failed");
+
+        verify(storage, never()).promote(eq(job.stagingKey(FEED)), anyString(), anyString());
+        verify(storage).deleteObjectsOrThrow(
+                List.of(job.publishedKey(VIEWER), job.publishedKey(FEED), job.publishedKey(THUMBNAIL)));
     }
-    @Test void givenInvalidMetadata_whenPromoting_thenRejectsBeforeCopy() {
-        for(var meta:java.util.List.of(new S3StoragePort.ObjectMetadata(0,"video/mp4","e"),new S3StoragePort.ObjectMetadata(100,"text/html","e"),new S3StoragePort.ObjectMetadata(20_000_000,"video/mp4","e"))) {
-            var storage=mock(S3StoragePort.class);
-            var job=VideoUploadSession.create(UUID.randomUUID(),1L,2L,3L,LocalDateTime.now(),LocalDateTime.now(),null);
+
+    @Test
+    void givenInvalidMetadata_whenPromoting_thenRejectsBeforeCopy() {
+        List<ObjectMetadata> invalid = List.of(
+                new ObjectMetadata(0, "video/mp4", "e"),
+                new ObjectMetadata(100, "text/html", "e"),
+                new ObjectMetadata(20_000_000, "video/mp4", "e"));
+        for (ObjectMetadata meta : invalid) {
+            S3StoragePort storage = mock(S3StoragePort.class);
             when(storage.head(anyString())).thenReturn(meta);
-            assertThatThrownBy(()->new VideoUploadAssetVerifier(storage).promote(job)).hasMessageContaining("확인");
-            verify(storage,never()).promote(anyString(),anyString(),anyString());
+
+            assertThatThrownBy(() -> new VideoUploadAssetVerifier(storage).promote(job)).hasMessageContaining("확인");
+
+            verify(storage, never()).promote(anyString(), anyString(), anyString());
         }
     }
 
-    @Test void givenLaterVariantMissing_whenPromoting_thenValidatesEverythingBeforeCopy() {
-        var storage=mock(S3StoragePort.class);
-        var job=VideoUploadSession.create(UUID.randomUUID(),1L,2L,3L,LocalDateTime.now(),LocalDateTime.now(),null);
-        when(storage.head(job.key("viewer"))).thenReturn(new S3StoragePort.ObjectMetadata(100,"video/mp4","viewer-etag"));
-        when(storage.head(job.key("feed"))).thenReturn(new S3StoragePort.ObjectMetadata(100,"video/mp4","feed-etag"));
-        when(storage.head(job.key("thumbnail"))).thenReturn(null);
+    @Test
+    void givenLaterVariantMissing_whenPromoting_thenValidatesEverythingBeforeCopy() {
+        when(storage.head(job.stagingKey(VIEWER))).thenReturn(new ObjectMetadata(100, "video/mp4", "viewer-etag"));
+        when(storage.head(job.stagingKey(FEED))).thenReturn(new ObjectMetadata(100, "video/mp4", "feed-etag"));
+        when(storage.head(job.stagingKey(THUMBNAIL))).thenReturn(null);
 
-        assertThatThrownBy(()->new VideoUploadAssetVerifier(storage).promote(job)).hasMessageContaining("확인");
+        assertThatThrownBy(() -> verifier.promote(job)).hasMessageContaining("확인");
 
-        verify(storage,never()).promote(anyString(),anyString(),anyString());
+        verify(storage, never()).promote(anyString(), anyString(), anyString());
     }
 }

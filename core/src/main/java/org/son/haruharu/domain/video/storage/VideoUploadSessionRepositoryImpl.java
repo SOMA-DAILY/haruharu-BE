@@ -1,27 +1,43 @@
 package org.son.haruharu.domain.video.storage;
+
 import jakarta.persistence.EntityManager;
+import lombok.RequiredArgsConstructor;
+import org.son.haruharu.domain.video.implement.VideoUploadSession;
+import org.son.haruharu.domain.video.implement.VideoUploadSessionRepository;
+import org.springframework.stereotype.Repository;
+
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Repository;
-import org.son.haruharu.domain.room.implement.RoomMemberRepository;
-import org.son.haruharu.domain.video.implement.*;
+
 @Repository
 @RequiredArgsConstructor
 public class VideoUploadSessionRepositoryImpl implements VideoUploadSessionRepository {
-    private final VideoUploadSessionJpaRepository repository;
+
+    private final VideoUploadSessionJpaRepository jpaRepository;
     private final EntityManager entityManager;
-    private final RoomMemberRepository members;
-    public void lockMember(Long memberId) { members.lockById(memberId); }
-    public Optional<VideoUploadSession> find(UUID id) { return repository.findById(id).map(VideoUploadSessionEntity::toDomain); }
-    public boolean hasPending(Long memberId,LocalDateTime slot,LocalDateTime now) {
-        return repository.existsByMemberIdAndSlotStartAndPostIdIsNullAndCancelledFalseAndExpiresAtAfter(memberId,slot,now);
+
+    @Override
+    public Optional<VideoUploadSession> findById(UUID id) {
+        return jpaRepository.findById(id).map(VideoUploadSessionEntity::toDomain);
     }
+
+    @Override
+    public boolean existsPending(Long memberId, LocalDateTime slotStart, LocalDateTime now) {
+        return jpaRepository.existsByMemberIdAndSlotStartAndPostIdIsNullAndCancelledFalseAndExpiresAtAfter(
+                memberId, slotStart, now);
+    }
+
+    @Override
     public VideoUploadSession insert(VideoUploadSession session) {
+        // 할당 id라 save()는 merge로 기존 행을 덮어쓸 수 있다. persist로 PK 충돌을 드러낸다.
         entityManager.persist(VideoUploadSessionEntity.from(session));
         entityManager.flush();
         return session;
     }
-    public VideoUploadSession save(VideoUploadSession session) { return repository.saveAndFlush(VideoUploadSessionEntity.from(session)).toDomain(); }
+
+    @Override
+    public VideoUploadSession save(VideoUploadSession session) {
+        return jpaRepository.saveAndFlush(VideoUploadSessionEntity.from(session)).toDomain();
+    }
 }

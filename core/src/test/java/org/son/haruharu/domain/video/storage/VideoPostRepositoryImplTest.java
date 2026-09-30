@@ -18,12 +18,11 @@ import static org.mockito.Mockito.never;
 class VideoPostRepositoryImplTest {
 
     @Mock VideoPostJpaRepository jpaRepository;
-    @Mock org.son.haruharu.domain.room.implement.RoomMemberRepository members;
     private VideoPostRepository repository;
 
     @BeforeEach
     void setUp() {
-        repository = new VideoPostRepositoryImpl(jpaRepository, members);
+        repository = new VideoPostRepositoryImpl(jpaRepository);
     }
 
     @Test

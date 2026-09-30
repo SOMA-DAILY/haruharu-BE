@@ -1,60 +1,60 @@
 package org.son.haruharu.domain.video.implement;
+
+import java.util.Arrays;
 import java.util.List;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.son.haruharu.domain.video.implement.exception.VideoUploadIncompleteException;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
+import org.son.haruharu.infrastructure.s3.S3StoragePort.ObjectMetadata;
+import org.springframework.stereotype.Component;
+
+/** 임시 경로에 올라온 세 파일의 메타데이터를 확인하고, 확인한 버전만 게시 경로로 복사한다. */
 @Component
 @RequiredArgsConstructor
 public class VideoUploadAssetVerifier {
+
+    private static final List<VideoUploadVariant> VARIANTS = Arrays.asList(VideoUploadVariant.values());
+
     private final S3StoragePort storage;
-    public String contentType(String variant) {
-        return contentType(variant, null);
+
+    /** 이미 올라온 파일이면 재업로드 URL을 발급하지 않는다. */
+    public boolean ready(VideoUploadSession session, VideoUploadVariant variant) {
+        return valid(storage.head(session.stagingKey(variant)), variant);
     }
-    public String contentType(String variant, String requested) {
-        String fallback = switch (variant) {
-            case "viewer", "feed" -> "video/mp4";
-            case "thumbnail" -> "image/jpeg";
-            default -> throw new VideoUploadIncompleteException();
-        };
-        String type = requested == null ? fallback : requested;
-        if (!allowedContentType(variant, type)) throw new VideoUploadIncompleteException();
-        return type;
-    }
-    public boolean ready(VideoUploadSession session,String variant) {
-        return valid(storage.head(session.key(variant)),variant);
-    }
+
+    /**
+     * 세 파일을 모두 확인한 뒤에 복사를 시작한다. 복사는 확인 때의 ETag와 같을 때만 성공하며,
+     * 도중에 실패하면 이미 복사한 게시 경로를 지우고 원래 예외를 던진다.
+     */
     public void promote(VideoUploadSession session) {
-        var variants = List.of("viewer","feed","thumbnail");
-        var metadata = variants.stream().map(variant -> {
-            var meta = storage.head(session.key(variant));
-            if (!valid(meta,variant) || meta.etag()==null) throw new VideoUploadIncompleteException();
-            return meta;
-        }).toList();
+        List<ObjectMetadata> metadata = VARIANTS.stream()
+                .map(variant -> {
+                    ObjectMetadata meta = storage.head(session.stagingKey(variant));
+                    if (!valid(meta, variant) || meta.etag() == null) {
+                        throw new VideoUploadIncompleteException();
+                    }
+                    return meta;
+                })
+                .toList();
         try {
-            for (int index = 0; index < variants.size(); index++) {
-                var variant = variants.get(index);
-                storage.promote(session.key(variant),session.publishedKey(variant),metadata.get(index).etag());
+            for (int index = 0; index < VARIANTS.size(); index++) {
+                VideoUploadVariant variant = VARIANTS.get(index);
+                storage.promote(session.stagingKey(variant), session.publishedKey(variant), metadata.get(index).etag());
             }
         } catch (RuntimeException failure) {
             try {
-                storage.deleteObjects(variants.stream().map(session::publishedKey).toList());
+                storage.deleteObjectsOrThrow(VARIANTS.stream().map(session::publishedKey).toList());
             } catch (RuntimeException cleanupFailure) {
                 failure.addSuppressed(cleanupFailure);
             }
             throw failure;
         }
     }
-    private boolean valid(S3StoragePort.ObjectMetadata metadata,String variant) {
-        long max=switch (variant) { case "viewer" -> 10_000_000; case "feed" -> 5_000_000; case "thumbnail" -> 2_000_000; default -> throw new VideoUploadIncompleteException(); };
-        return metadata!=null && metadata.bytes()>0 && metadata.bytes()<=max && allowedContentType(variant,metadata.contentType());
-    }
-    private boolean allowedContentType(String variant,String type) {
-        return switch (variant) {
-            case "viewer" -> "video/mp4".equals(type) || "video/quicktime".equals(type);
-            case "feed" -> "video/mp4".equals(type);
-            case "thumbnail" -> "image/jpeg".equals(type);
-            default -> throw new VideoUploadIncompleteException();
-        };
+
+    private boolean valid(ObjectMetadata metadata, VideoUploadVariant variant) {
+        return metadata != null
+                && variant.allowsSize(metadata.bytes())
+                && variant.allowsContentType(metadata.contentType());
     }
 }
