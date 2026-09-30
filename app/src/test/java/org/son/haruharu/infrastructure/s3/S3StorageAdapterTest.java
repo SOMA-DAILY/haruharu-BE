@@ -8,14 +8,22 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Error;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -82,5 +90,44 @@ class S3StorageAdapterTest {
         then(s3Presigner).should().presignGetObject(captor.capture());
         assertThat(captor.getValue().signatureDuration()).isEqualTo(Duration.ofSeconds(1800));
         assertThat(captor.getValue().getObjectRequest().key()).isEqualTo("users/1/images/a.jpg");
+    }
+
+    @Test
+    @DisplayName("deleteObjects는 객체별 삭제 실패가 있어도 예외 없이 끝난다(프로필 이미지 정리·탈퇴 경로 호환)")
+    void givenPerObjectS3Error_whenDeleting_thenDoesNotThrow() {
+        given(s3Client.deleteObjects(any(DeleteObjectsRequest.class))).willReturn(
+                DeleteObjectsResponse.builder().errors(S3Error.builder().code("AccessDenied").build()).build());
+
+        assertThatCode(() -> adapter.deleteObjects(List.of("users/1/images/a.jpg")))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("deleteObjectsOrThrow는 객체별 삭제 실패를 예외로 알린다")
+    void givenPerObjectS3Error_whenDeletingOrThrow_thenReportsCleanupFailure() {
+        given(s3Client.deleteObjects(any(DeleteObjectsRequest.class))).willReturn(
+                DeleteObjectsResponse.builder().errors(S3Error.builder().code("AccessDenied").build()).build());
+
+        assertThatThrownBy(() -> adapter.deleteObjectsOrThrow(List.of("users/1/videos/job/published/feed.mp4")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("1 object");
+    }
+
+    @Test
+    @DisplayName("head는 404·403을 미검증 객체(null)로, 그 외 S3 오류는 그대로 던진다")
+    void givenS3ErrorStatus_whenHead_thenNullOnlyForMissingOrForbidden() {
+        given(s3Client.headObject(any(HeadObjectRequest.class)))
+                .willThrow(s3Error(404))
+                .willThrow(s3Error(403))
+                .willThrow(s3Error(500));
+
+        assertThat(adapter.head("users/video-upload-staging/1/videos/job/feed.mp4")).isNull();
+        assertThat(adapter.head("users/video-upload-staging/1/videos/job/feed.mp4")).isNull();
+        assertThatThrownBy(() -> adapter.head("users/video-upload-staging/1/videos/job/feed.mp4"))
+                .isInstanceOf(S3Exception.class);
+    }
+
+    private static S3Exception s3Error(int status) {
+        return (S3Exception) S3Exception.builder().statusCode(status).build();
     }
 }
