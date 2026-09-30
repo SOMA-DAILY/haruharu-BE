@@ -53,9 +53,6 @@ aws:
 fcm:
   service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
 
-# 매칭 정책. enter-cost: 신청 차감 = 미성사 환불 = 불발 통지 개수(구름). 값 변경은 이 설정만 수정.
-# 구름 경제(#143): 신청 20 / 완주 5+5+5 / 미매칭 위로 5 → 완주+미매칭 = 전액 환급(±0).
-# 아래 4개 값은 하나의 불변식(전액 환급)이라 env 오버라이드 없이 yaml 리터럴로만 관리한다 — 변경은 PR로.
 haruharu:
   application:
     commit-sha: ${APPLICATION_COMMIT_SHA:unknown}
@@ -95,13 +92,10 @@ haruharu:
       settle-minutes: ${MISSION_OUTCOME_SETTLE_MINUTES:5}
       batch-size: ${MISSION_OUTCOME_BATCH_SIZE:100}
       cron: ${MISSION_OUTCOME_CRON:30 * * * * *}
-  # 첫 가입 1회 보너스 구름(#232). 정책값은 코드 @DefaultValue가 아닌 이 yaml 리터럴로 관리(matching.enter-cost와 동일 방침).
+  # 첫 가입 1회 보너스 구름(#232). 정책값은 코드 @DefaultValue가 아닌 이 yaml 리터럴로 관리.
   coin:
     signup-bonus: 20
     enabled: false  # 코인 경제 비활성(#309 피벗). 가입 보너스·코인 API off. 되살릴 때만 true
-  matching:
-    enter-cost: 20
-    enabled: false  # 자동매칭 비활성(#308 피벗). 되살릴 때만 true
   payment:
     enabled: false  # 결제(IAP) 비활성(#309 피벗). webhook·상품 API off. 되살릴 때만 true
   room:

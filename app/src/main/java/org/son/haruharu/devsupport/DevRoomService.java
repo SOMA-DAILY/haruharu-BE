@@ -2,7 +2,6 @@ package org.son.haruharu.devsupport;
 
 import org.son.haruharu.common.time.AdjustableClock;
 import org.son.haruharu.devsupport.dto.DevClockResponse;
-import org.son.haruharu.devsupport.dto.DevMatchingRunResponse;
 import org.son.haruharu.devsupport.dto.DevRoomResponse;
 import org.son.haruharu.devsupport.exception.DevMemberAlreadyInRoomException;
 import org.son.haruharu.devsupport.exception.DevMemberNotVerifiedException;
@@ -11,10 +10,8 @@ import org.son.haruharu.devsupport.exception.InvalidDevDayException;
 import org.son.haruharu.devsupport.exception.InvalidDevMembersException;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
-import org.son.haruharu.domain.matching.business.MatchingExecutor;
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.room.business.ConsolationRewardService;
-import org.son.haruharu.domain.room.business.RoomActivator;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
@@ -35,9 +32,7 @@ import java.util.List;
 
 /**
  * [dev·local 전용, #180] 테스트 방 즉시 생성·시간대 지정 유스케이스.
- * 배치(22:00 매칭, 09:00 활성화)를 기다리지 않고 원하는 상태의 방을 재현한다.
- * 도메인 로직은 만들지 않는다 — 기존 도메인 객체/유스케이스(Room, MatchingExecutor,
- * ConsolationRewardService 등)만 조합한다.
+ * 기존 방 도메인 객체와 유스케이스로 원하는 상태의 테스트 방을 재현한다.
  */
 @Profile({"local", "dev"})
 @Service
@@ -53,8 +48,6 @@ public class DevRoomService {
     private final RoomReader roomReader;
     private final RoomWriter roomWriter;
     private final RoomMemberWriter roomMemberWriter;
-    private final MatchingExecutor matchingExecutor;
-    private final RoomActivator roomActivator;
     private final ConsolationRewardService consolationRewardService;
     private final RoomMissionSlotService roomMissionSlotService;
     private final DevRoomCleaner devRoomCleaner;
@@ -62,8 +55,7 @@ public class DevRoomService {
 
     public DevRoomService(IdentityService identityService, RoomService roomService,
                           RoomReader roomReader, RoomWriter roomWriter,
-                          RoomMemberWriter roomMemberWriter, MatchingExecutor matchingExecutor,
-                          RoomActivator roomActivator, ConsolationRewardService consolationRewardService,
+                          RoomMemberWriter roomMemberWriter, ConsolationRewardService consolationRewardService,
                           RoomMissionSlotService roomMissionSlotService,
                           DevRoomCleaner devRoomCleaner, AdjustableClock adjustableClock) {
         this.identityService = identityService;
@@ -71,8 +63,6 @@ public class DevRoomService {
         this.roomReader = roomReader;
         this.roomWriter = roomWriter;
         this.roomMemberWriter = roomMemberWriter;
-        this.matchingExecutor = matchingExecutor;
-        this.roomActivator = roomActivator;
         this.consolationRewardService = consolationRewardService;
         this.roomMissionSlotService = roomMissionSlotService;
         this.devRoomCleaner = devRoomCleaner;
@@ -80,7 +70,7 @@ public class DevRoomService {
     }
 
     /**
-     * 지정 계정들로 방을 즉시 ACTIVE로 생성한다. started_at은 운영(RoomActivator)과 동일한
+     * 지정 계정들로 방을 즉시 ACTIVE로 생성한다. started_at은 테스트 방의
      * 시작일 09:00 앵커로 역산한다 — 현재 시각이 요청한 day에 해당하도록 시작일을 계산.
      * time을 주면 가상 시계를 그 방의 (day, time) 절대 시각에 고정한다.
      */
@@ -148,16 +138,6 @@ public class DevRoomService {
     @Transactional
     public int grantConsolation() {
         return consolationRewardService.grantForAnnouncedRooms(LocalDateTime.now(adjustableClock));
-    }
-
-    /** 매칭 배치 수동 실행 — 큐 확정·불발 환불 후 해당 날짜 방을 즉시 활성화한다. */
-    @Transactional
-    public DevMatchingRunResponse runMatching(LocalDate date) {
-        LocalDate scheduledDate = date != null ? date : LocalDate.now(adjustableClock);
-        LocalDateTime now = LocalDateTime.now(adjustableClock);
-        int created = matchingExecutor.execute(scheduledDate, now);
-        int activated = roomActivator.activate(scheduledDate, now);
-        return new DevMatchingRunResponse(scheduledDate, created, activated);
     }
 
     /** 테스트 방과 파생 데이터(영상·선택·매치·채팅) 전체 삭제. */

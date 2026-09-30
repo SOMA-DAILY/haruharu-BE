@@ -2,7 +2,6 @@ package org.son.haruharu.domain.user.business;
 
 import org.son.haruharu.domain.auth.business.AuthService;
 import org.son.haruharu.domain.coin.business.CoinService;
-import org.son.haruharu.domain.matching.business.MatchingService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.identity.implement.VerificationStatus;
@@ -38,7 +37,6 @@ public class UserService {
     private final ValueService valueService;
     private final CoinService coinService;
     private final AuthService authService;
-    private final MatchingService matchingService;
     private final Clock clock;
 
     public UserService(
@@ -49,7 +47,6 @@ public class UserService {
         ValueService valueService,
         CoinService coinService,
         AuthService authService,
-        MatchingService matchingService,
         Clock clock
     ) {
         this.userReader = userReader;
@@ -59,7 +56,6 @@ public class UserService {
         this.valueService = valueService;
         this.coinService = coinService;
         this.authService = authService;
-        this.matchingService = matchingService;
         this.clock = clock;
     }
 
@@ -117,9 +113,6 @@ public class UserService {
     @Transactional
     public void withdraw(Long userId) {
         User user = userReader.getById(userId);
-        // 잔여 매칭 신청 취소·환불을 지갑 삭제보다 먼저 한다(#255).
-        // 순서가 뒤바뀌면 환불(credit)이 CoinWallet.init()으로 지갑을 되살려 탈퇴자에게 구름이 남는다.
-        matchingService.cancelQueueOnWithdraw(userId);
         profileService.deleteProfileAndImages(userId);
         valueService.deleteAnswers(userId);
         coinService.deleteWallet(userId);

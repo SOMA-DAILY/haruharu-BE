@@ -17,7 +17,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * <p>
  * 엔티티 스캔은 admin 도메인 + 어드민이 실제로 조회하는 core 엔티티 패키지만 열거한다.
  * core 전체를 스캔하면 identity 등 core 전용 빈(CiDiCryptoConverter→IdentityCrypto)까지 끌어와
- * 컨텍스트를 오염시키므로, 필요한 패키지(대시보드: room/matching/user)만 추가한다.
+ * 컨텍스트를 오염시키므로, 필요한 패키지(대시보드: room/user)만 추가한다.
  * <p>
  * 리포지토리는 admin 도메인과 core room·user·mission storage 패키지를 스캔한다. Spring Data의
  * 패키지 단위 스캔 때문에 mission은 slot 저장소가 속한 패키지 전체가 포함되며, 실제 도메인 빈은
@@ -27,7 +27,6 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EntityScan({
         "org.son.haruharu.admin.domain",
         "org.son.haruharu.domain.room.storage",
-        "org.son.haruharu.domain.matching.storage",
         "org.son.haruharu.domain.user.storage",
         "org.son.haruharu.domain.profile.storage",
         "org.son.haruharu.domain.coin.storage",

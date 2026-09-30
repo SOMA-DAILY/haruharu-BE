@@ -21,14 +21,6 @@ public record CoinCreditCommand(
     }
 
     /**
-     * 매칭 취소·미성사 환불 적립. 소모는 리워드 우선이므로 환불도 REWARD 버킷으로 되돌린다
-     * (PAID 적립 시 실결제 환불 회수(revoke) 대상 잔액이 부풀려지는 것을 막는다).
-     */
-    public static CoinCreditCommand matchRefund(Long userId, long amount, String refType, String refId) {
-        return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.MATCH_REFUND, refType, refId);
-    }
-
-    /**
      * 첫 가입 보너스 적립. 리워드 버킷(환불 회수 무관)으로 적립하고, refType/refId로 유저당 1회 멱등을 보장한다.
      */
     public static CoinCreditCommand signupBonus(Long userId, long amount) {

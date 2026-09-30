@@ -3,7 +3,6 @@ package org.son.haruharu.domain.room.implement;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -70,15 +69,6 @@ public class RoomReader {
             case PENDING -> 2;
             default -> 3;
         };
-    }
-
-    /**
-     * 09:00 자동 시작 배치용.
-     * 초대코드 모델 방(starts_at 보유)은 제외한다(#320) — scheduledDate 가 starts_at 의 날짜라 그대로 두면
-     * 19:00 시작 예정 방이 09:00 에 조기 flip 된다. 그쪽 전이는 RoomStatusReconciler 담당.
-     */
-    public List<Room> getScheduledPending(LocalDate scheduledDate) {
-        return roomRepository.findAllByScheduledDateAndStatus(scheduledDate, RoomStatus.PENDING);
     }
 
     /**

@@ -10,8 +10,4 @@ public record CoinSpendCommand(
         String refType,
         String refId
 ) {
-    /** 매칭 큐 진입 소모. 사유(MATCH_ENTER)를 coin 도메인 내부에서 고정한다. */
-    public static CoinSpendCommand matchEnter(Long userId, long amount, String refType, String refId) {
-        return new CoinSpendCommand(userId, amount, CoinLedgerReason.MATCH_ENTER, refType, refId);
-    }
 }

@@ -11,6 +11,7 @@ package org.son.haruharu.domain.notification.implement;
 public enum NotificationType {
 
     // ── A. 세션 진행 (3일 서사) ──
+    // 폐기된 자동매칭 알림. 기존 알림/발송 이력의 enum 역직렬화용으로 유지.
     ROOM_MATCHED("🎉 오늘의 인연이 정해졌어요", "3일간 함께할 인연이 도착했어요. 내일 만나요", true, NotificationCategory.ACTIVITY),
     ROOM_STARTED("👋 하루방이 열렸어요", "지금 첫 영상으로 인사를 건네보세요", true, NotificationCategory.ACTIVITY),
     SLOT_START("🎬 새로운 하루를 남길 시간", "서로의 하루를 확인하고, 오늘의 나도 남겨보세요", false, NotificationCategory.ACTIVITY),
@@ -45,12 +46,13 @@ public enum NotificationType {
     CHAT_REPLY("💬 답장", "%s님이 답장했어요", true, NotificationCategory.ACTIVITY, true),
 
     // ── C. 시스템 / 거래 ──
+    // 폐기된 자동매칭 환불 알림의 이력 호환용. 발송 트리거는 제거됨.
     COIN_REFUNDED("☁️ 구름 %d개를 돌려드렸어요", "이번엔 인연이 닿지 않았지만, 다음 기회에 다시 만나요", true, NotificationCategory.TRANSACTIONAL),
     // Figma 5-5 매칭 미성사 화면 카피("위로의 구름을 선물로 드렸어요") 대응(#143)
     MATCH_CONSOLATION("☁️ 위로의 구름이 도착했어요", "이번엔 인연이 닿지 않았지만, 위로의 구름 %d개를 선물로 드렸어요", true, NotificationCategory.TRANSACTIONAL),
     PAYMENT_COMPLETED("☁️ 충전 완료!", "구름 %d개가 충전됐어요. 새로운 인연에 한 걸음 더 가까워졌어요", false, NotificationCategory.TRANSACTIONAL),
 
-    // ── D. 재참여 (잠수 유저 복귀 유도) ──
+    // 폐기된 자동매칭 재참여 알림의 이력 호환용. 발송 트리거는 제거됨.
     WINBACK("💫 새로운 인연이 도착했어요", "오늘 밤 매칭에 당신의 자리를 남겨뒀어요. 지금 신청해보세요", false, NotificationCategory.MARKETING);
 
     private final String title;
