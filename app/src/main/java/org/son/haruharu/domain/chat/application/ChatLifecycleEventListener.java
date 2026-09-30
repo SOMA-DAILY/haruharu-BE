@@ -7,7 +7,6 @@ import org.son.haruharu.domain.chat.business.event.ChatRoomClosedEvent;
 import org.son.haruharu.infrastructure.stomp.StompDeliveryPort;
 import org.son.haruharu.domain.chat.business.event.MessageDeletedEvent;
 import org.son.haruharu.domain.chat.business.event.ReactionUpdatedEvent;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -47,17 +46,19 @@ public class ChatLifecycleEventListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void reactionUpdated(ReactionUpdatedEvent event) {
-        chatDeliveryService.deliverIfActive(event.chatRoomId(), () ->
-                messagingTemplate.convertAndSend(eventsTopic(event.chatRoomId()),
-                        new ReactionUpdatedPayload("REACTION_UPDATED", event.messageId(), event.counts())));
+        Long chatRoomId = event.chatRoomId();
+        chatDeliveryService.deliverIfActive(chatRoomId, () -> deliveryPort.sendToTopic(eventsTopic(chatRoomId),
+                new ReactionUpdatedPayload("REACTION_UPDATED", event.messageId(), event.counts()),
+                ChatRoomDeliveryGuard.activeRoom(chatRoomId)));
     }
 
     /** 운영 글 삭제(#457). 앱은 해당 말풍선을 '삭제된 메시지' 로 바꾼다. */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void messageDeleted(MessageDeletedEvent event) {
-        chatDeliveryService.deliverIfActive(event.chatRoomId(), () ->
-                messagingTemplate.convertAndSend(eventsTopic(event.chatRoomId()),
-                        new MessageDeletedPayload("MESSAGE_DELETED", event.messageId())));
+        Long chatRoomId = event.chatRoomId();
+        chatDeliveryService.deliverIfActive(chatRoomId, () -> deliveryPort.sendToTopic(eventsTopic(chatRoomId),
+                new MessageDeletedPayload("MESSAGE_DELETED", event.messageId()),
+                ChatRoomDeliveryGuard.activeRoom(chatRoomId)));
     }
 
     static String eventsTopic(Long chatRoomId) {

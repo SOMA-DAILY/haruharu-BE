@@ -43,7 +43,7 @@ class RedisStompDeliveryAdapterTest {
     RedisStompDeliveryAdapter adapter;
 
     private final ChatMessageBroadcast broadcast =
-            new ChatMessageBroadcast(1024L, 12L, 102L, "안녕", LocalDateTime.of(2026, 9, 26, 21, 0), null);
+            new ChatMessageBroadcast(1024L, 12L, 102L, "안녕", LocalDateTime.of(2026, 9, 26, 21, 0));
 
     @BeforeEach
     void setUp() {
