@@ -61,13 +61,14 @@ class AdminRoomCommandServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock AdminRoomReader adminRoomReader;
+    @Mock org.son.haruharu.domain.roomschedule.business.RoomScheduleService roomScheduleService;
 
     AdminRoomCommandService service;
 
     @BeforeEach
     void setUp() {
         service = new AdminRoomCommandService(roomService, roomInviteService, roomMissionSlotService,
-                roomMemberReader, roomMemberWriter, adminRoomReader);
+                roomMemberReader, roomMemberWriter, adminRoomReader, roomScheduleService);
     }
 
     private CreateAdminRoomCommand createCommand() {
@@ -77,7 +78,7 @@ class AdminRoomCommandServiceTest {
                 STARTS_AT.plusHours(63),
                 STARTS_AT.plusHours(64),
                 STARTS_AT.plusHours(72),
-                3, 6, null, true, slotCommands());
+                3, 6, null, true, slotCommands(), List.of());
     }
 
     private RoomInvite issuedInvite(String code) {

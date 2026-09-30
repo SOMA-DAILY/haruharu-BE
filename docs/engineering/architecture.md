@@ -71,7 +71,7 @@ app/src/main/java/org/son/haruharu/
 │               └── {Action}Request.java      # toCommand() 포함
 ├── config/                                   # Security·WebSocket·Scheduling·필터·OpenApi
 ├── handler/                                  # @RestControllerAdvice (GlobalExceptionHandler)
-├── infrastructure/scheduler/                 # cron (아직 배치 미전환분 잔존)
+├── infrastructure/scheduler/                 # cron (배치 미전환분 잔존 + 행 단위 claim 으로 멱등을 잡아 JobRepository 가 필요 없는 잡, 예: RoomScheduleDispatchScheduler)
 ├── batch/                                    # Spring Batch(#357). config/=공용 인프라(JDBC JobRepository·스키마), {job}/=Tasklet·JobConfig·@Scheduled 런처
 ├── demo/                                     # 심사용 데모(#352). prod 노출 O — 어드민 접근 코드로 게이트(@Profile 제한 두지 말 것)
 └── devsupport/                               # 개발 편의 API (운영 제외)

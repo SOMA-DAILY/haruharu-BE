@@ -19,7 +19,11 @@ public record AdminRoomDetailResponse(
         @Schema(description = "참여자 수", example = "6") int memberCount,
         @Schema(description = "여성 수", example = "3") int femaleCount,
         @Schema(description = "남성 수", example = "3") int maleCount,
-        @Schema(description = "참여자 목록") List<MemberView> members
+        @Schema(description = "참여자 목록") List<MemberView> members,
+        // #457: 방 편성 카드의 DAY 표기와 "최종 선택 이후 공개" 경고 계산용(추가만). 구 모델 방은 null.
+        @Schema(description = "방 시작 예정 시각", nullable = true) LocalDateTime startsAt,
+        @Schema(description = "최종선택 오픈 시각", nullable = true) LocalDateTime finalSelectionOpensAt,
+        @Schema(description = "방 종료 시각", nullable = true) LocalDateTime endsAt
 ) {
     public record MemberView(
             @Schema(description = "방 멤버 id", example = "10") Long memberId,

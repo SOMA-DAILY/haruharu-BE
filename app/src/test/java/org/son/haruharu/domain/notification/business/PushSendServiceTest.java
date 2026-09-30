@@ -96,6 +96,30 @@ class PushSendServiceTest {
     }
 
     @Test
+    @DisplayName("운영 글 푸시(ADMIN_MESSAGE)는 bodyArgs [제목, 본문] 이 제목과 본문에 따로 들어간다(#455)")
+    void givenAdminMessage_whenSend_thenTitleAndBodyUsePositionalArgs() {
+        given(deviceTokenReader.findAllByUserIds(List.of(1L)))
+                .willReturn(List.of(new DeviceToken(10L, 1L, "token-1")));
+        given(pushPort.send(any())).willReturn(List.of());
+
+        service.sendToUsers(List.of(1L), NotificationType.ADMIN_MESSAGE, Map.of(), "📢 하루 공지", "방 채팅에 새 공지가 올라왔어요");
+
+        ArgumentCaptor<PushMessage> captor = ArgumentCaptor.forClass(PushMessage.class);
+        then(pushPort).should().send(captor.capture());
+        assertThat(captor.getValue().title()).isEqualTo("📢 하루 공지");
+        assertThat(captor.getValue().body()).isEqualTo("방 채팅에 새 공지가 올라왔어요");
+    }
+
+    @Test
+    @DisplayName("새 타입 3종의 야간 예외는 답장(CHAT_REPLY)만 true 다(#455)")
+    void givenChatP0Types_thenOnlyReplyIsQuietHoursExempt() {
+        assertThat(NotificationType.CHAT_REPLY.quietHoursExempt()).isTrue();
+        assertThat(NotificationType.ADMIN_MESSAGE.quietHoursExempt()).isFalse();
+        assertThat(NotificationType.PROFILE_REVEAL.quietHoursExempt()).isFalse();
+        assertThat(String.format(NotificationType.CHAT_REPLY.body(), "선우")).isEqualTo("선우님이 답장했어요");
+    }
+
+    @Test
     @DisplayName("FCM이 UNREGISTERED로 응답한 토큰은 삭제하고 흐름은 계속된다")
     void givenUnregisteredTokens_whenSend_thenDeletesThem() {
         given(deviceTokenReader.findAllByUserIds(List.of(1L))).willReturn(List.of(
@@ -253,13 +277,13 @@ class PushSendServiceTest {
     // ===================== 야간 차단 예외(#446) =====================
 
     @Test
-    @DisplayName("야간 예외 타입은 채팅·영상 반응·영상 메시지·영상 업로드·질문 도착·답변 도착 6종뿐이다")
+    @DisplayName("야간 예외 타입은 채팅·영상 반응·영상 메시지·영상 업로드·질문 도착·답변 도착·답장(#455) 7종뿐이다")
     void givenNotificationTypes_whenInspectQuietHoursExempt_thenOnlyUserInteractionTypes() {
         assertThat(java.util.Arrays.stream(NotificationType.values()).filter(NotificationType::quietHoursExempt))
                 .containsExactlyInAnyOrder(
                         NotificationType.CHAT, NotificationType.REACTION_RECEIVED, NotificationType.VIDEO_REPLY,
                         NotificationType.VIDEO_UPLOADED, NotificationType.QUESTION_RECEIVED,
-                        NotificationType.QUESTION_ANSWERED);
+                        NotificationType.QUESTION_ANSWERED, NotificationType.CHAT_REPLY);
     }
 
     @Test

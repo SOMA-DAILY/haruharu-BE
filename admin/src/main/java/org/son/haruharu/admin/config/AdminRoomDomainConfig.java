@@ -1,5 +1,8 @@
 package org.son.haruharu.admin.config;
 
+import org.son.haruharu.domain.chat.implement.ChatMessageReader;
+import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
+import org.son.haruharu.domain.chat.storage.ChatMessageRepositoryImpl;
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.mission.implement.RoomMissionSettingWriter;
 import org.son.haruharu.domain.mission.implement.RoomMissionSlotWriter;
@@ -19,6 +22,10 @@ import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.son.haruharu.domain.room.storage.RoomInviteRepositoryImpl;
 import org.son.haruharu.domain.room.storage.RoomMemberRepositoryImpl;
 import org.son.haruharu.domain.room.storage.RoomRepositoryImpl;
+import org.son.haruharu.domain.roomschedule.business.RoomScheduleService;
+import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader;
+import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemWriter;
+import org.son.haruharu.domain.roomschedule.storage.RoomScheduleItemRepositoryImpl;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
@@ -56,7 +63,15 @@ import org.springframework.context.annotation.Import;
         RoomMemberRepositoryImpl.class,
         RoomInviteRepositoryImpl.class,
         RoomMissionSlotRepositoryImpl.class,
-        RoomMissionSettingRepositoryImpl.class
+        RoomMissionSettingRepositoryImpl.class,
+        // #457: 방 편성 저장(발송은 app 서버 잡) + 보낸 운영 글 삭제(chat_messages.admin_deleted_at).
+        RoomScheduleService.class,
+        RoomScheduleItemReader.class,
+        RoomScheduleItemWriter.class,
+        RoomScheduleItemRepositoryImpl.class,
+        ChatMessageReader.class,
+        ChatMessageWriter.class,
+        ChatMessageRepositoryImpl.class
 })
 public class AdminRoomDomainConfig {
 }
