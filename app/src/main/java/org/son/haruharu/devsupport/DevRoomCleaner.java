@@ -53,6 +53,7 @@ public class DevRoomCleaner {
                 roomId);
         jdbcTemplate.update("DELETE FROM room_missions WHERE room_id = ?", roomId);
         jdbcTemplate.update("DELETE FROM room_mission_slots WHERE room_id = ?", roomId);
+        jdbcTemplate.update("DELETE FROM room_mission_settings WHERE room_id = ?", roomId);
         // 영상 업로드 세션은 게시물·멤버를 모두 참조하므로 가장 먼저 지운다.
         jdbcTemplate.update("DELETE FROM video_upload_sessions WHERE room_id = ?", roomId);
         // 영상(리액션 → 포스트)

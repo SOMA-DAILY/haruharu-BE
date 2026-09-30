@@ -69,7 +69,7 @@ class AdminRoomScheduleApiIntegrationTest {
         slots.append("]");
         return """
                 {"starts_at":"%s","final_selection_opens_at":"%s","final_selection_closes_at":"%s",
-                 "result_at":"%s","ends_at":"%s","total_days":3,"max_uses":6,"mission_slots":%s,
+                 "result_at":"%s","ends_at":"%s","total_days":3,"max_uses":6,"mission_enabled":true,"mission_slots":%s,
                  "chat_schedule":%s}
                 """.formatted(startsAt, startsAt.plusHours(60), startsAt.plusHours(63), startsAt.plusHours(64),
                 startsAt.plusHours(72), slots, chatSchedule);
