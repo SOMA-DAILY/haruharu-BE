@@ -27,7 +27,8 @@ public record FeedResponse(List<SlotStatus> slots, List<FeedItem> posts, LocalDa
             String caption,
             LocalDateTime createdAt,
             List<ReactionTally> reactionCounts,
-            String myReaction
+            String myReaction,
+            String feedVideoUrl
     ) {}
 
     /** 반응 이모지 한 종의 집계. type=ReactionType.name(), emoji=표시 이모지, count=반응 수(>0). */

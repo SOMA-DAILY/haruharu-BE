@@ -92,6 +92,8 @@ public class VideoService {
         LocalDateTime slotStart = SlotClock.currentSlotStart(room.startsAt(), now);
         validateOwnUrl(userId, command.videoUrl());
 
+        // 업로드 세션 게시(VideoUploadSessionService)와 같은 멤버 락으로 검사·저장을 직렬화해 슬롯당 1개를 지킨다.
+        roomMemberReader.lockById(member.id());
         if (videoPostReader.hasActiveUpload(member.id(), slotStart)) {
             throw new DuplicateSlotUploadException();
         }
