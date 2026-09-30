@@ -11,7 +11,8 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
  * STOMP over WebSocket 설정.
  * - 핸드셰이크 엔드포인트: /ws-chat (JWT 인증은 StompAuthChannelInterceptor의 CONNECT 처리에서)
  * - 구독: /sub/**(토픽), /user/queue/**(개인 큐 — 에러 프레임), 발행: /pub/**
- * - SimpleBroker(인메모리) 사용 — 단일 인스턴스 전제. 스케일아웃 시 브로커 릴레이 필요(#89).
+ * - SimpleBroker(인메모리) 사용 — 구독은 인스턴스별. 다중 인스턴스는 Redis Pub/Sub 팬아웃으로 전달한다
+ *   (haruharu.chat.fanout.redis.enabled, #453 — infrastructure/stomp).
  */
 @Configuration
 @EnableWebSocketMessageBroker

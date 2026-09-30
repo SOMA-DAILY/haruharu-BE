@@ -18,6 +18,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-batch'
+    // STOMP 멀티 인스턴스 팬아웃(#453) — Redis Pub/Sub(Lettuce)
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     // API 문서
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
