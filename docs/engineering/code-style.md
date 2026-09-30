@@ -56,7 +56,8 @@ public record ApiResponse<T>(
     }
 }
 
-public record ApiErrorDetail(String code, String message) {}
+public record ApiErrorDetail(String code, String message,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<ApiFieldError> fields) {}  // fields 는 VALIDATION_ERROR 만
 ```
 
 `GlobalExceptionHandler`에서는 `ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage()))` 패턴을 사용한다.

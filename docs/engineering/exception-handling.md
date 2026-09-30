@@ -61,6 +61,23 @@ throw new UserAlreadyExistsException();
 throw new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니다.");
 ```
 
+## 칸별 검증 400: VALIDATION_ERROR
+
+요청 칸마다 다른 메시지를 화면에 붙여야 하는 검증(방 온보딩 프로필, 방 편성)은 Bean Validation 대신 도메인 객체가 검증하고
+`FieldValidationException` 을 상속한 예외를 던진다. 응답은 `error.code = "VALIDATION_ERROR"`, `error.fields = [{ "field", "message" }]`
+(field 는 요청 JSON 키, snake_case). 단순 `@Valid` 위반은 그대로 `INVALID_INPUT` 이고 `fields` 가 없다.
+
+```java
+public record ApiErrorDetail(String code, String message,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<ApiFieldError> fields) {}
+public record ApiFieldError(String field, String message) {}
+
+// domain/profile/implement/exception/InvalidRoomProfileException.java
+public class InvalidRoomProfileException extends FieldValidationException {
+    public InvalidRoomProfileException(List<ApiFieldError> fieldErrors) { super(fieldErrors); }
+}
+```
+
 ## GlobalExceptionHandler 처리 범위
 
 | 예외 | HTTP 상태 | 로그 레벨 |
@@ -70,6 +87,7 @@ throw new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니
 | `UnauthorizedException` | 401 | `warn` |
 | `ForbiddenException` | 403 | `warn` |
 | `ConflictException` | 409 | `warn` |
+| `FieldValidationException` | 400 | `warn` (필드명만 — 값은 PII). `error.fields` 포함 |
 | `MethodArgumentNotValidException` | 400 | `warn` (필드명만 — 값은 PII) |
 | `ConstraintViolationException` | 400 | `warn` |
 | `MethodArgumentTypeMismatchException` | 400 | `warn` (파라미터명만) |
