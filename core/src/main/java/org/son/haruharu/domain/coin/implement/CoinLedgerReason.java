@@ -20,6 +20,6 @@ public enum CoinLedgerReason {
     SIGNUP_BONUS,
     /** 일일 업로드 슬롯 완주 보상 적립 */
     UPLOAD_COMPLETION_REWARD,
-    /** 세션 미매칭 위로 구름 적립(#143) */
+    /** 세션 미매칭 위로 구름 적립(#143). 지급 흐름은 #464에서 제거했고 기존 원장 행 조회 호환용으로만 남긴다. */
     MATCH_CONSOLATION
 }

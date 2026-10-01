@@ -11,8 +11,6 @@ public interface CoinLedgerJpaRepository extends JpaRepository<CoinLedgerEntity,
 
     boolean existsByUserIdAndReason(Long userId, CoinLedgerReason reason);
 
-    boolean existsByUserIdAndReasonAndRefId(Long userId, CoinLedgerReason reason, String refId);
-
     List<CoinLedgerEntity> findByUserIdOrderByCreatedAtDescIdDesc(Long userId, Pageable pageable);
 
     List<CoinLedgerEntity> findByUserIdAndCreatedAtLessThanOrderByCreatedAtDescIdDesc(

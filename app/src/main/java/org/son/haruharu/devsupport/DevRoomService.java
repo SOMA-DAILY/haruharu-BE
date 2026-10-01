@@ -11,7 +11,6 @@ import org.son.haruharu.devsupport.exception.InvalidDevMembersException;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
-import org.son.haruharu.domain.room.business.ConsolationRewardService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
@@ -48,14 +47,13 @@ public class DevRoomService {
     private final RoomReader roomReader;
     private final RoomWriter roomWriter;
     private final RoomMemberWriter roomMemberWriter;
-    private final ConsolationRewardService consolationRewardService;
     private final RoomMissionSlotService roomMissionSlotService;
     private final DevRoomCleaner devRoomCleaner;
     private final AdjustableClock adjustableClock;
 
     public DevRoomService(IdentityService identityService, RoomService roomService,
                           RoomReader roomReader, RoomWriter roomWriter,
-                          RoomMemberWriter roomMemberWriter, ConsolationRewardService consolationRewardService,
+                          RoomMemberWriter roomMemberWriter,
                           RoomMissionSlotService roomMissionSlotService,
                           DevRoomCleaner devRoomCleaner, AdjustableClock adjustableClock) {
         this.identityService = identityService;
@@ -63,7 +61,6 @@ public class DevRoomService {
         this.roomReader = roomReader;
         this.roomWriter = roomWriter;
         this.roomMemberWriter = roomMemberWriter;
-        this.consolationRewardService = consolationRewardService;
         this.roomMissionSlotService = roomMissionSlotService;
         this.devRoomCleaner = devRoomCleaner;
         this.adjustableClock = adjustableClock;
@@ -132,12 +129,6 @@ public class DevRoomService {
     public void terminateRoom(Long roomId) {
         Room room = getActiveRoom(roomId);
         roomWriter.save(room.ended(LocalDateTime.now(adjustableClock)));
-    }
-
-    /** 위로 구름 수동 트리거 — 발표 시각이 지난 모든 ACTIVE 방 대상(기존 유스케이스 그대로). */
-    @Transactional
-    public int grantConsolation() {
-        return consolationRewardService.grantForAnnouncedRooms(LocalDateTime.now(adjustableClock));
     }
 
     /** 테스트 방과 파생 데이터(영상·선택·매치·채팅) 전체 삭제. */
