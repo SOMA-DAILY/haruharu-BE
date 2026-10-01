@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 
 /**
  * [dev·local 전용, #180] 테스트 방 즉시 생성 + 가상 시계 API.
@@ -66,13 +65,6 @@ public class DevSupportController {
     public ApiResponse<Void> terminateRoom(@PathVariable Long roomId) {
         devRoomService.terminateRoom(roomId);
         return ApiResponse.ok(null);
-    }
-
-    /** 발표 시각이 지난 모든 ACTIVE 방의 미매칭 멤버에게 위로 구름을 지급한다(가상 시각 기준). */
-    @Operation(summary = "위로 구름 수동 지급", description = "발표 시각(Day3 22:00) 지난 모든 ACTIVE 방의 미매칭 멤버에게 지급(22:00 배치 대체, 멱등).")
-    @PostMapping("/consolation")
-    public ApiResponse<Map<String, Integer>> grantConsolation() {
-        return ApiResponse.ok(Map.of("granted", devRoomService.grantConsolation()));
     }
 
     @Operation(summary = "가상 시계 상태 조회", description = "fixed=true면 고정 중. 테스트 시작 전 다른 사람이 쓰는 중인지 확인 용도.")

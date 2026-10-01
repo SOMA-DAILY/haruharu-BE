@@ -27,12 +27,4 @@ public record CoinCreditCommand(
         return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.SIGNUP_BONUS,
                 "SIGNUP_BONUS", String.valueOf(userId));
     }
-
-    /**
-     * 세션 미매칭 위로 구름 적립(#143). 리워드 버킷으로 적립하고, refId(roomId)로 유저·방당 1회 멱등을 보장한다.
-     */
-    public static CoinCreditCommand matchConsolation(Long userId, long amount, Long roomId) {
-        return new CoinCreditCommand(userId, CoinBucket.REWARD, amount, CoinLedgerReason.MATCH_CONSOLATION,
-                "ROOM", roomId.toString());
-    }
 }

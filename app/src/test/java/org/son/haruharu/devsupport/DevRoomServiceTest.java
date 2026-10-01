@@ -17,7 +17,6 @@ import org.son.haruharu.devsupport.exception.InvalidDevMembersException;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
-import org.son.haruharu.domain.room.business.ConsolationRewardService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -54,7 +53,6 @@ class DevRoomServiceTest {
     @Mock RoomReader roomReader;
     @Mock RoomWriter roomWriter;
     @Mock RoomMemberWriter roomMemberWriter;
-    @Mock ConsolationRewardService consolationRewardService;
     @Mock RoomMissionSlotService roomMissionSlotService;
     @Mock DevRoomCleaner devRoomCleaner;
 
@@ -65,8 +63,7 @@ class DevRoomServiceTest {
     void setUp() {
         adjustableClock = new AdjustableClock(Clock.fixed(REAL_NOW.atZone(SEOUL).toInstant(), SEOUL));
         devRoomService = new DevRoomService(identityService, roomService, roomReader, roomWriter,
-                roomMemberWriter, consolationRewardService,
-                roomMissionSlotService, devRoomCleaner, adjustableClock);
+                roomMemberWriter, roomMissionSlotService, devRoomCleaner, adjustableClock);
     }
 
     private void givenVerifiedMembers(Long... userIds) {
@@ -255,7 +252,7 @@ class DevRoomServiceTest {
                 .isInstanceOf(DevRoomNotActiveException.class);
     }
 
-    // ── terminate / consolation ─────────────────────
+    // ── terminate ─────────────────────
 
     @Test
     @DisplayName("ACTIVE 방을 수동 종료하면 ENDED로 저장된다")
@@ -278,18 +275,6 @@ class DevRoomServiceTest {
 
         assertThatThrownBy(() -> devRoomService.terminateRoom(1L))
                 .isInstanceOf(DevRoomNotActiveException.class);
-    }
-
-    @Test
-    @DisplayName("위로 구름 수동 트리거는 가상 시각 기준으로 기존 유스케이스를 호출한다")
-    void givenFixedClock_whenGrantConsolation_thenDelegatesWithVirtualNow() {
-        LocalDateTime virtual = LocalDateTime.of(2026, 7, 10, 22, 30);
-        adjustableClock.fix(virtual);
-        given(consolationRewardService.grantForAnnouncedRooms(virtual)).willReturn(4);
-
-        int granted = devRoomService.grantConsolation();
-
-        assertThat(granted).isEqualTo(4);
     }
 
 }

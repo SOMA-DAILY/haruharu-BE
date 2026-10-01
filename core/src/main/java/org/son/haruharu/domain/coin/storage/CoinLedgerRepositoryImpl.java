@@ -33,11 +33,6 @@ public class CoinLedgerRepositoryImpl implements CoinLedgerRepository {
     }
 
     @Override
-    public boolean existsByUserIdAndReasonAndRefId(Long userId, CoinLedgerReason reason, String refId) {
-        return jpaRepository.existsByUserIdAndReasonAndRefId(userId, reason, refId);
-    }
-
-    @Override
     public List<CoinLedger> findPage(Long userId, LocalDateTime before, int limit) {
         PageRequest page = PageRequest.of(0, limit);
         List<CoinLedgerEntity> rows = (before == null)

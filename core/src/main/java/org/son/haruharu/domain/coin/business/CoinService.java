@@ -80,20 +80,6 @@ public class CoinService {
     }
 
     /**
-     * 세션 미매칭 위로 구름 지급(#143). 유저·방당 1회만 지급하며(원장 MATCH_CONSOLATION + refId=roomId 존재 시 skip),
-     * 새로 지급했으면 true를 반환한다(호출측이 알림 대상 선별에 사용).
-     */
-    @Transactional
-    public boolean grantMatchConsolation(Long userId, Long roomId, long amount) {
-        if (coinLedgerReader.existsByUserIdAndReasonAndRefId(
-                userId, CoinLedgerReason.MATCH_CONSOLATION, roomId.toString())) {
-            return false;
-        }
-        credit(CoinCreditCommand.matchConsolation(userId, amount, roomId));
-        return true;
-    }
-
-    /**
      * 실결제(IAP 구매) 이력 존재 여부(#277). 결제 원장이 있는 계정은 실사용자로 판별하기 위함이다.
      */
     public boolean hasPurchaseHistory(Long userId) {

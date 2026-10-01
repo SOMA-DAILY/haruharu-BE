@@ -113,9 +113,6 @@ haruharu:
     enabled: false  # 코인 경제 비활성(#309 피벗). 가입 보너스·코인 API off. 되살릴 때만 true
   payment:
     enabled: false  # 결제(IAP) 비활성(#309 피벗). webhook·상품 API off. 되살릴 때만 true
-  room:
-    consolation-reward:
-      amount: 5
   # 채팅 P0(#455). 플래그는 기본 OFF 로 배포하고 앱 배포 뒤 켠다(지금 앱은 새 푸시 타입과 운영 말풍선을 모른다).
   chat:
     fanout:

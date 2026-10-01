@@ -57,7 +57,7 @@ class FinalSelectionResolveIntegrationTest {
 
         reconciler.reconcile(LocalDateTime.now());
 
-        assertThat(matchResultReader.hasMatch(m1.id())).isTrue();
+        assertThat(matchResultReader.findByMember(m1.id())).isPresent();
         assertThat(matchResultReader.isMatched(m1.id(), m2.id())).isTrue();
     }
 
@@ -92,6 +92,6 @@ class FinalSelectionResolveIntegrationTest {
 
         reconciler.reconcile(LocalDateTime.now());
 
-        assertThat(matchResultReader.hasMatch(m1.id())).isFalse();
+        assertThat(matchResultReader.findByMember(m1.id())).isEmpty();
     }
 }

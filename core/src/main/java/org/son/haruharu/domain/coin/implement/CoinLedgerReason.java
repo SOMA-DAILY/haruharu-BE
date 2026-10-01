@@ -19,7 +19,5 @@ public enum CoinLedgerReason {
     /** 첫 가입 보너스 적립 */
     SIGNUP_BONUS,
     /** 일일 업로드 슬롯 완주 보상 적립 */
-    UPLOAD_COMPLETION_REWARD,
-    /** 세션 미매칭 위로 구름 적립(#143) */
-    MATCH_CONSOLATION
+    UPLOAD_COMPLETION_REWARD
 }

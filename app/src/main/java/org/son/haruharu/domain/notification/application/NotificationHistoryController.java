@@ -28,7 +28,7 @@ public class NotificationHistoryController {
             description = "로그인 유저의 알림을 최신순 커서 페이지네이션으로 조회한다. 응답은 notifications 배열과 함께 "
                     + "next_cursor(다음 페이지 커서, 없으면 null), unread_count(안 읽은 알림 수)를 포함한다. "
                     + "각 알림의 payload는 type별 딥링크 키를 담는다 — roomId: ROOM_MATCHED·ROOM_STARTED·FINAL_SELECTION_OPEN·"
-                    + "MUTUAL_MATCH·SELECTED_BY_SOMEONE·MATCH_CONSOLATION / videoPostId: REACTION_RECEIVED / "
+                    + "MUTUAL_MATCH·SELECTED_BY_SOMEONE / videoPostId: REACTION_RECEIVED / "
                     + "chatRoomId: CHAT / 빈 객체: COIN_REFUNDED. 값은 전부 문자열.")
     @GetMapping
     public ApiResponse<NotificationsResponse> getNotifications(
