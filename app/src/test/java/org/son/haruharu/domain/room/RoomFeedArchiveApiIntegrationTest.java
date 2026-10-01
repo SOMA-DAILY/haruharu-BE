@@ -114,22 +114,36 @@ class RoomFeedArchiveApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("요청자가 업로드하지 않아도 타 멤버 공개 영상이 피드에 반환된다")
-    void givenOtherMemberPost_whenGetFeed_thenReturnsPost() throws Exception {
+    @DisplayName("현재 슬롯 영상만 기본 피드에 반환되고 이전 영상은 과거 조회로 볼 수 있다")
+    void givenCurrentAndPastPosts_whenGetFeed_thenSeparatesCurrentAndArchive() throws Exception {
         Long otherUserId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null)))
                 .toDomain().id();
         RoomMember other = roomMemberWriter.save(RoomMember.of(roomId, otherUserId, "FEMALE", null, startsAt));
-        LocalDateTime postSlot = startsAt.plusHours(5);
+        LocalDateTime postSlot = startsAt.plusHours(6);
         videoPostJpaRepository.save(VideoPostEntity.from(
-                VideoPost.create(other.id(), postSlot, null, "hello", "video-key", "thumb-key", startsAt.plusHours(5))));
+                VideoPost.create(other.id(), postSlot, null, "hello", "video-key", "thumb-key", postSlot)));
+        videoPostJpaRepository.save(VideoPostEntity.from(
+                VideoPost.create(other.id(), postSlot.minusHours(1), null, "past", "past-video-key", null,
+                        postSlot.minusMinutes(20))));
         given(s3StoragePort.createPresignedGetUrl(anyString())).willAnswer(invocation ->
                 "signed:" + invocation.getArgument(0, String.class));
 
-        mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId).header("Authorization", "Bearer " + token))
+        String feed = mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId)
+                        .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.slots.length()").value(1))
                 .andExpect(jsonPath("$.data.slots[*].locked").value(org.hamcrest.Matchers.everyItem(
                         org.hamcrest.Matchers.is(false))))
                 .andExpect(jsonPath("$.data.posts.length()").value(1))
-                .andExpect(jsonPath("$.data.posts[0].video_url").value("signed:video-key"));
+                .andExpect(jsonPath("$.data.posts[0].video_url").value("signed:video-key"))
+                .andReturn().getResponse().getContentAsString();
+        String cursor = JsonPath.read(feed, "$.data.next_cursor");
+        mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId)
+                        .param("before", cursor)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.posts.length()").value(1))
+                .andExpect(jsonPath("$.data.posts[0].video_url").value("signed:past-video-key"))
+                .andExpect(jsonPath("$.data.slots[0].current").value(false));
     }
 }

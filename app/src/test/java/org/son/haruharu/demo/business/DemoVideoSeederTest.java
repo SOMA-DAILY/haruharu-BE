@@ -33,7 +33,7 @@ class DemoVideoSeederTest {
     @DisplayName("과거 슬롯에 전 멤버의 영상을 심고 현재 슬롯은 비운다")
     void givenPastSlots_whenSeed_thenSeedsAllMembersExceptCurrent() {
         DemoVideoSeeder seeder = new DemoVideoSeeder(videoPostWriter, VIDEO_URL, THUMB_URL);
-        // startsAt=10:00, now=12:00 → 노출 창 [10,11,12], 현재=12:00 → 과거 슬롯 [10:00, 11:00]
+        // startsAt=10:00, now=12:00 → 현재=12:00 → 직전 두 과거 슬롯 [10:00, 11:00]
         LocalDateTime startsAt = LocalDateTime.of(2026, 6, 24, 10, 0);
         LocalDateTime now = LocalDateTime.of(2026, 6, 24, 12, 0);
 

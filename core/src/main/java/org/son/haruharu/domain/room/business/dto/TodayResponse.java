@@ -8,7 +8,7 @@ import org.son.haruharu.domain.room.implement.Room;
 
 /**
  * 오늘 화면: 공개 가능한 영상이 있는 시간대와 ACTIVE 현재 촬영 시간대를 담은 슬롯 목록 + 내 업로드 진행.
- * 원본 노출 창(slot_start 기준 최근 3시간)의 빈 비현재 슬롯은 제외한다.
+ * 원본 노출 창(slot_start 기준 현재 1시간)의 빈 비현재 슬롯은 제외한다.
  * 슬롯이 없는 상태(시작 전·종료 등)면 slots는 빈 목록.
  * JSON 직렬화는 전역 SNAKE_CASE 설정을 따른다.
  * MVP: 미션 비활성화로 미션 후보(missionCandidates)는 응답에서 제외.

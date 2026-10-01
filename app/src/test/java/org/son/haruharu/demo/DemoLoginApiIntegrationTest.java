@@ -108,8 +108,20 @@ class DemoLoginApiIntegrationTest {
                 .andExpect(jsonPath("$.data.members[?(@.me == true)].name_revealed",
                         org.hamcrest.Matchers.contains(false)));
 
-        // 데모 토큰으로 피드를 열면 과거 슬롯에 심어진 영상이 보인다(데모도 그 슬롯을 올려 게이트 통과).
-        mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId).header("Authorization", "Bearer " + accessToken))
+        // 기본 피드는 촬영용 현재 슬롯만 노출하고, 심어진 데모 영상은 과거 커서로 조회한다.
+        MvcResult feed = mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId)
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.posts").isEmpty())
+                .andExpect(jsonPath("$.data.slots.length()").value(1))
+                .andExpect(jsonPath("$.data.slots[0].current").value(true))
+                .andExpect(jsonPath("$.data.next_cursor").isNotEmpty())
+                .andReturn();
+        String cursor = jsonMapper.readTree(feed.getResponse().getContentAsString())
+                .get("data").get("next_cursor").asString();
+        mockMvc.perform(get("/api/v1/rooms/{id}/feed", roomId)
+                        .param("before", cursor)
+                        .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.posts").isNotEmpty());
 

@@ -35,8 +35,6 @@ class RoomTodayServiceTest {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final LocalDate DATE = LocalDate.of(2026, 6, 26);
     private static final LocalDateTime STARTS = DATE.atTime(20, 0);
-    private static final LocalDateTime S20 = DATE.atTime(20, 0);
-    private static final LocalDateTime S21 = DATE.atTime(21, 0);
     private static final LocalDateTime S22 = DATE.atTime(22, 0);
 
     @Mock RoomReader roomReader;
@@ -60,23 +58,23 @@ class RoomTodayServiceTest {
     }
 
     @Test
-    @DisplayName("공개 영상이 없는 지난 슬롯은 제외하고 빈 현재 슬롯은 유지한다")
-    void givenOnlyOneVisiblePastSlot_whenGetToday_thenOmitsEmptyPastAndKeepsCurrent() {
+    @DisplayName("오늘 화면은 현재 슬롯만 조회하고 반환한다")
+    void givenCurrentSlot_whenGetToday_thenReturnsCurrentOnly() {
         given(roomMemberReader.getByRoomIdAndUserId(100L, 1L)).willReturn(member(200L, 1L));
         given(roomReader.findById(100L)).willReturn(Optional.of(activeRoom()));
         given(roomMemberReader.getByRoomId(100L))
                 .willReturn(List.of(member(200L, 1L), member(201L, 2L)));
-        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S20, S21, S22)))
-                .willReturn(List.of(S21));
-        given(videoPostReader.getUploadedSlotStarts(200L, List.of(S21, S22))).willReturn(List.of());
+        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S22)))
+                .willReturn(List.of(S22));
+        given(videoPostReader.getUploadedSlotStarts(200L, List.of(S22))).willReturn(List.of());
 
         TodayResponse result = serviceAt(DATE.atTime(22, 10)).getToday(100L, 1L);
 
         assertThat(result.slots()).extracting(TodayResponse.SlotView::slotStart)
-                .containsExactly(S21, S22);
+                .containsExactly(S22);
         assertThat(result.slots()).extracting(TodayResponse.SlotView::openNow)
-                .containsExactly(false, true);
-        assertThat(result.totalSlots()).isEqualTo(2);
+                .containsExactly(true);
+        assertThat(result.totalSlots()).isEqualTo(1);
     }
 
     @Test
@@ -86,7 +84,7 @@ class RoomTodayServiceTest {
         given(roomReader.findById(100L)).willReturn(Optional.of(activeRoom()));
         given(roomMemberReader.getByRoomId(100L))
                 .willReturn(List.of(member(200L, 1L), member(201L, 2L)));
-        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S20, S21, S22)))
+        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S22)))
                 .willReturn(List.of());
         given(videoPostReader.getUploadedSlotStarts(200L, List.of(S22))).willReturn(List.of());
 
@@ -105,14 +103,14 @@ class RoomTodayServiceTest {
         given(roomReader.findById(100L)).willReturn(Optional.of(activeRoom()));
         given(roomMemberReader.getByRoomId(100L))
                 .willReturn(List.of(member(200L, 1L), member(201L, 2L)));
-        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S20, S21, S22)))
-                .willReturn(List.of(S20, S21, S22));
-        given(videoPostReader.getUploadedSlotStarts(eq(200L), anyList())).willReturn(List.of(S21));
+        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S22)))
+                .willReturn(List.of(S22));
+        given(videoPostReader.getUploadedSlotStarts(eq(200L), anyList())).willReturn(List.of(S22));
 
         TodayResponse result = serviceAt(DATE.atTime(22, 10)).getToday(100L, 1L);
 
         assertThat(result.slots()).extracting(TodayResponse.SlotView::uploaded)
-                .containsExactly(false, true, false);
+                .containsExactly(true);
         assertThat(result.uploadedCount()).isEqualTo(1);
     }
 
@@ -123,8 +121,8 @@ class RoomTodayServiceTest {
         given(roomReader.findById(100L)).willReturn(Optional.of(activeRoom()));
         given(roomMemberReader.getByRoomId(100L))
                 .willReturn(List.of(member(200L, 1L), member(201L, 2L)));
-        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S20, S21, S22)))
-                .willReturn(List.of(S20, S21, S22));
+        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S22)))
+                .willReturn(List.of(S22));
         given(videoPostReader.getUploadedSlotStarts(eq(200L), anyList())).willReturn(List.of());
 
         TodayResponse result = serviceAt(DATE.atTime(22, 10)).getToday(100L, 1L);
@@ -144,8 +142,8 @@ class RoomTodayServiceTest {
         given(roomReader.findById(100L)).willReturn(Optional.of(room));
         given(roomMemberReader.getByRoomId(100L))
                 .willReturn(List.of(member(200L, 1L), member(201L, 2L)));
-        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S20, S21, S22)))
-                .willReturn(List.of(S20, S21, S22));
+        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S22)))
+                .willReturn(List.of(S22));
         given(videoPostReader.getUploadedSlotStarts(eq(200L), anyList())).willReturn(List.of());
 
         TodayResponse result = serviceAt(DATE.atTime(22, 10)).getToday(100L, 1L);
@@ -174,24 +172,20 @@ class RoomTodayServiceTest {
     }
 
     @Test
-    @DisplayName("SELECTING 중에는 공개 영상이 있는 지난 슬롯만 유지하고 현재 슬롯은 없다")
-    void givenSelectingWithVisiblePast_whenGetToday_thenOmitsEmptyPastAndNoCurrent() {
+    @DisplayName("최종선택 시작 시 이전 슬롯은 만료되고 오늘 슬롯은 비어 있다")
+    void givenSelectionStarted_whenGetToday_thenNoSlots() {
         Room room = new Room(100L, RoomStatus.ACTIVE, DATE, 3, STARTS, null,
                 STARTS, DATE.atTime(22, 0), DATE.atTime(23, 0),
                 DATE.plusDays(1).atTime(0, 0), DATE.plusDays(1).atTime(1, 0));
         given(roomMemberReader.getByRoomIdAndUserId(100L, 1L)).willReturn(member(200L, 1L));
         given(roomReader.findById(100L)).willReturn(Optional.of(room));
-        given(roomMemberReader.getByRoomId(100L))
-                .willReturn(List.of(member(200L, 1L), member(201L, 2L)));
-        given(videoPostReader.getVisibleSlotStarts(List.of(200L, 201L), List.of(S20, S21)))
-                .willReturn(List.of(S21));
-        given(videoPostReader.getUploadedSlotStarts(200L, List.of(S21))).willReturn(List.of());
 
-        TodayResponse result = serviceAt(DATE.atTime(22, 10)).getToday(100L, 1L);
+        TodayResponse result = serviceAt(DATE.atTime(22, 0)).getToday(100L, 1L);
 
-        assertThat(result.slots()).extracting(TodayResponse.SlotView::slotStart)
-                .containsExactly(S21);
-        assertThat(result.slots()).noneMatch(TodayResponse.SlotView::openNow);
+        assertThat(result.slots()).isEmpty();
+        assertThat(result.totalSlots()).isZero();
+        assertThat(result.uploadedCount()).isZero();
+        org.mockito.Mockito.verifyNoInteractions(videoPostReader);
     }
 
     @Test
