@@ -18,9 +18,4 @@ public class ChatRoomWriter {
     public void delete(Long id) {
         chatRoomRepository.deleteById(id);
     }
-
-    /** 데모 정리 전용 하드삭제(#266). */
-    public void hardDeleteByMatchResultId(Long matchResultId) {
-        chatRoomRepository.hardDeleteByMatchResultId(matchResultId);
-    }
 }
