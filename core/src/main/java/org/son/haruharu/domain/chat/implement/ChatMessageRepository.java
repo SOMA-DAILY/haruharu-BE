@@ -29,7 +29,4 @@ public interface ChatMessageRepository {
     /** 운영자가 지웠지만 아직 MESSAGE_DELETED 를 방송하지 않은 메시지. */
     List<ChatMessage> findPendingDeleteBroadcasts(int limit);
     int markDeleteBroadcast(Long id, java.time.LocalDateTime now);
-
-    /** 데모 정리 전용 하드삭제(#266). 전역 soft-delete라 재시드 시 누적되므로 물리 삭제한다. */
-    void hardDeleteByChatRoomId(Long chatRoomId);
 }

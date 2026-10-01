@@ -79,9 +79,4 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     public int markDeleteBroadcast(Long id, java.time.LocalDateTime now) {
         return chatMessageJpaRepository.markDeleteBroadcast(id, now);
     }
-
-    @Override
-    public void hardDeleteByChatRoomId(Long chatRoomId) {
-        chatMessageJpaRepository.hardDeleteByChatRoomId(chatRoomId);
-    }
 }

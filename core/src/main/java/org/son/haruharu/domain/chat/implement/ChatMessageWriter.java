@@ -23,9 +23,4 @@ public class ChatMessageWriter {
     public boolean markDeleteBroadcast(Long id, java.time.LocalDateTime now) {
         return chatMessageRepository.markDeleteBroadcast(id, now) > 0;
     }
-
-    /** 데모 정리 전용 하드삭제(#266). */
-    public void hardDeleteByChatRoomId(Long chatRoomId) {
-        chatMessageRepository.hardDeleteByChatRoomId(chatRoomId);
-    }
 }

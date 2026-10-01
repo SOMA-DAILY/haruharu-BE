@@ -35,7 +35,6 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.video.storage",
         "org.son.haruharu.domain.chat.storage",
         "org.son.haruharu.domain.question.storage",
-        "org.son.haruharu.domain.demoaccess.storage",
         // #457: 방 편성
         "org.son.haruharu.domain.roomschedule.storage"
 })

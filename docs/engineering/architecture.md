@@ -73,7 +73,6 @@ app/src/main/java/org/son/haruharu/
 ├── handler/                                  # @RestControllerAdvice (GlobalExceptionHandler)
 ├── infrastructure/scheduler/                 # cron (배치 미전환분 잔존 + 행 단위 claim 으로 멱등을 잡아 JobRepository 가 필요 없는 잡, 예: RoomScheduleDispatchScheduler)
 ├── batch/                                    # Spring Batch(#357). config/=공용 인프라(JDBC JobRepository·스키마), {job}/=Tasklet·JobConfig·@Scheduled 런처
-├── demo/                                     # 심사용 데모(#352). prod 노출 O — 어드민 접근 코드로 게이트(@Profile 제한 두지 말 것)
 └── devsupport/                               # 개발 편의 API (운영 제외)
 
 admin/src/main/java/org/son/haruharu/admin/
@@ -273,7 +272,6 @@ public static UserEntity from(User user) {
 - `mission` — missions(카탈로그) · room_missions(인스턴스)
 - `notification` — device_tokens · notification_settings · notification_history (FCM)
 - `report` — reports
-- `demoaccess` — demo_access_codes. 심사용 데모 로그인 접근 코드 보관(#352, inert — core는 읽지도 분기도 안 함)
 
 **보류 (비활성 잔존, 삭제 X):**
 - `identity` — user_identities. PASS 실명인증 → 지연인증(성별/실명 필요 시점에만)

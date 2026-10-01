@@ -172,14 +172,6 @@ management:
     redis:
       enabled: false
 
-# 심사용 데모(#352). 데모 피드 영상은 고정 S3 자산 하나를 재사용한다(DB 행은 로그인 시점 생성).
-# video-url 미설정이면 영상 없이 촬영 CTA만 노출된다.
-demo:
-  provider-id: ${DEMO_PROVIDER_ID:haruharu-demo}
-  feed:
-    video-url: ${DEMO_FEED_VIDEO_URL:}
-    thumbnail-url: ${DEMO_FEED_THUMBNAIL_URL:https://picsum.photos/seed/haruharu-demo-feed/600/800}
-
 # 요청 단위 식별자를 모든 로그에 노출한다(#257). 값은 MdcLoggingFilter가 심는다.
 # traceId는 ALB가 주입한 X-Amzn-Trace-Id — ALB access log와 같은 키라 두 로그를 조인할 수 있다.
 # level 패턴을 오버라이드하는 방식은 Spring Boot 권장(Micrometer Tracing도 동일 방식).
