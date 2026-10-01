@@ -4,6 +4,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.storage.UserProfileEntity;
 import org.son.haruharu.domain.room.implement.Room;
@@ -129,10 +131,18 @@ class AdminRoomApiIntegrationTest {
                   "ends_at": "%s",
                   "total_days": 3,
                   "max_uses": 6,
+                  "mission_enabled": true,
                   "mission_slots": %s
                 }
                 """.formatted(startsAt, startsAt.plusHours(60), startsAt.plusHours(63),
                 startsAt.plusHours(64), startsAt.plusHours(72), missionSlots(startsAt));
+    }
+
+    /** 미션 꺼짐 요청. mission_slots 는 생략하거나(null) 빈 배열로 보낸다. */
+    private static String missionDisabledBody(LocalDateTime startsAt, boolean omitSlots) {
+        return createRoomBody(startsAt).replace(
+                "\"mission_enabled\": true,\n  \"mission_slots\": " + missionSlots(startsAt).stripTrailing(),
+                omitSlots ? "\"mission_enabled\": false" : "\"mission_enabled\": false,\n  \"mission_slots\": []");
     }
 
     private static String missionSlots(LocalDateTime startsAt) {
@@ -168,11 +178,74 @@ class AdminRoomApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         Long roomId = com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
-        Long slotCount = em.createQuery(
+        assertThat(slotCountOf(roomId)).isEqualTo(6L);
+        assertThat(missionEnabledOf(roomId)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @DisplayName("mission_enabled=false 면 슬롯을 생략하거나 빈 배열로 보내도 미션 꺼진 방이 생성된다")
+    void givenMissionDisabled_whenCreateRoom_thenCreatesRoomWithoutSlots(boolean omitSlots) throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        String body = missionDisabledBody(startsAt, omitSlots);
+        assertThat(body).contains("\"mission_enabled\": false").doesNotContain("day_number");
+
+        String response = mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON).content(body)
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        Long roomId = com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
+        assertThat(slotCountOf(roomId)).isZero();
+        assertThat(missionEnabledOf(roomId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("mission_enabled 를 빠뜨리면 400 INVALID_INPUT")
+    void givenMissingMissionEnabled_whenCreateRoom_thenReturns400() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        String body = createRoomBody(startsAt).replace("\"mission_enabled\": true,\n", "");
+        assertThat(body).doesNotContain("mission_enabled");
+
+        mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON).content(body)
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("mission_enabled 와 슬롯이 어긋나면(켜짐+슬롯 없음, 꺼짐+슬롯 있음) 400 ROOM_MISSION_SLOT_INVALID_SCHEDULE")
+    void givenMismatchedMissionEnabledAndSlots_whenCreateRoom_thenReturns400() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        String enabledWithoutSlots = missionDisabledBody(startsAt, true)
+                .replace("\"mission_enabled\": false", "\"mission_enabled\": true");
+        String disabledWithSlots = createRoomBody(startsAt)
+                .replace("\"mission_enabled\": true", "\"mission_enabled\": false");
+
+        for (String body : List.of(enabledWithoutSlots, disabledWithSlots)) {
+            mockMvc.perform(post("/api/v1/admin/rooms")
+                            .contentType(MediaType.APPLICATION_JSON).content(body)
+                            .with(authentication(adminAuth())))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("ROOM_MISSION_SLOT_INVALID_SCHEDULE"));
+        }
+    }
+
+    private long slotCountOf(Long roomId) {
+        return em.createQuery(
                         "select count(s) from RoomMissionSlotEntity s where s.roomId = :roomId", Long.class)
                 .setParameter("roomId", roomId)
                 .getSingleResult();
-        assertThat(slotCount).isEqualTo(6L);
+    }
+
+    private boolean missionEnabledOf(Long roomId) {
+        return em.createQuery(
+                        "select s.missionEnabled from RoomMissionSettingEntity s where s.roomId = :roomId",
+                        Boolean.class)
+                .setParameter("roomId", roomId)
+                .getSingleResult();
     }
 
     @Test
@@ -223,6 +296,7 @@ class AdminRoomApiIntegrationTest {
                   "ends_at": "%s",
                   "total_days": 3,
                   "max_uses": 6,
+                  "mission_enabled": true,
                   "mission_slots": %s
                 }
                 """.formatted(startsAt, startsAt.minusHours(1), startsAt.plusDays(2),

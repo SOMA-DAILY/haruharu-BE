@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 현재 노출 중인 슬롯 창(slot_start 기준 최근 3시간)의 영상 피드. slots는 공개 가능한 영상이 있는 시간대와
+ * 현재 노출 중인 슬롯 창(slot_start 기준 현재 1시간)의 영상 피드. slots는 공개 가능한 영상이 있는 시간대와
  * ACTIVE 현재 촬영 시간대를 담는다(스토리형 좌/우 슬롯 이동 UI 대응). locked는 하위 호환 필드이며 항상 false다.
  * 각 post는 반응 이모지별 집계(reactionCounts, 0인 타입은 생략·enum 순서)와 내 반응(myReaction, 없으면 null)을 함께 노출한다.
  * userId는 작성자 신고(reported_user_id) 연결용. JSON은 전역 SNAKE_CASE.

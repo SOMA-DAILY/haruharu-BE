@@ -204,7 +204,7 @@ public class RoomController {
     }
 
     @Operation(summary = "현재 슬롯 창 영상 피드 조회",
-            description = "지금 노출 중인 슬롯 창(slot_start 기준 최근 3시간)의 영상 피드를 반환한다. "
+            description = "지금 노출 중인 슬롯 창(slot_start 기준 현재 1시간)의 영상 피드를 반환한다. "
                     + "slots는 공개 가능한 영상이 있는 시간대와 ACTIVE 현재 촬영 시간대를 담으며 locked는 하위 호환 필드로 항상 false다. "
                     + "현재 촬영 슬롯 여부(current, dots 촬영 CTA 대상 — ACTIVE일 때만 true), "
                     + "각 영상은 반응 집계(reaction_counts: [{type, emoji, count}] 배열 — 반응 0인 이모지 타입은 생략, ReactionType 선언 순서)와 "
@@ -212,7 +212,7 @@ public class RoomController {
     @GetMapping("/{roomId}/feed")
     public ApiResponse<FeedResponse> getFeed(@Parameter(description = "소개팅방 id", example = "1") @PathVariable Long roomId,
                                              @Parameter(description = "과거 회고 커서(#350). 이 slot_start 이전 슬롯을 조회한다. "
-                                                     + "빈 시간대를 포함한 원본 시간축 기준이며, 생략 시 현재 노출 창(최근 3시간)이다. "
+                                                     + "빈 시간대를 포함한 원본 시간축 기준이며, 생략 시 현재 노출 창(현재 슬롯 1시간)이다. "
                                                      + "응답의 next_cursor 를 넣어 이어 조회한다.",
                                                      example = "2026-06-26T20:00:00")
                                              @RequestParam(required = false)

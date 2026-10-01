@@ -54,11 +54,12 @@ public class AdminRoomCommandService {
         this.roomScheduleService = roomScheduleService;
     }
 
-    /** 방 + 미션 슬롯 + 코드 + 채팅 편성(#457) 생성. 검증·저장 실패 시 전체를 롤백한다(같은 트랜잭션). */
+    /** 방 + 미션 설정·슬롯(#449) + 코드 + 채팅 편성(#457) 생성. 검증·저장 실패 시 전체를 롤백한다(같은 트랜잭션). */
     @Transactional
     public AdminRoomCreatedResponse createRoomWithInvite(CreateAdminRoomCommand command, Long adminId) {
         Long roomId = roomService.createRoom(command.toRoomCommand());
-        roomMissionSlotService.createForRoom(roomId, command.totalDays(), command.startsAt(),
+        roomMissionSlotService.createForRoom(roomId, command.missionEnabled(),
+                command.totalDays(), command.startsAt(),
                 command.finalSelectionOpensAt(), command.missionSlots());
         RoomInvite invite = roomInviteService.issueFor(
                 roomId, command.maxUses(), command.inviteExpiresAt(), createdBy(adminId));

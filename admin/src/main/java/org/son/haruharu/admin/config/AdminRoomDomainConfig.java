@@ -4,7 +4,9 @@ import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.storage.ChatMessageRepositoryImpl;
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
+import org.son.haruharu.domain.mission.implement.RoomMissionSettingWriter;
 import org.son.haruharu.domain.mission.implement.RoomMissionSlotWriter;
+import org.son.haruharu.domain.mission.storage.RoomMissionSettingRepositoryImpl;
 import org.son.haruharu.domain.mission.storage.RoomMissionSlotRepositoryImpl;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.profile.storage.UserProfileRepositoryImpl;
@@ -52,6 +54,7 @@ import org.springframework.context.annotation.Import;
         RoomInviteWriter.class,
         InviteCodeGenerator.class,
         RoomMissionSlotWriter.class,
+        RoomMissionSettingWriter.class,
         // #392: RoomInviteService.join 이 프로필 gender 를 방 멤버로 스냅샷하는 데 필요.
         UserProfileReader.class,
         UserProfileRepositoryImpl.class,
@@ -60,6 +63,7 @@ import org.springframework.context.annotation.Import;
         RoomMemberRepositoryImpl.class,
         RoomInviteRepositoryImpl.class,
         RoomMissionSlotRepositoryImpl.class,
+        RoomMissionSettingRepositoryImpl.class,
         // #457: 방 편성 저장(발송은 app 서버 잡) + 보낸 운영 글 삭제(chat_messages.admin_deleted_at).
         RoomScheduleService.class,
         RoomScheduleItemReader.class,

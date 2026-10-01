@@ -21,6 +21,7 @@ public record CreateAdminRoomCommand(
         int totalDays,
         Integer maxUses,
         LocalDateTime inviteExpiresAt,
+        boolean missionEnabled,
         List<CreateRoomMissionSlotCommand> missionSlots,
         // 채팅 편성(#457). 비면 0줄.
         List<ScheduleItemCommand> chatSchedule

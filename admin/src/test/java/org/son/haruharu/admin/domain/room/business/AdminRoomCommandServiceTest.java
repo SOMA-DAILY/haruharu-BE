@@ -36,6 +36,7 @@ import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundExceptio
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -77,7 +78,7 @@ class AdminRoomCommandServiceTest {
                 STARTS_AT.plusHours(63),
                 STARTS_AT.plusHours(64),
                 STARTS_AT.plusHours(72),
-                3, 6, null, slotCommands(), List.of());
+                3, 6, null, true, slotCommands(), List.of());
     }
 
     private RoomInvite issuedInvite(String code) {
@@ -102,7 +103,7 @@ class AdminRoomCommandServiceTest {
         verify(roomService).createRoom(argThat(c ->
                 c.startsAt().equals(STARTS_AT) && c.totalDays() == 3));
         verify(roomMissionSlotService).createForRoom(
-                ROOM_ID, 3, STARTS_AT, STARTS_AT.plusHours(60), slotCommands());
+                ROOM_ID, true, 3, STARTS_AT, STARTS_AT.plusHours(60), slotCommands());
     }
 
     @Test
@@ -119,7 +120,7 @@ class AdminRoomCommandServiceTest {
     @DisplayName("미션 슬롯 검증에 실패하면 초대코드는 발급하지 않는다")
     void givenInvalidMissionSlots_whenCreateRoomWithInvite_thenThrowsAndNoInvite() {
         given(roomService.createRoom(any())).willReturn(ROOM_ID);
-        given(roomMissionSlotService.createForRoom(any(), anyInt(), any(), any(), anyList()))
+        given(roomMissionSlotService.createForRoom(any(), anyBoolean(), anyInt(), any(), any(), anyList()))
                 .willThrow(new InvalidRoomMissionSlotScheduleException());
 
         assertThatThrownBy(() -> service.createRoomWithInvite(createCommand(), ADMIN_ID))
