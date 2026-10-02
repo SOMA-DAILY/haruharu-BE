@@ -22,7 +22,7 @@ import java.util.Map;
  * 알림함(inboxVisible) 저장은 푸시 수신 설정과 무관하게 대상 유저 전원에게 남긴다.
  * 야간(QuietHoursProperties, 기본 00~08시 KST)에는 푸시만 건너뛰고 알림함 저장은 유지한다(#429).
  * 단 NotificationType.quietHoursExempt 타입(유저 간 실시간 상호작용)은 야간에도 푸시를 보낸다(#446).
- * 시각은 주입 Clock(ClockConfig, Asia/Seoul) 기준 — local·dev 에선 AdjustableClock 으로 야간을 흉내낼 수 있다.
+ * 시각은 주입 Clock(ClockConfig, Asia/Seoul) 기준이다.
  */
 @Slf4j
 @Service

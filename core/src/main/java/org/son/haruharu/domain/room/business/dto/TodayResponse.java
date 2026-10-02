@@ -15,7 +15,7 @@ import org.son.haruharu.domain.room.implement.Room;
  *
  * 헤더 타이머는 '남은 시간'을 서버가 계산하지 않고, 다음 전환 절대시각(timerTargetAt)만 내려
  * 클라가 자체 시계로 카운트다운한다(홈의 applyDeadlineAt/confirmAt과 동일 철학).
- * now는 응답 생성 시점 기준 시각(주입 Clock, dev 가상 시계 반영) — 클라 카운트다운의 기기 시계 오차 보정 기준.
+ * now는 응답 생성 시점 기준 시각(주입 Clock) — 클라 카운트다운의 기기 시계 오차 보정 기준.
  * timerType으로 라벨을 구분한다: NEXT_SLOT="다음 시간대", DEADLINE="마감".
  * currentDay는 방 진행 일차 표시용(room 레벨).
  */

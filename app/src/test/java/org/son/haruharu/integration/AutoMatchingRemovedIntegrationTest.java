@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserStatus;
 import org.son.haruharu.domain.user.storage.UserEntity;
@@ -91,20 +92,26 @@ class AutoMatchingRemovedIntegrationTest {
         }
     }
 
-    @Test
-    @DisplayName("개발 API가 활성인 로컬 서버에서도 자동매칭 수동 실행 API는 없다")
-    void givenLocalProfile_whenHttpCallsDevApi_thenOnlyMatchingRunIsRemoved() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+            "POST, /api/v1/dev/rooms",
+            "DELETE, /api/v1/dev/rooms/1",
+            "PUT, /api/v1/dev/rooms/1/time",
+            "POST, /api/v1/dev/rooms/1/terminate",
+            "GET, /api/v1/dev/clock",
+            "DELETE, /api/v1/dev/clock",
+            "POST, /api/v1/dev/matching/run"
+    })
+    @DisplayName("로컬 서버에서도 폐기된 개발 API는 인증된 HTTP 요청에 404를 반환한다")
+    void givenLocalProfile_whenHttpCallsRemovedDevApi_thenNotFound(String method, String path) throws Exception {
         Long userId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null)))
                 .toDomain().id();
-        String authorization = "Bearer " + jwtProvider.generateAccessToken(userId);
-        HttpRequest clock = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/dev/clock"))
-                .header("Authorization", authorization).GET().build();
-        HttpRequest matching = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/dev/matching/run"))
-                .header("Authorization", authorization).POST(HttpRequest.BodyPublishers.noBody()).build();
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header("Authorization", "Bearer " + jwtProvider.generateAccessToken(userId))
+                .method(method, HttpRequest.BodyPublishers.noBody()).build();
 
         try (HttpClient client = HttpClient.newHttpClient()) {
-            assertThat(client.send(clock, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(200);
-            assertThat(client.send(matching, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(404);
+            assertThat(client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(404);
         }
     }
 }

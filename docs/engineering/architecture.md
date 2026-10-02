@@ -72,8 +72,7 @@ app/src/main/java/org/son/haruharu/
 ├── config/                                   # Security·WebSocket·Scheduling·필터·OpenApi
 ├── handler/                                  # @RestControllerAdvice (GlobalExceptionHandler)
 ├── infrastructure/scheduler/                 # cron (배치 미전환분 잔존 + 행 단위 claim 으로 멱등을 잡아 JobRepository 가 필요 없는 잡, 예: RoomScheduleDispatchScheduler)
-├── batch/                                    # Spring Batch(#357). config/=공용 인프라(JDBC JobRepository·스키마), {job}/=Tasklet·JobConfig·@Scheduled 런처
-└── devsupport/                               # 개발 편의 API (운영 제외)
+└── batch/                                    # Spring Batch(#357). config/=공용 인프라(JDBC JobRepository·스키마), {job}/=Tasklet·JobConfig·@Scheduled 런처
 
 admin/src/main/java/org/son/haruharu/admin/
 ├── AdminApplication.java                     # @SpringBootApplication
