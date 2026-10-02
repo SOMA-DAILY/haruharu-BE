@@ -91,6 +91,10 @@ haruharu:
     slot-start:
       enabled: ${SLOT_START_NOTIFICATION_ENABLED:true}
       cron: ${SLOT_START_NOTIFICATION_CRON:15 0 * * * *}
+  room:
+    reconcile:
+      enabled: ${ROOM_RECONCILE_ENABLED:true}
+      cron: ${ROOM_RECONCILE_CRON:45 */5 * * * *}
   mission:
     assignment:
       enabled: ${MISSION_ASSIGNMENT_ENABLED:true}
