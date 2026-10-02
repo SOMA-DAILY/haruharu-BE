@@ -101,7 +101,7 @@ class HomeServiceTest {
     }
 
     @Test
-    @DisplayName("응답 now는 주입된 Clock 기준 시각이다(dev 가상 시계 반영)")
+    @DisplayName("응답 now는 주입된 Clock 기준 시각이다")
     void givenFixedClock_whenGetHome_thenNowFromClock() {
         HomeService service = serviceAt("2026-07-05T01:00:00Z"); // 10:00 KST
         stub(null, null);

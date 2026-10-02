@@ -36,10 +36,6 @@ import java.time.temporal.ChronoUnit;
 
 /**
  * 인증·세션 관리. 토큰 만료 시각만은 주입 Clock이 아니라 시스템 시각을 기준으로 삼는다(#296).
- * ClockConfig가 "시간 구동 로직은 Clock을 주입받는다"고 규정하지만 여기는 의도적 예외다 —
- * local·dev의 AdjustableClock(#180)으로 가상 시각을 앞당겨 방 진행·슬롯·최종선택을 테스트할 때
- * 토큰 만료까지 딸려가면 로그인 세션이 풀려 테스트가 불가능해진다. 운영 프로필의 Clock은
- * Clock.system(Asia/Seoul)이라 시스템 시각과 동일하므로 운영 동작 차이는 없다.
  */
 @Slf4j
 @Service
@@ -95,8 +91,7 @@ public class AuthService {
      * 주의: 이 returning 판정이 보너스 재지급을 막는 유일한 지점이다 — grantSignupBonus 의 멱등성은
      * userId 기준이라 재가입으로 새 userId 가 생기면 무력하다.
      * threshold 에 주입 Clock 이 아닌 시스템 시각을 쓰는 이유: 비교 대상인 deleted_at 은 Hibernate
-     * @SoftDelete(TIMESTAMP) 가 시스템 클록으로 찍는다. local·dev 의 AdjustableClock(#180)으로 가상 시각을
-     * 과거 고정한 상태라면 now(clock) 기준으로는 파기 대상이 0건이 되어 복귀 유저를 신규로 오판(보너스 재지급)한다.
+     * @SoftDelete(TIMESTAMP)가 시스템 시각으로 기록하므로 같은 기준으로 비교한다.
      */
     private User signup(String providerType, String providerId) {
         boolean returning = userCredentialWriter.purgeWithdrawnBefore(
