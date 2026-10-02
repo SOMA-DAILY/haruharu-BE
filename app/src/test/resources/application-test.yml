@@ -46,6 +46,10 @@ haruharu:
       enabled: false
     outcome:
       enabled: false
+  # 테스트 중 cron 이 실제 잡을 띄워 테스트 데이터와 경합하지 않게 런처만 끈다(잡 빈은 그대로라 직접 실행 테스트는 가능).
+  room:
+    reconcile:
+      enabled: false
   coin:
     enabled: true
   payment:

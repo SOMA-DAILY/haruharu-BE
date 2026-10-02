@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * status reconciler end-to-end(#320). 실제 DB(JPA)를 거쳐 저장 status 컬럼이 시각 기준으로 전이되는지 검증한다.
- * 스케줄러({@code RoomReconcileScheduler})는 시각 판단 없이 호출만 하는 얇은 래퍼라 여기서 다루지 않는다.
+ * 배치 잡({@code roomReconcileJob})은 시각 판단 없이 호출만 하는 얇은 래퍼라 여기서 다루지 않는다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
