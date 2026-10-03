@@ -1,4 +1,4 @@
-"""하루하루 내부 배치 트리거 API(#389) 클라이언트의 순수 함수(#390).
+"""하루하루 내부 배치 트리거 API(#389) 클라이언트의 순수 함수(#390, #469).
 
 Airflow 런타임에 의존하지 않는 부분만 여기 둔다 — bucket 변환, 요청 구성, 응답 해석. DAG 파일은 이 함수들을
 HTTP 호출·XCom·Sensor 로 감쌀 뿐이다. 그래서 컨텍스트 없이 pytest 로 검증할 수 있다.
@@ -16,7 +16,9 @@ from zoneinfo import ZoneInfo
 
 from airflow.sdk.exceptions import AirflowException, AirflowFailException
 
-JOB_NAME = "notificationCleanupJob"
+# Spring Batch Job.getName() — 트리거 API 경로의 {jobName} 이자 BATCH_JOB_INSTANCE.JOB_NAME.
+NOTIFICATION_CLEANUP_JOB_NAME = "notificationCleanupJob"
+ROOM_RECONCILE_JOB_NAME = "roomReconcileJob"
 TOKEN_HEADER = "X-Internal-Token"
 KST = ZoneInfo("Asia/Seoul")
 
@@ -33,9 +35,28 @@ def bucket_for(run_after: datetime | None, data_interval_end: datetime | None = 
     둘 다 "실제로 도는 날"이 된다 — 앱의 @Scheduled 런처가 쓰던 ``LocalDate.now(Asia/Seoul)`` 와 같은 좌표계.
     ``logical_date`` 는 수동 실행에서 None 일 수 있어(AIP-83) 마지막 폴백으로만 쓴다.
     """
+    return _reference_kst(run_after, data_interval_end, logical_date).date().isoformat()
+
+
+def five_minute_bucket_for(run_after: datetime | None, data_interval_end: datetime | None = None,
+                           logical_date: datetime | None = None) -> str:
+    """이 DAG Run 이 담당하는 5분 구간 = KST 시각을 5분 단위로 내린 ``yyyy-MM-ddTHH:mm`` (#469).
+
+    앱 ``RoomReconcileJobLauncher`` 의 bucket(KST ``LocalDateTime`` 5분 내림 → ``toString()``, 초가 0 이라 초 표기 없음)과
+    **같은 문자열**이어야 한다. 그래야 앱 cron 폴백과 Airflow 가 같은 구간을 두고 JobInstance 하나로 수렴한다 —
+    문자열이 한 글자라도 다르면 별개 JobInstance 가 되어 같은 구간이 두 번 돈다.
+    스케줄 run 은 run_after 가 정확히 5분 경계(CronTriggerTimetable), 수동 run 은 트리거 시각이 속한 구간이 된다.
+    """
+    kst = _reference_kst(run_after, data_interval_end, logical_date)
+    floored = kst.replace(minute=kst.minute - kst.minute % 5, second=0, microsecond=0)
+    return floored.strftime("%Y-%m-%dT%H:%M")
+
+
+def _reference_kst(run_after: datetime | None, data_interval_end: datetime | None,
+                   logical_date: datetime | None) -> datetime:
     for candidate in (run_after, data_interval_end, logical_date):
         if candidate is not None:
-            return candidate.astimezone(KST).date().isoformat()
+            return candidate.astimezone(KST)
     raise AirflowFailException("bucket 을 정할 날짜가 없다 (run_after/data_interval_end/logical_date 모두 None)")
 
 

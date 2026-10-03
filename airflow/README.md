@@ -1,4 +1,4 @@
-# Airflow — 하루하루 배치 지휘 (#390)
+# Airflow — 하루하루 배치 지휘 (#390, #469)
 
 Apache Airflow 3.3.1 로 Spring Batch 잡을 **지휘**하는 파일럿. Airflow 가 "언제·다시·기한"을 맡고, Spring Batch 가 "실제 실행과 이력"을 맡는다.
 첫 대상은 알림함 정리 잡(`notificationCleanupJob`)이다. Airflow 는 [#389 내부 배치 트리거 API](../app/src/main/java/org/son/haruharu/batch/api) 를 호출할 뿐 잡 로직을 모른다.
@@ -69,6 +69,7 @@ REST API(v2)는 `POST /auth/token {username,password}` 로 JWT 를 받아 `Autho
 | `HARUHARU_ALERT_SLACK_WEBHOOK_URL` | 비우면 알림은 로그로만. **Slack 또는 Discord** Incoming Webhook URL — URL 로 판별해 본문 형식(`text` / `content`, Discord 2000자)을 맞춘다(#411). 필드 화이트리스트만 전송(예외 원문·exit_message 는 싣지 않는다) |
 | `HARUHARU_CLEANUP_DEADLINE_MINUTES` | 데드라인(기본 15). 로컬 실험 시 1~2 |
 | `HARUHARU_ALERT_DEADLINE_INCLUDE_BACKFILL` | 기본 false. 백필 실행의 데드라인 초과(구조적으로 항상 초과)를 알릴지 |
+| `HARUHARU_RECONCILE_ALERT_PERIOD_MINUTES` | `room_reconcile` 실패 알림 주기(기본 30). '마지막 성공 이후 이 분' 부터 이 간격마다 한 번. 로컬 실험 시 5~10 |
 
 ## 알림은 어디까지 Airflow 가 하나
 
@@ -76,6 +77,7 @@ REST API(v2)는 `POST /auth/token {username,password}` 로 JWT 를 받아 `Autho
 |---|---|
 | 태스크 실패(재시도 소진), DAG Run 실패 | Airflow `on_failure_callback` → `haruharu_alerts.dag_failed` → 로그 + Slack/Discord 웹훅 |
 | 04:15 까지 미완료 | Airflow Deadline Alert → `haruharu_alerts.deadline_missed` (triggerer) |
+| `room_reconcile` 태스크 실패(재시도 소진) | 태스크 `on_failure_callback` → `haruharu_alerts.room_reconcile_task_failed` (scheduler) — 아래 억제 규칙 통과 시에만 웹훅 |
 | **Airflow 스케줄러/triggerer 자체가 죽음** | Airflow 는 못 알린다. ECS 헬스체크(`/api/v2/monitor/health`) + CloudWatch, 또는 Datadog 로그 부재 감지 — 인프라 이슈 |
 
 "감시자를 감시하는 건 한 단계 바깥에 둔다."
@@ -96,7 +98,44 @@ REST API(v2)는 `POST /auth/token {username,password}` 로 JWT 를 받아 `Autho
 - `wait_job` 의 조회 실패는 '아직 모름' 이다: 연결 오류·5xx·429·깨진 200 본문은 다음 poke 로 넘기고(10분 상한), 400/401/403/404 만 즉시 실패.
 - `start_job` 의 200/202 응답이 깨져 있으면(execution_id 없음) 재시도한다 — 서버는 이미 잡을 시작했을 수 있고, 멱등 재호출이 ID 를 돌려준다.
 - 데드라인 콜백은 triggerer 이벤트 루프에서 돈다. 동기 HTTP 는 `asyncio.to_thread` 로 내려 루프를 막지 않는다.
-- 시크릿 스코프: 배치 토큰(Connection)은 태스크를 실행하는 scheduler(LocalExecutor)에만, Slack 웹훅은 콜백을 실행하는 dag-processor·triggerer 에만 주입한다. `.env` 는 compose 치환에만 쓰고 컨테이너에 통째로 넣지 않는다.
+- 시크릿 스코프: 배치 토큰(Connection)은 태스크를 실행하는 scheduler(LocalExecutor)에만, Slack 웹훅은 콜백을 실행하는 dag-processor·triggerer·scheduler(`room_reconcile` 태스크 콜백, #469)에만 주입한다. `.env` 는 compose 치환에만 쓰고 컨테이너에 통째로 넣지 않는다.
+
+## 두 번째 DAG: `room_reconcile` (#469)
+
+방 status 전이 + 최종선택 동시공개 resolve 잡(`roomReconcileJob`, #466)을 5분마다 트리거한다.
+
+```text
+매 5분(KST) ──▶ start_job : POST .../jobs/roomReconcileJob/executions {"bucket": "2026-10-02T14:05"}  (HTTP 20s, retries 2, 대기 상한 30s)
+             ──▶ wait_job  : GET .../executions/{id} 15초 폴링(HTTP 10s), 90초 상한 (reschedule)
+             실패          : 태스크 on_failure_callback → 억제 규칙 통과 시에만 웹훅 (데드라인 없음)
+```
+
+| 항목 | `notification_cleanup` | `room_reconcile` |
+|---|---|---|
+| 주기 | 매일 04:00 | 매 5분 |
+| bucket | KST 날짜 `yyyy-MM-dd` (`bucket_for`) | KST 5분 내림 `yyyy-MM-ddTHH:mm` (`five_minute_bucket_for`) |
+| 앱 `@Scheduled` 런처 | **끔** (`NOTIFICATION_CLEANUP_SCHEDULER_ENABLED=false`) | **켜 둠** (`ROOM_RECONCILE_ENABLED=true`, 45초 `*/5`) — 폴백 |
+| 실패 알림 | DAG 콜백, run 마다 | 태스크 콜백, 장애 지속 시 주기당 1건 |
+| 데드라인 | logical_date + 15분 | 없음 — 대신 run 최악 소요 ≤ 4분(시도 3×20s + 대기 2×30s + 센서 90s + poke 10s = 220s)을 테스트로 고정 |
+| 백필 | 의미 있음(날짜별 정리) | 의미 없음(잡은 실제 시각으로 reconcile) — `catchup=False` |
+
+**앱 cron 을 끄지 않는 이유.** 이 잡은 매칭 성사(MatchResult·DIRECT 채팅·성사 푸시)를 포함한다. 앱 cron 을 끄면 Airflow 장애가 곧
+매칭 중단인데 Airflow 생존 감시는 아직 없다. 두 경로는 **같은 bucket 문자열**을 쓰므로 `BATCH_JOB_INSTANCE (JOB_NAME, JOB_KEY)` 유니크로
+구간당 한 번만 실행된다. Airflow 가 정각 직후, 앱이 45초에 발화하니 평소엔 Airflow 가 실행하고 앱은 `ALREADY_COMPLETED` 로 스킵한다.
+bucket 문자열이 한 글자라도 다르면 별개 JobInstance 가 되어 같은 구간이 두 번 돈다 — 그래서 양쪽 테스트가 같은 시각·같은 문자열을 고정한다
+(`RoomReconcileJobLauncherTest` ↔ `TestFiveMinuteBucketFor`).
+
+**알림 억제 (상태 없음).** 5분 DAG 를 run 마다 알리면 앱 장애 1시간에 12건이다. 태스크 컨텍스트의 `prev_start_date_success`
+(마지막 성공 run 의 시작 시각)로 `outage = 이번 logical_date − 그 시각` 을 구하고, `ti.get_previous_dagrun()` 으로 직전 run 의 outage 도 구해
+`floor(outage / period)`(period 기본 30분)가 **직전 run 보다 커진 run** — period 의 새 배수를 처음 넘은 run — 에서만 알린다 →
+장애 30·60·90분… 에 한 건씩. 좁은 시간 창(`outage % period < 5분`)으로 판단하면 run 이 밀려 10분 간격이 될 때 창을 계속 놓쳐
+지속 장애를 영영 못 알린다(Codex 리뷰로 발견) — 경계 통과로 판단해 run 간격과 무관하게 주기마다 한 번은 반드시 알린다.
+30분 안에 회복하면 알리지 않는다(그동안은 앱 cron 이 처리). 이전 성공이 아예 없으면 첫 실패와 이후 벽시계 period 경계마다,
+수동 run(`run_type=manual`, logical_date 를 지정한 API 트리거 포함)은 항상 알린다. pendulum 날짜 차이(`Interval`)는 `%`·`//` 가
+`AttributeError` 라 초 단위로만 계산한다. 이 값은 태스크 컨텍스트에만 있어서 **DAG 콜백이 아니라 태스크 콜백**이고,
+태스크 콜백은 태스크를 실행한 프로세스(LocalExecutor = scheduler)에서 돌므로 **웹훅을 scheduler 에도 주입**해야 한다.
+
+공통 HTTP 본문(`start_batch_job`·`poke_batch_execution`)과 Pool 은 `haruharu_tasks.py` 로 분리돼 두 DAG 가 공유한다.
 
 ## 운영 배포 (dev, #405)
 
@@ -115,3 +154,6 @@ REST API(v2)는 `POST /auth/token {username,password}` 로 JWT 를 받아 `Autho
 | 로그 | CloudWatch `/ecs/haruharu-airflow-dev` (스트림 prefix = 컨테이너명) |
 
 절차·롤백·감시 설정은 `haruharu-infra/airflow-dev-runbook.md`(레포 밖). prod 는 dev 안정 후 별도 이슈.
+
+> **#469 배포 시:** `room_reconcile` 실패 알림은 scheduler 컨테이너에서 나간다. 태스크 정의의 `airflow-scheduler` 컨테이너 secrets 에
+> `HARUHARU_ALERT_SLACK_WEBHOOK_URL`(dag-processor·triggerer 와 같은 키)을 추가해야 한다. 없으면 알림은 태스크 로그에만 남는다.
