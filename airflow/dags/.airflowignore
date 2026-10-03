@@ -1,4 +1,5 @@
 # DAG 가 아닌 공용 모듈 — dag-processor 가 DAG 파일로 파싱하지 않게 제외한다 (import 는 그대로 된다)
 haruharu_batch.py
 haruharu_alerts.py
+haruharu_tasks.py
 __pycache__/
