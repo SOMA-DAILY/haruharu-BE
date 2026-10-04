@@ -45,7 +45,7 @@ public record QuestionListResponse(
                             ? sentStatus(c, q)
                             : !c.open()
                                     ? "CLOSED"
-                                    : c.relatedUserIds().contains(p.userId()) || sent.size() >= 2
+                                    : c.relatedUserIds().contains(p.userId())
                                             ? "UNAVAILABLE"
                                             : "AVAILABLE";
             targets.add(
@@ -101,7 +101,7 @@ public record QuestionListResponse(
                 c.phase(),
                 c.opensAt(),
                 c.closesAt(),
-                c.open() && c.eligibleGender() ? Math.max(0, 2 - sent.size()) : 0,
+                (int) targets.stream().filter(t -> t.status().equals("AVAILABLE")).count(),
                 grantUnread,
                 event != null,
                 page.receivedCount(),

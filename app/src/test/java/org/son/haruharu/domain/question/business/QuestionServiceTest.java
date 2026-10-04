@@ -189,8 +189,8 @@ class QuestionServiceTest {
     }
 
     @Test
-    @DisplayName("질문권 2개와 상대별 1회 제한 및 요청 재시도를 보장한다")
-    void givenOpenRoom_whenSend_thenLimitAndIdempotency() {
+    @DisplayName("모든 이성 상대에게 한 번씩 질문하고 동일 요청 재시도는 중복 저장하지 않는다")
+    void givenOpenRoom_whenSend_thenPerTargetLimitAndIdempotency() {
         var command = new CreateQuestionCommand(11L, "안녕", UUID.randomUUID());
         var first = service.create(1L, 100L, command);
         assertThat(service.create(1L, 100L, command).id()).isEqualTo(first.id());
@@ -202,15 +202,38 @@ class QuestionServiceTest {
                                         new CreateQuestionCommand(11L, "다시", UUID.randomUUID())))
                 .hasMessageContaining("이미 질문");
         service.create(1L, 100L, new CreateQuestionCommand(12L, "안녕", UUID.randomUUID()));
-        assertThatThrownBy(
-                        () ->
-                                service.create(
-                                        1L,
-                                        100L,
-                                        new CreateQuestionCommand(13L, "안녕", UUID.randomUUID())))
-                .hasMessageContaining("질문권");
+        assertThat(service.list(1L, 100L).remainingCount()).isEqualTo(1);
+        assertThat(service.list(1L, 100L).targets())
+                .filteredOn(t -> t.roomMemberId().equals(13L))
+                .extracting(t -> t.status())
+                .containsExactly("AVAILABLE");
+        service.create(1L, 100L, new CreateQuestionCommand(13L, "안녕", UUID.randomUUID()));
+        assertThat(questions).hasSize(3);
+        assertThat(service.list(1L, 100L).targets())
+                .extracting(t -> t.questionId())
+                .doesNotContainNull();
         assertThat(service.list(1L, 100L).remainingCount()).isZero();
-        then(events).should(times(2)).publishEvent(any(QuestionCreatedEvent.class));
+        then(events).should(times(3)).publishEvent(any(QuestionCreatedEvent.class));
+    }
+
+    @Test
+    @DisplayName("남은 횟수는 차단·탈퇴·이미 전송한 상대를 제외한 실제 질문 가능 상대 수다")
+    void givenUnavailableAndSentTargets_whenList_thenCountOnlyAvailableTargets() {
+        assertThat(service.list(1L, 100L).remainingCount()).isEqualTo(3);
+        service.create(1L, 100L, new CreateQuestionCommand(11L, "안녕", UUID.randomUUID()));
+        given(blocks.getBlockedUserIds(100L)).willReturn(Set.of(102L));
+        given(blocks.getRelatedUserIds(100L)).willReturn(Set.of(102L, 103L));
+        assertThat(service.list(1L, 100L).remainingCount()).isZero();
+        given(blocks.getBlockedUserIds(100L)).willReturn(Set.of());
+        given(blocks.getRelatedUserIds(100L)).willReturn(Set.of());
+        willReturn(Set.of(100L, 101L, 102L)).given(users).findActiveIds(any());
+        assertThat(service.list(1L, 100L).remainingCount()).isEqualTo(1);
+        participants = participants.stream().filter(p -> !p.userId().equals(101L)).toList();
+        assertThat(service.list(1L, 100L).remainingCount()).isEqualTo(1);
+        assertThat(service.list(1L, 100L).targets())
+                .filteredOn(t -> t.roomMemberId().equals(11L))
+                .extracting(t -> t.status())
+                .containsExactly("CLOSED");
     }
 
     @Test
