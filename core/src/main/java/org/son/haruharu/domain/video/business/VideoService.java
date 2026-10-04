@@ -13,6 +13,8 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
+import org.son.haruharu.domain.video.business.command.VideoCaptionUpdateCommand;
+import org.son.haruharu.domain.video.business.dto.VideoCaptionResponse;
 import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
 import org.son.haruharu.domain.video.business.dto.VideoUploadUrlResponse;
 import org.son.haruharu.domain.video.business.exception.DuplicateSlotUploadException;
@@ -92,6 +94,8 @@ public class VideoService {
         LocalDateTime slotStart = SlotClock.currentSlotStart(room.startsAt(), now);
         validateOwnUrl(userId, command.videoUrl());
 
+        // 업로드 세션 게시(VideoUploadSessionService)와 같은 멤버 락으로 검사·저장을 직렬화해 슬롯당 1개를 지킨다.
+        roomMemberReader.lockById(member.id());
         if (videoPostReader.hasActiveUpload(member.id(), slotStart)) {
             throw new DuplicateSlotUploadException();
         }
@@ -120,6 +124,16 @@ public class VideoService {
         }
         videoPostWriter.save(post.deletedAt(LocalDateTime.now(clock)));
         // MVP: 미션 비활성화로 열쇠 지급 자체가 없어 회수 로직도 없다.
+    }
+
+    @Transactional
+    public VideoCaptionResponse updateCaption(Long userId, Long videoPostId, VideoCaptionUpdateCommand command) {
+        VideoPost post = videoPostReader.getEditableById(videoPostId);
+        RoomMember owner = roomMemberReader.getById(post.roomMemberId());
+        if (!owner.userId().equals(userId)) throw new NotVideoOwnerException();
+        VideoPost updated = post.withCaption(command.caption());
+        videoPostWriter.updateCaption(videoPostId, updated.caption());
+        return VideoCaptionResponse.from(updated);
     }
 
     private void validateOwnUrl(Long userId, String videoUrl) {
