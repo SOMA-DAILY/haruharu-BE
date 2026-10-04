@@ -32,4 +32,12 @@ public interface VideoPostJpaRepository extends JpaRepository<VideoPostEntity, L
     /** 한 멤버의 활성(비삭제·비숨김) 영상 전체를 slot_start 오름차순으로. 매칭 상대 프로필 카드용. */
     List<VideoPostEntity> findByRoomMemberIdAndDeletedAtIsNullAndIsHiddenFalseOrderBySlotStartAsc(
             Long roomMemberId);
+
+    /** 주어진 방의 멤버들 중에 해당 슬롯들에 활성(미삭제) 영상을 올린 멤버의 id **/
+    @Query("select distinct v.roomMemberId from VideoPostEntity v " +
+            "where v.roomMemberId in :roomMemberIds " +
+            "and v.slotStart in :slotStarts " +
+            "and v.deletedAt is null")
+    List<Long> findUploadedRoomMemberIds(@Param("roomMemberIds") List<Long> roomMemberIds,
+                                         @Param("slotStarts") List<LocalDateTime> slotStarts);
 }

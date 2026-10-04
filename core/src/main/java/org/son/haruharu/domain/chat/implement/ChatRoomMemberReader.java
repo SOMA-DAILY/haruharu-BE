@@ -18,6 +18,11 @@ public class ChatRoomMemberReader {
         return chatRoomMemberRepository.findByChatRoomIdAndUserId(chatRoomId, userId);
     }
 
+    /** 나가지 않은 멤버십만 반환한다. */
+    public Optional<ChatRoomMember> findActiveMembership(Long chatRoomId, Long userId) {
+        return findMembership(chatRoomId, userId).filter(member -> !member.hasLeft());
+    }
+
     public List<ChatRoomMember> findActiveByUserId(Long userId) {
         return chatRoomMemberRepository.findActiveByUserId(userId);
     }

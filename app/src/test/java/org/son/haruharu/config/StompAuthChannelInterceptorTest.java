@@ -124,6 +124,28 @@ class StompAuthChannelInterceptorTest {
     }
 
     @Test
+    @DisplayName("참여 중인 방의 이벤트 경로(/sub/chat-rooms/{id}/events) 구독은 허용된다(#456)")
+    void subscribe_toOwnRoomEvents_isAllowed() {
+        given(chatRoomMemberReader.findMembership(10L, 7L)).willReturn(Optional.of(member(10L, 7L)));
+        StompHeaderAccessor accessor = subscribeAccessor("/sub/chat-rooms/10/events", 7L);
+
+        assertThatCode(() -> interceptor().preSend(message(accessor), channel)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("참여하지 않은 방의 이벤트 경로와 그 밖의 하위 경로 구독은 거부된다(#456)")
+    void subscribe_toOthersRoomEventsOrOtherSuffix_throws() {
+        given(chatRoomMemberReader.findMembership(999L, 7L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> interceptor().preSend(message(subscribeAccessor("/sub/chat-rooms/999/events", 7L)), channel))
+                .isInstanceOf(StompAuthorizationException.class);
+        assertThatThrownBy(() -> interceptor().preSend(message(subscribeAccessor("/sub/chat-rooms/10/events/x", 7L)), channel))
+                .isInstanceOf(StompAuthorizationException.class);
+        assertThatThrownBy(() -> interceptor().preSend(message(subscribeAccessor("/sub/chat-rooms/*/events", 7L)), channel))
+                .isInstanceOf(StompAuthorizationException.class);
+    }
+
+    @Test
     @DisplayName("참여하지 않은 방 토픽 구독은 거부된다(엿듣기 차단)")
     void subscribe_toOthersRoom_throws() {
         given(chatRoomMemberReader.findMembership(999L, 7L)).willReturn(Optional.empty());

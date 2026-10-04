@@ -42,7 +42,7 @@ public class RoomStatusTransitionService {
         if (room == null || room.status() == RoomStatus.CANCELLED || room.status() == RoomStatus.ENDED) {
             return false;
         }
-        // 스케줄 시각이 없는 구 모델 방은 09:00 배치(RoomActivator/RoomTerminator)가 담당한다.
+        // 스케줄 시각이 없는 구 모델 방은 자동 상태 전이 대상이 아니다.
         if (room.startsAt() == null) {
             return false;
         }

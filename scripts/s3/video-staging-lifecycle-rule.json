@@ -1,0 +1,16 @@
+{
+  "ID": "expire-video-upload-staging",
+  "Status": "Enabled",
+  "Filter": {
+    "Prefix": "users/video-upload-staging/"
+  },
+  "Expiration": {
+    "Days": 3
+  },
+  "NoncurrentVersionExpiration": {
+    "NoncurrentDays": 3
+  },
+  "AbortIncompleteMultipartUpload": {
+    "DaysAfterInitiation": 1
+  }
+}

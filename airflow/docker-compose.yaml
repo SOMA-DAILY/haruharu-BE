@@ -28,6 +28,8 @@ x-airflow-common:
     # 데드라인(분). 기본 15. DAG 정의에 쓰이므로 DAG 를 파싱하는 모든 컴포넌트에 같은 값이 있어야 한다.
     HARUHARU_CLEANUP_DEADLINE_MINUTES: ${HARUHARU_CLEANUP_DEADLINE_MINUTES:-15}
     HARUHARU_ALERT_DEADLINE_INCLUDE_BACKFILL: ${HARUHARU_ALERT_DEADLINE_INCLUDE_BACKFILL:-false}
+    # room_reconcile(#469) 실패 알림 주기(분). 기본 30. 태스크 콜백(scheduler)에서 읽는다. 로컬 실험 시 5~10.
+    HARUHARU_RECONCILE_ALERT_PERIOD_MINUTES: ${HARUHARU_RECONCILE_ALERT_PERIOD_MINUTES:-30}
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
     AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
     # dags/ 의 공용 모듈(haruharu_alerts 등)을 triggerer 도 import 할 수 있게 한다.
@@ -50,7 +52,8 @@ x-airflow-common:
 
 # 시크릿 스코프 — 읽을 수 있는 프로세스를 최소화한다.
 #   배치 토큰(Connection): 태스크를 실행하는 scheduler(LocalExecutor) 만.
-#   Slack 웹훅: 콜백을 실행하는 dag-processor(on_failure_callback)·triggerer(Deadline AsyncCallback) 만.
+#   Slack 웹훅: 콜백을 실행하는 dag-processor(DAG on_failure_callback)·triggerer(Deadline AsyncCallback)
+#              ·scheduler(태스크 on_failure_callback — room_reconcile #469, LocalExecutor 라 태스크가 scheduler 에서 돈다).
 x-batch-conn-env:
   &batch-conn-env
   # 하루하루 app 연결 — Connection 을 UI 대신 환경변수로 정의한다(AIRFLOW_CONN_<ID>, JSON 형식).
@@ -58,7 +61,7 @@ x-batch-conn-env:
   AIRFLOW_CONN_HARUHARU_APP: '{"conn_type":"http","host":"${HARUHARU_APP_BASE_URL:-http://host.docker.internal:8080}","password":"${INTERNAL_BATCH_TOKEN:-}"}'
 x-alert-env:
   &alert-env
-  # 선택: Slack Incoming Webhook. 비어 있으면 알림은 로그로만 남는다.
+  # 선택: Slack 또는 Discord Incoming Webhook URL(URL 로 자동 판별, #411). 비어 있으면 알림은 로그로만 남는다.
   HARUHARU_ALERT_SLACK_WEBHOOK_URL: ${HARUHARU_ALERT_SLACK_WEBHOOK_URL:-}
 
 services:
@@ -99,7 +102,7 @@ services:
     <<: *airflow-common
     command: scheduler
     environment:
-      <<: [*airflow-common-env, *batch-conn-env]
+      <<: [*airflow-common-env, *batch-conn-env, *alert-env]
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
       interval: 30s

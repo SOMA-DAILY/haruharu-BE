@@ -3,6 +3,7 @@ package org.son.haruharu.domain.notification.business;
 import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.domain.video.business.event.VideoReactedEvent;
+import org.son.haruharu.domain.video.implement.ReactionType;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -30,7 +31,13 @@ public class VideoReactedEventListener {
         }
         pushSendService.sendToUsers(List.of(event.authorUserId()),
                 NotificationType.REACTION_RECEIVED, Map.of("videoPostId", event.videoPostId().toString()),
-                event.reactorNickname(), reactionVerb(event.reactionType()));
+                event.reactorNickname(), reactionVerb(event.reactionType()), reactionEmoji(event.reactionType()));
+    }
+
+    /** 푸시 제목 앞 이모지(#446). 알 수 없는 유형(과거 값 등)이면 기존 기본값 👀. */
+    private static String reactionEmoji(String reactionType) {
+        String emoji = ReactionType.emojiOf(reactionType);
+        return emoji == null ? "👀" : emoji;
     }
 
     /** ReactionType.name() → 푸시 본문 동사(카피: "회원님의 영상을 %s"). 새 반응 유형 추가 시 여기도 함께 갱신한다. */

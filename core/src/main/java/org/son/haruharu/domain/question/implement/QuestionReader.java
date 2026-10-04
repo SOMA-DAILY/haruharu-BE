@@ -12,6 +12,8 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 public class QuestionReader {
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final QuestionRepository repository;
 
     public Question get(Long id) {
@@ -50,6 +52,27 @@ public class QuestionReader {
                         .latestUnread(context.roomId(), context.userId(), context.blockedUserIds())
                         .orElse(null),
                 next);
+    }
+
+    /** 마감 임박 안내용. 방 인원이 적어 한 페이지면 충분하고, 답할 수 있는지는 컨텍스트가 판정한다. */
+    public boolean hasUnanswered(QuestionContext context) {
+        return repository
+                .findReceived(
+                        context.roomId(),
+                        context.userId(),
+                        context.blockedUserIds(),
+                        Long.MAX_VALUE,
+                        MAX_PAGE_SIZE)
+                .stream()
+                .anyMatch(
+                        question ->
+                                question.answer() == null
+                                        && context.visible(question)
+                                        && context.canInteract(question));
+    }
+
+    public List<Question> sent(Long roomId, Long userId) {
+        return repository.findSent(roomId, userId);
     }
 
     public boolean isRetry(Long roomId, Long userId, java.util.UUID requestId) {

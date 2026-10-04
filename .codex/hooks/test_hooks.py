@@ -100,7 +100,7 @@ class HarnessDiscoveryInputTest(unittest.TestCase):
 
         self.assertEqual(discovered, REQUIRED_AGENTS)
 
-    def test_skills_have_frontmatter_and_canonical_source(self) -> None:
+    def test_skills_have_frontmatter_and_claude_adapters(self) -> None:
         discovered: set[str] = set()
         for path in (ROOT / ".agents/skills").glob("*/SKILL.md"):
             content = path.read_text(encoding="utf-8")

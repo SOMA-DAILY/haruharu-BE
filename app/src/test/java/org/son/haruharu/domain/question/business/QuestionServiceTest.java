@@ -514,4 +514,74 @@ class QuestionServiceTest {
                             assertThat(target.status()).isEqualTo("WAITING");
                         });
     }
+
+    @Test
+    @DisplayName("마감 임박 대상은 답할 질문이 남은 사람을 우선하고 질문권을 다 쓴 사람은 제외한다")
+    void givenOpenRoom_whenDeadlineTargets_thenAnswerFirstAndSkipFinished() {
+        var sent =
+                service.create(1L, 100L, new CreateQuestionCommand(11L, "안녕", UUID.randomUUID()));
+
+        var pending = service.deadlineTargets(1L);
+        assertThat(pending.unansweredUserIds()).containsExactly(101L);
+        assertThat(pending.unusedGrantUserIds())
+                .doesNotContain(101L)
+                .containsExactlyInAnyOrder(100L, 102L, 103L);
+
+        service.answer(1L, 101L, sent.id(), new AnswerQuestionCommand("반가워"));
+        service.create(1L, 100L, new CreateQuestionCommand(12L, "안녕", UUID.randomUUID()));
+
+        var answered = service.deadlineTargets(1L);
+        assertThat(answered.unansweredUserIds()).containsExactly(102L);
+        assertThat(answered.unusedGrantUserIds()).containsExactlyInAnyOrder(100L, 101L, 103L);
+
+        service.create(1L, 100L, new CreateQuestionCommand(13L, "안녕", UUID.randomUUID()));
+        var finished = service.deadlineTargets(1L);
+        assertThat(finished.unansweredUserIds()).containsExactlyInAnyOrder(102L, 103L);
+        assertThat(finished.unusedGrantUserIds()).containsExactly(101L);
+    }
+
+    @Test
+    @DisplayName("차단·이탈·성별 미지정과 마감된 방은 마감 안내 대상에서 빠진다")
+    void givenClosedOrUnanswerable_whenDeadlineTargets_thenExcluded() {
+        service.create(1L, 100L, new CreateQuestionCommand(11L, "안녕", UUID.randomUUID()));
+
+        // 101이 유일한 이성인 100을 차단하면 답할 질문도, 쓸 수 있는 질문권도 남지 않는다.
+        given(blocks.getBlockedUserIds(101L)).willReturn(Set.of(100L));
+        var blocked = service.deadlineTargets(1L);
+        assertThat(blocked.unansweredUserIds()).doesNotContain(101L);
+        assertThat(blocked.unusedGrantUserIds()).doesNotContain(101L);
+
+        // 성별이 없는 참가자는 질문을 주고받을 수 없어 재촉하지 않는다.
+        given(blocks.getBlockedUserIds(101L)).willReturn(Set.of());
+        participants =
+                List.of(
+                        participants.get(0),
+                        new RoomMember(11L, 1L, 101L, null, null, null, now),
+                        participants.get(2),
+                        participants.get(3));
+        assertThat(service.deadlineTargets(1L).unansweredUserIds()).doesNotContain(101L);
+
+        // 이탈·비활성 참가자는 대상이 아니다.
+        willReturn(Set.of(100L, 102L, 103L)).given(users).findActiveIds(any());
+        var departed = service.deadlineTargets(1L);
+        assertThat(departed.unansweredUserIds()).isEmpty();
+        assertThat(departed.unusedGrantUserIds()).doesNotContain(101L);
+
+        room =
+                new Room(
+                        1L,
+                        RoomStatus.PENDING,
+                        now.toLocalDate(),
+                        3,
+                        null,
+                        null,
+                        now.minusHours(24),
+                        now.minusMinutes(1),
+                        now.plusHours(1),
+                        now.plusHours(2),
+                        now.plusHours(3));
+        var closed = service.deadlineTargets(1L);
+        assertThat(closed.unansweredUserIds()).isEmpty();
+        assertThat(closed.unusedGrantUserIds()).isEmpty();
+    }
 }

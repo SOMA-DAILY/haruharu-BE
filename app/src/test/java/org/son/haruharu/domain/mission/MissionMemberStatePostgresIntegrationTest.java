@@ -38,6 +38,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -103,6 +104,7 @@ class MissionMemberStatePostgresIntegrationTest {
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired MockMvc mockMvc;
     @Autowired ApplicationEventPublisher eventPublisher;
+    @Autowired JdbcTemplate jdbcTemplate;
 
     @Test
     @DisplayName("커밋된 영상·GROUP 채팅 저장 이벤트는 실제 listener를 거쳐 각각의 미션 카드를 해소한다")
@@ -141,6 +143,30 @@ class MissionMemberStatePostgresIntegrationTest {
         MissionMemberState chatState = stateFor(chatMember.id());
         assertThat(chatState.resolution().name()).isEqualTo("CHAT_MESSAGE_AFTER_VIEW");
         assertThat(chatState.expectedActivityCount()).isOne();
+    }
+
+    @Test
+    @DisplayName("미션이 꺼진 방은 커밋된 영상·GROUP 채팅 이벤트가 와도 미션 활동을 기록하지 않는다")
+    void givenMissionDisabledRoom_whenCommittedEventsPublished_thenRecordsNothing() {
+        LocalDateTime open = LocalDateTime.now().minusMinutes(10);
+        Fixture fixture = fixture(open, ActivationChannel.VIDEO);
+        RoomMember member = roomMemberWriter.save(RoomMember.of(
+                fixture.room().id(), 403L, "MALE", null, open.minusDays(1)));
+        initializer.initializeOpenedTargets(open.plusMinutes(1), 100);
+        inTransaction(() -> stateWriter.impress(fixture.mission().id(), member.id(), open.plusMinutes(2)));
+        jdbcTemplate.update("UPDATE room_mission_settings SET mission_enabled = false WHERE room_id = ?",
+                fixture.room().id());
+
+        inTransaction(() -> eventPublisher.publishEvent(new VideoUploadedEvent(
+                9200L, fixture.room().id(), member.id(), open.plusMinutes(3))));
+        inTransaction(() -> eventPublisher.publishEvent(new ChatMessageSentEvent(
+                9201L, 702L, ChatRoomType.GROUP, fixture.room().id(), 403L,
+                List.of(), "닉네임", open.plusMinutes(4))));
+
+        MissionMemberState state = stateFor(member.id());
+        assertThat(state.expectedActivityCount()).isZero();
+        assertThat(state.crossChannelActivityCount()).isZero();
+        assertThat(state.resolution()).isNull();
     }
 
     @Test
