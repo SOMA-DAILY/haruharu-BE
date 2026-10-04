@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.chat.business.dto;
 
 import org.son.haruharu.domain.chat.implement.ChatMessage;
+import org.son.haruharu.domain.chat.implement.ChatMission;
 
 import java.time.LocalDateTime;
 
@@ -10,10 +11,21 @@ public record ChatMessageBroadcast(
         Long chatRoomId,
         Long senderId,
         String content,
-        LocalDateTime sentAt
+        LocalDateTime sentAt,
+        String messageType,
+        String senderName,
+        boolean deleted,
+        ChatMission mission
 ) {
-    public static ChatMessageBroadcast from(ChatMessage message) {
+    public ChatMessageBroadcast(Long messageId, Long chatRoomId, Long senderId, String content, LocalDateTime sentAt) {
+        this(messageId, chatRoomId, senderId, content, sentAt, "TEXT", null, false, null);
+    }
+
+    public static ChatMessageBroadcast from(ChatMessage message) { return from(message, message.visibleMission()); }
+
+    public static ChatMessageBroadcast from(ChatMessage message, ChatMission mission) {
         return new ChatMessageBroadcast(
-                message.id(), message.chatRoomId(), message.senderId(), message.content(), message.createdAt());
+                message.id(), message.chatRoomId(), message.senderId(), message.visibleContent(), message.createdAt(),
+                message.messageType(), message.senderName(), message.adminDeleted(), mission);
     }
 }

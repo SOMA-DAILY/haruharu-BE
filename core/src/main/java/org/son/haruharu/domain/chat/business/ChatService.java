@@ -70,6 +70,7 @@ public class ChatService {
     private final BlockReader blockReader;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+    private final org.son.haruharu.domain.chat.implement.ChatMissionPresenter missionPresenter;
 
     public ChatService(ChatRoomReader chatRoomReader,
                        ChatRoomWriter chatRoomWriter,
@@ -83,7 +84,7 @@ public class ChatService {
                        RoomReader roomReader,
                        BlockReader blockReader,
                        ApplicationEventPublisher eventPublisher,
-                       Clock clock) {
+                       Clock clock, org.son.haruharu.domain.chat.implement.ChatMissionPresenter missionPresenter) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomWriter = chatRoomWriter;
         this.chatRoomMemberReader = chatRoomMemberReader;
@@ -97,6 +98,7 @@ public class ChatService {
         this.blockReader = blockReader;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
+        this.missionPresenter = missionPresenter;
     }
 
     /**
@@ -126,6 +128,12 @@ public class ChatService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createGroupRoom(Long roomId) {
+        ensureGroupRoom(roomId);
+    }
+
+    /** 예약 시각이 시작 전이 배치보다 먼저 도달해도 같은 방 잠금 안에서 그룹채팅을 준비한다. */
+    @Transactional
+    public void ensureGroupRoom(Long roomId) {
         if (roomReader.findByIdForUpdate(roomId).isEmpty()) {
             return;
         }
@@ -209,7 +217,16 @@ public class ChatService {
         requireActiveIfDirect(chatRoomId, userId);
         int limit = Math.min(Math.max(size, 1), MAX_MESSAGE_PAGE_SIZE);
         List<ChatMessage> messages = chatMessageReader.findPage(chatRoomId, cursor, limit);
-        return MessagePageResponse.of(messages, limit);
+        return MessagePageResponse.of(messages, limit, missionPresenter.prepare(messages.stream().map(ChatMessage::visibleMission).toList()));
+    }
+
+    public org.son.haruharu.domain.mission.business.dto.MissionImageResponse getMissionImage(Long chatRoomId, Long userId, Long messageId) {
+        requireMember(chatRoomId,userId);
+        requireActiveIfDirect(chatRoomId,userId);
+        var message = chatMessageReader.findById(messageId).filter(item -> item.chatRoomId().equals(chatRoomId));
+        return message.map(item -> missionPresenter.present(item.visibleMission()))
+                .map(org.son.haruharu.domain.chat.implement.ChatMission::image)
+                .orElseThrow(org.son.haruharu.domain.chat.storage.exception.ChatMissionImageNotFoundException::new);
     }
 
     /** 읽음 커서 갱신. 커서는 뒤로만 이동한다(역행 방지). */
@@ -279,7 +296,7 @@ public class ChatService {
         unreadExcluded.add(userId);
         Optional<ChatMessage> last = chatMessageReader.findLast(chatRoomId, excludedSenders);
         long unread = chatMessageReader.countUnread(chatRoomId, me.lastReadMessageId(), unreadExcluded);
-        String lastMessage = last.map(ChatMessage::content).orElse(null);
+        String lastMessage = last.map(ChatMessage::visibleContent).orElse(null);
         LocalDateTime lastMessageAt = last.map(ChatMessage::createdAt).orElse(null);
 
         if (room.type() == ChatRoomType.GROUP) {

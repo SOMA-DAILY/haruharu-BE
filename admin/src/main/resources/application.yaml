@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
   application:
     name: haruharu-admin
 
@@ -54,3 +58,15 @@ management:
   endpoint:
     health:
       show-details: never
+
+aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  s3:
+    bucket: ${AWS_S3_BUCKET}
+    presign-expiry-seconds: ${AWS_S3_PRESIGN_EXPIRY:300}
+    video-get-expiry-seconds: ${AWS_S3_VIDEO_GET_EXPIRY:3600}
+    image-get-expiry-seconds: ${AWS_S3_IMAGE_GET_EXPIRY:3600}
+
+haruharu:
+  chat:
+    system-user-id: ${CHAT_SYSTEM_USER_ID:0}

@@ -3,6 +3,7 @@ package org.son.haruharu.domain.chat.application;
 import org.son.haruharu.domain.chat.business.ChatDeliveryService;
 import org.son.haruharu.domain.chat.business.event.ChatMessageBroadcastEvent;
 import org.son.haruharu.domain.chat.business.event.ChatRoomClosedEvent;
+import org.son.haruharu.domain.chat.business.event.MessageDeletedEvent;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -20,8 +21,8 @@ public class ChatLifecycleEventListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void broadcast(ChatMessageBroadcastEvent event) {
-        chatDeliveryService.deliverIfActive(event.message().chatRoomId(), () ->
-                messagingTemplate.convertAndSend("/sub/chat-rooms/" + event.message().chatRoomId(), event.message()));
+        chatDeliveryService.deliverMessage(event.message(), message ->
+                messagingTemplate.convertAndSend("/sub/chat-rooms/" + message.chatRoomId(), message));
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -33,4 +34,12 @@ public class ChatLifecycleEventListener {
     }
 
     public record RoomClosedPayload(String type, Long chatRoomId) {}
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void delete(MessageDeletedEvent event) {
+        chatDeliveryService.deliverIfActive(event.chatRoomId(), () -> messagingTemplate.convertAndSend(
+                "/sub/chat-rooms/" + event.chatRoomId() + "/events", new MessageDeletedPayload("MESSAGE_DELETED", event.messageId())));
+    }
+
+    public record MessageDeletedPayload(String type, Long messageId) {}
 }

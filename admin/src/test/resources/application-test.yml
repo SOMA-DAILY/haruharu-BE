@@ -23,3 +23,11 @@ admin:
     password: ${ADMIN_BOOTSTRAP_PASSWORD:}
   cors:
     allowed-origins: http://localhost:5173
+
+aws:
+  s3:
+    bucket: test-mission-images
+
+haruharu:
+  chat:
+    system-user-id: 2

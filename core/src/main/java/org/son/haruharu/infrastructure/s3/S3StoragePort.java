@@ -22,5 +22,7 @@ public interface S3StoragePort {
     /** 공개 객체 URL 베이스(끝 / 포함). URL 소유권 검증·키 변환에 사용. */
     String publicBaseUrl();
 
+    void putImage(String key, String contentType, byte[] bytes);
+
     void deleteObjects(Collection<String> keys);
 }

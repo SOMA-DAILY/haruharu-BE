@@ -12,6 +12,11 @@ import java.util.Optional;
 
 public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageEntity, Long> {
 
+    @Modifying
+    @Query("update ChatMessageEntity m set m.adminDeleted = true where m.id = :id "
+            + "and m.operatorMissionId is not null and m.adminDeleted = false")
+    int markAdminDeleted(@Param("id") Long id);
+
     // 삭제된(deleted_at) 메시지 제외는 BaseEntity @SoftDelete 전역 필터가 처리한다.
     List<ChatMessageEntity> findByChatRoomIdOrderByIdDesc(Long chatRoomId, Pageable pageable);
 

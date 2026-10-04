@@ -48,6 +48,12 @@ public class S3StorageAdapter implements S3StoragePort {
     }
 
     @Override
+    public void putImage(String key, String contentType, byte[] bytes) {
+        s3Client.putObject(PutObjectRequest.builder().bucket(properties.s3().bucket()).key(key).contentType(contentType).build(),
+                software.amazon.awssdk.core.sync.RequestBody.fromBytes(bytes));
+    }
+
+    @Override
     public String createPresignedGetUrl(String objectUrl) {
         return presignGet(objectUrl, properties.s3().videoGetExpirySeconds());
     }

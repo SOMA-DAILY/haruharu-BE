@@ -7,6 +7,7 @@ import java.util.Set;
 public interface ChatMessageRepository {
     ChatMessage save(ChatMessage message);
     Optional<ChatMessage> findById(Long id);
+    boolean markAdminDeleted(Long id);
     /**
      * 최신순 페이지. cursorId가 null이면 첫 페이지, 아니면 그 id보다 이전(작은) 메시지를 limit개.
      * 삭제된(deletedAt) 메시지는 제외.

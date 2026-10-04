@@ -11,6 +11,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
+import org.son.haruharu.domain.chat.implement.ChatMission;
 
 @Entity
 @Table(name = "chat_messages", indexes = {
@@ -32,6 +33,13 @@ public class ChatMessageEntity extends BaseEntity {
     @Column(nullable = false, columnDefinition = "text")
     private String content;
 
+    @Column(unique = true) private Long operatorMissionId;
+    private Long missionImageId;
+    private Long missionRoomId;
+    @Column(length = 20) private String missionTemplateId;
+    @Column(length = 40) private String missionTitle;
+    @Column(nullable = false, columnDefinition = "boolean default false") private boolean adminDeleted;
+
     public static ChatMessageEntity from(ChatMessage message) {
         ChatMessageEntity entity = new ChatMessageEntity();
         entity.id = message.id();
@@ -39,10 +47,20 @@ public class ChatMessageEntity extends BaseEntity {
         entity.senderId = message.senderId();
         entity.content = message.content();
         entity.createdAt = message.createdAt();
+        entity.adminDeleted = message.adminDeleted();
+        if (message.mission() != null) {
+            entity.operatorMissionId = message.mission().missionId();
+            entity.missionRoomId = message.mission().roomId();
+            entity.missionImageId = message.mission().imageId();
+            entity.missionTemplateId = message.mission().templateId();
+            entity.missionTitle = message.mission().title();
+        }
         return entity;
     }
 
     public ChatMessage toDomain() {
-        return new ChatMessage(id, chatRoomId, senderId, content, createdAt);
+        ChatMission mission = operatorMissionId == null ? null
+                : new ChatMission(operatorMissionId, missionRoomId, missionTemplateId, missionTitle, missionImageId, null);
+        return new ChatMessage(id, chatRoomId, senderId, content, createdAt, mission, adminDeleted);
     }
 }

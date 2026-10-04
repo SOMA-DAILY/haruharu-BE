@@ -87,6 +87,12 @@ public class ChatController {
         return ApiResponse.ok(chatService.getMessages(chatRoomId, userId, cursor, size));
     }
 
+    @GetMapping("/{chatRoomId}/messages/{messageId}/mission-image")
+    public ApiResponse<org.son.haruharu.domain.mission.business.dto.MissionImageResponse> getMissionImage(
+            @PathVariable Long chatRoomId, @PathVariable Long messageId, Authentication authentication) {
+        return ApiResponse.ok(chatService.getMissionImage(chatRoomId, (Long) authentication.getPrincipal(), messageId));
+    }
+
     @Operation(summary = "메시지 읽음 처리",
             description = "읽음 커서(last_read_message_id)를 갱신한다. 커서는 뒤로만 이동(역행 방지). 갱신 후 안 읽은 개수를 반환.")
     @PatchMapping("/{chatRoomId}/read")

@@ -28,6 +28,9 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     }
 
     @Override
+    public boolean markAdminDeleted(Long id) { return chatMessageJpaRepository.markAdminDeleted(id) == 1; }
+
+    @Override
     public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
         List<ChatMessageEntity> rows = (cursorId == null)

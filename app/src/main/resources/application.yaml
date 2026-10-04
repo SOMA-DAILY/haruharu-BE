@@ -85,6 +85,8 @@ haruharu:
       batch-size: ${MISSION_OUTCOME_BATCH_SIZE:100}
       cron: ${MISSION_OUTCOME_CRON:30 * * * * *}
   # 첫 가입 1회 보너스 구름(#232). 정책값은 코드 @DefaultValue가 아닌 이 yaml 리터럴로 관리(matching.enter-cost와 동일 방침).
+  chat:
+    system-user-id: ${CHAT_SYSTEM_USER_ID:0}
   coin:
     signup-bonus: 20
     enabled: false  # 코인 경제 비활성(#309 피벗). 가입 보너스·코인 API off. 되살릴 때만 true

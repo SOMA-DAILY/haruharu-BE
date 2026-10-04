@@ -33,6 +33,13 @@ import org.springframework.context.annotation.Import;
 @Configuration
 @Import({
         // business — 방·미션 슬롯·초대코드 생성 유스케이스에 필요한 서비스만 가져온다.
+        org.son.haruharu.config.S3Config.class,
+        org.son.haruharu.infrastructure.s3.S3StorageAdapter.class,
+        org.son.haruharu.domain.mission.business.MissionImageService.class,
+        org.son.haruharu.domain.mission.implement.MissionImageReader.class,
+        org.son.haruharu.domain.mission.implement.MissionImageUploader.class,
+        org.son.haruharu.domain.mission.implement.MissionImageWriter.class,
+        org.son.haruharu.domain.mission.storage.MissionImageRepositoryImpl.class,
         RoomService.class,
         RoomInviteService.class,
         RoomMissionSlotService.class,
@@ -53,6 +60,10 @@ import org.springframework.context.annotation.Import;
         RoomMemberRepositoryImpl.class,
         RoomInviteRepositoryImpl.class,
         RoomMissionSlotRepositoryImpl.class
+        , org.son.haruharu.domain.mission.business.OperatorMissionService.class
+        , org.son.haruharu.domain.mission.implement.OperatorMissionReader.class
+        , org.son.haruharu.domain.mission.implement.OperatorMissionWriter.class
+        , org.son.haruharu.domain.mission.storage.OperatorMissionRepositoryImpl.class
 })
 public class AdminRoomDomainConfig {
 }

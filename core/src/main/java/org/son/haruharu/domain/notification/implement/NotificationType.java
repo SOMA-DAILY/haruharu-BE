@@ -23,6 +23,7 @@ public enum NotificationType {
     SELECTED_BY_SOMEONE("💕 설레는 소식이 있어요", "누군가 당신을 마음에 담았어요. 누굴까요?", true, NotificationCategory.ACTIVITY),
     // body의 %s는 발신자 닉네임(bodyArgs)으로 치환. 대화 내용은 잠금화면 노출 방지를 위해 미포함.
     CHAT("💬 새 메시지", "%s님이 메시지를 보냈어요", true, NotificationCategory.ACTIVITY),
+    ADMIN_MESSAGE("🎬 하루의 새 미션", "운영자가 보낸 미션을 확인하고 하루를 남겨보세요", true, NotificationCategory.ACTIVITY),
     // title의 %s는 업로더의 방 가명(pseudonym). 고볼륨·시한성이라 알림함 미저장(#422).
     VIDEO_UPLOADED("🎬 %s님이 하루를 남겼어요", "지금 영상을 확인해보세요", false, NotificationCategory.ACTIVITY),
     QUESTION_AVAILABLE("💌 익명 질문이 열렸어요", "궁금했던 마음을 질문으로 전해보세요", true, NotificationCategory.ACTIVITY),

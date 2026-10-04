@@ -172,13 +172,13 @@ class AdminRoomApiIntegrationTest {
                         "select count(s) from RoomMissionSlotEntity s where s.roomId = :roomId", Long.class)
                 .setParameter("roomId", roomId)
                 .getSingleResult();
-        assertThat(slotCount).isEqualTo(6L);
+        assertThat(slotCount).isZero();
     }
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    @DisplayName("미션 슬롯이 중복되면 400이고 방·슬롯·초대코드가 남지 않는다")
-    void givenDuplicateMissionSlot_whenCreateRoom_thenReturns400AndRollsBack() throws Exception {
+    @DisplayName("새 방 생성은 구 자동 미션 슬롯 입력을 무시하고 채팅 제공을 준비한다")
+    void givenLegacyMissionSlots_whenCreateRoom_thenIgnoresSlots() throws Exception {
         LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
         String duplicateSlots = missionSlots(startsAt)
                 .replaceFirst("\\\"AFTERNOON\\\"", "\\\"MORNING\\\"");
@@ -190,12 +190,11 @@ class AdminRoomApiIntegrationTest {
         mockMvc.perform(post("/api/v1/admin/rooms")
                         .contentType(MediaType.APPLICATION_JSON).content(body)
                         .with(authentication(adminAuth())))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code").value("ROOM_MISSION_SLOT_INVALID_SCHEDULE"));
+                .andExpect(status().isCreated());
 
-        assertThat(roomCount()).isEqualTo(roomCount);
+        assertThat(roomCount()).isEqualTo(roomCount + 1);
         assertThat(roomMissionSlotCount()).isEqualTo(slotCount);
-        assertThat(roomInviteCount()).isEqualTo(inviteCount);
+        assertThat(roomInviteCount()).isEqualTo(inviteCount + 1);
     }
 
     private long roomCount() {

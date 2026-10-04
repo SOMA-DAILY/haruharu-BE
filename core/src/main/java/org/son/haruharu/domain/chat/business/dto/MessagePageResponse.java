@@ -2,6 +2,7 @@ package org.son.haruharu.domain.chat.business.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
+import org.son.haruharu.domain.chat.implement.ChatMission;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,17 +16,26 @@ public record MessagePageResponse(
             @Schema(description = "메시지 id", example = "1024") Long messageId,
             @Schema(description = "보낸 사람 유저 id", example = "102") Long senderId,
             @Schema(description = "메시지 내용", example = "내일 만나요!") String content,
-            @Schema(description = "전송 시각") LocalDateTime sentAt
+            @Schema(description = "전송 시각") LocalDateTime sentAt,
+            String messageType,
+            String senderName,
+            boolean deleted,
+            ChatMission mission
     ) {
         public static MessageItem from(ChatMessage message) {
-            return new MessageItem(message.id(), message.senderId(), message.content(), message.createdAt());
+            return new MessageItem(message.id(), message.senderId(), message.visibleContent(), message.createdAt(),
+                    message.messageType(), message.senderName(), message.adminDeleted(), message.visibleMission());
         }
     }
 
     public static MessagePageResponse of(List<ChatMessage> messages, int size) {
+        return of(messages,size,mission -> mission);
+    }
+
+    public static MessagePageResponse of(List<ChatMessage> messages, int size, java.util.function.UnaryOperator<ChatMission> presenter) {
         boolean hasMore = messages.size() >= size;
         Long nextCursor = hasMore ? messages.get(messages.size() - 1).id() : null;
-        List<MessageItem> items = messages.stream().map(MessageItem::from).toList();
+        List<MessageItem> items = messages.stream().map(message -> new MessageItem(message.id(),message.senderId(),message.visibleContent(),message.createdAt(),message.messageType(),message.senderName(),message.adminDeleted(),presenter.apply(message.visibleMission()))).toList();
         return new MessagePageResponse(items, nextCursor);
     }
 }

@@ -4,5 +4,10 @@ package org.son.haruharu.domain.video.business.command;
 public record VideoUploadCommand(
         String videoUrl,
         String thumbnailUrl,
-        String caption
-) {}
+        String caption,
+        java.time.LocalDateTime expectedSlotStart
+) {
+    public VideoUploadCommand(String videoUrl, String thumbnailUrl, String caption) {
+        this(videoUrl, thumbnailUrl, caption, null);
+    }
+}

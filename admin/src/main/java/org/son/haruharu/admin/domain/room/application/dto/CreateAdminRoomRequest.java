@@ -32,8 +32,8 @@ public record CreateAdminRoomRequest(
         @Positive Integer maxUses,
         @Schema(description = "초대코드 만료 시각(null이면 무기한)", nullable = true)
         LocalDateTime inviteExpiresAt,
-        @Schema(description = "Day별 오전·오후 미션 슬롯. total_days × 2개를 전달한다.")
-        @NotNull List<@NotNull @Valid MissionSlotRequest> missionSlots
+        @Schema(description = "이전 클라이언트 호환용. 새 방에는 자동 미션 슬롯을 생성하지 않는다.", deprecated = true)
+        List<MissionSlotRequest> missionSlots
 ) {
     public CreateAdminRoomCommand toCommand() {
         return new CreateAdminRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,

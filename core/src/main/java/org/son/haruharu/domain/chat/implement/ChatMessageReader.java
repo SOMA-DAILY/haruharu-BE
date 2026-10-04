@@ -19,6 +19,8 @@ public class ChatMessageReader {
         return chatMessageRepository.findPage(chatRoomId, cursorId, limit);
     }
 
+    public Optional<ChatMessage> findById(Long id) { return chatMessageRepository.findById(id); }
+
     public Optional<ChatMessage> findLast(Long chatRoomId, Set<Long> excludeSenderIds) {
         return chatMessageRepository.findLast(chatRoomId, excludeSenderIds);
     }

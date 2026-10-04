@@ -108,6 +108,8 @@ public class AdminSecurityConfig {
                         // 방 조회 권한(전체)에 코드 원문까지 딸려가면 CS 계정이 임의 방에 입장할 수 있다(#318 보안리뷰).
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/rooms/*/invites")
                         .hasAnyRole("SUPER", "OPERATOR")
+                        .requestMatchers("/api/v1/admin/rooms/*/operator-missions",
+                                "/api/v1/admin/rooms/*/operator-missions/**").hasAnyRole("SUPER", "OPERATOR")
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         // 401·403 모두 ApiResponse 표준 포맷으로 응답(컨테이너 기본 에러 우회 방지).
