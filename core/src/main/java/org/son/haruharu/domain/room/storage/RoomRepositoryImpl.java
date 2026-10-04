@@ -6,7 +6,6 @@ import org.son.haruharu.domain.room.implement.RoomRepository;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -55,13 +54,6 @@ public class RoomRepositoryImpl implements RoomRepository {
             return List.of();
         }
         return jpaRepository.findByIdInAndStatusNot(ids, status).stream()
-                .map(RoomEntity::toDomain)
-                .toList();
-    }
-
-    @Override
-    public List<Room> findAllByScheduledDateAndStatus(LocalDate scheduledDate, RoomStatus status) {
-        return jpaRepository.findAllByScheduledDateAndStatusAndStartsAtIsNull(scheduledDate, status).stream()
                 .map(RoomEntity::toDomain)
                 .toList();
     }

@@ -84,7 +84,6 @@ public class MatchResultService {
      * 확인 대기 중인 최근 매칭 결과(홈 자동 노출용). 유저의 가장 최근 방(joinedAt 기준)이
      * 결과 발표(Day3 22:00)를 지났으면 MATCHED/FAILED를 담아 반환하고, 발표 전·미시작(PENDING)·
      * 방 이력 없음이면 empty. 새 방에 배정되면 최근 방이 바뀌므로 이전 결과는 자연히 노출이 끝난다.
-     * FAILED 판정(MatchResult 없음)은 위로 구름 지급(MATCH_CONSOLATION) 대상 기준과 동일하다.
      */
     public Optional<PendingMatchResultResponse> findPendingResult(Long userId) {
         List<RoomMember> memberships = roomMemberReader.findByUserId(userId);

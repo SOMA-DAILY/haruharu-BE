@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.claude/hooks/block-bypass.sh\"",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/agent-hooks/block-bypass.sh\"",
             "timeout": 10,
             "statusMessage": "Checking verification bypass policy"
           }

@@ -3,7 +3,6 @@ package org.son.haruharu.domain.room.implement;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -73,16 +72,7 @@ public class RoomReader {
     }
 
     /**
-     * 09:00 자동 시작 배치용.
-     * 초대코드 모델 방(starts_at 보유)은 제외한다(#320) — scheduledDate 가 starts_at 의 날짜라 그대로 두면
-     * 19:00 시작 예정 방이 09:00 에 조기 flip 된다. 그쪽 전이는 RoomStatusReconciler 담당.
-     */
-    public List<Room> getScheduledPending(LocalDate scheduledDate) {
-        return roomRepository.findAllByScheduledDateAndStatus(scheduledDate, RoomStatus.PENDING);
-    }
-
-    /**
-     * 고정 벽시계 배치(종료·위로구름·슬롯 푸시·최종선택 오픈)의 진입점(#320).
+     * 고정 벽시계 배치(종료·슬롯 푸시·최종선택 오픈)의 진입점(#320).
      * <b>구 모델 방만</b> 반환한다 — 초대코드 모델 방은 방마다 시각이 달라 9시·18:05 같은 고정 cron 으로
      * 처리하면 조기 종료·오지급·엉뚱한 시각 푸시가 난다. 그쪽은 RoomStatusReconciler 담당.
      * <p>

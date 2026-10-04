@@ -18,6 +18,11 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     private final ChatMessageJpaRepository chatMessageJpaRepository;
 
     @Override
+    public Optional<ChatMessage> findByRequest(Long chatRoomId, Long senderId, String requestId) {
+        return chatMessageJpaRepository.findByChatRoomIdAndSenderIdAndClientRequestId(chatRoomId, senderId, requestId).map(ChatMessageEntity::toDomain);
+    }
+
+    @Override
     public ChatMessage save(ChatMessage message) {
         return chatMessageJpaRepository.save(ChatMessageEntity.from(message)).toDomain();
     }
@@ -25,6 +30,11 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     @Override
     public Optional<ChatMessage> findById(Long id) {
         return chatMessageJpaRepository.findById(id).map(ChatMessageEntity::toDomain);
+    }
+
+    @Override
+    public List<ChatMessage> findAllByIds(java.util.Collection<Long> ids) {
+        return chatMessageJpaRepository.findAllById(ids).stream().map(ChatMessageEntity::toDomain).toList();
     }
 
     @Override
@@ -55,7 +65,18 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     }
 
     @Override
-    public void hardDeleteByChatRoomId(Long chatRoomId) {
-        chatMessageJpaRepository.hardDeleteByChatRoomId(chatRoomId);
+    public int markAdminDeleted(Long id, java.time.LocalDateTime now) {
+        return chatMessageJpaRepository.markAdminDeleted(id, now);
+    }
+
+    @Override
+    public List<ChatMessage> findPendingDeleteBroadcasts(int limit) {
+        return chatMessageJpaRepository.findPendingDeleteBroadcasts(PageRequest.of(0, limit)).stream()
+                .map(ChatMessageEntity::toDomain).toList();
+    }
+
+    @Override
+    public int markDeleteBroadcast(Long id, java.time.LocalDateTime now) {
+        return chatMessageJpaRepository.markDeleteBroadcast(id, now);
     }
 }

@@ -27,4 +27,7 @@ public interface VideoPostRepository {
 
     /** 한 멤버의 활성 영상 전체(slot_start 오름차순). 매칭 상대 카드의 영상용. */
     List<VideoPost> findActiveByRoomMember(Long roomMemberId);
+
+    /** 주어진 방의 멤버들 중에 해당 슬롯들에 활성(미삭제) 영상을 올린 멤버 id **/
+    List<Long> findUploadedRoomMemberIds(List<Long> roomMemberIds, List<LocalDateTime> slotStarts);
 }

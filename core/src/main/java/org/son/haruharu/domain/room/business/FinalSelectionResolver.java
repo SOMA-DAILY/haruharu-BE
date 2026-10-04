@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
  * 멱등: 이미 성사된 쌍(match_results 존재)은 건너뛴다. result_at 이후 여러 번 sweep 돼도 안전하다.
  * MutualMatchEvent 를 발행해 DIRECT 채팅 자동 생성·매칭 푸시 파이프라인(기존)을 그대로 태운다.
  * <p>
- * 방 하나를 단일 트랜잭션으로 resolve 한다(단일 인스턴스 배치 전제 — MatchingExecutor 와 동일). 분산 HA 로
+ * 방 하나를 단일 트랜잭션으로 resolve 한다(단일 인스턴스 배치 전제). 분산 HA 로
  * 확장해 두 인스턴스가 동시에 sweep 하면 UNIQUE(member_a,member_b) 위반으로 뒤쪽 쌍이 롤백되고 다음 sweep 에서
  * 복구되나, 그 방·그 sweep 의 다른 쌍 성사·알림이 지연될 수 있다. 그때는 쌍 단위 트랜잭션/분산락을 재검토한다.
  */

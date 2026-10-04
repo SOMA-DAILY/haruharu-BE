@@ -10,7 +10,7 @@ import java.util.List;
  * {@code slot_start = starts_at + N시간}(N≥0)으로 방마다 다르게 흐른다.
  * <ul>
  *   <li>창: {@code [slot_start, slot_start+1h)} — 한 슬롯의 업로드 대상 구간</li>
- *   <li>가시성: {@code [slot_start, slot_start+3h)} — 올린 영상이 노출되는 구간(공백 회피용 3시간 유지)</li>
+ *   <li>가시성: {@code [slot_start, slot_start+1h)} — 올린 슬롯 시간대에만 노출되는 구간</li>
  * </ul>
  * 순수 계산만 하고 상태를 갖지 않는다(now·starts_at을 인자로 받는다). Day·벽시계 개념에 결합되지 않는다.
  */
@@ -19,7 +19,7 @@ public final class SlotClock {
     /** 슬롯 길이(업로드 창). */
     public static final int SLOT_LENGTH_HOURS = 1;
     /** 가시성 유지 시간(노출 창). */
-    public static final int VISIBILITY_HOURS = 3;
+    public static final int VISIBILITY_HOURS = 1;
 
     private SlotClock() {
     }
@@ -41,14 +41,14 @@ public final class SlotClock {
         return currentSlotStart(startsAt, now).plusHours(SLOT_LENGTH_HOURS);
     }
 
-    /** now가 slot_start의 가시성 창 {@code [slot_start, slot_start+3h)} 안인지. */
+    /** now가 slot_start의 가시성 창 {@code [slot_start, slot_start+1h)} 안인지. */
     public static boolean isVisible(LocalDateTime slotStart, LocalDateTime now) {
         return !now.isBefore(slotStart) && now.isBefore(slotStart.plusHours(VISIBILITY_HOURS));
     }
 
     /**
-     * 지금 노출 중인 슬롯 시작 시각들(오름차순). 현재 슬롯과, 아직 가시성 창이 남은 과거 슬롯을 담되
-     * starts_at 이전은 제외한다. 슬롯 간격 1h·가시성 3h라 최대 3개(현재+과거2).
+     * 지금 노출 중인 현재 슬롯 시작 시각만 반환한다.
+     * starts_at 이전은 제외한다. 슬롯 간격과 가시성 모두 1h라 최대 1개다.
      */
     public static List<LocalDateTime> visibleSlotStarts(LocalDateTime startsAt, LocalDateTime now) {
         LocalDateTime current = currentSlotStart(startsAt, now);

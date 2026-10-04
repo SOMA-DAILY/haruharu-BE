@@ -69,4 +69,12 @@ public class VideoPostRepositoryImpl implements VideoPostRepository {
                 .map(VideoPostEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    public List<Long> findUploadedRoomMemberIds(List<Long> roomMemberIds, List<LocalDateTime> slotStarts) {
+        if (roomMemberIds.isEmpty() || slotStarts.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findUploadedRoomMemberIds(roomMemberIds, slotStarts);
+    }
 }

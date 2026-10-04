@@ -48,7 +48,7 @@ class RoomFeedServiceTest {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final LocalDate DATE = LocalDate.of(2026, 6, 26);
     private static final LocalDateTime STARTS = DATE.atTime(20, 0);
-    // now=22:10 기준 노출 창 = [20:00, 21:00, 22:00]
+    // now=22:10 기준 기본 노출 슬롯 = [22:00]
     private static final LocalDateTime S20 = DATE.atTime(20, 0);
     private static final LocalDateTime S21 = DATE.atTime(21, 0);
     private static final LocalDateTime S22 = DATE.atTime(22, 0);
@@ -106,16 +106,39 @@ class RoomFeedServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
         given(roomReader.findById(10L)).willReturn(Optional.of(activeRoom()));
         given(roomMemberReader.getByRoomId(10L)).willReturn(List.of(member(20L, 1L), member(30L, 2L)));
-        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S20, S21, S22)))
-                .willReturn(List.of(post(101L, 30L, S21, "other-s21")));
+        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S22)))
+                .willReturn(List.of(post(101L, 30L, S22, "other-s22")));
         given(videoReactionReader.getReactionCounts(List.of(101L))).willReturn(List.of());
         given(videoReactionReader.getMyReactions(List.of(101L), 1L)).willReturn(Map.of());
 
         FeedResponse result = service.getFeed(10L, 1L);
 
-        assertThat(result.slots()).extracting(SlotStatus::slotStart).containsExactly(S21, S22);
+        assertThat(result.slots()).extracting(SlotStatus::slotStart).containsExactly(S22);
         assertThat(result.slots()).noneMatch(SlotStatus::locked);
         assertThat(result.posts()).extracting(FeedItem::videoPostId).containsExactly(101L);
+    }
+
+    @Test
+    @DisplayName("이전 슬롯 영상은 기본 피드에서 제외되지만 반환된 커서로 과거 조회할 수 있다")
+    void givenPastAndCurrentPosts_whenFeedThenArchive_thenPastOnlyInArchive() {
+        given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
+        given(roomReader.findById(10L)).willReturn(Optional.of(activeRoom()));
+        given(roomMemberReader.getByRoomId(10L)).willReturn(List.of(member(20L, 1L), member(30L, 2L)));
+        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S22)))
+                .willReturn(List.of(post(102L, 30L, S22, "current")));
+        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S20, S21)))
+                .willReturn(List.of(post(101L, 30L, S21, "past")));
+
+        FeedResponse current = service.getFeed(10L, 1L);
+        assertThat(current.slots()).extracting(SlotStatus::slotStart).containsExactly(S22);
+        assertThat(current.posts()).extracting(FeedItem::videoPostId).containsExactly(102L);
+        assertThat(current.nextCursor()).isEqualTo(S22);
+
+        FeedResponse past = service.getFeedBefore(10L, 1L, current.nextCursor(), 6);
+        assertThat(past.slots()).extracting(SlotStatus::slotStart).containsExactly(S21);
+        assertThat(past.slots()).noneMatch(SlotStatus::current);
+        assertThat(past.posts()).extracting(FeedItem::videoPostId).containsExactly(101L);
+        assertThat(past.nextCursor()).isNull();
     }
 
     @Test
@@ -124,7 +147,7 @@ class RoomFeedServiceTest {
         given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
         given(roomReader.findById(10L)).willReturn(Optional.of(activeRoom()));
         given(roomMemberReader.getByRoomId(10L)).willReturn(List.of(member(20L, 1L), member(30L, 2L)));
-        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S20, S21, S22))).willReturn(List.of());
+        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S22))).willReturn(List.of());
 
         FeedResponse result = service.getFeed(10L, 1L);
 
@@ -134,17 +157,15 @@ class RoomFeedServiceTest {
     }
 
     @Test
-    @DisplayName("공개 영상은 모든 슬롯에 반환되고 반응 집계와 presigned URL을 유지한다")
+    @DisplayName("현재 슬롯의 공개 영상은 반응 집계와 presigned URL을 유지한다")
     void givenVisiblePosts_whenFeed_thenReturnsPostsWithReactionsAndSignedUrls() {
         given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
         given(roomReader.findById(10L)).willReturn(Optional.of(activeRoom()));
         given(roomMemberReader.getByRoomId(10L))
                 .willReturn(List.of(member(20L, 1L), member(30L, 2L)));
-        given(videoPostReader.getFeed(anyList(), anyList())).willReturn(List.of(
-                post(100L, 20L, S21, "my-s21"),
-                post(101L, 30L, S21, "other-s21"),
-                post(102L, 30L, S22, "other-s22"),
-                post(103L, 30L, S20, "other-s20")
+        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S22))).willReturn(List.of(
+                post(100L, 20L, S22, "my-s22"),
+                post(101L, 30L, S22, "other-s22")
         ));
         given(videoReactionReader.getReactionCounts(anyList())).willReturn(List.of(
                 new ReactionCount(101L, "LIKE", 3),
@@ -155,11 +176,11 @@ class RoomFeedServiceTest {
         FeedResponse result = service.getFeed(10L, 1L);
 
         assertThat(result.slots()).allMatch(slot -> !slot.locked());
-        assertThat(result.posts()).extracting(FeedItem::videoPostId).containsExactly(100L, 101L, 102L, 103L);
-        assertThat(result.posts()).extracting(FeedItem::slotStart).containsExactly(S21, S21, S22, S20);
-        assertThat(result.posts()).extracting(FeedItem::mine).containsExactly(true, false, false, false);
-        assertThat(result.posts()).extracting(FeedItem::userId).containsExactly(1L, 2L, 2L, 2L);
-        assertThat(itemOf(result, 101L).videoUrl()).isEqualTo("signed:other-s21");
+        assertThat(result.posts()).extracting(FeedItem::videoPostId).containsExactly(100L, 101L);
+        assertThat(result.posts()).extracting(FeedItem::slotStart).containsExactly(S22, S22);
+        assertThat(result.posts()).extracting(FeedItem::mine).containsExactly(true, false);
+        assertThat(result.posts()).extracting(FeedItem::userId).containsExactly(1L, 2L);
+        assertThat(itemOf(result, 101L).videoUrl()).isEqualTo("signed:other-s22");
 
         // post 101: 집계(0 생략·enum 순서) + 내 반응
         FeedItem p101 = itemOf(result, 101L);
@@ -183,17 +204,17 @@ class RoomFeedServiceTest {
     @DisplayName("SELECTING(최종선택 진행 중) 방은 촬영 불가라 모든 슬롯 current=false다")
     void givenSelecting_whenFeed_thenNoCurrentSlot() {
         given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
-        // opensAt 22:00 → now(22:10)엔 SELECTING. 창은 최종선택 오픈 이전 슬롯(20:00·21:00)만
+        // opensAt 22:00 → now(22:10)엔 SELECTING. 이전 슬롯은 만료되어 기본 창은 비어 있다.
         Room selecting = new Room(10L, RoomStatus.ACTIVE, DATE, 3, STARTS, null,
                 STARTS, S22, DATE.atTime(22, 15), DATE.atTime(22, 30), DATE.atTime(23, 0));
         given(roomReader.findById(10L)).willReturn(Optional.of(selecting));
-        given(roomMemberReader.getByRoomId(10L)).willReturn(List.of(member(20L, 1L), member(30L, 2L)));
-        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S20, S21))).willReturn(List.of());
 
         FeedResponse result = service.getFeed(10L, 1L);
 
         assertThat(result.slots()).isEmpty();
         assertThat(result.slots()).noneMatch(SlotStatus::current);
+        assertThat(result.nextCursor()).isEqualTo(S22);
+        then(videoPostReader).shouldHaveNoInteractions();
     }
 
     @Test
@@ -235,17 +256,17 @@ class RoomFeedServiceTest {
     @Test
     @DisplayName("현재 창이 비어도 historical cursor는 raw 슬롯 기준으로 진행된다")
     void givenEmptyHistoricalWindow_whenFeed_thenReturnsEmptyAndRawCursor() {
-        // starts 18:00, now 22:10 → 창 [20,21,22], 그 이전(18·19시)이 남음 → next_cursor=20:00
+        // starts 18:00, now 22:10 → 창 [22], 이전 슬롯 회고 시작 커서는 22:00
         given(roomMemberReader.getByRoomIdAndUserId(10L, 1L)).willReturn(member(20L, 1L));
         given(roomReader.findById(10L)).willReturn(Optional.of(roomStartingAt(DATE.atTime(18, 0))));
         given(roomMemberReader.getByRoomId(10L)).willReturn(List.of(member(20L, 1L), member(30L, 2L)));
-        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S20, S21, S22))).willReturn(List.of());
+        given(videoPostReader.getFeed(List.of(20L, 30L), List.of(S22))).willReturn(List.of());
 
         FeedResponse result = service.getFeed(10L, 1L);
 
         assertThat(result.slots()).extracting(SlotStatus::slotStart).containsExactly(S22);
         assertThat(result.posts()).isEmpty();
-        assertThat(result.nextCursor()).isEqualTo(S20);
+        assertThat(result.nextCursor()).isEqualTo(S22);
     }
 
     @Test

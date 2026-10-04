@@ -15,6 +15,22 @@ public class ChatMessageReader {
         this.chatMessageRepository = chatMessageRepository;
     }
 
+    public Optional<ChatMessage> findByRequest(Long chatRoomId, Long senderId, String requestId) {
+        return chatMessageRepository.findByRequest(chatRoomId, senderId, requestId);
+    }
+
+    public Optional<ChatMessage> findById(Long id) {
+        return chatMessageRepository.findById(id);
+    }
+
+    public List<ChatMessage> findAllByIds(java.util.Collection<Long> ids) {
+        return chatMessageRepository.findAllByIds(ids);
+    }
+
+    public List<ChatMessage> findPendingDeleteBroadcasts(int limit) {
+        return chatMessageRepository.findPendingDeleteBroadcasts(limit);
+    }
+
     public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
         return chatMessageRepository.findPage(chatRoomId, cursorId, limit);
     }

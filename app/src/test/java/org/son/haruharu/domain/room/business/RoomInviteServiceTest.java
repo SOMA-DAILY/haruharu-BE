@@ -1,6 +1,8 @@
 package org.son.haruharu.domain.room.business;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.util.concurrent.atomic.AtomicReference;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -17,7 +19,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.son.haruharu.common.time.AdjustableClock;
 import org.son.haruharu.domain.room.business.dto.JoinRoomResponse;
 import org.son.haruharu.domain.room.business.event.RoomMemberJoinedEvent;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotFoundException;
@@ -320,7 +321,7 @@ class RoomInviteServiceTest {
     void givenInviteExpiresWhileWaitingForRoomLock_whenJoin_thenRejectsAtSerializedTime() {
         LocalDateTime beforeExpiry = NOW;
         LocalDateTime afterExpiry = NOW.plusMinutes(2);
-        AdjustableClock advancingClock = new AdjustableClock(clock);
+        MutableClock advancingClock = new MutableClock(clock);
         advancingClock.fix(beforeExpiry);
         RoomInvite expiring = new RoomInvite(5L, ROOM_ID, CODE, RoomInviteStatus.ACTIVE, 6, 0,
                 NOW.plusMinutes(1), "admin");
@@ -344,7 +345,7 @@ class RoomInviteServiceTest {
     void givenRoomEndsWhileWaitingForRoomLock_whenExistingMemberJoins_thenTerminalWins() {
         LocalDateTime beforeEnd = NOW;
         LocalDateTime afterEnd = NOW.plusMinutes(2);
-        AdjustableClock advancingClock = new AdjustableClock(clock);
+        MutableClock advancingClock = new MutableClock(clock);
         advancingClock.fix(beforeEnd);
         RoomInviteService boundaryService = serviceWithClock(advancingClock);
         Room scheduled = new Room(ROOM_ID, RoomStatus.ACTIVE, NOW.toLocalDate(), 3, NOW.minusDays(1), null,
@@ -416,4 +417,38 @@ class RoomInviteServiceTest {
 
         verify(roomInviteWriter, times(1)).save(any());
     }
+
+    private static final class MutableClock extends Clock {
+        private final ZoneId zone;
+        private final AtomicReference<Instant> instant;
+
+        private MutableClock(Clock clock) {
+            this(clock.getZone(), new AtomicReference<>(clock.instant()));
+        }
+
+        private MutableClock(ZoneId zone, AtomicReference<Instant> instant) {
+            this.zone = zone;
+            this.instant = instant;
+        }
+
+        void fix(LocalDateTime time) {
+            instant.set(time.atZone(zone).toInstant());
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return zone;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return new MutableClock(zone, instant);
+        }
+
+        @Override
+        public Instant instant() {
+            return instant.get();
+        }
+    }
+
 }

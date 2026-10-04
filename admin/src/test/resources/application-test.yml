@@ -13,6 +13,10 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
 
 # test-only 더미. 부트스트랩은 비활성(테스트가 계정을 직접 시드).
+aws:
+  s3:
+    bucket: test-only-activity-bucket
+
 admin:
   jwt:
     secret: ${ADMIN_JWT_SECRET:test-only-admin-secret-not-for-prod-haruharu-min-32bytes}

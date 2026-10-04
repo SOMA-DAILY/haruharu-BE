@@ -54,6 +54,9 @@ application-staging*.yaml
 local-kakao-test/
 .claude/ref/
 docs/
+!/docs/
+/docs/*
+!/docs/engineering/
 docker-compose.yml
 http/
 

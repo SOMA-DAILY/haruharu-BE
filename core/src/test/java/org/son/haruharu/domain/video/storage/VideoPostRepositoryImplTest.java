@@ -34,6 +34,22 @@ class VideoPostRepositoryImplTest {
     }
 
     @Test
+    void givenEmptyMemberIds_whenFindUploadedRoomMemberIds_thenReturnsEmptyWithoutJpaCall() {
+        assertThat(repository.findUploadedRoomMemberIds(List.of(), List.of(LocalDateTime.now()))).isEmpty();
+
+        then(jpaRepository).should(never()).findUploadedRoomMemberIds(org.mockito.ArgumentMatchers.anyList(),
+                org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    void givenEmptySlotStarts_whenFindUploadedRoomMemberIds_thenReturnsEmptyWithoutJpaCall() {
+        assertThat(repository.findUploadedRoomMemberIds(List.of(1L), List.of())).isEmpty();
+
+        then(jpaRepository).should(never()).findUploadedRoomMemberIds(org.mockito.ArgumentMatchers.anyList(),
+                org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
     void givenEmptySlotStarts_whenFindVisibleSlotStarts_thenReturnsEmptyWithoutJpaCall() {
         assertThat(repository.findVisibleSlotStarts(List.of(1L), List.of())).isEmpty();
 

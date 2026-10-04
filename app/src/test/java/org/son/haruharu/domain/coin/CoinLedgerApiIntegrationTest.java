@@ -53,7 +53,7 @@ class CoinLedgerApiIntegrationTest {
         coinService.credit(new CoinCreditCommand(
                 userId, CoinBucket.PAID, 100, CoinLedgerReason.PURCHASE, "IAP", "r1"));
         // 리워드 50 적립 → 잔액 150
-        coinService.credit(CoinCreditCommand.matchRefund(userId, 50, "MATCH", "r2"));
+        coinService.credit(new CoinCreditCommand(userId, CoinBucket.REWARD, 50, CoinLedgerReason.MATCH_REFUND, "MATCH", "r2"));
         // 80 소모(리워드 먼저): 리워드 -50 → 잔액 100, 유료 -30 → 잔액 70
         coinService.spend(new CoinSpendCommand(userId, 80, CoinLedgerReason.MATCH_ENTER, "MATCH", "r3"));
 
@@ -86,7 +86,7 @@ class CoinLedgerApiIntegrationTest {
     void givenUnknownCursor_whenGetLedger_thenReturnsFirstPage() throws Exception {
         Long userId = 502L;
         coinService.createWallet(userId);
-        coinService.credit(CoinCreditCommand.matchRefund(userId, 10, "MATCH", "r1"));
+        coinService.credit(new CoinCreditCommand(userId, CoinBucket.REWARD, 10, CoinLedgerReason.MATCH_REFUND, "MATCH", "r1"));
 
         mockMvc.perform(get("/api/v1/coin/ledger").param("cursor", "99999999")
                         .with(authentication(auth(userId))))

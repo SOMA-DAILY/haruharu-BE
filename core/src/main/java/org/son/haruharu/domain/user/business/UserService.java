@@ -2,7 +2,6 @@ package org.son.haruharu.domain.user.business;
 
 import org.son.haruharu.domain.auth.business.AuthService;
 import org.son.haruharu.domain.coin.business.CoinService;
-import org.son.haruharu.domain.matching.business.MatchingService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.identity.implement.VerificationStatus;
@@ -38,7 +37,6 @@ public class UserService {
     private final ValueService valueService;
     private final CoinService coinService;
     private final AuthService authService;
-    private final MatchingService matchingService;
     private final Clock clock;
 
     public UserService(
@@ -49,7 +47,6 @@ public class UserService {
         ValueService valueService,
         CoinService coinService,
         AuthService authService,
-        MatchingService matchingService,
         Clock clock
     ) {
         this.userReader = userReader;
@@ -59,12 +56,11 @@ public class UserService {
         this.valueService = valueService;
         this.coinService = coinService;
         this.authService = authService;
-        this.matchingService = matchingService;
         this.clock = clock;
     }
 
     public UserProfileResponse getMyProfile(Long userId) {
-        userReader.getById(userId); // 존재 검증(없으면 404) — 프로필 응답 전 유저 존재 보장. (구 demoMode 소비는 #323로 제거)
+        userReader.getById(userId); // 존재 검증(없으면 404) — 프로필 응답 전 유저 존재 보장.
         ProfileResponse profile = profileService.getProfile(userId);
         Optional<VerifiedIdentity> verified = identityService.findVerified(userId);
         // 성별: 본인인증(PASS)이 있으면 그 검증된 값이 우선, 없으면 온보딩 자기신고 프로필 gender 로 폴백(#392).
@@ -117,9 +113,6 @@ public class UserService {
     @Transactional
     public void withdraw(Long userId) {
         User user = userReader.getById(userId);
-        // 잔여 매칭 신청 취소·환불을 지갑 삭제보다 먼저 한다(#255).
-        // 순서가 뒤바뀌면 환불(credit)이 CoinWallet.init()으로 지갑을 되살려 탈퇴자에게 구름이 남는다.
-        matchingService.cancelQueueOnWithdraw(userId);
         profileService.deleteProfileAndImages(userId);
         valueService.deleteAnswers(userId);
         coinService.deleteWallet(userId);
