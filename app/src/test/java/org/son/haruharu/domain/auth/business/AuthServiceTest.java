@@ -31,6 +31,8 @@ import org.son.haruharu.infrastructure.oauth.OAuthProvider;
 import org.son.haruharu.infrastructure.oauth.OAuthProviderRegistry;
 import org.son.haruharu.infrastructure.oauth.OAuthUserInfo;
 import org.son.haruharu.utils.JwtProvider;
+import org.son.haruharu.utils.JwtValidation;
+import org.son.haruharu.support.LogCapture;
 import org.son.haruharu.utils.TokenHashUtils;
 
 import java.time.LocalDateTime;
@@ -44,6 +46,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+
+import ch.qos.logback.classic.Level;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -233,8 +237,9 @@ class AuthServiceTest {
         RefreshToken refreshToken = new RefreshToken(10L, userId, tokenHash,
             LocalDateTime.now().plusDays(30), null);
 
-        given(jwtProvider.isValid(rawToken)).willReturn(true);
+        given(jwtProvider.validate(rawToken)).willReturn(JwtValidation.VALID);
         given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(refreshToken));
+        given(refreshTokenWriter.revokeByTokenHash(tokenHash)).willReturn(true);
         given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.now()));
         given(identityService.isVerified(userId)).willReturn(false);
         given(jwtProvider.generateAccessToken(userId)).willReturn("new-access-token");
@@ -258,8 +263,9 @@ class AuthServiceTest {
         RefreshToken refreshToken = new RefreshToken(10L, userId, tokenHash,
             LocalDateTime.now().plusDays(30), null);
 
-        given(jwtProvider.isValid(rawToken)).willReturn(true);
+        given(jwtProvider.validate(rawToken)).willReturn(JwtValidation.VALID);
         given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(refreshToken));
+        given(refreshTokenWriter.revokeByTokenHash(tokenHash)).willReturn(true);
         given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ONBOARDING, LocalDateTime.now()));
         given(jwtProvider.generateAccessToken(userId)).willReturn("new-access-token");
         given(jwtProvider.generateRefreshToken(userId)).willReturn("new-refresh-token");
@@ -278,7 +284,7 @@ class AuthServiceTest {
         RefreshToken expiredToken = new RefreshToken(10L, 20L, tokenHash,
             LocalDateTime.now().minusDays(1), null);
 
-        given(jwtProvider.isValid(rawToken)).willReturn(true);
+        given(jwtProvider.validate(rawToken)).willReturn(JwtValidation.VALID);
         given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(expiredToken));
 
         assertThatThrownBy(() -> authService.refresh(new TokenRefreshCommand(rawToken)))
@@ -294,7 +300,7 @@ class AuthServiceTest {
         RefreshToken revokedToken = new RefreshToken(10L, userId, tokenHash,
             LocalDateTime.now().plusDays(30), LocalDateTime.now().minusHours(1));
 
-        given(jwtProvider.isValid(rawToken)).willReturn(true);
+        given(jwtProvider.validate(rawToken)).willReturn(JwtValidation.VALID);
         given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(revokedToken));
 
         assertThatThrownBy(() -> authService.refresh(new TokenRefreshCommand(rawToken)))
@@ -304,12 +310,71 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("revoke 직후 grace 창 안에 같은 토큰이 다시 오면 401만 주고 전체 세션은 유지한다(#417 병렬 재발급)")
+    void givenTokenRevokedWithinGrace_whenRefresh_thenThrowsUnauthorizedWithoutRevokingAll() {
+        Long userId = 1L;
+        String rawToken = "just-revoked-refresh-token";
+        String tokenHash = TokenHashUtils.sha256Hex(rawToken);
+        // 앱이 refresh 를 병렬 2회 호출 → 첫 요청이 revoke 한 지 1초 뒤 늦은 요청이 도착
+        RefreshToken revokedToken = new RefreshToken(10L, userId, tokenHash,
+            LocalDateTime.now().plusDays(30), LocalDateTime.now().minusSeconds(1));
+
+        given(jwtProvider.validate(rawToken)).willReturn(JwtValidation.VALID);
+        given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(revokedToken));
+
+        assertThatThrownBy(() -> authService.refresh(new TokenRefreshCommand(rawToken)))
+            .isInstanceOf(InvalidRefreshTokenException.class);
+
+        then(refreshTokenWriter).should(never()).revokeAllByUserId(any());
+    }
+
+    @Test
+    @DisplayName("refresh 거절 사유는 응답이 아닌 서버 로그에만 남는다 — 토큰 원문은 남기지 않는다(#417)")
+    void givenRejectedRefresh_whenRefresh_thenLogsReasonWithoutRawToken() {
+        String rawToken = "expired-refresh-token";
+        String tokenHash = TokenHashUtils.sha256Hex(rawToken);
+        RefreshToken expiredToken = new RefreshToken(10L, 20L, tokenHash,
+            LocalDateTime.now().minusDays(1), null);
+        given(jwtProvider.validate(rawToken)).willReturn(JwtValidation.VALID);
+        given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(expiredToken));
+
+        try (LogCapture logs = LogCapture.of(AuthService.class)) {
+            assertThatThrownBy(() -> authService.refresh(new TokenRefreshCommand(rawToken)))
+                .isInstanceOf(InvalidRefreshTokenException.class)
+                .hasMessage(new InvalidRefreshTokenException().getMessage()); // 응답 메시지는 사유를 드러내지 않는다
+
+            assertThat(logs.at(Level.WARN)).hasSize(1);
+            assertThat(logs.text()).contains("EXPIRED").contains("userId=20").doesNotContain(rawToken);
+        }
+    }
+
+    @Test
+    @DisplayName("조회 후 다른 요청이 먼저 토큰을 소비했으면(원자적 revoke 0건) 401만 주고 전체 세션은 유지한다(#417 동시 재발급)")
+    void givenTokenConsumedConcurrently_whenRefresh_thenThrowsUnauthorizedWithoutIssuingOrRevokingAll() {
+        Long userId = 1L;
+        String rawToken = "raced-refresh-token";
+        String tokenHash = TokenHashUtils.sha256Hex(rawToken);
+        RefreshToken active = new RefreshToken(10L, userId, tokenHash, LocalDateTime.now().plusDays(30), null);
+
+        given(jwtProvider.validate(rawToken)).willReturn(JwtValidation.VALID);
+        given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(active));
+        given(userReader.getById(userId)).willReturn(new User(userId, UserStatus.ACTIVE, LocalDateTime.now()));
+        given(refreshTokenWriter.revokeByTokenHash(tokenHash)).willReturn(false); // 승자가 먼저 소비
+
+        assertThatThrownBy(() -> authService.refresh(new TokenRefreshCommand(rawToken)))
+            .isInstanceOf(InvalidRefreshTokenException.class);
+
+        then(refreshTokenWriter).should(never()).save(any());
+        then(refreshTokenWriter).should(never()).revokeAllByUserId(any());
+    }
+
+    @Test
     @DisplayName("DB에 없는 리프레시 토큰으로 갱신 시 401 예외가 발생한다")
     void givenUnknownRefreshToken_whenRefresh_thenThrowsUnauthorized() {
         String rawToken = "unknown-refresh-token";
         String tokenHash = TokenHashUtils.sha256Hex(rawToken);
 
-        given(jwtProvider.isValid(rawToken)).willReturn(true);
+        given(jwtProvider.validate(rawToken)).willReturn(JwtValidation.VALID);
         given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.refresh(new TokenRefreshCommand(rawToken)))
@@ -319,7 +384,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("JWT 형식이 잘못된 리프레시 토큰으로 갱신 시 401 예외가 발생한다")
     void givenMalformedRefreshToken_whenRefresh_thenThrowsUnauthorized() {
-        given(jwtProvider.isValid("malformed")).willReturn(false);
+        given(jwtProvider.validate("malformed")).willReturn(JwtValidation.MALFORMED);
 
         assertThatThrownBy(() -> authService.refresh(new TokenRefreshCommand("malformed")))
             .isInstanceOf(InvalidRefreshTokenException.class);
@@ -340,10 +405,26 @@ class AuthServiceTest {
 
         given(jwtProvider.isValid(rawToken)).willReturn(true);
         given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(refreshToken));
+        given(refreshTokenWriter.revokeByTokenHash(tokenHash)).willReturn(true);
 
         authService.logout(new LogoutCommand(rawToken));
 
         then(refreshTokenWriter).should().revokeByTokenHash(tokenHash);
+    }
+
+    @Test
+    @DisplayName("로그아웃 조회 후 다른 요청이 먼저 토큰을 소비했으면 401 예외가 발생한다(#417)")
+    void givenTokenConsumedConcurrently_whenLogout_thenThrowsUnauthorized() {
+        String rawToken = "raced-logout-token";
+        String tokenHash = TokenHashUtils.sha256Hex(rawToken);
+        RefreshToken active = new RefreshToken(10L, 1L, tokenHash, LocalDateTime.now().plusDays(30), null);
+
+        given(jwtProvider.isValid(rawToken)).willReturn(true);
+        given(refreshTokenReader.findByTokenHash(tokenHash)).willReturn(Optional.of(active));
+        given(refreshTokenWriter.revokeByTokenHash(tokenHash)).willReturn(false);
+
+        assertThatThrownBy(() -> authService.logout(new LogoutCommand(rawToken)))
+            .isInstanceOf(InvalidTokenException.class);
     }
 
     @Test

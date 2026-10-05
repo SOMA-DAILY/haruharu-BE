@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * status reconciler end-to-end(#320). 실제 DB(JPA)를 거쳐 저장 status 컬럼이 시각 기준으로 전이되는지 검증한다.
- * 스케줄러({@code RoomReconcileScheduler})는 시각 판단 없이 호출만 하는 얇은 래퍼라 여기서 다루지 않는다.
+ * 배치 잡({@code roomReconcileJob})은 시각 판단 없이 호출만 하는 얇은 래퍼라 여기서 다루지 않는다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -104,18 +104,6 @@ class RoomStatusReconcileIntegrationTest {
         assertThat(roomReader.getLegacyActive())
                 .noneMatch(r -> r.id().equals(scheduled.id()))
                 .anyMatch(r -> r.id().equals(legacyActive.id()));
-    }
-
-    @Test
-    @DisplayName("getScheduledPending 은 새 모델 PENDING 방을 반환하지 않는다 (09:00 조기 flip 차단)")
-    void getScheduledPending_excludesScheduledRoom() {
-        LocalDateTime startsAt = LocalDateTime.now().plusHours(6);
-        Room scheduled = persistScheduledRoom(startsAt);
-        Room legacyPending = roomWriter.save(Room.create(startsAt.toLocalDate(), 3));
-
-        assertThat(roomReader.getScheduledPending(startsAt.toLocalDate()))
-                .noneMatch(r -> r.id().equals(scheduled.id()))
-                .anyMatch(r -> r.id().equals(legacyPending.id()));
     }
 
     @Test

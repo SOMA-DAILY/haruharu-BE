@@ -1,6 +1,5 @@
 package org.son.haruharu.domain.room.storage;
 
-import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -34,9 +33,6 @@ public interface RoomJpaRepository extends JpaRepository<RoomEntity, Long> {
     Optional<RoomEntity> findByIdForUpdate(@Param("id") Long id);
 
     List<RoomEntity> findByIdInAndStatusNot(List<Long> ids, RoomStatus status);
-
-    List<RoomEntity> findAllByScheduledDateAndStatusAndStartsAtIsNull(
-            LocalDate scheduledDate, RoomStatus status);
 
     // #320 구 모델(자동매칭) 전용 배치 대상. 초대코드 모델 방(starts_at 보유)은 고정 벽시계 배치가 아니라
     // RoomStatusReconciler 가 방별 시각으로 처리하므로 조회 단계에서 잘라낸다.

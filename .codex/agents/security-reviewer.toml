@@ -2,9 +2,7 @@ name = "security-reviewer"
 description = "Read-only security reviewer for Spring Security, OAuth2, JWT, filters, user input, authentication, and payments."
 sandbox_mode = "read-only"
 developer_instructions = """
-Read `.claude/agents/security-reviewer.md`, `CLAUDE.md`, and
-`.claude/rules/architecture.md` from the repository root. Treat them as the
-canonical security review contract. Inspect only; never modify files. Return
-the required PASS/FAIL report with concrete file references. Any CRITICAL
-finding blocks commit and PR preparation.
+Read `docs/engineering/reviews/security-reviewer.md` from the repository root and follow
+its shared contract and relevant linked rules. Inspect only; never modify files. Report concrete findings with file and line references.
+Use the contract's result format and report any checks you could not perform.
 """

@@ -5,6 +5,7 @@ import org.son.haruharu.common.ApiErrorDetail;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.common.exception.BadRequestException;
 import org.son.haruharu.common.exception.ConflictException;
+import org.son.haruharu.common.exception.FieldValidationException;
 import org.son.haruharu.common.exception.ForbiddenException;
 import org.son.haruharu.common.exception.NotFoundException;
 import org.son.haruharu.common.exception.UnauthorizedException;
@@ -26,6 +27,13 @@ public class AdminExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException e) {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
+    }
+
+    /** 칸별 메시지를 error.fields 로 내린다(#457 편성 검증). BadRequestException 보다 구체적이라 먼저 잡힌다. */
+    @ExceptionHandler(FieldValidationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleFieldValidation(FieldValidationException e) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage(), e.getFieldErrors())));
     }
 
     @ExceptionHandler(UnauthorizedException.class)

@@ -6,7 +6,6 @@ import org.son.haruharu.domain.auth.implement.RefreshTokenRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -31,17 +30,9 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
         refreshTokenJpaRepository.deleteByUserId(userId);
     }
 
+    /** revokedAt 은 시스템 시각 기준(RefreshToken.isExpired 와 동일). */
     @Override
-    public void revokeByTokenHash(String tokenHash) {
-        refreshTokenJpaRepository.findByTokenHash(tokenHash)
-            .ifPresent(entity -> {
-                entity.revoke();
-                refreshTokenJpaRepository.save(entity);
-            });
-    }
-
-    @Override
-    public List<Long> findUserIdsLastActiveBetween(LocalDateTime from, LocalDateTime to) {
-        return refreshTokenJpaRepository.findUserIdsLastIssuedBetween(from, to);
+    public boolean revokeByTokenHash(String tokenHash) {
+        return refreshTokenJpaRepository.revokeIfActive(tokenHash, LocalDateTime.now()) == 1;
     }
 }

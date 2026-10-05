@@ -13,7 +13,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class MissionImageUploader {
     private final S3StoragePort storage;
     private final long systemUserId;
-    public MissionImageUploader(S3StoragePort storage, @org.springframework.beans.factory.annotation.Value("${haruharu.chat.system-user-id:0}") long systemUserId) {
+    // haruharu.chat.system-user-id 는 app 에서 빈 값일 수 있어(#455 yaml) 빈 문자열은 0 으로 받는다.
+    public MissionImageUploader(S3StoragePort storage,
+                                @org.springframework.beans.factory.annotation.Value(
+                                        "#{'${haruharu.chat.system-user-id:}'.isBlank() ? 0L : T(java.lang.Long).parseLong('${haruharu.chat.system-user-id:}')}")
+                                long systemUserId) {
         this.storage = storage;
         this.systemUserId = systemUserId;
     }

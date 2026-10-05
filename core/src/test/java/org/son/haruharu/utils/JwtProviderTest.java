@@ -1,7 +1,10 @@
 package org.son.haruharu.utils;
 
+import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,5 +68,35 @@ class JwtProviderTest {
         assertThat(jwtProvider.isValid(jwtProvider.generateAccessToken(1L))).isTrue();
         assertThat(jwtProvider.isValid(otherProvider.generateAccessToken(1L))).isFalse();
         assertThat(jwtProvider.isValid("garbage")).isFalse();
+    }
+
+    @Test
+    @DisplayName("같은 유저에게 연속 발급한 리프레시 토큰은 같은 초에 만들어져도 서로 다르다(#417)")
+    void givenSameUserSameSecond_whenGenerateRefreshTwice_thenTokensDiffer() {
+        // given/when — iat·exp가 초 단위라 같은 초 발급분은 jti 없이는 바이트 동일했다
+        String first = jwtProvider.generateRefreshToken(1L);
+        String second = jwtProvider.generateRefreshToken(1L);
+
+        assertThat(first).isNotEqualTo(second);
+        assertThat(jwtProvider.isValid(first)).isTrue();
+        assertThat(jwtProvider.isValid(second)).isTrue();
+        // 초 경계를 넘어 우연히 달라진 게 아니라 jti 가 있어서 다른 것임을 고정한다
+        assertThat(jtiOf(first)).isNotBlank().isNotEqualTo(jtiOf(second));
+    }
+
+    private static String jtiOf(String token) {
+        return Jwts.parser()
+            .verifyWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
+            .build().parseSignedClaims(token).getPayload().getId();
+    }
+
+    @Test
+    @DisplayName("같은 유저에게 연속 발급한 액세스 토큰도 서로 다르다(#417)")
+    void givenSameUserSameSecond_whenGenerateAccessTwice_thenTokensDiffer() {
+        String first = jwtProvider.generateAccessToken(1L);
+        String second = jwtProvider.generateAccessToken(1L);
+
+        assertThat(first).isNotEqualTo(second);
+        assertThat(jtiOf(first)).isNotBlank().isNotEqualTo(jtiOf(second));
     }
 }

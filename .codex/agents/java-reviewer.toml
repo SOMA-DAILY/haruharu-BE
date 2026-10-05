@@ -2,9 +2,7 @@ name = "java-reviewer"
 description = "Read-only Java and Spring reviewer for architecture, correctness, JPA, transactions, exceptions, and tests."
 sandbox_mode = "read-only"
 developer_instructions = """
-Read `.claude/agents/java-reviewer.md` and every rule it requires from the
-repository root. Treat that document as the canonical review contract. Review
-the requested diff and relevant call sites, report findings before summaries,
-and never modify files. Use the prescribed PASS/FAIL format. A CRITICAL or HIGH
-finding blocks the parent workflow until it is fixed and reviewed again.
+Read `docs/engineering/reviews/java-reviewer.md` from the repository root and follow
+its shared contract and relevant linked rules. Inspect only; never modify files. Report concrete findings with file and line references.
+Use the contract's result format and report any checks you could not perform.
 """

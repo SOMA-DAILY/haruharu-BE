@@ -89,7 +89,8 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     /**
      * 구독 인가(default-deny). 개인 목적지(/user/**)는 Spring이 세션 단위로 스코핑하므로 통과.
-     * 채팅방 토픽은 /sub/chat-rooms/{숫자} 또는 해당 방의 /events이면서 참여자일 때만 허용하고,
+     * 채팅방 토픽은 정확히 /sub/chat-rooms/{숫자} 또는 그 이벤트 경로 /sub/chat-rooms/{숫자}/events(#456)이면서
+     * 참여자일 때만 허용하고,
      * 그 외 모든 destination(와일드카드 /sub/chat-rooms/*, /sub/** 등)은 거부한다.
      * (default-allow면 SimpleBroker의 AntPathMatcher 와일드카드 구독으로 타 방 메시지를 도청할 수 있다.)
      */

@@ -60,7 +60,7 @@ public class FinalSelectionService {
         if (now.isBefore(selectionOpensAt(room))) {
             throw new NotFinalSelectionDayException();
         }
-        // 결과 발표(22:00) 이후 선택 불가 — 발표 시점의 미매칭 확정(위로 구름 지급, #143)이 뒤집히지 않게 한다.
+        // 최종선택 마감 이후 선택 불가 — 결과 발표 시점의 매칭·미매칭 확정이 뒤집히지 않게 한다.
         if (!now.isBefore(selectionClosesAt(room))) {
             throw new SelectionClosedException();
         }

@@ -104,7 +104,7 @@ public class RoomService {
                     room.currentDayAt(now), now));
     }
 
-    /** 종료되지 않은(PENDING/ACTIVE) 방 보유 여부. 매칭 큐 참가 차단 등 도메인 간 조율에 쓰인다. */
+    /** 종료되지 않은 방 보유 여부. 테스트 방 생성 등 도메인 간 조율에 쓰인다. */
     public boolean hasCurrentRoom(Long userId) {
         List<Long> candidateRoomIds = candidateRoomIds(userId);
         if (candidateRoomIds.isEmpty()) {
@@ -113,7 +113,7 @@ public class RoomService {
         return roomReader.findCurrent(candidateRoomIds, LocalDateTime.now(clock)).isPresent();
     }
 
-    /** 유저는 과거 방 이력(재매칭 방지용 보존)을 가질 수 있으므로, 후보 방 id를 모아 종료되지 않은 방을 한 번에 조회한다. */
+    /** 유저는 과거 방 이력을 가질 수 있으므로, 후보 방 id를 모아 종료되지 않은 방을 한 번에 조회한다. */
     private List<Long> candidateRoomIds(Long userId) {
         return roomMemberReader.findByUserId(userId).stream()
             .map(RoomMember::roomId)

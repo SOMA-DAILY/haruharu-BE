@@ -49,6 +49,15 @@ public class UserProfileEntity extends BaseEntity {
     @Column(length = 10)
     private Gender gender;
 
+    // 방 참가 전 온보딩 프로필(#455). 전부 null 허용.
+    private Integer birthYear;
+
+    @Column(length = 15)
+    private String department;
+
+    @Column(length = 40)
+    private String intoNow;
+
     public static UserProfileEntity from(UserProfile userProfile) {
         var entity = new UserProfileEntity();
         entity.id = userProfile.id();
@@ -61,6 +70,9 @@ public class UserProfileEntity extends BaseEntity {
         entity.drinkingStatus = userProfile.drinkingStatus();
         entity.smokingStatus = userProfile.smokingStatus();
         entity.gender = userProfile.gender();
+        entity.birthYear = userProfile.birthYear();
+        entity.department = userProfile.department();
+        entity.intoNow = userProfile.intoNow();
         return entity;
     }
 
@@ -75,7 +87,10 @@ public class UserProfileEntity extends BaseEntity {
                 nickname,
                 drinkingStatus,
                 smokingStatus,
-                gender
+                gender,
+                birthYear,
+                department,
+                intoNow
         );
     }
 }

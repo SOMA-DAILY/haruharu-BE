@@ -20,7 +20,6 @@ import org.son.haruharu.admin.domain.room.storage.exception.AdminRoomNotFoundExc
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.mission.business.command.CreateRoomMissionSlotCommand;
 import org.son.haruharu.domain.mission.implement.MissionPeriod;
-import org.son.haruharu.domain.mission.implement.exception.InvalidRoomMissionSlotScheduleException;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.exception.RoomInvalidScheduleException;
@@ -36,8 +35,8 @@ import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundExceptio
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -60,13 +59,14 @@ class AdminRoomCommandServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock AdminRoomReader adminRoomReader;
+    @Mock org.son.haruharu.domain.roomschedule.business.RoomScheduleService roomScheduleService;
 
     AdminRoomCommandService service;
 
     @BeforeEach
     void setUp() {
         service = new AdminRoomCommandService(roomService, roomInviteService, roomMissionSlotService,
-                roomMemberReader, roomMemberWriter, adminRoomReader);
+                roomMemberReader, roomMemberWriter, adminRoomReader, roomScheduleService);
     }
 
     private CreateAdminRoomCommand createCommand() {
@@ -76,7 +76,7 @@ class AdminRoomCommandServiceTest {
                 STARTS_AT.plusHours(63),
                 STARTS_AT.plusHours(64),
                 STARTS_AT.plusHours(72),
-                3, 6, null, slotCommands());
+                3, 6, null, true, slotCommands(), List.of());
     }
 
     private RoomInvite issuedInvite(String code) {
@@ -100,8 +100,7 @@ class AdminRoomCommandServiceTest {
         assertThat(res.code()).isEqualTo("K7M2QX");
         verify(roomService).createRoom(argThat(c ->
                 c.startsAt().equals(STARTS_AT) && c.totalDays() == 3));
-        verify(roomMissionSlotService, never()).createForRoom(
-                ROOM_ID, 3, STARTS_AT, STARTS_AT.plusHours(60), slotCommands());
+        verify(roomMissionSlotService, never()).createForRoom(any(), anyBoolean(), anyInt(), any(), any(), any());
     }
 
     @Test
@@ -123,9 +122,9 @@ class AdminRoomCommandServiceTest {
         CreateAdminRoomCommand original = createCommand();
         CreateAdminRoomCommand withoutSlots = new CreateAdminRoomCommand(original.startsAt(), original.finalSelectionOpensAt(),
                 original.finalSelectionClosesAt(), original.resultAt(), original.endsAt(), original.totalDays(),
-                original.maxUses(), original.inviteExpiresAt(), null);
+                original.maxUses(), original.inviteExpiresAt(), false, null, List.of());
         assertThat(service.createRoomWithInvite(withoutSlots, ADMIN_ID).roomId()).isEqualTo(ROOM_ID);
-        verify(roomMissionSlotService, never()).createForRoom(any(), anyInt(), any(), any(), any());
+        verify(roomMissionSlotService, never()).createForRoom(any(), anyBoolean(), anyInt(), any(), any(), any());
     }
 
     @Test

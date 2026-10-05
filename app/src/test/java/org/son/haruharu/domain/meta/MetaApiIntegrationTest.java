@@ -27,12 +27,12 @@ class MetaApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("인증 없이 GET /api/v1/meta 호출 시 정책 상수 matching.enter_cost 설정값(20)이 반환된다")
-    void givenNoAuth_whenGetMeta_thenReturnsEnterCost() throws Exception {
+    @DisplayName("인증 없이 메타를 조회할 수 있고 폐기된 자동매칭 정책은 응답에 포함되지 않는다")
+    void givenNoAuth_whenGetMeta_thenOmitsAutoMatchingPolicy() throws Exception {
         mockMvc.perform(get("/api/v1/meta"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
-                .andExpect(jsonPath("$.data.matching.enter_cost").value(20));
+                .andExpect(jsonPath("$.data.matching").doesNotExist());
     }
 
     @Test

@@ -27,8 +27,9 @@ class OperatorMissionRecordingServiceTest {
     }
     void setup(boolean deleted, LocalDateTime closes) {
         given(chatMembers.findMembership(1L, 7L)).willReturn(Optional.of(ChatRoomMember.join(1L, 7L, now)));
-        given(messages.findById(2L)).willReturn(Optional.of(new ChatMessage(2L, 1L, 9L, "미션", now,
-                new ChatMission(3L, 4L, "DAY1_1", "오늘 첫 미션"), deleted)));
+        given(messages.findById(2L)).willReturn(Optional.of(new ChatMessage(2L, 1L, 9L, "미션", now, null, null, null, null, null,
+                org.son.haruharu.domain.chat.implement.ChatMessageType.ADMIN, null, deleted ? now : null, null,
+                new ChatMission(3L, 4L, "DAY1_1", "오늘 첫 미션"))));
         if (!deleted) given(rooms.findById(4L)).willReturn(Optional.of(Room.createScheduled(now.minusHours(1), closes,
                 closes.plusHours(1), closes.plusHours(2), closes.plusDays(1), 3)));
     }

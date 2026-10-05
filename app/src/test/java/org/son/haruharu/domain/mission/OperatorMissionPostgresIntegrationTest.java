@@ -147,7 +147,7 @@ class OperatorMissionPostgresIntegrationTest {
         var sent=service.history(roomId,null,20).getFirst();
         var message=messages.findById(sent.messageId()).orElseThrow();
         assertThat(sent.deleteProcessedAt()).isNotNull();
-        assertThat(message.visibleContent()).isEqualTo("삭제된 메시지");
+        assertThat(message.displayContent()).isEqualTo("삭제된 메시지");
         assertThat(message.visibleMission()).isNull();
     }
     void awaitLock(String table) {

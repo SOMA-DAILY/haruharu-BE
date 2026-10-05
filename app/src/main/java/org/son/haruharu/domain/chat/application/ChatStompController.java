@@ -36,7 +36,7 @@ public class ChatStompController {
                      Principal principal) {
         Long senderId = ((StompPrincipal) principal).userId();
         // 커밋 후 리스너가 종료 상태를 확인한 뒤 브로드캐스트한다.
-        chatService.sendMessage(chatRoomId, senderId, request.content());
+        chatService.sendMessage(chatRoomId, senderId, request.content(), request.replyToMessageId());
     }
 
     /** 참여자 아님·방 없음 등 비즈니스 예외를 발신자 개인 큐(/user/queue/errors)로 알린다. */

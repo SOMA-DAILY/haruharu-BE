@@ -25,7 +25,9 @@ public record UpdateProfileCommand(
             this.height(), this.mbti(), this.nickname(),
             this.drinkingStatus() != null ? this.drinkingStatus() : existing.drinkingStatus(),
             this.smokingStatus() != null ? this.smokingStatus() : existing.smokingStatus(),
-            this.gender() != null ? this.gender() : existing.gender()
+            this.gender() != null ? this.gender() : existing.gender(),
+            // 방 온보딩 프로필(#455)은 이 API 가 다루지 않는다. 지금 앱 마이페이지 저장으로 지워지지 않게 기존 값을 보존한다.
+            existing.birthYear(), existing.department(), existing.intoNow()
         );
     }
 }

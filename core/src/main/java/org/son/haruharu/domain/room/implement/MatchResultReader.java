@@ -19,11 +19,6 @@ public class MatchResultReader {
                 .orElseThrow(MatchResultNotFoundException::new);
     }
 
-    /** 해당 멤버의 상호매칭 성사 여부(예외 없이 boolean, 위로 구름 대상 판정용). */
-    public boolean hasMatch(Long memberId) {
-        return matchResultRepository.findByMember(memberId).isPresent();
-    }
-
     /** 해당 멤버의 매칭 결과(없으면 empty — 미성사도 정상 흐름인 조회용). */
     public Optional<MatchResult> findByMember(Long memberId) {
         return matchResultRepository.findByMember(memberId);

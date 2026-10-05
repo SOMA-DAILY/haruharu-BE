@@ -26,14 +26,14 @@ public class AdminDashboardController {
         this.adminDashboardService = adminDashboardService;
     }
 
-    @Operation(summary = "대시보드 요약 KPI", description = "진행중 방(일차별)·매칭 대기(성비)·오늘 가입 수.")
+    @Operation(summary = "대시보드 요약 KPI", description = "진행중 방(일차별)·오늘 가입 수.")
     @GetMapping("/summary")
     public ApiResponse<DashboardSummaryResponse> summary() {
         return ApiResponse.ok(adminDashboardService.getSummary());
     }
 
     @Operation(summary = "대시보드 추이(metrics)",
-            description = "기간별 일자 가입 추이 + 매칭 신청/성사/성공률. from/to 미지정 시 최근 14일, from>to면 400, 92일 초과 시 clamp.")
+            description = "기간별 일자 가입 추이. from/to 미지정 시 최근 14일, from>to면 400, 92일 초과 시 clamp.")
     @GetMapping("/metrics")
     public ApiResponse<DashboardMetricsResponse> metrics(
             @Parameter(description = "시작일(포함, 미지정 시 to-13)", example = "2026-07-01")

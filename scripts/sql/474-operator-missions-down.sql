@@ -4,7 +4,6 @@ ALTER TABLE chat_messages DROP COLUMN IF EXISTS operator_mission_id;
 ALTER TABLE chat_messages DROP COLUMN IF EXISTS mission_room_id;
 ALTER TABLE chat_messages DROP COLUMN IF EXISTS mission_template_id;
 ALTER TABLE chat_messages DROP COLUMN IF EXISTS mission_title;
-ALTER TABLE chat_messages DROP COLUMN IF EXISTS admin_deleted;
 DROP TABLE IF EXISTS operator_missions;
 ALTER TABLE chat_messages DROP COLUMN IF EXISTS mission_image_id;
 DROP TABLE IF EXISTS operator_mission_images;

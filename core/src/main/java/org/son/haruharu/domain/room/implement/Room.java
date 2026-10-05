@@ -23,11 +23,7 @@ public record Room(
                 LocalDateTime startedAt, LocalDateTime endedAt) {
         this(id, status, scheduledDate, totalDays, startedAt, endedAt, null, null, null, null, null);
     }
-    /**
-     * 세션 결과 발표(최종선택 마감·미매칭 확정) 시각. room 세션의 고유 개념으로,
-     * 매칭 큐 확정 시각(MatchingQueue.CONFIRM_HOUR)과 우연히 같은 22시일 뿐 별개다 —
-     * 타 도메인 implement 결합을 피하기 위해 room이 소유한다(#143 리뷰 반영).
-     */
+    /** 스케줄이 없는 구 모델 방의 결과 발표(최종선택 마감) 시각. */
     public static final int RESULT_ANNOUNCE_HOUR = 22;
 
     /**
@@ -36,20 +32,23 @@ public record Room(
      */
     public static final int DAY_START_HOUR = 9;
 
+    /** 기본 세션 일수. 방별 운영 스케줄은 각 방에 별도로 저장한다. */
+    public static final int DEFAULT_TOTAL_DAYS = 3;
+
     /**
      * 구 모델 방의 최종선택 오픈 시각(마지막 날 시각). 구 UploadSlot Day3 마지막 슬롯 종료(18시) 대체.
      * 새 모델 방은 어드민 입력 opens_at 을 쓰므로 쓰이지 않는다.
      */
     private static final int LEGACY_SELECTION_OPEN_HOUR = 18;
 
-    /** 매칭 확정으로 방 생성: scheduledDate(확정일) 당일 시작 예정. 시작 전이므로 PENDING. (구 모델·보류) */
+    /** 스케줄이 없는 구 모델 방 생성. 기존 데이터·테스트 방 호환용. */
     public static Room create(LocalDate scheduledDate, int totalDays) {
         return new Room(null, RoomStatus.PENDING, scheduledDate, totalDays, null, null);
     }
 
     /**
      * 초대코드 모델 방 생성(#311): 운영진/어드민이 시각 4~5개를 직접 입력한다. 시작 전이므로 PENDING.
-     * scheduledDate 는 구 조회 호환을 위해 startsAt 의 날짜로 채운다(구 activator 게이팅은 P4-1).
+     * scheduledDate 는 구 조회 호환을 위해 startsAt 의 날짜로 채운다.
      * status 는 저장하되 timestamp 가 source of truth — 실제 상태는 statusAt(now) 로 파생한다.
      */
     public static Room createScheduled(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
@@ -138,6 +137,18 @@ public record Room(
             return 0;
         }
         return (int) Math.min(totalDays, rawDayAt(now));
+    }
+
+    /**
+     * 시각의 DAY 표기 = 달력 날짜 차 + 1(방 시작 전이면 0 이하). 앵커는 startsAt, 없으면 startedAt, 둘 다 없으면 null.
+     * currentDayAt 은 24시간 단위라 09:00 시작 방의 DAY2 08:00 이 DAY1 로 나오므로 편성·공개 시각 표기엔 이걸 쓴다.
+     */
+    public Integer calendarDayOf(LocalDateTime at) {
+        LocalDateTime anchor = startsAt != null ? startsAt : startedAt;
+        if (at == null || anchor == null) {
+            return null;
+        }
+        return (int) ChronoUnit.DAYS.between(anchor.toLocalDate(), at.toLocalDate()) + 1;
     }
 
     /**

@@ -35,4 +35,12 @@ public class ChatDeliveryService {
             delivery.run();
         }
     }
+
+    /**
+     * 방이 아직 활성인지(물리·소프트 삭제 아님). 다른 인스턴스가 발행한 메시지를 로컬 전달하기 직전 재확인용(#453) —
+     * 발행 인스턴스의 {@link #deliverIfActive} 이후 방이 닫혔으면 버린다. 잠금 없이 조회만 한다.
+     */
+    public boolean isActive(Long chatRoomId) {
+        return chatRoomReader.findById(chatRoomId).isPresent();
+    }
 }
