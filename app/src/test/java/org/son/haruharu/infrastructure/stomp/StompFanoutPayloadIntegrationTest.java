@@ -61,11 +61,13 @@ class StompFanoutPayloadIntegrationTest {
     @DisplayName("Redis 를 거친 payload 는 클라이언트에게 직접 보낸 것과 같은 snake_case JSON 으로 나간다")
     void givenChatBroadcast_whenRelayedThroughFanout_thenSameJsonAsDirectSend() {
         // given
-        // 중첩 객체(reply_to·reactions)와 #456·#457 필드까지 기본값이 아닌 값으로 채워 팬아웃 왕복을 확인한다
+        // 중첩 객체(reply_to·reactions·mission)와 #456·#457·#474 필드까지 기본값이 아닌 값으로 채워 팬아웃 왕복을 확인한다
         ChatMessageBroadcast broadcast = new ChatMessageBroadcast(1024L, 12L, 102L, "안녕",
                 LocalDateTime.of(2026, 9, 26, 21, 0, 5), 7L,
                 List.of(new ReactionCountItem("LAUGH", 3)), null,
-                ReplyToView.of(880L, "선우", "원문", true), "ADMIN", "하루", false);
+                ReplyToView.of(880L, "선우", "원문", true), "ADMIN", "하루", false,
+                new org.son.haruharu.domain.chat.implement.ChatMission(31L, 9L, "DAY2_3", "오늘의 미션", 5L,
+                        new org.son.haruharu.domain.mission.business.dto.MissionImageResponse(5L, "https://img.test/signed", 20, 30)));
 
         // 발행 인스턴스 A: 실제 Boot 매퍼로 envelope 를 만든다(Redis 는 발행 문자열만 캡처)
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);

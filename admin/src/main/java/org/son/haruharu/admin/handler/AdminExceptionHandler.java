@@ -84,6 +84,11 @@ public class AdminExceptionHandler {
     }
 
     /** 유저 서버와 동일 방침(#259) — 클라 연결 종료는 서버 버그가 아니므로 ERROR·스택으로 남기지 않는다. */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUploadTooLarge(org.springframework.web.multipart.MaxUploadSizeExceededException exception) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(ApiResponse.error(new ApiErrorDetail("MISSION_IMAGE_TOO_LARGE", "10MB 이하의 사진을 선택해 주세요.")));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
         if (DisconnectedClientHelper.isClientDisconnectedException(e)) {

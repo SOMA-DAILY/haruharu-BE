@@ -25,6 +25,47 @@ import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class StompAuthChannelInterceptorTest {
+    @Test @DisplayName("서버 전용 STOMP 명령은 클라이언트에서 사용할 수 없다")
+    void serverCommandsCannotBypassSendAuthorization() {
+        for (StompCommand command : new StompCommand[]{StompCommand.MESSAGE,StompCommand.CONNECTED,StompCommand.ERROR,StompCommand.RECEIPT}) {
+            var accessor=StompHeaderAccessor.create(command);
+            accessor.setDestination("/sub/chat-rooms/10");
+            accessor.setUser(new StompPrincipal(7L));accessor.setLeaveMutable(true);
+            assertThatThrownBy(()->interceptor().preSend(message(accessor),channel)).isInstanceOf(StompAuthorizationException.class);
+        }
+    }
+    @Test @DisplayName("CONNECT의 별칭 STOMP도 JWT 인증을 요구한다")
+    void stompAliasRequiresAuthentication() {
+        var accessor=StompHeaderAccessor.create(StompCommand.STOMP);accessor.setLeaveMutable(true);
+        assertThatThrownBy(()->interceptor().preSend(message(accessor),channel)).isInstanceOf(StompAuthenticationException.class);
+    }
+
+    @Test
+    @DisplayName("클라이언트는 브로커 토픽에 운영 메시지나 삭제 이벤트를 직접 발행할 수 없다")
+    void send_toBroker_isDenied() {
+        for (String destination : new String[]{"/sub/chat-rooms/10", "/queue/errors", "/user/queue/errors", "/pub/unknown"}) {
+            StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SEND);
+            accessor.setDestination(destination);
+            accessor.setUser(new StompPrincipal(7L));
+            accessor.setLeaveMutable(true);
+            assertThatThrownBy(() -> interceptor().preSend(message(accessor), channel))
+                    .isInstanceOf(StompAuthorizationException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("채팅 전송은 인증된 방 참여자만 허용한다")
+    void send_toMessageEndpoint_checksMembership() {
+        given(chatRoomMemberReader.findMembership(10L, 7L)).willReturn(Optional.of(member(10L, 7L)));
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SEND);
+        accessor.setDestination("/pub/chat-rooms/10/messages");
+        accessor.setUser(new StompPrincipal(7L));
+        accessor.setLeaveMutable(true);
+        assertThatCode(() -> interceptor().preSend(message(accessor), channel)).doesNotThrowAnyException();
+        accessor.setUser(null);
+        assertThatThrownBy(() -> interceptor().preSend(message(accessor), channel))
+                .isInstanceOf(StompAuthenticationException.class);
+    }
 
     @Mock
     JwtProvider jwtProvider;
@@ -121,6 +162,20 @@ class StompAuthChannelInterceptorTest {
         StompHeaderAccessor accessor = subscribeAccessor("/sub/chat-rooms/10", 7L);
 
         assertThatCode(() -> interceptor().preSend(message(accessor), channel)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("메시지 변경 알림 경로도 현재 방 참여자만 정확한 경로로 구독할 수 있다")
+    void givenRoomMembership_whenSubscribingToMessageEvents_thenOnlyExactOwnRoomIsAllowed() {
+        given(chatRoomMemberReader.findMembership(10L, 7L)).willReturn(Optional.of(member(10L, 7L)));
+        given(chatRoomMemberReader.findMembership(999L, 7L)).willReturn(Optional.empty());
+
+        assertThatCode(() -> interceptor().preSend(message(subscribeAccessor("/sub/chat-rooms/10/events", 7L)), channel))
+                .doesNotThrowAnyException();
+        for (String destination : new String[]{"/sub/chat-rooms/999/events", "/sub/chat-rooms/10/*", "/sub/chat-rooms/10/events/more"}) {
+            assertThatThrownBy(() -> interceptor().preSend(message(subscribeAccessor(destination, 7L)), channel))
+                    .isInstanceOf(StompAuthorizationException.class);
+        }
     }
 
     @Test

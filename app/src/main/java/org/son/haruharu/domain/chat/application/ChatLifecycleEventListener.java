@@ -24,11 +24,11 @@ public class ChatLifecycleEventListener {
     }
 
     // 다른 인스턴스는 도착 시점에 방이 닫혔으면 버린다(guard) — 종료 알림보다 늦게 도착하는 메시지를 막는다(#453).
+    // 전달 직전 저장된 메시지를 다시 읽는다(#474) — 미션 카드 사진의 서명 URL 을 붙이고, 그사이 운영자가 지웠으면 삭제 상태로 보낸다.
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void broadcast(ChatMessageBroadcastEvent event) {
-        Long chatRoomId = event.message().chatRoomId();
-        chatDeliveryService.deliverIfActive(chatRoomId, () -> deliveryPort.sendToTopic(
-                "/sub/chat-rooms/" + chatRoomId, event.message(), ChatRoomDeliveryGuard.activeRoom(chatRoomId)));
+        chatDeliveryService.deliverMessage(event.message(), message -> deliveryPort.sendToTopic(
+                "/sub/chat-rooms/" + message.chatRoomId(), message, ChatRoomDeliveryGuard.activeRoom(message.chatRoomId())));
     }
 
     // 종료 알림은 방이 닫힌 뒤에 보내는 것이라 guard 없이 전달한다.
