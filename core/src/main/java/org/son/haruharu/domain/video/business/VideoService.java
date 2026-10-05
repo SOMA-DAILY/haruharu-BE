@@ -80,8 +80,17 @@ public class VideoService {
     @Transactional
     public VideoPostResponse upload(Long userId, Long roomId, VideoUploadCommand command) {
         RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
-        Room room = roomReader.findById(roomId)
+        Room room = roomReader.findByIdForUpdate(roomId)
                 .orElseThrow(RoomNotFoundException::new);
+        validateOwnUrl(userId, command.videoUrl());
+        // 같은 파일의 제출 응답이 유실돼도 원래 게시물을 반환한다. 새 업로드 알림은 다시 만들지 않는다.
+        var existing = videoPostReader.findActiveByRoomMember(member.id()).stream()
+                .filter(post -> post.videoUrl().equals(command.videoUrl())).findFirst();
+        if (existing.isPresent()) {
+            VideoPost post = existing.orElseThrow();
+            return VideoPostResponse.of(post, s3StoragePort.createPresignedGetUrl(post.videoUrl()),
+                    s3StoragePort.createPresignedGetUrl(post.thumbnailUrl()));
+        }
         LocalDateTime now = LocalDateTime.now(clock);
         // 시각 파생 상태로 판정(저장 status는 배치 지연될 수 있음). 새 모델(starts_at) 방만 업로드 대상.
         if (room.startsAt() == null || room.statusAt(now) != RoomStatus.ACTIVE) {
@@ -90,7 +99,9 @@ public class VideoService {
 
         // 슬롯은 서버가 판정하는 "현재 슬롯"(starts_at 상대 정시). 클라는 슬롯을 지정하지 않는다.
         LocalDateTime slotStart = SlotClock.currentSlotStart(room.startsAt(), now);
-        validateOwnUrl(userId, command.videoUrl());
+        if (command.expectedSlotStart() != null && !command.expectedSlotStart().equals(slotStart)) {
+            throw new RoomNotActiveException();
+        }
 
         // 업로드 세션 게시(VideoUploadSessionService)와 같은 멤버 락으로 검사·저장을 직렬화해 슬롯당 1개를 지킨다.
         roomMemberReader.lockById(member.id());

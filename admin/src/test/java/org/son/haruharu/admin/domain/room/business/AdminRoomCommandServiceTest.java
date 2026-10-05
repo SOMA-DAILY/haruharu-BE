@@ -20,7 +20,6 @@ import org.son.haruharu.admin.domain.room.storage.exception.AdminRoomNotFoundExc
 import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.mission.business.command.CreateRoomMissionSlotCommand;
 import org.son.haruharu.domain.mission.implement.MissionPeriod;
-import org.son.haruharu.domain.mission.implement.exception.InvalidRoomMissionSlotScheduleException;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.exception.RoomInvalidScheduleException;
@@ -38,7 +37,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -102,8 +100,7 @@ class AdminRoomCommandServiceTest {
         assertThat(res.code()).isEqualTo("K7M2QX");
         verify(roomService).createRoom(argThat(c ->
                 c.startsAt().equals(STARTS_AT) && c.totalDays() == 3));
-        verify(roomMissionSlotService).createForRoom(
-                ROOM_ID, true, 3, STARTS_AT, STARTS_AT.plusHours(60), slotCommands());
+        verify(roomMissionSlotService, never()).createForRoom(any(), anyBoolean(), anyInt(), any(), any(), any());
     }
 
     @Test
@@ -117,15 +114,17 @@ class AdminRoomCommandServiceTest {
     }
 
     @Test
-    @DisplayName("미션 슬롯 검증에 실패하면 초대코드는 발급하지 않는다")
-    void givenInvalidMissionSlots_whenCreateRoomWithInvite_thenThrowsAndNoInvite() {
+    @DisplayName("새 방은 자동 미션 슬롯 없이 생성하고 초대코드를 발급한다")
+    void givenNoMissionSlots_whenCreateRoomWithInvite_thenCreatesWithoutAutoMissions() {
         given(roomService.createRoom(any())).willReturn(ROOM_ID);
-        given(roomMissionSlotService.createForRoom(any(), anyBoolean(), anyInt(), any(), any(), anyList()))
-                .willThrow(new InvalidRoomMissionSlotScheduleException());
-
-        assertThatThrownBy(() -> service.createRoomWithInvite(createCommand(), ADMIN_ID))
-                .isInstanceOf(InvalidRoomMissionSlotScheduleException.class);
-        verify(roomInviteService, never()).issueFor(any(), any(), any(), any());
+        given(roomInviteService.issueFor(eq(ROOM_ID), eq(6), isNull(), eq("admin:1")))
+                .willReturn(issuedInvite("K7M2QX"));
+        CreateAdminRoomCommand original = createCommand();
+        CreateAdminRoomCommand withoutSlots = new CreateAdminRoomCommand(original.startsAt(), original.finalSelectionOpensAt(),
+                original.finalSelectionClosesAt(), original.resultAt(), original.endsAt(), original.totalDays(),
+                original.maxUses(), original.inviteExpiresAt(), false, null, List.of());
+        assertThat(service.createRoomWithInvite(withoutSlots, ADMIN_ID).roomId()).isEqualTo(ROOM_ID);
+        verify(roomMissionSlotService, never()).createForRoom(any(), anyBoolean(), anyInt(), any(), any(), any());
     }
 
     @Test

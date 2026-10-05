@@ -18,6 +18,7 @@ import org.son.haruharu.domain.chat.business.dto.MessageReactionResponse;
 import org.son.haruharu.domain.chat.business.dto.MessageReactorResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
+import org.son.haruharu.domain.mission.business.dto.MissionImageResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -120,6 +121,18 @@ public class ChatController {
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(chatMessageReactionService.getReactors(userId, chatRoomId, messageId));
+    }
+
+    @Operation(summary = "운영자 미션 카드 참고 사진",
+            description = "미션 카드 메시지의 사진 서명 URL 을 새로 발급한다(#474). 채팅방 멤버가 아니면 403(CHAT_NOT_MEMBER), "
+                    + "카드가 아니거나 사진이 없거나 운영자가 지웠으면 404(CHAT_MISSION_IMAGE_NOT_FOUND).")
+    @GetMapping("/{chatRoomId}/messages/{messageId}/mission-image")
+    public ApiResponse<MissionImageResponse> getMissionImage(
+            @Parameter(description = "채팅방 id") @PathVariable Long chatRoomId,
+            @Parameter(description = "메시지 id") @PathVariable Long messageId,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(chatService.getMissionImage(chatRoomId, userId, messageId));
     }
 
     @Operation(summary = "메시지 읽음 처리",

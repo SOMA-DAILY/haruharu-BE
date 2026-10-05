@@ -24,7 +24,8 @@ import java.util.regex.Pattern;
 @Component
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
-    private static final Pattern CHAT_ROOM_TOPIC = Pattern.compile("/sub/chat-rooms/(\\d+)(/events)?");
+    private static final Pattern CHAT_ROOM_TOPIC = Pattern.compile("/sub/chat-rooms/(\\d+)(?:/events)?");
+    private static final Pattern CHAT_MESSAGE_ENDPOINT = Pattern.compile("/pub/chat-rooms/(\\d+)/messages");
 
     private final JwtProvider jwtProvider;
     private final ChatRoomMemberReader chatRoomMemberReader;
@@ -40,12 +41,37 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         if (accessor == null) {
             return message;
         }
-        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+        StompCommand command = accessor.getCommand();
+        if (command == null) {
+            if (accessor.getMessageType() != org.springframework.messaging.simp.SimpMessageType.HEARTBEAT) {
+                throw new StompAuthorizationException();
+            }
+            return message;
+        }
+        if (StompCommand.CONNECT.equals(command) || StompCommand.STOMP.equals(command)) {
             accessor.setUser(authenticate(accessor));
-        } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+        } else if (StompCommand.SUBSCRIBE.equals(command)) {
             authorizeSubscription(accessor);
+        } else if (StompCommand.SEND.equals(command)) {
+            authorizeSend(accessor);
+        } else if (command == StompCommand.UNSUBSCRIBE || command == StompCommand.DISCONNECT
+                || command == StompCommand.ACK || command == StompCommand.NACK) {
+            currentUserId(accessor);
+        } else {
+            throw new StompAuthorizationException();
         }
         return message;
+    }
+
+    private void authorizeSend(StompHeaderAccessor accessor) {
+        Long userId = currentUserId(accessor);
+        String destination = accessor.getDestination();
+        Matcher matcher = CHAT_MESSAGE_ENDPOINT.matcher(destination == null ? "" : destination);
+        if (!matcher.matches()) throw new StompAuthorizationException();
+        Long chatRoomId = parseChatRoomId(matcher.group(1));
+        if (chatRoomMemberReader.findMembership(chatRoomId, userId).filter(member -> !member.hasLeft()).isEmpty()) {
+            throw new StompAuthorizationException();
+        }
     }
 
     private StompPrincipal authenticate(StompHeaderAccessor accessor) {
@@ -69,6 +95,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
      * (default-allow면 SimpleBroker의 AntPathMatcher 와일드카드 구독으로 타 방 메시지를 도청할 수 있다.)
      */
     private void authorizeSubscription(StompHeaderAccessor accessor) {
+        Long userId = currentUserId(accessor);
         String destination = accessor.getDestination();
         if (destination == null) {
             throw new StompAuthorizationException();
@@ -81,7 +108,6 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             throw new StompAuthorizationException();
         }
         Long chatRoomId = parseChatRoomId(matcher.group(1));
-        Long userId = currentUserId(accessor);
         boolean member = chatRoomMemberReader.findMembership(chatRoomId, userId)
                 .filter(member2 -> !member2.hasLeft())
                 .isPresent();

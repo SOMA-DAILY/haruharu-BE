@@ -112,7 +112,7 @@ class VideoServiceTest {
         var command = new VideoUploadCommand(url, null, "안녕");
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
-        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom(roomId)));
+        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(activeRoom(roomId)));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(videoPostReader.hasActiveUpload(memberId, SLOT_AT_12)).willReturn(false);
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
@@ -132,7 +132,7 @@ class VideoServiceTest {
     void givenNotActiveRoom_whenUpload_thenThrows() {
         Long userId = 1L;
         Long roomId = 11L;
-        var command = new VideoUploadCommand(BASE + "x", null, null);
+        var command = new VideoUploadCommand(BASE + "users/" + userId + "/videos/v.mp4", null, null);
         // starts_at 20:00 → serviceAt(12)에선 아직 시작 전 → statusAt=PENDING
         LocalDateTime starts = DATE.atTime(20, 0);
         Room pending = new Room(roomId, RoomStatus.PENDING, DATE, 3, null, null,
@@ -140,7 +140,8 @@ class VideoServiceTest {
                 starts.plusDays(2).plusHours(3), starts.plusDays(3));
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(500L, userId));
-        given(roomReader.findById(roomId)).willReturn(Optional.of(pending));
+        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(pending));
+        given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
 
         assertThatThrownBy(() -> serviceAt(12).upload(userId, roomId, command))
             .isInstanceOf(RoomNotActiveException.class);
@@ -156,7 +157,7 @@ class VideoServiceTest {
         var command = new VideoUploadCommand(url, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId));
-        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom(roomId)));
+        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(activeRoom(roomId)));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(videoPostReader.hasActiveUpload(memberId, SLOT_AT_12)).willReturn(true);
 
@@ -174,7 +175,8 @@ class VideoServiceTest {
         var command = new VideoUploadCommand(url, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId));
-        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom(roomId)));
+        // 업로드는 방 행을 잠그고 시작한다(#474, 운영자 미션 발송과 직렬화).
+        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(activeRoom(roomId)));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(videoPostReader.hasActiveUpload(memberId, SLOT_AT_12)).willReturn(false);
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
