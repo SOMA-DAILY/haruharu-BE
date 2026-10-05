@@ -69,7 +69,7 @@ public class VideoUploadSessionController {
             @Parameter(description = "방 id", example = "1") @PathVariable Long roomId,
             @Parameter(description = "업로드 세션 id(job_id)") @PathVariable UUID sessionId,
             @Parameter(description = "파일 종류: viewer·feed·thumbnail", example = "feed") @PathVariable String variant,
-            @RequestBody(required = false) VideoUploadAssetPresignRequest request,
+            @Valid @RequestBody(required = false) VideoUploadAssetPresignRequest request,
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         String contentType = request == null ? null : request.contentType();

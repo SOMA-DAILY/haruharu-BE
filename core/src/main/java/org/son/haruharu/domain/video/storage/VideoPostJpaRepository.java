@@ -2,12 +2,18 @@ package org.son.haruharu.domain.video.storage;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 public interface VideoPostJpaRepository extends JpaRepository<VideoPostEntity, Long> {
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update VideoPostEntity v set v.caption = :caption where v.id = :videoPostId "
+            + "and v.deletedAt is null and v.isHidden = false")
+    int updateCaption(@Param("videoPostId") Long videoPostId, @Param("caption") String caption);
 
     /** 주어진 슬롯 창(slot_start 목록) 중 이 멤버가 업로드(미삭제)한 슬롯들. 슬롯별 잠금 판정용 배치 조회. */
     @Query("select distinct v.slotStart from VideoPostEntity v "

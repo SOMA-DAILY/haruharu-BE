@@ -38,7 +38,7 @@ public class VideoUploadSessionEntity {
     @Column(nullable = false)
     private LocalDateTime expiresAt;
 
-    @Column(length = 20)
+    @Column(length = 100)
     private String caption;
 
     private Long postId;
