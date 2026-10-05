@@ -146,18 +146,35 @@ class QuestionApiIntegrationTest {
         assertThat(statuses).containsOnly(200);
         assertThat(countQuestions()).isEqualTo(1);
         mvc.perform(get(base()).with(authentication(auth(sender))))
-                .andExpect(jsonPath("$.data.remaining_count").value(1));
+                .andExpect(jsonPath("$.data.remaining_count").value(2));
     }
 
     @Test
-    @DisplayName("서로 다른 대상에게 동시 전송해도 질문권 두 개를 초과하지 않는다")
-    void givenThreeConcurrentTargets_whenCreate_thenOnlyTwoSucceed() throws Exception {
+    @DisplayName("서로 다른 세 상대에게 동시 질문하면 모두 성공하고 전체 기록이 조회된다")
+    void givenThreeConcurrentTargets_whenCreate_thenAllSucceedAndRemainVisible() throws Exception {
         List<Integer> statuses =
                 concurrently(
                         3, i -> create(i, UUID.randomUUID()).andReturn().getResponse().getStatus());
-        assertThat(statuses.stream().filter(s -> s == 200).count()).isEqualTo(2);
-        assertThat(statuses.stream().filter(s -> s >= 400 && s < 500).count()).isEqualTo(1);
-        assertThat(countQuestions()).isEqualTo(2);
+        assertThat(statuses).containsOnly(200);
+        assertThat(countQuestions()).isEqualTo(3);
+        mvc.perform(get(base()).with(authentication(auth(sender))))
+                .andExpect(jsonPath("$.data.remaining_count").value(0))
+                .andExpect(jsonPath("$.data.targets.length()").value(3))
+                .andExpect(jsonPath("$.data.targets[0].question_id").isNumber())
+                .andExpect(jsonPath("$.data.targets[1].question_id").isNumber())
+                .andExpect(jsonPath("$.data.targets[2].question_id").isNumber());
+    }
+
+    @Test
+    @DisplayName("같은 상대에게 서로 다른 요청으로 동시에 질문해도 한 건만 저장된다")
+    void givenSameTargetConcurrentRequests_whenCreate_thenOnlyOneQuestionPersists()
+            throws Exception {
+        List<Integer> statuses =
+                concurrently(4, i -> create(0, UUID.randomUUID()).andReturn().getResponse().getStatus());
+        assertThat(statuses).containsExactlyInAnyOrder(200, 409, 409, 409);
+        assertThat(countQuestions()).isEqualTo(1);
+        mvc.perform(get(base()).with(authentication(auth(sender))))
+                .andExpect(jsonPath("$.data.remaining_count").value(2));
     }
 
     @Test

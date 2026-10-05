@@ -54,8 +54,6 @@ public class SecurityConfig {
             .httpBasic(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
-                // 심사용 데모(#352). 데모 계정/방에만 영향(실데이터 불가침)이라 prod 에서도 인증 없이 연다.
-                .requestMatchers("/api/v1/demo/**").permitAll()
                 // RevenueCat webhook은 JWT가 아닌 공유 시크릿(Authorization 헤더)으로 인증한다.
                 .requestMatchers(HttpMethod.POST, "/api/v1/iap/webhook").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/value-questions").permitAll()

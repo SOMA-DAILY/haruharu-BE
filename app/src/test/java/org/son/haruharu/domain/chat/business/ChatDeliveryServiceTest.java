@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,7 +44,9 @@ class ChatDeliveryServiceTest {
         given(reader.lockIfPresent(10L)).willReturn(true);
         given(reader.findById(10L)).willReturn(Optional.of(ChatRoom.createGroup(1L)));
         var card = new org.son.haruharu.domain.chat.implement.ChatMission(3L,1L,"DAY1_1","오늘 첫 미션");
-        var deleted = new org.son.haruharu.domain.chat.implement.ChatMessage(2L,10L,9L,"원래 문구",java.time.LocalDateTime.now(),card,true);
+        var now = java.time.LocalDateTime.now();
+        var deleted = new org.son.haruharu.domain.chat.implement.ChatMessage(2L,10L,9L,"원래 문구",now,null,null,null,null,null,
+                org.son.haruharu.domain.chat.implement.ChatMessageType.ADMIN,null,now,null,card);
         given(messages.findById(2L)).willReturn(Optional.of(deleted));
         var original = new org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast(2L,10L,9L,"원래 문구",deleted.createdAt());
         var called = new java.util.concurrent.atomic.AtomicBoolean();
@@ -54,5 +57,16 @@ class ChatDeliveryServiceTest {
             org.assertj.core.api.Assertions.assertThat(latest.mission()).isNull();
         });
         org.assertj.core.api.Assertions.assertThat(called).isTrue();
+    }
+
+    @Test
+    @DisplayName("원격 전달 재확인은 잠금 없이 방이 남아 있는지만 본다")
+    void givenRoomState_whenIsActive_thenReflectsPresenceWithoutLock() {
+        given(reader.findById(10L)).willReturn(Optional.of(ChatRoom.createDirect(100L)));
+        given(reader.findById(11L)).willReturn(Optional.empty());
+        ChatDeliveryService service = new ChatDeliveryService(reader, messages, org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatMissionPresenter.class));
+        assertThat(service.isActive(10L)).isTrue();
+        assertThat(service.isActive(11L)).isFalse();
+        then(reader).should(never()).lockIfPresent(anyLong());
     }
 }

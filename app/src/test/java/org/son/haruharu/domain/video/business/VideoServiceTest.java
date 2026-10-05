@@ -11,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.room.implement.Room;
@@ -37,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.inOrder;
 
 @ExtendWith(MockitoExtension.class)
 class VideoServiceTest {
@@ -161,6 +163,30 @@ class VideoServiceTest {
 
         assertThatThrownBy(() -> serviceAt(12).upload(userId, roomId, command))
             .isInstanceOf(DuplicateSlotUploadException.class);
+    }
+
+    @Test
+    @DisplayName("슬롯 중복 검사 전에 멤버 락을 잡아 업로드 세션 게시와 직렬화한다")
+    void givenUpload_whenCheckingSlot_thenLocksMemberBeforeDuplicateCheck() {
+        Long userId = 1L;
+        Long roomId = 13L;
+        Long memberId = 22L;
+        String url = BASE + "users/" + userId + "/videos/v.mp4";
+        var command = new VideoUploadCommand(url, null, null);
+
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId));
+        // 업로드는 방 행을 잠그고 시작한다(#474, 운영자 미션 발송과 직렬화).
+        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(activeRoom(roomId)));
+        given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
+        given(videoPostReader.hasActiveUpload(memberId, SLOT_AT_12)).willReturn(false);
+        given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        serviceAt(12).upload(userId, roomId, command);
+
+        InOrder order = inOrder(roomMemberReader, videoPostReader, videoPostWriter);
+        order.verify(roomMemberReader).lockById(memberId);
+        order.verify(videoPostReader).hasActiveUpload(memberId, SLOT_AT_12);
+        order.verify(videoPostWriter).save(any());
     }
 
     // ── delete ───────────────────────────────────────────────

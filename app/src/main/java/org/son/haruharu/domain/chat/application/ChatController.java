@@ -6,23 +6,31 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.chat.application.dto.MarkReadRequest;
+import org.son.haruharu.domain.chat.application.dto.MessageReactionRequest;
+import org.son.haruharu.domain.chat.business.ChatMessageReactionService;
 import org.son.haruharu.domain.chat.business.ChatPartnerService;
 import org.son.haruharu.domain.chat.business.ChatService;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
 import org.son.haruharu.domain.chat.business.dto.GroupChatRoomResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
+import org.son.haruharu.domain.chat.business.dto.MessageReactionResponse;
+import org.son.haruharu.domain.chat.business.dto.MessageReactorResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
+import org.son.haruharu.domain.mission.business.dto.MissionImageResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "채팅", description = "채팅방·메시지 조회 및 상태 변경 (실시간 송수신은 STOMP — 별도 문서 참고)")
 @RestController
@@ -31,10 +39,13 @@ public class ChatController {
 
     private final ChatService chatService;
     private final ChatPartnerService chatPartnerService;
+    private final ChatMessageReactionService chatMessageReactionService;
 
-    public ChatController(ChatService chatService, ChatPartnerService chatPartnerService) {
+    public ChatController(ChatService chatService, ChatPartnerService chatPartnerService,
+                          ChatMessageReactionService chatMessageReactionService) {
         this.chatService = chatService;
         this.chatPartnerService = chatPartnerService;
+        this.chatMessageReactionService = chatMessageReactionService;
     }
 
     @Operation(summary = "내 채팅방 목록 조회",
@@ -87,10 +98,41 @@ public class ChatController {
         return ApiResponse.ok(chatService.getMessages(chatRoomId, userId, cursor, size));
     }
 
+    @Operation(summary = "메시지 반응 토글",
+            description = "없으면 추가, 같은 종류면 취소, 다른 종류면 교체(한 사람당 메시지 1개). 내 메시지는 "
+                    + "403(CHAT_REACTION_OWN_MESSAGE), 채팅방 멤버가 아니면 403(CHAT_NOT_MEMBER), 다른 방 메시지면 "
+                    + "404(CHAT_MESSAGE_NOT_FOUND). 바뀐 개수는 /sub/chat-rooms/{id}/events 로 REACTION_UPDATED. 푸시 없음.")
+    @PutMapping("/{chatRoomId}/messages/{messageId}/reaction")
+    public ApiResponse<MessageReactionResponse> toggleReaction(
+            @Parameter(description = "채팅방 id") @PathVariable Long chatRoomId,
+            @Parameter(description = "메시지 id") @PathVariable Long messageId,
+            @Valid @RequestBody MessageReactionRequest request,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(chatMessageReactionService.toggle(userId, chatRoomId, messageId, request.type()));
+    }
+
+    @Operation(summary = "메시지에 반응한 사람",
+            description = "메시지 주인만 조회할 수 있다(아니면 403 CHAT_REACTION_OWNER_ONLY). 이름은 GROUP 가명 / DIRECT 실명.")
+    @GetMapping("/{chatRoomId}/messages/{messageId}/reactions")
+    public ApiResponse<List<MessageReactorResponse>> getReactors(
+            @Parameter(description = "채팅방 id") @PathVariable Long chatRoomId,
+            @Parameter(description = "메시지 id") @PathVariable Long messageId,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(chatMessageReactionService.getReactors(userId, chatRoomId, messageId));
+    }
+
+    @Operation(summary = "운영자 미션 카드 참고 사진",
+            description = "미션 카드 메시지의 사진 서명 URL 을 새로 발급한다(#474). 채팅방 멤버가 아니면 403(CHAT_NOT_MEMBER), "
+                    + "카드가 아니거나 사진이 없거나 운영자가 지웠으면 404(CHAT_MISSION_IMAGE_NOT_FOUND).")
     @GetMapping("/{chatRoomId}/messages/{messageId}/mission-image")
-    public ApiResponse<org.son.haruharu.domain.mission.business.dto.MissionImageResponse> getMissionImage(
-            @PathVariable Long chatRoomId, @PathVariable Long messageId, Authentication authentication) {
-        return ApiResponse.ok(chatService.getMissionImage(chatRoomId, (Long) authentication.getPrincipal(), messageId));
+    public ApiResponse<MissionImageResponse> getMissionImage(
+            @Parameter(description = "채팅방 id") @PathVariable Long chatRoomId,
+            @Parameter(description = "메시지 id") @PathVariable Long messageId,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(chatService.getMissionImage(chatRoomId, userId, messageId));
     }
 
     @Operation(summary = "메시지 읽음 처리",

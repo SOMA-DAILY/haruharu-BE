@@ -22,7 +22,19 @@ public interface S3StoragePort {
     /** 공개 객체 URL 베이스(끝 / 포함). URL 소유권 검증·키 변환에 사용. */
     String publicBaseUrl();
 
+    record ObjectMetadata(long bytes, String contentType, String etag) {
+        public ObjectMetadata(long bytes, String contentType) { this(bytes,contentType,null); }
+    }
+    /** 검증한 버전만 PUT 주소를 발급하지 않는 최종 경로로 복사한다. */
+    void promote(String sourceKey, String destinationKey, String etag);
+    /** 서버가 소유한 키만 받는다. 없거나 접근이 거부되면 null. */
+    ObjectMetadata head(String key);
+
+    /** 객체별 삭제 실패는 무시한다(best-effort 정리). */
     void putImage(String key, String contentType, byte[] bytes);
 
     void deleteObjects(Collection<String> keys);
+
+    /** 객체별 삭제 실패가 하나라도 있으면 예외를 던진다. 정리 실패를 알아야 하는 호출부 전용. */
+    void deleteObjectsOrThrow(Collection<String> keys);
 }

@@ -6,6 +6,8 @@ import java.util.Optional;
 
 public interface RoomMemberRepository {
 
+    void lockById(Long id);
+
     List<RoomMember> saveAll(List<RoomMember> members);
 
     RoomMember save(RoomMember member);

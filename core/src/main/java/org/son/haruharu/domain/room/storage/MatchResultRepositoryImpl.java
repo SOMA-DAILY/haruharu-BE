@@ -37,12 +37,4 @@ public class MatchResultRepositoryImpl implements MatchResultRepository {
     public MatchResult save(MatchResult matchResult) {
         return matchResultJpaRepository.save(MatchResultEntity.from(matchResult)).toDomain();
     }
-
-    @Override
-    public void hardDeleteByMemberIds(java.util.List<Long> memberIds) {
-        if (memberIds.isEmpty()) {
-            return;
-        }
-        matchResultJpaRepository.hardDeleteByMemberIds(memberIds);
-    }
 }

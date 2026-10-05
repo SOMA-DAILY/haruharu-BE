@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.room.storage;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberRepository;
@@ -14,6 +16,12 @@ import java.util.Optional;
 public class RoomMemberRepositoryImpl implements RoomMemberRepository {
 
     private final RoomMemberJpaRepository jpaRepository;
+    private final EntityManager entityManager;
+
+    @Override
+    public void lockById(Long id) {
+        entityManager.find(RoomMemberEntity.class, id, LockModeType.PESSIMISTIC_WRITE);
+    }
 
     @Override
     public List<RoomMember> saveAll(List<RoomMember> members) {

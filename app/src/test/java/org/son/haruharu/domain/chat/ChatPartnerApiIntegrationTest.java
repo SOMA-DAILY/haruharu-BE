@@ -131,7 +131,8 @@ class ChatPartnerApiIntegrationTest {
                 .andExpect(jsonPath("$.data.profile.nickname").value("이나경"))
                 // 프로필 블록(fields/value_answers) 구조 존재. 항목 값 공개는 매칭공개(#138)와 함께 동작.
                 .andExpect(jsonPath("$.data.profile.fields").isArray())
-                .andExpect(jsonPath("$.data.profile.fields[?(@.key == 'location')]").exists())
+                .andExpect(jsonPath("$.data.profile.fields[?(@.key == 'MBTI')]").exists())
+                .andExpect(jsonPath("$.data.profile.fields[0].available_from_day").isNumber())
                 .andExpect(jsonPath("$.data.videos", org.hamcrest.Matchers.hasSize(4)))
                 .andExpect(jsonPath("$.data.videos[0].video_url").value("https://cdn/v-1-1.mp4"))
                 .andExpect(jsonPath("$.data.videos[0].slot_start").value("2026-06-24T09:00:00"))

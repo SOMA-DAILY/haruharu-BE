@@ -1,6 +1,5 @@
 package org.son.haruharu.domain.room.implement;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,9 +16,6 @@ public interface RoomRepository {
     Optional<Room> findByIdForUpdate(Long id);
 
     List<Room> findByIdInAndStatusNot(List<Long> ids, RoomStatus status);
-
-    /** 배치용 — starts_at 이 없는 구 모델 방. */
-    List<Room> findAllByScheduledDateAndStatus(LocalDate scheduledDate, RoomStatus status);
 
     /** 구 모델 전용 배치 대상(#320) — starts_at 이 없는 ACTIVE 방. */
     List<Room> findLegacyActive();

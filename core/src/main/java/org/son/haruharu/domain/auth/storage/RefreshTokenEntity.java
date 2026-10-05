@@ -48,8 +48,4 @@ public class RefreshTokenEntity extends BaseEntity {
     public RefreshToken toDomain() {
         return new RefreshToken(id, userId, tokenHash, expiresAt, revokedAt);
     }
-
-    public void revoke() {
-        this.revokedAt = java.time.LocalDateTime.now();
-    }
 }

@@ -4,13 +4,10 @@ import org.son.haruharu.admin.domain.dashboard.business.dto.DashboardMetricsResp
 import org.son.haruharu.admin.domain.dashboard.business.dto.DashboardSummaryResponse;
 import org.son.haruharu.admin.domain.dashboard.business.exception.AdminDashboardInvalidRangeException;
 import org.son.haruharu.admin.domain.dashboard.implement.DashboardReader;
-import org.son.haruharu.domain.matching.implement.MatchingQueueStatus;
 import org.son.haruharu.domain.room.implement.Room;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,8 +23,6 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class AdminDashboardService {
 
-    private static final String GENDER_FEMALE = "FEMALE";
-    private static final String GENDER_MALE = "MALE";
     private static final int DEFAULT_RANGE_DAYS = 14;
     private static final int MAX_RANGE_DAYS = 92;
 
@@ -40,12 +35,12 @@ public class AdminDashboardService {
     }
 
     public DashboardSummaryResponse getSummary() {
-        return new DashboardSummaryResponse(activeRooms(), matchingQueue(), todaySignups());
+        return new DashboardSummaryResponse(activeRooms(), todaySignups());
     }
 
     /**
      * 기간별 추이. from/to 미지정 시 최근 14일, from&gt;to면 400, 92일 초과 시 from을 to-91로 clamp.
-     * 일자별 가입·매칭을 조회해 from~to 연속 날짜로 0 채우고 매칭 성공률을 파생한다.
+     * 일자별 가입 수를 조회해 from~to 연속 날짜로 빈 날짜를 0으로 채운다.
      */
     public DashboardMetricsResponse getMetrics(LocalDate from, LocalDate to) {
         LocalDate resolvedTo = to != null ? to : LocalDate.now(clock);
@@ -60,45 +55,14 @@ public class AdminDashboardService {
         LocalDateTime fromStart = resolvedFrom.atStartOfDay();
         LocalDateTime toEnd = resolvedTo.plusDays(1).atStartOfDay();
         Map<LocalDate, Long> signupsByDay = dashboardReader.signupCountsByDay(fromStart, toEnd);
-        Map<LocalDate, Map<MatchingQueueStatus, Long>> matchingByDay =
-                dashboardReader.matchingCountsByDay(fromStart, toEnd);
-
         List<DashboardMetricsResponse.SignupPoint> signups = new ArrayList<>();
-        List<DashboardMetricsResponse.MatchingPoint> matchingDaily = new ArrayList<>();
-        long totalApplications = 0;
-        long totalMatched = 0;
-        long totalExpired = 0;
         for (LocalDate date = resolvedFrom; !date.isAfter(resolvedTo); date = date.plusDays(1)) {
             signups.add(new DashboardMetricsResponse.SignupPoint(date, signupsByDay.getOrDefault(date, 0L)));
-
-            Map<MatchingQueueStatus, Long> byStatus = matchingByDay.getOrDefault(date, Map.of());
-            long matched = byStatus.getOrDefault(MatchingQueueStatus.MATCHED, 0L);
-            long expired = byStatus.getOrDefault(MatchingQueueStatus.EXPIRED, 0L);
-            long applications = byStatus.values().stream().mapToLong(Long::longValue).sum();
-            matchingDaily.add(new DashboardMetricsResponse.MatchingPoint(
-                    date, applications, matched, expired, successRate(matched, expired)));
-            totalApplications += applications;
-            totalMatched += matched;
-            totalExpired += expired;
         }
 
-        DashboardMetricsResponse.MatchingOverall overall = new DashboardMetricsResponse.MatchingOverall(
-                totalApplications, totalMatched, totalExpired, successRate(totalMatched, totalExpired));
         return new DashboardMetricsResponse(
                 new DashboardMetricsResponse.Range(resolvedFrom, resolvedTo),
-                signups,
-                new DashboardMetricsResponse.Matching(matchingDaily, overall));
-    }
-
-    /** 성공률 = matched/(matched+expired). 소수 4자리 반올림, 분모 0이면 null. */
-    private static Double successRate(long matched, long expired) {
-        long denominator = matched + expired;
-        if (denominator == 0) {
-            return null;
-        }
-        return BigDecimal.valueOf(matched)
-                .divide(BigDecimal.valueOf(denominator), 4, RoundingMode.HALF_UP)
-                .doubleValue();
+                signups);
     }
 
     private DashboardSummaryResponse.ActiveRooms activeRooms() {
@@ -111,13 +75,6 @@ public class AdminDashboardService {
                         TreeMap::new,
                         Collectors.counting()));
         return new DashboardSummaryResponse.ActiveRooms(rooms.size(), byDay);
-    }
-
-    private DashboardSummaryResponse.MatchingQueue matchingQueue() {
-        return new DashboardSummaryResponse.MatchingQueue(
-                dashboardReader.queuedCount(),
-                dashboardReader.queuedCountByGender(GENDER_FEMALE),
-                dashboardReader.queuedCountByGender(GENDER_MALE));
     }
 
     private long todaySignups() {

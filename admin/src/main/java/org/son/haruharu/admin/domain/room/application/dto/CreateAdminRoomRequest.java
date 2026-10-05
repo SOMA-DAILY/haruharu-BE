@@ -32,13 +32,23 @@ public record CreateAdminRoomRequest(
         @Positive Integer maxUses,
         @Schema(description = "초대코드 만료 시각(null이면 무기한)", nullable = true)
         LocalDateTime inviteExpiresAt,
-        @Schema(description = "이전 클라이언트 호환용. 새 방에는 자동 미션 슬롯을 생성하지 않는다.", deprecated = true)
-        List<MissionSlotRequest> missionSlots
+        @Schema(description = "이전 클라이언트 호환용(#474). 새 방은 자동 미션 슬롯을 만들지 않으므로 값은 무시한다.",
+                deprecated = true, nullable = true)
+        Boolean missionEnabled,
+        @Schema(description = "이전 클라이언트 호환용(#474). 새 방에는 자동 미션 슬롯을 생성하지 않는다.",
+                deprecated = true, nullable = true)
+        List<MissionSlotRequest> missionSlots,
+        @Schema(description = "채팅 편성(#457, 선택). 어드민 화면 기본 5줄을 고친 그대로 저장된다. 서버 기본값 없음(비면 0줄). "
+                + "줄마다 run_at 필수, 시각 제한 없음.", nullable = true)
+        List<ScheduleItemRequest> chatSchedule
 ) {
     public CreateAdminRoomCommand toCommand() {
         return new CreateAdminRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
-                resultAt, endsAt, totalDays, maxUses, inviteExpiresAt,
-                missionSlots == null ? null : missionSlots.stream().map(MissionSlotRequest::toCommand).toList());
+                resultAt, endsAt, totalDays, maxUses, inviteExpiresAt, Boolean.TRUE.equals(missionEnabled),
+                missionSlots == null ? null : missionSlots.stream().filter(java.util.Objects::nonNull)
+                        .map(MissionSlotRequest::toCommand).toList(),
+                chatSchedule == null ? List.of()
+                        : chatSchedule.stream().filter(java.util.Objects::nonNull).map(ScheduleItemRequest::toCommand).toList());
     }
 
     public record MissionSlotRequest(

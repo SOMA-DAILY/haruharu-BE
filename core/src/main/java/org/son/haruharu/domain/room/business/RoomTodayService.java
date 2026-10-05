@@ -45,7 +45,7 @@ public class RoomTodayService {
         // currentDay는 방 진행 일차 표시용(room 레벨).
         int currentDay = room.currentDayAt(now);
 
-        // 노출 중인 슬롯 창(최근 3시간). 최종선택 이후 시작 슬롯은 업로드 불가라 제외. 촬영 가능한 '현재 슬롯'은 ACTIVE일 때만.
+        // 노출 중인 슬롯 창(현재 슬롯 1시간). 최종선택 이후 시작 슬롯은 업로드 불가라 제외. 촬영 가능한 '현재 슬롯'은 ACTIVE일 때만.
         List<LocalDateTime> window = room.startsAt() == null
                 ? List.of()
                 : SlotClock.visibleSlotStarts(room.startsAt(), now, room.finalSelectionOpensAt());

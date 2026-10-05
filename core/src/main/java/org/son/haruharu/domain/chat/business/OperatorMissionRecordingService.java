@@ -32,7 +32,7 @@ public class OperatorMissionRecordingService {
                 .orElseThrow(ChatNotMemberException::new);
         LocalDateTime now = LocalDateTime.now(clock);
         var message = messages.findById(messageId).filter(item -> item.chatRoomId().equals(chatRoomId));
-        if (message.isEmpty() || message.orElseThrow().mission() == null || message.orElseThrow().adminDeleted()) {
+        if (message.isEmpty() || message.orElseThrow().mission() == null || message.orElseThrow().isAdminDeleted()) {
             return new OperatorMissionRecordingResponse(false, "DELETED", null, null, null, null, now);
         }
         Long roomId = message.orElseThrow().mission().roomId();

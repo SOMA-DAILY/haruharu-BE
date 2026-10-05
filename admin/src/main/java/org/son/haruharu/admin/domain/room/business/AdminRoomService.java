@@ -73,7 +73,8 @@ public class AdminRoomService {
                 // 표시 status 는 파생값 — 저장 컬럼은 reconciler 가 맞추는 materialized 값이라 배치 지연에 노출된다(#320).
                 room.id(), room.statusAt(LocalDateTime.now(clock)), room.scheduledDate(), room.totalDays(), currentDay,
                 startedAtOf(room), room.endedAt(), members.size(),
-                countGender(members, GENDER_FEMALE), countGender(members, GENDER_MALE), memberViews);
+                countGender(members, GENDER_FEMALE), countGender(members, GENDER_MALE), memberViews,
+                room.startsAt(), room.finalSelectionOpensAt(), room.endsAt());
     }
 
     private AdminRoomDetailResponse.MemberView toMemberView(RoomMember member, UserProfile profile, LocalDate today) {

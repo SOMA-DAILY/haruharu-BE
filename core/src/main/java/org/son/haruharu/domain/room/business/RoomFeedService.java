@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 현재 노출 중인 슬롯 창(slot_start 기준 최근 3시간)의 영상 피드. 공개 가능한 영상이 있는 시간대와
+ * 현재 노출 중인 슬롯 창(slot_start 기준 현재 1시간)의 영상 피드. 공개 가능한 영상이 있는 시간대와
  * ACTIVE 현재 촬영 시간대를 반환하며, 슬롯은 방 시작 상대 정시(SlotClock)다.
  */
 @Service
@@ -59,7 +59,7 @@ public class RoomFeedService {
     private static final int MAX_PAGE_SIZE = 24;
 
     /**
-     * 현재 노출 창(slot_start 기준 최근 3시간)의 피드. 방 진입 시 초기 조회.
+     * 현재 노출 창(slot_start 기준 현재 1시간)의 피드. 방 진입 시 초기 조회.
      * nextCursor는 이 창의 가장 과거 슬롯 — 클라가 그보다 과거를 이어 보려면 {@code before}로 넘긴다(방 시작이면 null).
      */
     public FeedResponse getFeed(Long roomId, Long userId) {
@@ -88,7 +88,7 @@ public class RoomFeedService {
 
     /**
      * {@code before} 슬롯보다 과거의 슬롯들을 최대 size개 이어 조회(과거 회고 페이지네이션, #350).
-     * 노출 창(3시간)과 무관하게 방 시작까지 되짚어보며, 공개 가능한 콘텐츠가 있는 슬롯만 반환한다.
+     * 기본 노출 창(현재 슬롯)과 무관하게 방 시작까지 되짚어보며, 공개 가능한 콘텐츠가 있는 슬롯만 반환한다.
      * 과거 슬롯이라 촬영 CTA(current)는 항상 false다.
      */
     public FeedResponse getFeedBefore(Long roomId, Long userId, LocalDateTime before, int size) {
@@ -164,7 +164,8 @@ public class RoomFeedService {
                         s3StoragePort.createPresignedGetUrl(p.thumbnailUrl()),
                         p.caption(), p.createdAt(),
                         countsByPost.getOrDefault(p.id(), List.of()),
-                        myReactionByPost.get(p.id())))
+                        myReactionByPost.get(p.id()),
+                        s3StoragePort.createPresignedGetUrl(p.feedVideoUrl())))
                 .toList();
         return new FeedResponse(slots, posts, nextCursor);
     }

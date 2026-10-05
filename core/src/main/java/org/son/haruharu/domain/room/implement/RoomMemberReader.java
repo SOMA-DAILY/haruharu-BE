@@ -15,6 +15,14 @@ public class RoomMemberReader {
 
     private final RoomMemberRepository roomMemberRepository;
 
+    /**
+     * 멤버 행을 비관적 락(SELECT ... FOR UPDATE)으로 잠근다. 영상 게시처럼 "멤버·슬롯당 1개" 불변식을 지켜야 하는
+     * 쓰기에서 검사와 저장 사이의 경쟁을 멤버 단위로 직렬화한다. 반드시 트랜잭션 안에서 <b>그 검사 직전</b>에 호출한다.
+     */
+    public void lockById(Long id) {
+        roomMemberRepository.lockById(id);
+    }
+
     public RoomMember getById(Long id) {
         return roomMemberRepository.findById(id)
                 .orElseThrow(RoomMemberNotFoundException::new);

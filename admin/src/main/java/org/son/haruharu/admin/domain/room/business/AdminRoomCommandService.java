@@ -18,6 +18,7 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
+import org.son.haruharu.domain.roomschedule.business.RoomScheduleService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,26 +39,29 @@ public class AdminRoomCommandService {
     private final RoomMemberReader roomMemberReader;
     private final RoomMemberWriter roomMemberWriter;
     private final AdminRoomReader adminRoomReader;
+    private final RoomScheduleService roomScheduleService;
 
     public AdminRoomCommandService(RoomService roomService, RoomInviteService roomInviteService,
                                    RoomMissionSlotService roomMissionSlotService,
                                    RoomMemberReader roomMemberReader, RoomMemberWriter roomMemberWriter,
-                                   AdminRoomReader adminRoomReader) {
+                                   AdminRoomReader adminRoomReader, RoomScheduleService roomScheduleService) {
         this.roomService = roomService;
         this.roomInviteService = roomInviteService;
         this.roomMissionSlotService = roomMissionSlotService;
         this.roomMemberReader = roomMemberReader;
         this.roomMemberWriter = roomMemberWriter;
         this.adminRoomReader = adminRoomReader;
+        this.roomScheduleService = roomScheduleService;
     }
 
-    /** 방 + 미션 슬롯 + 코드 생성. 검증·저장 실패 시 전체를 롤백한다(같은 트랜잭션). */
+    /** 방 + 미션 설정·슬롯(#449) + 코드 + 채팅 편성(#457) 생성. 검증·저장 실패 시 전체를 롤백한다(같은 트랜잭션). */
     @Transactional
     public AdminRoomCreatedResponse createRoomWithInvite(CreateAdminRoomCommand command, Long adminId) {
         Long roomId = roomService.createRoom(command.toRoomCommand());
         // 새 방은 운영자 채팅으로 미션을 제공한다. 기존 방의 자동 슬롯은 건드리지 않는다.
         RoomInvite invite = roomInviteService.issueFor(
                 roomId, command.maxUses(), command.inviteExpiresAt(), createdBy(adminId));
+        roomScheduleService.createAll(roomId, command.chatSchedule(), createdBy(adminId));
         return new AdminRoomCreatedResponse(roomId, invite.code());
     }
 

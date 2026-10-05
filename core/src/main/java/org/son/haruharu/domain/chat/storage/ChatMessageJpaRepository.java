@@ -12,10 +12,7 @@ import java.util.Optional;
 
 public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageEntity, Long> {
 
-    @Modifying
-    @Query("update ChatMessageEntity m set m.adminDeleted = true where m.id = :id "
-            + "and m.operatorMissionId is not null and m.adminDeleted = false")
-    int markAdminDeleted(@Param("id") Long id);
+    Optional<ChatMessageEntity> findByChatRoomIdAndSenderIdAndClientRequestId(Long chatRoomId, Long senderId, String clientRequestId);
 
     // 삭제된(deleted_at) 메시지 제외는 BaseEntity @SoftDelete 전역 필터가 처리한다.
     List<ChatMessageEntity> findByChatRoomIdOrderByIdDesc(Long chatRoomId, Pageable pageable);
@@ -32,8 +29,15 @@ public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageEntit
     long countByChatRoomIdAndIdGreaterThanAndSenderIdNotIn(
             Long chatRoomId, Long lastReadMessageId, Collection<Long> excludeSenderIds);
 
-    // 네이티브 DELETE — 전역 @SoftDelete 우회(데모 재시드 시 이전 대화가 누적되지 않게 물리 삭제).
-    @Modifying
-    @Query(value = "delete from chat_messages where chat_room_id = :chatRoomId", nativeQuery = true)
-    void hardDeleteByChatRoomId(@Param("chatRoomId") Long chatRoomId);
+    @Modifying(clearAutomatically = true)
+    @Query("update ChatMessageEntity m set m.adminDeletedAt = :now where m.id = :id and m.adminDeletedAt is null")
+    int markAdminDeleted(@Param("id") Long id, @Param("now") java.time.LocalDateTime now);
+
+    @Query("select m from ChatMessageEntity m where m.adminDeletedAt is not null and m.deleteBroadcastAt is null "
+            + "order by m.id")
+    List<ChatMessageEntity> findPendingDeleteBroadcasts(Pageable pageable);
+
+    @Modifying(clearAutomatically = true)
+    @Query("update ChatMessageEntity m set m.deleteBroadcastAt = :now where m.id = :id and m.deleteBroadcastAt is null")
+    int markDeleteBroadcast(@Param("id") Long id, @Param("now") java.time.LocalDateTime now);
 }
