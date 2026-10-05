@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 
 import org.son.haruharu.domain.question.implement.*;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -26,7 +27,7 @@ public class QuestionRepositoryImpl implements QuestionRepository {
 
     public List<Question> findSent(Long roomId, Long userId) {
         return jpaRepository
-                .findByRoomIdAndSenderUserIdOrderByIdDesc(roomId, userId, PageRequest.of(0, 2))
+                .findByRoomIdAndSenderUserIdOrderByIdDesc(roomId, userId, Pageable.unpaged())
                 .stream()
                 .map(QuestionEntity::toDomain)
                 .toList();

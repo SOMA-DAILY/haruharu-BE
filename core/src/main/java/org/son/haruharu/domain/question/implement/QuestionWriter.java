@@ -34,8 +34,6 @@ public class QuestionWriter {
         context.validateTarget(target);
         if (repository.hasSentTo(context.roomId(), context.userId(), target.userId()))
             throw new QuestionAlreadySentException();
-        if (repository.countSent(context.roomId(), context.userId()) >= 2)
-            throw new QuestionLimitExceededException();
         return repository.save(
                 Question.create(
                         context.roomId(),

@@ -201,7 +201,6 @@ public class QuestionService {
     /** 남은 질문권을 실제로 쓸 수 있는지 — 보낼 수 있는 상대가 없으면 재촉하지 않는다. */
     private boolean hasUnusedGrant(QuestionContext context) {
         List<Question> sent = reader.sent(context.roomId(), context.userId());
-        if (sent.size() >= 2) return false;
         List<Long> asked = sent.stream().map(Question::recipientUserId).toList();
         return context.participants().stream()
                 .anyMatch(
