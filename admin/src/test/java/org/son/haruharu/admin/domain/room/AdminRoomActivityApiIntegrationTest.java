@@ -203,6 +203,7 @@ class AdminRoomActivityApiIntegrationTest {
         em.flush();
         var chat = ChatMessageEntity.from(new ChatMessage(null, chatRoom.toDomain().id(), 102L, "안녕하세요", START.plusHours(2)));
         em.persist(chat);
+        em.persist(ChatMessageEntity.from(ChatMessage.system(chatRoom.toDomain().id(), "운영 안내는 활동 집계 제외", null)));
         var direct = ChatRoomEntity.from(ChatRoom.createDirect(999L));
         em.persist(direct);
         em.flush();

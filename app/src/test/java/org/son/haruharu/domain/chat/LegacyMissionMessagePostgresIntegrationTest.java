@@ -51,14 +51,14 @@ class LegacyMissionMessagePostgresIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void givenStoredMissionMessage_whenReadHistoryAndReply_thenPreservesContentAndDeletion(boolean deleted) {
-        // #474 적용 DB의 미션 컬럼은 남겨두고 일반 ADMIN 메시지로 읽는다.
+        // #474 적용 DB의 미션 컬럼은 남겨두고 SYSTEM 안내로 읽는다.
         jdbc.execute("ALTER TABLE chat_messages ADD COLUMN operator_mission_id BIGINT UNIQUE");
         jdbc.execute("ALTER TABLE chat_messages ADD COLUMN mission_room_id BIGINT");
         jdbc.execute("ALTER TABLE chat_messages ADD COLUMN mission_template_id VARCHAR(20)");
         jdbc.execute("ALTER TABLE chat_messages ADD COLUMN mission_title VARCHAR(40)");
         jdbc.execute("ALTER TABLE chat_messages ADD COLUMN mission_image_id BIGINT");
         ChatMessage original = messages.saveAndFlush(ChatMessageEntity.from(
-                ChatMessage.admin(482L, 1L, "과거 미션 안내", null))).toDomain();
+                ChatMessage.system(482L, "과거 미션 안내", null))).toDomain();
         jdbc.update("""
                 UPDATE chat_messages SET operator_mission_id=482, mission_room_id=482,
                     mission_template_id='PHOTO', mission_title='과거 제목', mission_image_id=482,

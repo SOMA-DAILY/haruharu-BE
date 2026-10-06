@@ -71,6 +71,7 @@ public class ChatMessageViews {
 
     /** 원문이 남아 있고(운영자 삭제 아님, #457) 조회자가 원문 보낸 사람을 차단하지 않았을 때 볼 수 있다. */
     static boolean isViewable(ChatMessage original, Set<Long> blockedByViewer) {
-        return original != null && !original.isAdminDeleted() && !blockedByViewer.contains(original.senderId());
+        return original != null && !original.isAdminDeleted()
+                && (original.isSystem() || !blockedByViewer.contains(original.senderId()));
     }
 }

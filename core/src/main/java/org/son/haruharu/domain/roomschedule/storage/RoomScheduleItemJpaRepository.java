@@ -1,20 +1,27 @@
 package org.son.haruharu.domain.roomschedule.storage;
 
+import jakarta.persistence.LockModeType;
 import org.son.haruharu.domain.roomschedule.implement.RoomScheduleStatus;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 상태 전이는 전부 벌크 UPDATE(더티체킹 금지 — 두 인스턴스가 같은 행을 둘 다 보내는 걸 막는다, #457).
  * 벌크 UPDATE 는 @LastModifiedDate 를 타지 않으므로 updatedAt 을 직접 쓴다.
  */
 public interface RoomScheduleItemJpaRepository extends JpaRepository<RoomScheduleItemEntity, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select i from RoomScheduleItemEntity i where i.id = :id")
+    Optional<RoomScheduleItemEntity> findByIdForUpdate(@Param("id") Long id);
 
     List<RoomScheduleItemEntity> findByRoomIdOrderByRunAtAscIdAsc(Long roomId);
 
@@ -63,6 +70,14 @@ public interface RoomScheduleItemJpaRepository extends JpaRepository<RoomSchedul
             + "where i.id = :id and i.status = :from")
     int markFailed(@Param("id") Long id, @Param("reason") String reason, @Param("now") LocalDateTime now,
                    @Param("from") RoomScheduleStatus from, @Param("to") RoomScheduleStatus to);
+
+    @Modifying(clearAutomatically = true)
+    @Query("update RoomScheduleItemEntity i set i.status = :to, i.failReason = :reason, i.updatedAt = :now "
+            + "where i.id = :id and i.status = :from and i.runAt = :runAt and i.updatedAt = :updatedAt")
+    int markFailedIfUnchanged(@Param("id") Long id, @Param("from") RoomScheduleStatus from,
+            @Param("to") RoomScheduleStatus to, @Param("runAt") LocalDateTime runAt,
+            @Param("updatedAt") LocalDateTime updatedAt, @Param("reason") String reason,
+            @Param("now") LocalDateTime now);
 
     @Query("select i from RoomScheduleItemEntity i where i.status = :status and i.runAt <= :now "
             + "order by i.runAt, i.id")

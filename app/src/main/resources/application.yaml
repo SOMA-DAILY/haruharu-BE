@@ -122,8 +122,6 @@ haruharu:
     reply-push:
       # 답장 받은 사람에게 CHAT 대신 CHAT_REPLY
       enabled: ${CHAT_REPLY_PUSH_ENABLED:false}
-    # 운영 글 발신자(닉네임 '하루'). scripts/sql/455-chat-p0-base-verify.sql 로 확인한 id
-    system-user-id: ${CHAT_SYSTEM_USER_ID:}
 
 oauth:
   providers:

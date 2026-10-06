@@ -1,6 +1,8 @@
 package org.son.haruharu.domain.roomschedule;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -24,6 +26,10 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.*;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.son.haruharu.infrastructure.stomp.StompDeliveryPort;
+import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
+import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.*;
 
@@ -32,7 +38,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /** 방 편성 발송 잡과 편성 기준 공개(#457) — PostgreSQL 에서 claim 경쟁, 상태 전이, 응답 모양 확인. */
-@SpringBootTest(properties = "haruharu.chat.system-user-id=900001")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
@@ -51,7 +57,6 @@ class RoomScheduleDispatchIntegrationTest {
         r.add("spring.jpa.properties.hibernate.dialect", () -> "org.hibernate.dialect.PostgreSQLDialect");
     }
 
-    static final long SYSTEM_USER = 900001L;
 
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
@@ -63,7 +68,15 @@ class RoomScheduleDispatchIntegrationTest {
     @Autowired RoomScheduleDispatchService dispatcher;
     @Autowired MemberProfileService memberProfiles;
     @Autowired Clock clock;
-    @Autowired org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader itemReader;
+    @Autowired ChatMessageReader messageReader;
+    @Autowired org.son.haruharu.domain.profile.storage.UserProfileJpaRepository profiles;
+    @Autowired org.son.haruharu.utils.JwtProvider jwtProvider;
+    @Autowired tools.jackson.databind.json.JsonMapper jsonMapper;
+    @Autowired org.son.haruharu.domain.chat.application.ChatStompController stompController;
+    @org.springframework.boot.test.web.server.LocalServerPort int port;
+    @MockitoBean StompDeliveryPort delivery;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader itemReader;
     @Autowired org.son.haruharu.domain.roomschedule.business.RoomScheduleDispatchStep step;
 
     LocalDateTime now;
@@ -107,12 +120,147 @@ class RoomScheduleDispatchIntegrationTest {
     }
 
     long adminMessages(Long chatRoomId) {
-        return jdbc.queryForObject("select count(*) from chat_messages where chat_room_id=? and message_type='ADMIN'",
+        return jdbc.queryForObject("select count(*) from chat_messages where chat_room_id=? and sender_type='SYSTEM'",
                 Long.class, chatRoomId);
     }
 
     long inbox(String type) {
         return jdbc.queryForObject("select count(*) from notification_history where type=?", Long.class, type);
+    }
+
+    @Test
+    @DisplayName("실제 HTTP 서버에서 인증된 참가자가 SYSTEM 메시지를 재조회한다")
+    void givenCommittedSystemMessage_whenHttpGet_thenReturnsSenderContract() throws Exception {
+        Long id = addItem(roomId, now.minusMinutes(1), List.of(), "HTTP 재조회", false);
+        dispatcher.dispatchDue();
+        var request = java.net.http.HttpRequest.newBuilder(java.net.URI.create(
+                "http://localhost:" + port + "/api/v1/chat-rooms/" + chatId + "/messages"))
+                .header("Authorization", "Bearer " + jwtProvider.generateAccessToken(bob)).GET().build();
+        try (var client = java.net.http.HttpClient.newHttpClient()) {
+            var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(200);
+            var message = jsonMapper.readTree(response.body()).path("data").path("messages").get(0);
+            assertThat(message.path("message_id").asLong()).isEqualTo(((Number) item(id).get("sent_message_id")).longValue());
+            assertThat(message.path("sender_type").asText()).isEqualTo("SYSTEM");
+            assertThat(message.path("sender_id").isNull()).isTrue();
+            assertThat(message.path("message_type").asText()).isEqualTo("TEXT");
+            assertThat(message.path("content").asText()).isEqualTo("HTTP 재조회");
+        }
+    }
+
+    @Test
+    @DisplayName("클라이언트가 SYSTEM과 다른 sender_id를 보내도 인증된 USER로만 저장한다")
+    void givenForgedSenderPayload_whenStompSend_thenUsesAuthenticatedUser() {
+        var request = jsonMapper.readValue("{\"content\":\"위조 시도\",\"sender_type\":\"SYSTEM\",\"sender_id\":999}",
+                org.son.haruharu.domain.chat.application.dto.SendMessageRequest.class);
+        stompController.send(chatId, request, new org.son.haruharu.config.StompPrincipal(alice));
+        var saved = messageReader.findLast(chatId, Set.of()).orElseThrow();
+        assertThat(saved.senderType()).isEqualTo(org.son.haruharu.domain.chat.implement.ChatSenderType.USER);
+        assertThat(saved.senderId()).isEqualTo(alice);
+    }
+
+    @Test
+    @DisplayName("DB 저장 실패는 메시지·SENT를 롤백하고 방송하지 않는다")
+    void givenStorageFailure_whenDispatch_thenRollbackWithoutBroadcast() {
+        Long id = addItem(roomId, now.minusMinutes(1), List.of(), "저장 실패", false);
+        jdbc.execute("alter table chat_messages add constraint test_484_failure check (content <> '저장 실패')");
+        try {
+            assertThat(dispatcher.dispatchDue()).isZero();
+            assertThat(item(id).get("status")).isEqualTo("FAILED");
+            assertThat(item(id).get("sent_message_id")).isNull();
+            assertThat(adminMessages(chatId)).isZero();
+            verifyNoInteractions(delivery);
+        } finally {
+            jdbc.execute("alter table chat_messages drop constraint test_484_failure");
+        }
+    }
+
+    @Test
+    @DisplayName("커밋 후 방송이 실패해도 SENT·본문을 보존하고 다음 틱에 중복 저장하지 않는다")
+    void givenDeliveryFailure_whenReadAgain_thenCommittedMessageSurvives() {
+        Long id = addItem(roomId, now.minusMinutes(1), List.of(), "전달 실패 후 복원", true);
+        doAnswer(call -> {
+            ChatMessageBroadcast message = call.getArgument(1);
+            assertThat(item(id).get("status")).isEqualTo("SENT");
+            assertThat(messageReader.findById(message.messageId())).isPresent();
+            throw new IllegalStateException("test delivery unavailable");
+        }).when(delivery).sendToTopic(anyString(), any(ChatMessageBroadcast.class), anyString());
+
+        dispatcher.dispatchDue();
+        assertThat(item(id).get("status")).isEqualTo("SENT");
+        assertThat(chats.getMessages(chatId, bob, null, 20).messages().getFirst().content()).isEqualTo("전달 실패 후 복원");
+        assertThat(dispatcher.dispatchDue()).isZero();
+        assertThat(adminMessages(chatId)).isEqualTo(1);
+        verify(delivery, times(1)).sendToTopic(anyString(), any(ChatMessageBroadcast.class), anyString());
+    }
+
+    @Test
+    @DisplayName("차단 제외·안읽음·미리보기에서도 계정 없는 시스템 안내와 삭제 표시를 보존한다")
+    void givenSystemMessage_whenExcludeSenders_thenStillVisibleAndUnread() {
+        chats.sendMessage(chatId, alice, "차단 대상의 메시지");
+        Long id = addItem(roomId, now.minusMinutes(1), List.of(), "시스템 공지", false);
+        dispatcher.dispatchDue();
+        Long messageId = ((Number) item(id).get("sent_message_id")).longValue();
+
+        assertThat(messageReader.countUnread(chatId, null, Set.of(alice, bob))).isEqualTo(1);
+        assertThat(messageReader.countUnread(chatId, null, Set.of())).isEqualTo(2);
+        assertThat(messageReader.findLast(chatId, Set.of(alice)).orElseThrow().id()).isEqualTo(messageId);
+        chats.sendMessage(chatId, bob, "답장", messageId);
+        assertThat(chats.getMessages(chatId, carol, null, 20).messages().getFirst().replyTo().available()).isTrue();
+        assertThat(chats.getMessages(chatId, carol, null, 20).messages().getFirst().replyTo().senderName()).isEqualTo("하루");
+
+        Long last = addItem(roomId, now.minusMinutes(1), List.of(), "삭제할 공지", false);
+        dispatcher.dispatchDue();
+        scheduleService.deleteSentMessage(roomId, last);
+        for (Long userId : List.of(alice, bob, carol)) {
+            profiles.save(org.son.haruharu.domain.profile.storage.UserProfileEntity.from(
+                    org.son.haruharu.domain.profile.implement.UserProfile.empty(userId)));
+        }
+        assertThat(chats.getMyRooms(bob).chatRooms().stream().filter(r -> r.chatRoomId().equals(chatId)).findFirst().orElseThrow().lastMessage())
+                .isEqualTo("삭제된 메시지");
+    }
+
+    @Test
+    @DisplayName("due 조회 후 지금 보내기로 갱신된 예약을 오래된 스냅샷으로 만료시키지 않는다")
+    void givenRescheduledAfterDueRead_whenExpire_thenKeepsLatestSchedule() {
+        Long id = addItem(roomId, now.minusMinutes(90), List.of(), "다시 예약", false);
+        jdbc.update("update room_schedule_items set updated_at=? where id=?", now.minusMinutes(90), id);
+        doAnswer(call -> {
+            var snapshot = call.callRealMethod();
+            scheduleService.sendNow(roomId, id, "admin:1");
+            return snapshot;
+        }).when(itemReader).findDue(any(), anyInt());
+
+        assertThat(dispatcher.dispatchDue()).isZero();
+        assertThat(item(id).get("status")).isEqualTo("SCHEDULED");
+        doCallRealMethod().when(itemReader).findDue(any(), anyInt());
+        assertThat(dispatcher.dispatchDue()).isEqualTo(1);
+        assertThat(adminMessages(chatId)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("같은 편성의 실행 단계를 재호출해도 메시지는 한 번만 저장한다")
+    void givenSentSchedule_whenSendAgain_thenNoDuplicate() {
+        Long id = addItem(roomId, now.minusMinutes(1), List.of(), "중복 금지", false);
+        assertThat(step.claim(id, now)).isTrue();
+        var claimed = itemReader.findById(id).orElseThrow();
+        step.send(claimed, chatId);
+        assertThatThrownBy(() -> step.send(claimed, chatId)).isInstanceOf(RuntimeException.class);
+        assertThat(adminMessages(chatId)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("claim 후 방이 취소되면 메시지를 저장하지 않는다")
+    void givenCanceledAfterClaim_whenSend_thenNoMessage() {
+        Long id = addItem(roomId, now.minusMinutes(1), List.of(), "취소 후 발송 금지", false);
+        assertThat(step.claim(id, now)).isTrue();
+        var claimed = itemReader.findById(id).orElseThrow();
+        jdbc.update("update rooms set status='CANCELLED' where id=?", roomId);
+
+        assertThatThrownBy(() -> step.send(claimed, chatId)).isInstanceOf(RuntimeException.class);
+
+        assertThat(adminMessages(chatId)).isZero();
+        assertThat(item(id).get("status")).isEqualTo("SENDING");
     }
 
     @Test
@@ -144,7 +292,7 @@ class RoomScheduleDispatchIntegrationTest {
         assertThat(row.get("status")).isEqualTo("SENT");
         assertThat(row.get("sent_message_id")).isNotNull();
         assertThat(jdbc.queryForObject("select sender_id from chat_messages where id=?", Long.class,
-                row.get("sent_message_id"))).isEqualTo(SYSTEM_USER);
+                row.get("sent_message_id"))).isNull();
         assertThat(inbox("PROFILE_REVEAL")).isEqualTo(3);
         assertThat(inbox("ADMIN_MESSAGE")).isEqualTo(3);
         assertThat(jdbc.queryForObject("select title from notification_history where type='PROFILE_REVEAL' limit 1",
@@ -270,7 +418,7 @@ class RoomScheduleDispatchIntegrationTest {
     }
 
     @Test
-    @DisplayName("운영 글이 있는 방도 지금 앱 모양(sender_id 양수, content 채움)으로 열리고, 삭제는 '삭제된 메시지' + 방송 표시")
+    @DisplayName("시스템 유저 없이 운영 글을 저장·조회하고, 삭제는 '삭제된 메시지' + 방송 표시")
     void adminMessageShapeAndDelete() throws Exception {
         chats.sendMessage(chatId, alice, "안녕하세요");
         Long id = addItem(roomId, now.minusMinutes(1), List.of(), "하루방이 열렸어요 ☁️", false);
@@ -281,16 +429,17 @@ class RoomScheduleDispatchIntegrationTest {
         mvc.perform(get("/api/v1/chat-rooms/" + chatId + "/messages").with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.messages[0].message_id").value(messageId))
-                .andExpect(jsonPath("$.data.messages[0].sender_id").value(SYSTEM_USER))
+                .andExpect(jsonPath("$.data.messages[0].sender_id").isEmpty())
                 .andExpect(jsonPath("$.data.messages[0].content").value("하루방이 열렸어요 ☁️"))
-                .andExpect(jsonPath("$.data.messages[0].message_type").value("ADMIN"))
+                .andExpect(jsonPath("$.data.messages[0].message_type").value("TEXT"))
+                .andExpect(jsonPath("$.data.messages[0].sender_type").value("SYSTEM"))
                 .andExpect(jsonPath("$.data.messages[0].sender_name").value("하루"))
                 .andExpect(jsonPath("$.data.messages[0].deleted").value(false))
                 .andExpect(jsonPath("$.data.messages[1].message_type").value("TEXT"))
                 .andExpect(jsonPath("$.data.messages[1].sender_name").isEmpty());
-        // 시스템 유저는 채팅방 멤버가 아니다(방 인원 그대로)
-        assertThat(jdbc.queryForObject("select count(*) from chat_room_members where chat_room_id=? and user_id=?",
-                Long.class, chatId, SYSTEM_USER)).isZero();
+        // 운영용 계정/멤버를 추가하지 않는다.
+        assertThat(jdbc.queryForObject("select count(*) from chat_room_members where chat_room_id=?",
+                Long.class, chatId)).isEqualTo(3);
         // 운영 글에 답장하면 인용 이름은 '하루'
         chats.sendMessage(chatId, bob, "네!", messageId);
 
@@ -302,11 +451,11 @@ class RoomScheduleDispatchIntegrationTest {
                 .andExpect(jsonPath("$.data.messages[0].reply_to.available").value(false))
                 .andExpect(jsonPath("$.data.messages[1].content").value("삭제된 메시지"))
                 .andExpect(jsonPath("$.data.messages[1].deleted").value(true))
-                .andExpect(jsonPath("$.data.messages[1].sender_id").value(SYSTEM_USER));
+                .andExpect(jsonPath("$.data.messages[1].sender_id").isEmpty());
         assertThat(jdbc.queryForObject("select delete_broadcast_at from chat_messages where id=?", LocalDateTime.class,
                 messageId)).isNotNull();
         // 참가자 채팅 수에는 안 잡힌다: ChatMessageSentEvent 를 안 타므로 CHAT 알림도 운영 글 몫은 없다
-        assertThat(jdbc.queryForObject("select count(*) from chat_messages where chat_room_id=? and message_type='TEXT'",
+        assertThat(jdbc.queryForObject("select count(*) from chat_messages where chat_room_id=? and sender_type='USER'",
                 Long.class, chatId)).isEqualTo(2);
     }
 }

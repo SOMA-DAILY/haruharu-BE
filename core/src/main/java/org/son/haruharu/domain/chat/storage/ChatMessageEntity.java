@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.chat.storage;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.CheckConstraint;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -15,14 +16,19 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageType;
+import org.son.haruharu.domain.chat.implement.ChatSenderType;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "chat_messages", uniqueConstraints = @UniqueConstraint(name="uq_chat_messages_reply_request", columnNames={"chat_room_id", "sender_id", "client_request_id"}), indexes = {
+@Table(name = "chat_messages", uniqueConstraints = {
+        @UniqueConstraint(name="uq_chat_messages_reply_request", columnNames={"chat_room_id", "sender_id", "client_request_id"}),
+        @UniqueConstraint(name="uq_chat_messages_schedule_item", columnNames="schedule_item_id")
+}, indexes = {
         @Index(name = "idx_chat_messages_room_id", columnList = "chat_room_id, id"),
         @Index(name = "idx_chat_messages_reply_to", columnList = "reply_to_message_id")
-})
+}, check = @CheckConstraint(name = "ck_chat_messages_sender",
+        constraint = "(sender_type = 'USER' AND sender_id IS NOT NULL) OR (sender_type = 'SYSTEM' AND sender_id IS NULL)"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatMessageEntity extends BaseEntity {
 
@@ -33,8 +39,12 @@ public class ChatMessageEntity extends BaseEntity {
     @Column(name = "chat_room_id", nullable = false)
     private Long chatRoomId;
 
-    @Column(name = "sender_id", nullable = false)
+    @Column(name = "sender_id")
     private Long senderId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sender_type", nullable = false, length = 20)
+    private ChatSenderType senderType;
 
     @Column(nullable = false, columnDefinition = "text")
     private String content;
@@ -74,6 +84,7 @@ public class ChatMessageEntity extends BaseEntity {
         entity.id = message.id();
         entity.chatRoomId = message.chatRoomId();
         entity.senderId = message.senderId();
+        entity.senderType = message.senderType();
         entity.content = message.content();
         entity.videoPostId = message.videoPostId();
         entity.clientRequestId = message.clientRequestId();
@@ -91,6 +102,6 @@ public class ChatMessageEntity extends BaseEntity {
     public ChatMessage toDomain() {
         return new ChatMessage(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId,
                 replyToMessageId, replyPreviewSender, replyPreviewContent, messageType, scheduleItemId,
-                adminDeletedAt, deleteBroadcastAt);
+                adminDeletedAt, deleteBroadcastAt, senderType);
     }
 }

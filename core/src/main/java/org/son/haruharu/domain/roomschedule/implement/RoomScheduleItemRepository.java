@@ -13,6 +13,8 @@ public interface RoomScheduleItemRepository {
 
     Optional<RoomScheduleItem> findById(Long id);
 
+    Optional<RoomScheduleItem> findByIdForUpdate(Long id);
+
     /** run_at, id 순. */
     List<RoomScheduleItem> findByRoomId(Long roomId);
 
@@ -31,6 +33,9 @@ public interface RoomScheduleItemRepository {
 
     /** from → FAILED(reason). */
     int markFailed(Long id, RoomScheduleStatus from, String reason, LocalDateTime now);
+
+    /** 조회 뒤 수정된 예약에는 이전 스냅샷의 실패 판정을 적용하지 않는다. */
+    int markFailedIfUnchanged(RoomScheduleItem snapshot, String reason, LocalDateTime now);
 
     /** status=SCHEDULED and run_at <= now, 오래된 순. */
     List<RoomScheduleItem> findDue(LocalDateTime now, int limit);
