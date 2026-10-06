@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 import org.son.haruharu.domain.video.implement.VideoPost;
 
 /**
- * 업로드 결과. MVP: 미션 비활성화로 missionId=null 고정. 세션 재화(열쇠) 제거됨.
+ * 업로드 결과. missionId는 과거 데이터 호환용이며 신규 영상은 null이다.
  */
 public record VideoPostResponse(
         Long videoPostId,

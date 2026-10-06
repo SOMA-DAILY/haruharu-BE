@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 /**
  * 운영 글(#457, F3). app 서버의 편성 발송 잡만 부른다.
  * 시스템 유저('하루')는 채팅방 멤버가 아니라 멤버십 검증이 없고, ChatMessageSentEvent 대신 ChatMessageBroadcastEvent 만 발행한다
- * (참가자 CHAT 푸시·미션 집계 제외). 리스너가 AFTER_COMMIT 이라 트랜잭션 안에서만 부른다.
+ * (참가자 CHAT 푸시 제외). 리스너가 AFTER_COMMIT 이라 트랜잭션 안에서만 부른다.
  */
 @Service
 @Transactional(readOnly = true)

@@ -3,7 +3,7 @@ package org.son.haruharu.domain.mission;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.son.haruharu.domain.mission.implement.MissionAssignmentRelaxationLevel;
+import java.util.List;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -67,16 +67,19 @@ class MissionRuleV1MigrationTest {
     }
 
     @Test
-    @DisplayName("up.sql 적용 후 enum 의 모든 완화 단계가 저장된다")
+    @DisplayName("up.sql 적용 후 보존된 스키마의 모든 완화 단계가 저장된다")
     void givenMigratedSchema_whenInsertEveryLevel_thenAllAccepted() throws SQLException {
         execute(UP_SQL);
 
-        for (MissionAssignmentRelaxationLevel level : MissionAssignmentRelaxationLevel.values()) {
-            assertThatCode(() -> execute(insert(level.name())))
+        // 폐기된 Java enum 대신 당시 SQL 계약을 검증한다.
+        List<String> levels = List.of("NONE", "CLUSTER_RELAXED", "FORMAT_RELAXED",
+                "BURDEN_RELAXED", "REUSE_RELAXED", "SAFE_FALLBACK");
+        for (String level : levels) {
+            assertThatCode(() -> execute(insert(level)))
                     .as("%s 는 저장할 수 있어야 한다", level)
                     .doesNotThrowAnyException();
         }
-        assertThat(count()).isEqualTo(String.valueOf(MissionAssignmentRelaxationLevel.values().length));
+        assertThat(count()).isEqualTo(String.valueOf(levels.size()));
     }
 
     @Test

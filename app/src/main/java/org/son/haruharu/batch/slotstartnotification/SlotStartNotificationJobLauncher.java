@@ -37,7 +37,7 @@ public class SlotStartNotificationJobLauncher {
         this.clock = clock;
     }
 
-    // 현재 미션 배정 잡이 0초에 실행된다. 그로 인해 Batch 메타 테이블 직렬화 문제가 발생할 수 있다.
+    // 다른 배치와 동시에 실행되면 Batch 메타 테이블 직렬화 문제가 발생할 수 있다.
     // 15초 늦게 시작하더라도 반올림으로 인해 정각 시각은 같다.
     @Scheduled(cron = "${haruharu.notification.slot-start.cron:15 0 * * * *}", zone = "Asia/Seoul")
     public void launch() {

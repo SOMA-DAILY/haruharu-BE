@@ -59,9 +59,9 @@ public class RoomStatusTransitionService {
     /**
      * 전이 알림. ENDED 는 별도 푸시가 없다(결과 공개는 result_at 기준 lazy resolve 가 담당).
      * <p>
-     * "방이 시작됐다"(RoomStartedEvent)는 GROUP 채팅·미션 자동 생성의 훅이므로, 배치 장기 중단으로
+     * "방이 시작됐다"(RoomStartedEvent)는 GROUP 채팅 생성의 훅이므로, 배치 장기 중단으로
      * PENDING 이 ACTIVE 를 <b>건너뛰고</b> SELECTING/ENDED 로 직행해도 한 번은 발행해야 한다
-     * (안 그러면 그 방은 채팅방·미션이 영영 안 생긴다). PENDING 에서 처음 벗어날 때를 시작 시점으로 본다.
+     * (안 그러면 그 방은 채팅방이 영영 안 생긴다). PENDING 에서 처음 벗어날 때를 시작 시점으로 본다.
      */
     private void publishTransition(Long roomId, RoomStatus previous, RoomStatus derived) {
         if (previous == RoomStatus.PENDING && derived != RoomStatus.CANCELLED) {

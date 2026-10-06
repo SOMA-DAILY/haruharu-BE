@@ -19,8 +19,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * core 전체를 스캔하면 identity 등 core 전용 빈(CiDiCryptoConverter→IdentityCrypto)까지 끌어와
  * 컨텍스트를 오염시키므로, 필요한 패키지(대시보드: room/user)만 추가한다.
  * <p>
- * 리포지토리는 admin 도메인과 core room·user·mission storage 패키지를 스캔한다. Spring Data의
- * 패키지 단위 스캔 때문에 mission은 slot 저장소가 속한 패키지 전체가 포함되며, 실제 도메인 빈은
+ * 리포지토리는 admin 도메인과 운영에 필요한 core storage 패키지만 스캔한다. 실제 도메인 빈은
  * {@link org.son.haruharu.admin.config.AdminRoomDomainConfig}에서 필요한 구현만 배선한다.
  */
 @SpringBootApplication
@@ -31,7 +30,6 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.profile.storage",
         "org.son.haruharu.domain.coin.storage",
         "org.son.haruharu.domain.payment.storage",
-        "org.son.haruharu.domain.mission.storage",
         "org.son.haruharu.domain.video.storage",
         "org.son.haruharu.domain.chat.storage",
         "org.son.haruharu.domain.question.storage",
@@ -43,7 +41,6 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.user.storage",
         // #392: RoomInviteService.join 의 프로필 gender 스냅샷(UserProfileRepositoryImpl→UserProfileJpaRepository) 배선.
         "org.son.haruharu.domain.profile.storage",
-        "org.son.haruharu.domain.mission.storage",
         // #457: 방 편성 저장과 보낸 운영 글 삭제
         "org.son.haruharu.domain.chat.storage",
         "org.son.haruharu.domain.roomschedule.storage"})

@@ -9,7 +9,6 @@ import org.son.haruharu.admin.domain.room.business.dto.AdminRoomCreatedResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomInviteResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomMemberResponse;
 import org.son.haruharu.admin.domain.room.implement.AdminRoomReader;
-import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.implement.PseudonymPool;
@@ -35,32 +34,26 @@ public class AdminRoomCommandService {
 
     private final RoomService roomService;
     private final RoomInviteService roomInviteService;
-    private final RoomMissionSlotService roomMissionSlotService;
     private final RoomMemberReader roomMemberReader;
     private final RoomMemberWriter roomMemberWriter;
     private final AdminRoomReader adminRoomReader;
     private final RoomScheduleService roomScheduleService;
 
     public AdminRoomCommandService(RoomService roomService, RoomInviteService roomInviteService,
-                                   RoomMissionSlotService roomMissionSlotService,
                                    RoomMemberReader roomMemberReader, RoomMemberWriter roomMemberWriter,
                                    AdminRoomReader adminRoomReader, RoomScheduleService roomScheduleService) {
         this.roomService = roomService;
         this.roomInviteService = roomInviteService;
-        this.roomMissionSlotService = roomMissionSlotService;
         this.roomMemberReader = roomMemberReader;
         this.roomMemberWriter = roomMemberWriter;
         this.adminRoomReader = adminRoomReader;
         this.roomScheduleService = roomScheduleService;
     }
 
-    /** 방 + 미션 설정·슬롯(#449) + 코드 + 채팅 편성(#457) 생성. 검증·저장 실패 시 전체를 롤백한다(같은 트랜잭션). */
+    /** 방 + 코드 + 채팅 편성(#457) 생성. 검증·저장 실패 시 전체를 롤백한다(같은 트랜잭션). */
     @Transactional
     public AdminRoomCreatedResponse createRoomWithInvite(CreateAdminRoomCommand command, Long adminId) {
         Long roomId = roomService.createRoom(command.toRoomCommand());
-        roomMissionSlotService.createForRoom(roomId, command.missionEnabled(),
-                command.totalDays(), command.startsAt(),
-                command.finalSelectionOpensAt(), command.missionSlots());
         RoomInvite invite = roomInviteService.issueFor(
                 roomId, command.maxUses(), command.inviteExpiresAt(), createdBy(adminId));
         roomScheduleService.createAll(roomId, command.chatSchedule(), createdBy(adminId));

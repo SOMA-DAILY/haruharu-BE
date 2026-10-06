@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 
 /**
  * 일상 영상 업로드. 슬롯은 {@code slotStart}(room.starts_at 상대 정시, {@link SlotClock})로 식별한다.
- * missionId가 있으면 미션 영상(미션 비활성화 동안 항상 null).
+ * missionId는 과거 데이터 조회 호환용이다. 자동 미션 폐기 후 신규 영상은 null을 저장한다.
  */
 public record VideoPost(
         Long id,

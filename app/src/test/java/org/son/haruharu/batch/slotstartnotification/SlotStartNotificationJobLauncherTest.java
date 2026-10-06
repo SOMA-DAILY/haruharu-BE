@@ -35,9 +35,9 @@ class SlotStartNotificationJobLauncherTest {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
-    // 실제 적용값은 어노테이션 기본값이 아니라 yaml 값이므로 yaml 을 읽어 확인한다(MissionBatchCronScheduleTest 와 같은 방식).
+    // 실제 적용값은 어노테이션 기본값이 아니라 yaml 값이므로 yaml 을 읽어 확인한다.
     private static final Pattern YAML_CRON = Pattern.compile(
-            "cron:\\s*\\$\\{(MISSION_ASSIGNMENT|MISSION_OUTCOME|SLOT_START_NOTIFICATION)_CRON:([^}]+)}");
+            "cron:\\s*\\$\\{(SLOT_START_NOTIFICATION|CHAT_ADMIN_MESSAGE|ROOM_RECONCILE)_CRON:([^}]+)}");
 
     @Mock JobOperator jobOperator;
     @Mock Job slotStartNotificationJob;
@@ -90,18 +90,18 @@ class SlotStartNotificationJobLauncherTest {
     }
 
     @Test
-    @DisplayName("yaml 기본 cron 의 초 필드는 미션 배정·outcome 잡과 겹치지 않는다 — 겹치면 JobRepository 직렬화 충돌로 한쪽이 실행되지 않는다")
-    void givenYamlCrons_whenComparingSecondsField_thenSlotStartAvoidsMissionJobs() throws Exception {
+    @DisplayName("yaml 기본 cron 의 초 필드는 운영 글·방 상태 갱신 잡과 겹치지 않는다 — 겹치면 JobRepository 직렬화 충돌로 한쪽이 실행되지 않는다")
+    void givenYamlCrons_whenComparingSecondsField_thenSlotStartAvoidsOtherJobs() throws Exception {
         Map<String, String> cronByJob = new HashMap<>();
         Matcher matcher = YAML_CRON.matcher(readApplicationYaml());
         while (matcher.find()) {
             cronByJob.put(matcher.group(1), matcher.group(2).trim());
         }
 
-        assertThat(cronByJob).containsKeys("MISSION_ASSIGNMENT", "MISSION_OUTCOME", "SLOT_START_NOTIFICATION");
+        assertThat(cronByJob).containsKeys("SLOT_START_NOTIFICATION", "CHAT_ADMIN_MESSAGE", "ROOM_RECONCILE");
         assertThat(secondsField(cronByJob.get("SLOT_START_NOTIFICATION")))
-                .isNotEqualTo(secondsField(cronByJob.get("MISSION_ASSIGNMENT")))
-                .isNotEqualTo(secondsField(cronByJob.get("MISSION_OUTCOME")));
+                .isNotEqualTo(secondsField(cronByJob.get("CHAT_ADMIN_MESSAGE")))
+                .isNotEqualTo(secondsField(cronByJob.get("ROOM_RECONCILE")));
     }
 
     private static String secondsField(String cron) {

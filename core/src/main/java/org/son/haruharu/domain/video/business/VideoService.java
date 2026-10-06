@@ -98,7 +98,7 @@ public class VideoService {
             throw new DuplicateSlotUploadException();
         }
 
-        // MVP: 미션 비활성화 — mission_id는 항상 null.
+        // 자동 미션 폐기: 신규 영상의 mission_id는 null.
         VideoPost saved = videoPostWriter.save(VideoPost.create(
                 member.id(), slotStart, null,
                 command.caption(), command.videoUrl(), command.thumbnailUrl(), now));
@@ -121,7 +121,6 @@ public class VideoService {
             throw new NotVideoOwnerException();
         }
         videoPostWriter.save(post.deletedAt(LocalDateTime.now(clock)));
-        // MVP: 미션 비활성화로 열쇠 지급 자체가 없어 회수 로직도 없다.
     }
 
     private void validateOwnUrl(Long userId, String videoUrl) {

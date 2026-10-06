@@ -57,22 +57,12 @@ class AdminRoomScheduleApiIntegrationTest {
     }
 
     private String createRoomBody(String chatSchedule) {
-        long[][] offsets = {{1, 6}, {9, 14}, {25, 30}, {33, 38}, {49, 54}, {55, 58}};
-        String[] periods = {"MORNING", "AFTERNOON"};
-        StringBuilder slots = new StringBuilder("[");
-        for (int i = 0; i < offsets.length; i++) {
-            slots.append("""
-                    {"day_number":%d,"period":"%s","opens_at":"%s","closes_at":"%s"},""".formatted(
-                    i / 2 + 1, periods[i % 2], startsAt.plusHours(offsets[i][0]), startsAt.plusHours(offsets[i][1])));
-        }
-        slots.setLength(slots.length() - 1);
-        slots.append("]");
         return """
                 {"starts_at":"%s","final_selection_opens_at":"%s","final_selection_closes_at":"%s",
-                 "result_at":"%s","ends_at":"%s","total_days":3,"max_uses":6,"mission_enabled":true,"mission_slots":%s,
+                 "result_at":"%s","ends_at":"%s","total_days":3,"max_uses":6,
                  "chat_schedule":%s}
                 """.formatted(startsAt, startsAt.plusHours(60), startsAt.plusHours(63), startsAt.plusHours(64),
-                startsAt.plusHours(72), slots, chatSchedule);
+                startsAt.plusHours(72), chatSchedule);
     }
 
     private Long createRoom(String chatSchedule) throws Exception {

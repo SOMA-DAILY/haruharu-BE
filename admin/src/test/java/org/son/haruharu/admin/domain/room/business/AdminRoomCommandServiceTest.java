@@ -17,10 +17,6 @@ import org.son.haruharu.admin.domain.room.business.dto.AdminRoomInviteResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomMemberResponse;
 import org.son.haruharu.admin.domain.room.implement.AdminRoomReader;
 import org.son.haruharu.admin.domain.room.storage.exception.AdminRoomNotFoundException;
-import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
-import org.son.haruharu.domain.mission.business.command.CreateRoomMissionSlotCommand;
-import org.son.haruharu.domain.mission.implement.MissionPeriod;
-import org.son.haruharu.domain.mission.implement.exception.InvalidRoomMissionSlotScheduleException;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.exception.RoomInvalidScheduleException;
@@ -36,9 +32,6 @@ import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundExceptio
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -56,7 +49,6 @@ class AdminRoomCommandServiceTest {
     private static final LocalDateTime STARTS_AT = LocalDateTime.of(2026, 8, 20, 19, 0);
 
     @Mock RoomService roomService;
-    @Mock RoomMissionSlotService roomMissionSlotService;
     @Mock RoomInviteService roomInviteService;
     @Mock RoomMemberReader roomMemberReader;
     @Mock RoomMemberWriter roomMemberWriter;
@@ -67,7 +59,7 @@ class AdminRoomCommandServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AdminRoomCommandService(roomService, roomInviteService, roomMissionSlotService,
+        service = new AdminRoomCommandService(roomService, roomInviteService,
                 roomMemberReader, roomMemberWriter, adminRoomReader, roomScheduleService);
     }
 
@@ -78,7 +70,7 @@ class AdminRoomCommandServiceTest {
                 STARTS_AT.plusHours(63),
                 STARTS_AT.plusHours(64),
                 STARTS_AT.plusHours(72),
-                3, 6, null, true, slotCommands(), List.of());
+                3, 6, null, List.of());
     }
 
     private RoomInvite issuedInvite(String code) {
@@ -102,8 +94,7 @@ class AdminRoomCommandServiceTest {
         assertThat(res.code()).isEqualTo("K7M2QX");
         verify(roomService).createRoom(argThat(c ->
                 c.startsAt().equals(STARTS_AT) && c.totalDays() == 3));
-        verify(roomMissionSlotService).createForRoom(
-                ROOM_ID, true, 3, STARTS_AT, STARTS_AT.plusHours(60), slotCommands());
+        verify(roomScheduleService).createAll(ROOM_ID, List.of(), "admin:1");
     }
 
     @Test
@@ -113,18 +104,6 @@ class AdminRoomCommandServiceTest {
 
         assertThatThrownBy(() -> service.createRoomWithInvite(createCommand(), ADMIN_ID))
                 .isInstanceOf(RoomInvalidScheduleException.class);
-        verify(roomInviteService, never()).issueFor(any(), any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("미션 슬롯 검증에 실패하면 초대코드는 발급하지 않는다")
-    void givenInvalidMissionSlots_whenCreateRoomWithInvite_thenThrowsAndNoInvite() {
-        given(roomService.createRoom(any())).willReturn(ROOM_ID);
-        given(roomMissionSlotService.createForRoom(any(), anyBoolean(), anyInt(), any(), any(), anyList()))
-                .willThrow(new InvalidRoomMissionSlotScheduleException());
-
-        assertThatThrownBy(() -> service.createRoomWithInvite(createCommand(), ADMIN_ID))
-                .isInstanceOf(InvalidRoomMissionSlotScheduleException.class);
         verify(roomInviteService, never()).issueFor(any(), any(), any(), any());
     }
 
@@ -250,20 +229,5 @@ class AdminRoomCommandServiceTest {
         return Room.createScheduled(STARTS_AT, STARTS_AT.plusDays(2).withHour(18),
                 STARTS_AT.plusDays(2).withHour(21), STARTS_AT.plusDays(2).withHour(22),
                 STARTS_AT.plusDays(3).withHour(9), 3);
-    }
-
-    private List<CreateRoomMissionSlotCommand> slotCommands() {
-        return List.of(
-                slot(1, MissionPeriod.MORNING, 1, 6),
-                slot(1, MissionPeriod.AFTERNOON, 9, 14),
-                slot(2, MissionPeriod.MORNING, 25, 30),
-                slot(2, MissionPeriod.AFTERNOON, 33, 38),
-                slot(3, MissionPeriod.MORNING, 49, 54),
-                slot(3, MissionPeriod.AFTERNOON, 55, 58));
-    }
-
-    private CreateRoomMissionSlotCommand slot(int day, MissionPeriod period, int opensOffset, int closesOffset) {
-        return new CreateRoomMissionSlotCommand(day, period,
-                STARTS_AT.plusHours(opensOffset), STARTS_AT.plusHours(closesOffset));
     }
 }
