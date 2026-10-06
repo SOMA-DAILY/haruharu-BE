@@ -18,12 +18,6 @@ public class VideoPostReader {
                 .orElseThrow(VideoPostNotFoundException::new);
     }
 
-    public VideoPost getEditableById(Long id) {
-        VideoPost post = getById(id);
-        if (post.deletedAt() != null || post.isHidden()) throw new VideoPostNotFoundException();
-        return post;
-    }
-
     /** 주어진 슬롯 창 중 이 멤버가 업로드한 slot_start들. 슬롯별 잠금 판정용 배치 조회. */
     public List<LocalDateTime> getUploadedSlotStarts(Long roomMemberId, List<LocalDateTime> slotStarts) {
         return videoPostRepository.findUploadedSlotStarts(roomMemberId, slotStarts);

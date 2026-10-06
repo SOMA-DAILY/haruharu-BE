@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.video.implement;
 
 import java.time.LocalDateTime;
-import org.son.haruharu.domain.video.implement.exception.InvalidVideoCaptionException;
 
 /**
  * 일상 영상 업로드. 슬롯은 {@code slotStart}(room.starts_at 상대 정시, {@link SlotClock})로 식별한다.
@@ -29,11 +28,10 @@ public record VideoPost(
                 isHidden, hiddenReason, deletedAt, createdAt, null);
     }
 
-    private static final int MAX_CAPTION_LENGTH = 100;
     public static VideoPost create(Long roomMemberId, LocalDateTime slotStart, Long missionId,
                                    String caption, String videoUrl, String thumbnailUrl,
                                    LocalDateTime createdAt) {
-        return new VideoPost(null, roomMemberId, slotStart, missionId, normalizeCaption(caption),
+        return new VideoPost(null, roomMemberId, slotStart, missionId, caption,
                 videoUrl, thumbnailUrl, false, null, null, createdAt);
     }
 
@@ -44,18 +42,6 @@ public record VideoPost(
 
     public boolean isMissionVideo() {
         return missionId != null;
-    }
-
-    public VideoPost withCaption(String newCaption) {
-        return new VideoPost(id, roomMemberId, slotStart, missionId, normalizeCaption(newCaption),
-                videoUrl, thumbnailUrl, isHidden, hiddenReason, deletedAt, createdAt, feedVideoUrl);
-    }
-
-    private static String normalizeCaption(String caption) {
-        if (caption == null) return null;
-        if (caption.length() > MAX_CAPTION_LENGTH) throw new InvalidVideoCaptionException();
-        String trimmed = caption.strip();
-        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /** 소프트삭제(재촬영). 새 인스턴스를 반환. */

@@ -85,34 +85,16 @@ class VideoUploadSessionIntegrationTest {
         registry.add("spring.jpa.properties.hibernate.dialect", () -> "org.hibernate.dialect.PostgreSQLDialect");
     }
 
-    private final VideoUploadSessionService service;
-    private final VideoService legacy;
-    private final VideoUploadSessionRepository sessions;
-    private final RoomJpaRepository rooms;
-    private final RoomMemberJpaRepository members;
-    private final VideoPostJpaRepository posts;
-    private final MockMvc mvc;
-    private final PlatformTransactionManager transactionManager;
-    private final JdbcTemplate jdbc;
-    private final Clock clock;
-
-    @Autowired
-    VideoUploadSessionIntegrationTest(VideoUploadSessionService service, VideoService legacy,
-                                      VideoUploadSessionRepository sessions, RoomJpaRepository rooms,
-                                      RoomMemberJpaRepository members, VideoPostJpaRepository posts,
-                                      MockMvc mvc, PlatformTransactionManager transactionManager,
-                                      JdbcTemplate jdbc, Clock clock) {
-        this.service = service;
-        this.legacy = legacy;
-        this.sessions = sessions;
-        this.rooms = rooms;
-        this.members = members;
-        this.posts = posts;
-        this.mvc = mvc;
-        this.transactionManager = transactionManager;
-        this.jdbc = jdbc;
-        this.clock = clock;
-    }
+    @Autowired VideoUploadSessionService service;
+    @Autowired VideoService legacy;
+    @Autowired VideoUploadSessionRepository sessions;
+    @Autowired RoomJpaRepository rooms;
+    @Autowired RoomMemberJpaRepository members;
+    @Autowired VideoPostJpaRepository posts;
+    @Autowired MockMvc mvc;
+    @Autowired PlatformTransactionManager transactionManager;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired Clock clock;
     @MockitoBean S3StoragePort storage;
 
     private final Long user = 9100001L;
@@ -131,30 +113,6 @@ class VideoUploadSessionIntegrationTest {
         when(storage.head(anyString())).thenAnswer(invocation -> new S3StoragePort.ObjectMetadata(1000,
                 invocation.<String>getArgument(0).endsWith(".jpg") ? "image/jpeg" : "video/mp4", "etag"));
         when(storage.createPresignedGetUrl(any())).thenAnswer(invocation -> invocation.getArgument(0));
-    }
-
-    @Test
-    void givenHundredCharacterCaption_whenReservedAndPublished_thenBothStorageStagesPreserveIt() throws Exception {
-        UUID id = UUID.randomUUID();
-        String caption = "가".repeat(100);
-        mvc.perform(post("/api/v1/rooms/" + room + "/video-upload-sessions")
-                .with(as(user)).contentType("application/json")
-                .content("{\"job_id\":\"" + id + "\",\"caption\":\"" + caption + "\"}"))
-                .andExpect(status().isOk());
-
-        assertThat(sessions.findById(id).orElseThrow().caption()).isEqualTo(caption);
-        Long postId = service.complete(user, room, id).videoPostId();
-        assertThat(posts.findById(postId).orElseThrow().toDomain().caption()).isEqualTo(caption);
-    }
-
-    @Test
-    void givenOverlongCaption_whenReserved_thenRejectsBeforeCreatingSession() throws Exception {
-        UUID id = UUID.randomUUID();
-        mvc.perform(post("/api/v1/rooms/" + room + "/video-upload-sessions")
-                .with(as(user)).contentType("application/json")
-                .content("{\"job_id\":\"" + id + "\",\"caption\":\"" + "가".repeat(101) + "\"}"))
-                .andExpect(status().isBadRequest());
-        assertThat(sessions.findById(id)).isEmpty();
     }
 
     @Test

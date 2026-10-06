@@ -2,15 +2,11 @@ package org.son.haruharu.domain.video.business;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -37,12 +33,7 @@ import org.son.haruharu.domain.video.implement.exception.VideoUploadUnavailableE
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 기기 변환 영상 업로드 세션(접수 → 파일별 presign → 게시 → 취소). 한 멤버의 세션 작업과 레거시 업로드는
@@ -52,8 +43,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class VideoUploadSessionService {
-
-    private static final Logger log = LoggerFactory.getLogger(VideoUploadSessionService.class);
 
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
@@ -65,7 +54,6 @@ public class VideoUploadSessionService {
     private final S3StoragePort storage;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
-    private final PlatformTransactionManager transactionManager;
 
     /** 같은 jobId 재요청은 기존 세션을 그대로 돌려준다(캡션이 다르면 409). 슬롯은 접수 시점에 고정한다. */
     @Transactional
@@ -74,7 +62,7 @@ public class VideoUploadSessionService {
         LocalDateTime now = LocalDateTime.now(clock);
         Optional<VideoUploadSession> previous = sessionReader.findById(jobId);
         if (previous.isPresent()) {
-            VideoUploadSession session = requireOwned(previous.orElseThrow(VideoUploadUnavailableException::new), userId, roomId);
+            VideoUploadSession session = requireOwned(previous.get(), userId, roomId);
             if (!Objects.equals(session.caption(), caption)) {
                 throw new VideoUploadUnavailableException();
             }
@@ -127,7 +115,6 @@ public class VideoUploadSessionService {
         if (videoPostReader.hasActiveUpload(session.memberId(), session.slotStart())) {
             throw new DuplicateSlotUploadException();
         }
-        deletePublishedAssetsOnRollback(session);
         VideoPost post = publisher.publish(session, now);
         eventPublisher.publishEvent(new VideoUploadedEvent(post.id(), roomId, session.memberId(), post.createdAt()));
         return toResponse(post);
@@ -165,41 +152,5 @@ public class VideoUploadSessionService {
         return VideoPostResponse.of(post,
                 storage.createPresignedGetUrl(post.videoUrl()),
                 storage.createPresignedGetUrl(post.thumbnailUrl()));
-    }
-
-    private void deletePublishedAssetsOnRollback(VideoUploadSession session) {
-        List<String> publishedKeys = Arrays.stream(VideoUploadVariant.values())
-                .map(session::publishedKey)
-                .toList();
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                // UNKNOWN이면 DB가 커밋됐을 수 있다. 보일 수도 있는 게시물의 파일은 지우지 않는다.
-                if (status != STATUS_ROLLED_BACK) {
-                    return;
-                }
-                try {
-                    TransactionTemplate cleanup = new TransactionTemplate(transactionManager);
-                    cleanup.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-                    cleanup.executeWithoutResult(ignored -> {
-                        // 재시도는 같은 멤버 락과 같은 게시 경로를 쓴다. 삭제가 끝날 때까지 락을 잡아
-                        // 정리 도중 재시도가 먼저 게시하지 못하게 한다.
-                        roomMemberReader.lockById(session.memberId());
-                        boolean publishedByRetry = sessionReader.findById(session.id())
-                                .map(VideoUploadSession::isCompleted)
-                                .orElse(false);
-                        if (!publishedByRetry) {
-                            storage.deleteObjectsOrThrow(publishedKeys);
-                        }
-                    });
-                } catch (RuntimeException failure) {
-                    log.atError()
-                            .setCause(failure)
-                            .addKeyValue("event", "VIDEO_UPLOAD_ROLLBACK_CLEANUP_FAILED")
-                            .addKeyValue("uploadSessionId", session.id())
-                            .log("업로드 트랜잭션 롤백 후 게시 경로 정리 실패");
-                }
-            }
-        });
     }
 }

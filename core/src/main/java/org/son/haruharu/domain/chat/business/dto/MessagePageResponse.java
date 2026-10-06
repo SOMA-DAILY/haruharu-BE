@@ -2,7 +2,6 @@ package org.son.haruharu.domain.chat.business.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
-import org.son.haruharu.domain.chat.implement.ChatMission;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -13,7 +12,7 @@ public record MessagePageResponse(
         @Schema(description = "다음 페이지 조회에 넘길 커서(마지막 메시지 id). 다음 페이지 없으면 null", example = "995") Long nextCursor
 ) {
     /**
-     * 필드는 추가만 한다(#456: reactions, my_reaction, reply_to / #457: message_type, sender_name, deleted / #474: mission).
+     * 필드는 추가만 한다(#456: reactions, my_reaction, reply_to / #457: message_type, sender_name, deleted).
      * sender_id 는 운영 글에서도 시스템 유저 id(양수)로 채우고, content 는 운영자가 지웠으면 '삭제된 메시지'.
      */
     public record MessageItem(
@@ -27,24 +26,17 @@ public record MessagePageResponse(
             @Schema(description = "답장 인용(답장 아니면 null)", nullable = true) ReplyToView replyTo,
             @Schema(description = "TEXT 또는 ADMIN(운영 글)", example = "TEXT") String messageType,
             @Schema(description = "운영 글이면 '하루', 아니면 null(앱이 members 에서 찾음)", nullable = true) String senderName,
-            @Schema(description = "운영자가 지운 메시지면 true(content 는 '삭제된 메시지')") boolean deleted,
-            @Schema(description = "운영자 미션 카드(#474). 미션 카드가 아니거나 운영자가 지웠으면 null", nullable = true) ChatMission mission
+            @Schema(description = "운영자가 지운 메시지면 true(content 는 '삭제된 메시지')") boolean deleted
     ) {
         public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt) {
-            this(messageId, senderId, content, sentAt, null, List.of(), null, null, "TEXT", null, false, null);
+            this(messageId, senderId, content, sentAt, null, List.of(), null, null, "TEXT", null, false);
         }
 
         public static MessageItem of(ChatMessage message, List<ReactionCountItem> reactions, String myReaction,
                                      ReplyToView replyTo) {
-            return of(message, reactions, myReaction, replyTo, message.visibleMission());
-        }
-
-        /** mission 은 호출자가 사진 URL 까지 채운 카드(없으면 null). */
-        public static MessageItem of(ChatMessage message, List<ReactionCountItem> reactions, String myReaction,
-                                     ReplyToView replyTo, ChatMission mission) {
             return new MessageItem(message.id(), message.senderId(), message.displayContent(), message.createdAt(),
                     message.videoPostId(), reactions, myReaction, replyTo, message.messageType().name(),
-                    message.senderName(), message.isAdminDeleted(), mission);
+                    message.senderName(), message.isAdminDeleted());
         }
     }
 

@@ -39,7 +39,7 @@ public class VideoPostEntity {
     @Column
     private Long missionId;
 
-    @Column(length = 100)
+    @Column(length = 20)
     private String caption;
 
     @Column(nullable = false, length = 500)

@@ -178,14 +178,13 @@ class AdminRoomApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         Long roomId = com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
-        // 새 방은 mission_slots 를 보내도 자동 미션 슬롯을 만들지 않는다(#474).
-        assertThat(slotCountOf(roomId)).isZero();
-        assertThat(missionSettingRowsOf(roomId)).isZero();
+        assertThat(slotCountOf(roomId)).isEqualTo(6L);
+        assertThat(missionEnabledOf(roomId)).isTrue();
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    @DisplayName("mission_enabled=false 로 슬롯을 생략하거나 빈 배열로 보내도 방이 생성된다(이전 클라이언트 호환)")
+    @DisplayName("mission_enabled=false 면 슬롯을 생략하거나 빈 배열로 보내도 미션 꺼진 방이 생성된다")
     void givenMissionDisabled_whenCreateRoom_thenCreatesRoomWithoutSlots(boolean omitSlots) throws Exception {
         LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
         String body = missionDisabledBody(startsAt, omitSlots);
@@ -199,12 +198,12 @@ class AdminRoomApiIntegrationTest {
 
         Long roomId = com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
         assertThat(slotCountOf(roomId)).isZero();
-        assertThat(missionSettingRowsOf(roomId)).isZero();
+        assertThat(missionEnabledOf(roomId)).isFalse();
     }
 
     @Test
-    @DisplayName("mission_enabled 를 빠뜨려도 방이 생성된다(#474 이후 선택 항목)")
-    void givenMissingMissionEnabled_whenCreateRoom_thenCreated() throws Exception {
+    @DisplayName("mission_enabled 를 빠뜨리면 400 INVALID_INPUT")
+    void givenMissingMissionEnabled_whenCreateRoom_thenReturns400() throws Exception {
         LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
         String body = createRoomBody(startsAt).replace("\"mission_enabled\": true,\n", "");
         assertThat(body).doesNotContain("mission_enabled");
@@ -212,7 +211,26 @@ class AdminRoomApiIntegrationTest {
         mockMvc.perform(post("/api/v1/admin/rooms")
                         .contentType(MediaType.APPLICATION_JSON).content(body)
                         .with(authentication(adminAuth())))
-                .andExpect(status().isCreated());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("mission_enabled 와 슬롯이 어긋나면(켜짐+슬롯 없음, 꺼짐+슬롯 있음) 400 ROOM_MISSION_SLOT_INVALID_SCHEDULE")
+    void givenMismatchedMissionEnabledAndSlots_whenCreateRoom_thenReturns400() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        String enabledWithoutSlots = missionDisabledBody(startsAt, true)
+                .replace("\"mission_enabled\": false", "\"mission_enabled\": true");
+        String disabledWithSlots = createRoomBody(startsAt)
+                .replace("\"mission_enabled\": true", "\"mission_enabled\": false");
+
+        for (String body : List.of(enabledWithoutSlots, disabledWithSlots)) {
+            mockMvc.perform(post("/api/v1/admin/rooms")
+                            .contentType(MediaType.APPLICATION_JSON).content(body)
+                            .with(authentication(adminAuth())))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("ROOM_MISSION_SLOT_INVALID_SCHEDULE"));
+        }
     }
 
     private long slotCountOf(Long roomId) {
@@ -222,18 +240,18 @@ class AdminRoomApiIntegrationTest {
                 .getSingleResult();
     }
 
-    /** 새 방은 자동 미션을 쓰지 않으므로(#474) 미션 설정 행도 만들지 않는다. 설정 행이 없으면 미션 꺼진 방으로 본다. */
-    private long missionSettingRowsOf(Long roomId) {
+    private boolean missionEnabledOf(Long roomId) {
         return em.createQuery(
-                        "select count(s) from RoomMissionSettingEntity s where s.roomId = :roomId", Long.class)
+                        "select s.missionEnabled from RoomMissionSettingEntity s where s.roomId = :roomId",
+                        Boolean.class)
                 .setParameter("roomId", roomId)
                 .getSingleResult();
     }
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    @DisplayName("새 방 생성은 구 자동 미션 슬롯 입력을 무시하고 채팅 제공을 준비한다")
-    void givenLegacyMissionSlots_whenCreateRoom_thenIgnoresSlots() throws Exception {
+    @DisplayName("미션 슬롯이 중복되면 400이고 방·슬롯·초대코드가 남지 않는다")
+    void givenDuplicateMissionSlot_whenCreateRoom_thenReturns400AndRollsBack() throws Exception {
         LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
         String duplicateSlots = missionSlots(startsAt)
                 .replaceFirst("\\\"AFTERNOON\\\"", "\\\"MORNING\\\"");
@@ -245,11 +263,12 @@ class AdminRoomApiIntegrationTest {
         mockMvc.perform(post("/api/v1/admin/rooms")
                         .contentType(MediaType.APPLICATION_JSON).content(body)
                         .with(authentication(adminAuth())))
-                .andExpect(status().isCreated());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("ROOM_MISSION_SLOT_INVALID_SCHEDULE"));
 
-        assertThat(roomCount()).isEqualTo(roomCount + 1);
+        assertThat(roomCount()).isEqualTo(roomCount);
         assertThat(roomMissionSlotCount()).isEqualTo(slotCount);
-        assertThat(roomInviteCount()).isEqualTo(inviteCount + 1);
+        assertThat(roomInviteCount()).isEqualTo(inviteCount);
     }
 
     private long roomCount() {

@@ -58,7 +58,9 @@ public class AdminRoomCommandService {
     @Transactional
     public AdminRoomCreatedResponse createRoomWithInvite(CreateAdminRoomCommand command, Long adminId) {
         Long roomId = roomService.createRoom(command.toRoomCommand());
-        // 새 방은 운영자 채팅으로 미션을 제공한다. 기존 방의 자동 슬롯은 건드리지 않는다.
+        roomMissionSlotService.createForRoom(roomId, command.missionEnabled(),
+                command.totalDays(), command.startsAt(),
+                command.finalSelectionOpensAt(), command.missionSlots());
         RoomInvite invite = roomInviteService.issueFor(
                 roomId, command.maxUses(), command.inviteExpiresAt(), createdBy(adminId));
         roomScheduleService.createAll(roomId, command.chatSchedule(), createdBy(adminId));

@@ -21,11 +21,6 @@ public class VideoPostRepositoryImpl implements VideoPostRepository {
     }
 
     @Override
-    public boolean updateCaption(Long videoPostId, String caption) {
-        return jpaRepository.updateCaption(videoPostId, caption) == 1;
-    }
-
-    @Override
     public Optional<VideoPost> findById(Long id) {
         return jpaRepository.findById(id).map(VideoPostEntity::toDomain);
     }

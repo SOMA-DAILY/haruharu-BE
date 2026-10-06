@@ -16,8 +16,6 @@ import org.son.haruharu.domain.chat.business.exception.ChatReplyInvalidException
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
-import org.son.haruharu.domain.chat.implement.ChatMission;
-import org.son.haruharu.domain.chat.implement.ChatMissionPresenter;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
@@ -25,9 +23,7 @@ import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
-import org.son.haruharu.domain.chat.storage.exception.ChatMissionImageNotFoundException;
 import org.son.haruharu.domain.chat.storage.exception.ChatRoomNotFoundException;
-import org.son.haruharu.domain.mission.business.dto.MissionImageResponse;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -75,7 +71,6 @@ public class ChatService {
     private final ChatParticipantPolicy participants;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
-    private final ChatMissionPresenter missionPresenter;
 
     public ChatService(ChatRoomReader chatRoomReader,
                        ChatRoomWriter chatRoomWriter,
@@ -91,8 +86,7 @@ public class ChatService {
                        ChatMessageViews chatMessageViews,
                        ChatParticipantPolicy participants,
                        ApplicationEventPublisher eventPublisher,
-                       Clock clock,
-                       ChatMissionPresenter missionPresenter) {
+                       Clock clock) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomWriter = chatRoomWriter;
         this.chatRoomMemberReader = chatRoomMemberReader;
@@ -108,7 +102,6 @@ public class ChatService {
         this.participants = participants;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
-        this.missionPresenter = missionPresenter;
     }
 
     /**
@@ -138,12 +131,6 @@ public class ChatService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createGroupRoom(Long roomId) {
-        ensureGroupRoom(roomId);
-    }
-
-    /** 예약 시각이 시작 전이 배치보다 먼저 도달해도 같은 방 잠금 안에서 그룹채팅을 준비한다. */
-    @Transactional
-    public void ensureGroupRoom(Long roomId) {
         if (roomReader.findByIdForUpdate(roomId).isEmpty()) {
             return;
         }
@@ -256,17 +243,6 @@ public class ChatService {
         return MessagePageResponse.of(messages, limit, chatMessageViews.toItems(messages, userId));
     }
 
-    /** 운영자 미션 카드의 참고 사진(#474). 서명 URL 은 요청 때마다 새로 발급한다. 카드가 없거나 지워졌으면 404. */
-    public MissionImageResponse getMissionImage(Long chatRoomId, Long userId, Long messageId) {
-        requireMember(chatRoomId, userId);
-        participants.requireActiveIfDirect(chatRoomId, userId);
-        return chatMessageReader.findById(messageId)
-                .filter(item -> item.chatRoomId().equals(chatRoomId))
-                .map(item -> missionPresenter.present(item.visibleMission()))
-                .map(ChatMission::image)
-                .orElseThrow(ChatMissionImageNotFoundException::new);
-    }
-
     /** 읽음 커서 갱신. 커서는 뒤로만 이동한다(역행 방지). */
     @Transactional
     public ReadResponse markRead(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -334,7 +310,7 @@ public class ChatService {
         unreadExcluded.add(userId);
         Optional<ChatMessage> last = chatMessageReader.findLast(chatRoomId, excludedSenders);
         long unread = chatMessageReader.countUnread(chatRoomId, me.lastReadMessageId(), unreadExcluded);
-        String lastMessage = last.map(ChatMessage::displayContent).orElse(null);
+        String lastMessage = last.map(ChatMessage::content).orElse(null);
         LocalDateTime lastMessageAt = last.map(ChatMessage::createdAt).orElse(null);
 
         if (room.type() == ChatRoomType.GROUP) {

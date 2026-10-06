@@ -5,6 +5,6 @@ import org.son.haruharu.common.exception.ForbiddenException;
 public class NotVideoOwnerException extends ForbiddenException {
 
     public NotVideoOwnerException() {
-        super("VIDEO_403_NOT_OWNER", "본인의 영상만 수정하거나 삭제할 수 있습니다.");
+        super("VIDEO_403_NOT_OWNER", "본인의 영상만 삭제할 수 있습니다.");
     }
 }
