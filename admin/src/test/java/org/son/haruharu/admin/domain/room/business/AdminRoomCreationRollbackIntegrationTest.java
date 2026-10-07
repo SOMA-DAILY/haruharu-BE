@@ -1,11 +1,9 @@
 package org.son.haruharu.admin.domain.room.business;
 
-import java.time.LocalDateTime;
-import java.util.List;
-
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-
+import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.admin.domain.room.business.command.CreateAdminRoomCommand;
@@ -61,16 +59,16 @@ class AdminRoomCreationRollbackIntegrationTest {
         CreateAdminRoomCommand withSchedule = new CreateAdminRoomCommand(base.startsAt(), base.finalSelectionOpensAt(),
                 base.finalSelectionClosesAt(), base.resultAt(), base.endsAt(), base.totalDays(), base.maxUses(),
                 base.inviteExpiresAt(),
-                List.of(new org.son.haruharu.domain.roomschedule.business.command.ScheduleItemCommand(
-                        STARTS_AT, List.of(), "ok", false, null, null),
-                        new org.son.haruharu.domain.roomschedule.business.command.ScheduleItemCommand(
-                                STARTS_AT, List.of(), null, false, null, null)));
+                List.of(new org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand(
+                        org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT, org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition.from("ok", List.of()), STARTS_AT, null, null),
+                        new org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand(
+                                org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT, org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition.from(null, List.of()), STARTS_AT, null, null)));
 
         assertThatThrownBy(() -> service.createRoomWithInvite(withSchedule, 1L))
-                .isInstanceOf(org.son.haruharu.domain.roomschedule.implement.exception.InvalidScheduleItemException.class);
+                .isInstanceOf(org.son.haruharu.domain.mission.common.implement.exception.InvalidMissionException.class);
 
         assertThat(roomCount()).isEqualTo(roomCount);
-        assertThat(entityManager.createQuery("select count(i) from RoomScheduleItemEntity i", Long.class)
+        assertThat(entityManager.createQuery("select count(i) from RoomMissionEntity i", Long.class)
                 .getSingleResult()).isZero();
     }
 

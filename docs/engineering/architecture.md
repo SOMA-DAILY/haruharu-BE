@@ -71,7 +71,7 @@ app/src/main/java/org/son/haruharu/
 │               └── {Action}Request.java      # toCommand() 포함
 ├── config/                                   # Security·WebSocket·Scheduling·필터·OpenApi
 ├── handler/                                  # @RestControllerAdvice (GlobalExceptionHandler)
-├── infrastructure/scheduler/                 # cron (배치 미전환분 잔존 + 행 단위 claim 으로 멱등을 잡아 JobRepository 가 필요 없는 잡, 예: RoomScheduleDispatchScheduler)
+├── infrastructure/scheduler/                 # cron (배치 미전환분 잔존 + 행 단위 claim 으로 멱등을 잡아 JobRepository 가 필요 없는 잡, 예: MissionDispatchScheduler)
 └── batch/                                    # Spring Batch(#357). config/=공용 인프라(JDBC JobRepository·스키마), {job}/=Tasklet·JobConfig·@Scheduled 런처
 
 admin/src/main/java/org/son/haruharu/admin/
@@ -82,6 +82,11 @@ admin/src/main/java/org/son/haruharu/admin/
 ```
 
 **어느 모듈에 쓸지 판정:**
+
+미션처럼 여러 유형과 공통 실행 기능이 있는 도메인은 `domain/mission/common`,
+`domain/mission/types/{유형}`, `domain/mission/chat`으로 책임을 묶은 뒤 각 묶음 안에 계층을 둔다.
+`application`은 여전히 app/admin, 공유 `business`·`implement`·`storage`는 core에 위치한다.
+이 하위 패키지들은 같은 미션 도메인에 속한다. 구체적인 배치와 확장 절차는 [미션 구조](mission-domain.md)를 따른다.
 
 | 만드는 것 | 위치 |
 |-----------|------|
@@ -268,7 +273,8 @@ public static UserEntity from(User user) {
 - `room` — rooms(초대코드·어드민 스케줄·status) · room_members · room_invites(신규) · final_selections · match_results
 - `video` — video_posts(슬롯 시간창) · video_reactions
 - `chat` — chat_rooms(GROUP/DIRECT) · chat_room_members · chat_messages
-- 자동 미션 도메인은 #482에서 폐기. 과거 미션 테이블·영상의 `mission_id`는 데이터 호환을 위해 보존하며 런타임 엔티티·배치·API는 제공하지 않는다.
+- `mission` — #486의 공통 방 미션(`common`), 안내형 상세(`types/announcement`), 채팅 게시 계획(`chat`).
+- 이전 자동 미션 도메인은 #482에서 폐기. 과거 미션 테이블·영상의 `mission_id`는 데이터 호환을 위해 보존하며 런타임 엔티티·배치·API는 제공하지 않는다.
 - `notification` — device_tokens · notification_settings · notification_history (FCM)
 - `report` — reports
 

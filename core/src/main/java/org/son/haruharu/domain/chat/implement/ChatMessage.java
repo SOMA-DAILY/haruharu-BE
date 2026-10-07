@@ -2,6 +2,7 @@ package org.son.haruharu.domain.chat.implement;
 
 import java.time.LocalDateTime;
 import org.son.haruharu.domain.chat.implement.exception.InvalidChatSenderException;
+import org.son.haruharu.domain.chat.implement.exception.InvalidChatMissionReferenceException;
 
 /** 채팅 메시지. createdAt이 전송 시각(BaseEntity). 실제 전송은 #60(STOMP)에서 처리한다. */
 public record ChatMessage(
@@ -21,7 +22,9 @@ public record ChatMessage(
         Long scheduleItemId,
         LocalDateTime adminDeletedAt,
         LocalDateTime deleteBroadcastAt,
-        ChatSenderType senderType
+        ChatSenderType senderType,
+        Long roomMissionId,
+        Long missionAnnouncementId
 ) {
     /** 운영자가 지운 메시지 대신 내려주는 문구(#457). */
     public static final String DELETED_CONTENT = "삭제된 메시지";
@@ -34,6 +37,23 @@ public record ChatMessage(
         if (messageType == null) {
             messageType = ChatMessageType.TEXT;
         }
+        if (messageType == ChatMessageType.MISSION) {
+            if (senderType != ChatSenderType.SYSTEM || roomMissionId == null || roomMissionId <= 0
+                    || missionAnnouncementId == null || missionAnnouncementId <= 0) {
+                throw new InvalidChatMissionReferenceException();
+            }
+        } else if (roomMissionId != null || missionAnnouncementId != null) {
+            throw new InvalidChatMissionReferenceException();
+        }
+    }
+
+    public ChatMessage(Long id, Long chatRoomId, Long senderId, String content, LocalDateTime createdAt,
+                       Long videoPostId, String clientRequestId, Long replyToMessageId, String replyPreviewSender,
+                       String replyPreviewContent, ChatMessageType messageType, Long scheduleItemId,
+                       LocalDateTime adminDeletedAt, LocalDateTime deleteBroadcastAt, ChatSenderType senderType) {
+        this(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId, replyToMessageId,
+                replyPreviewSender, replyPreviewContent, messageType, scheduleItemId, adminDeletedAt,
+                deleteBroadcastAt, senderType, null, null);
     }
 
     public ChatMessage(Long id, Long chatRoomId, Long senderId, String content, LocalDateTime createdAt,
@@ -70,6 +90,11 @@ public record ChatMessage(
     public static ChatMessage system(Long chatRoomId, String content, Long scheduleItemId) {
         return new ChatMessage(null, chatRoomId, null, content, null, null, null, null, null, null,
                 ChatMessageType.TEXT, scheduleItemId, null, null, ChatSenderType.SYSTEM);
+    }
+
+    public static ChatMessage mission(Long chatRoomId, String content, Long roomMissionId, Long announcementId) {
+        return new ChatMessage(null, chatRoomId, null, content, null, null, null, null, null, null,
+                ChatMessageType.MISSION, null, null, null, ChatSenderType.SYSTEM, roomMissionId, announcementId);
     }
 
     public boolean isSystem() {

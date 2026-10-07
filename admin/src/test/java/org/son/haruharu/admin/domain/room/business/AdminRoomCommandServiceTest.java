@@ -3,7 +3,6 @@ package org.son.haruharu.admin.domain.room.business;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,14 +52,14 @@ class AdminRoomCommandServiceTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock AdminRoomReader adminRoomReader;
-    @Mock org.son.haruharu.domain.roomschedule.business.RoomScheduleService roomScheduleService;
+    @Mock org.son.haruharu.domain.mission.common.business.RoomMissionService roomMissionService;
 
     AdminRoomCommandService service;
 
     @BeforeEach
     void setUp() {
         service = new AdminRoomCommandService(roomService, roomInviteService,
-                roomMemberReader, roomMemberWriter, adminRoomReader, roomScheduleService);
+                roomMemberReader, roomMemberWriter, adminRoomReader, roomMissionService);
     }
 
     private CreateAdminRoomCommand createCommand() {
@@ -94,7 +93,7 @@ class AdminRoomCommandServiceTest {
         assertThat(res.code()).isEqualTo("K7M2QX");
         verify(roomService).createRoom(argThat(c ->
                 c.startsAt().equals(STARTS_AT) && c.totalDays() == 3));
-        verify(roomScheduleService).createAll(ROOM_ID, List.of(), "admin:1");
+        verify(roomMissionService).createAll(ROOM_ID, List.of(), "admin:1");
     }
 
     @Test

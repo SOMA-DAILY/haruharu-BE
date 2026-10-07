@@ -5,6 +5,8 @@ import org.son.haruharu.domain.chat.business.dto.MessagePageResponse.MessageItem
 import org.son.haruharu.domain.chat.business.dto.ReactionCountItem;
 import org.son.haruharu.domain.chat.business.dto.ReplyToView;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
+import org.son.haruharu.domain.chat.implement.ChatMissionLookup;
+import org.son.haruharu.domain.chat.implement.ChatMissionReference;
 import org.son.haruharu.domain.chat.implement.ChatMessageReactionReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.MessageReactionCount;
@@ -27,12 +29,14 @@ public class ChatMessageViews {
     private final ChatMessageReactionReader reactionReader;
     private final ChatMessageReader messageReader;
     private final BlockReader blockReader;
+    private final ChatMissionLookup missionLookup;
 
     public ChatMessageViews(ChatMessageReactionReader reactionReader, ChatMessageReader messageReader,
-                            BlockReader blockReader) {
+                            BlockReader blockReader, ChatMissionLookup missionLookup) {
         this.reactionReader = reactionReader;
         this.messageReader = messageReader;
         this.blockReader = blockReader;
+        this.missionLookup = missionLookup;
     }
 
     public List<MessageItem> toItems(List<ChatMessage> messages, Long viewerId) {
@@ -50,12 +54,17 @@ public class ChatMessageViews {
                 : messageReader.findAllByIds(replyIds).stream()
                         .collect(Collectors.toMap(ChatMessage::id, Function.identity()));
         Set<Long> blocked = replyIds.isEmpty() ? Set.of() : blockReader.getBlockedUserIds(viewerId);
+        List<Long> announcementIds = messages.stream().filter(m -> !m.isAdminDeleted())
+                .map(ChatMessage::missionAnnouncementId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, ChatMissionReference> missions = announcementIds.isEmpty() ? Map.of()
+                : missionLookup.findByAnnouncementIds(announcementIds);
 
         return messages.stream()
                 .map(m -> MessageItem.of(m,
                         ReactionCountItem.sorted(counts.getOrDefault(m.id(), List.of())),
                         mine.get(m.id()),
-                        replyTo(m, originals, blocked)))
+                        replyTo(m, originals, blocked),
+                        m.missionAnnouncementId() == null ? null : missions.get(m.missionAnnouncementId())))
                 .toList();
     }
 

@@ -33,17 +33,21 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.video.storage",
         "org.son.haruharu.domain.chat.storage",
         "org.son.haruharu.domain.question.storage",
-        // #457: 방 편성
-        "org.son.haruharu.domain.roomschedule.storage"
+        // #486: 공통 미션, 안내형 상세, 채팅 게시 계획
+        "org.son.haruharu.domain.mission.common.storage",
+        "org.son.haruharu.domain.mission.types.announcement.storage",
+        "org.son.haruharu.domain.mission.chat.storage"
 })
 @EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.room.storage",
         // #321: RoomInviteService.join 의 유저 행 비관적 락(UserRepositoryImpl→UserJpaRepository) 배선.
         "org.son.haruharu.domain.user.storage",
         // #392: RoomInviteService.join 의 프로필 gender 스냅샷(UserProfileRepositoryImpl→UserProfileJpaRepository) 배선.
         "org.son.haruharu.domain.profile.storage",
-        // #457: 방 편성 저장과 보낸 운영 글 삭제
+        // #486: 미션·게시 계획 저장과 보낸 운영 글 삭제
         "org.son.haruharu.domain.chat.storage",
-        "org.son.haruharu.domain.roomschedule.storage"})
+        "org.son.haruharu.domain.mission.common.storage",
+        "org.son.haruharu.domain.mission.types.announcement.storage",
+        "org.son.haruharu.domain.mission.chat.storage"})
 @Import({JpaConfig.class, ClockConfig.class, TimeZoneConfig.class})
 public class AdminApplication {
 

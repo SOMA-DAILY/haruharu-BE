@@ -64,7 +64,7 @@ class AutomaticMissionRetirementPostgresIntegrationTest {
                 {"starts_at":"2030-01-01T19:00:00","final_selection_opens_at":"2030-01-03T18:00:00",
                  "final_selection_closes_at":"2030-01-03T21:00:00","result_at":"2030-01-03T22:00:00",
                  "ends_at":"2030-01-04T19:00:00","total_days":3,"max_uses":6,
-                 "chat_schedule":[{"run_at":"2030-01-01T19:00:00","message_content":"안내"}]%s}
+                 "missions":[{"type":"ANNOUNCEMENT","opens_at":"2030-01-01T19:00:00","details":{"content":"안내"}}]%s}
                 """.formatted(legacyInput ? ",\"mission_enabled\":true,\"mission_slots\":[]" : "");
         var auth = new UsernamePasswordAuthenticationToken(1L, null,
                 List.of(new SimpleGrantedAuthority("ROLE_OPERATOR")));
@@ -76,7 +76,7 @@ class AutomaticMissionRetirementPostgresIntegrationTest {
         Long roomId = com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM room_invites WHERE room_id = ?", Long.class, roomId))
                 .isEqualTo(1L);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM room_schedule_items WHERE room_id = ?", Long.class, roomId))
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM room_mission_instances WHERE room_id = ?", Long.class, roomId))
                 .isEqualTo(1L);
         assertThat(jdbc.queryForList("SELECT * FROM room_mission_settings ORDER BY id")).isEqualTo(settings);
         assertThat(jdbc.queryForList("SELECT * FROM room_mission_slots ORDER BY id")).isEqualTo(slots);

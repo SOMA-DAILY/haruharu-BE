@@ -2,7 +2,6 @@ package org.son.haruharu.config;
 
 import java.time.LocalDateTime;
 import java.util.Map;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.block.implement.Block;
@@ -48,6 +47,23 @@ class EntityAuditColumnRoundTripTest {
         assertThat(org.son.haruharu.domain.question.storage.QuestionEntity.from(question).toDomain()).isEqualTo(question);
         var grant = new org.son.haruharu.domain.question.implement.QuestionGrant(1L,1L,100L,true,CREATED_AT);
         assertThat(org.son.haruharu.domain.question.storage.QuestionGrantEntity.from(grant).toDomain()).isEqualTo(grant);
+    }
+
+    @Test
+    void givenMissionAndAnnouncement_whenRoundTrip_thenPreserveAuditAndAllReferences() {
+        var mission = new org.son.haruharu.domain.mission.common.implement.RoomMission(1L, 2L,
+                org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT,
+                CREATED_AT, CREATED_AT.plusDays(1), CREATED_AT.plusHours(1), "admin:1", "admin:2", CREATED_AT, CREATED_AT.plusMinutes(1));
+        assertThat(org.son.haruharu.domain.mission.common.storage.RoomMissionEntity.from(mission).toDomain()).isEqualTo(mission);
+        var definition = new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMission(1L,
+                org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition.from("안내", java.util.List.of("MBTI")),
+                CREATED_AT, CREATED_AT.plusMinutes(1));
+        assertThat(org.son.haruharu.domain.mission.types.announcement.storage.AnnouncementMissionEntity.from(definition).toDomain()).isEqualTo(definition);
+        var announcement = new org.son.haruharu.domain.mission.chat.implement.MissionAnnouncement(10L,1L,2L,
+                org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementType.START,CREATED_AT,"게시 문구",true,"제목","본문",
+                org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementStatus.SENT,null,50L,70L,"admin:1","admin:2",
+                CREATED_AT.plusMinutes(2),CREATED_AT,CREATED_AT.plusMinutes(3));
+        assertThat(org.son.haruharu.domain.mission.chat.storage.MissionAnnouncementEntity.from(announcement).toDomain()).isEqualTo(announcement);
     }
 
     @Test
