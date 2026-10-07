@@ -4,6 +4,8 @@ import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.son.haruharu.domain.chat.business.ChatService;
 import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
@@ -401,18 +403,23 @@ class MissionDispatchIntegrationTest {
         assertThat(item(justCreated).get("status")).isEqualTo("SENT");
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(ints = {123456000, 123456100, 123456900})
     @DisplayName("조회 뒤 어드민이 run_at 을 내일로 미루면 claim 이 실패하고, claim 뒤엔 다시 읽은 문구로 보낸다")
-    void claimRechecksRunAtAndUsesFreshRow() {
-        Long id = addItem(roomId, now.minusMinutes(1), List.of(), "옛 문구", false);
+    void claimRechecksRunAtAndUsesFreshRow(int nanos) {
+        LocalDateTime originalRunAt = now.minusMinutes(1).withNano(nanos);
+        Long id = addItem(roomId, originalRunAt, List.of(), "옛 문구", false);
         var snapshot = itemReader.findDue(LocalDateTime.now(clock), 10);
         assertThat(snapshot).extracting(i -> i.id()).contains(id);
+        // PostgreSQL timestamp(6)에서 반올림된 실제 예약 시각으로 복원한다.
+        LocalDateTime persistedRunAt = snapshot.stream().filter(i -> i.id().equals(id))
+                .findFirst().orElseThrow().runAt();
 
         reschedule(id, now.plusDays(1), "옛 문구");
         assertThat(step.claim(id, LocalDateTime.now(clock))).isFalse();
         assertThat(item(id).get("status")).isEqualTo("SCHEDULED");
 
-        reschedule(id, now.minusMinutes(1), "새 문구");
+        reschedule(id, persistedRunAt, "새 문구");
         dispatcher.dispatchDue();
         assertThat(jdbc.queryForObject("select content from chat_messages where id=?", String.class,
                 item(id).get("sent_message_id"))).isEqualTo("새 문구");
