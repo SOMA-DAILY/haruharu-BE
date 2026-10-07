@@ -46,7 +46,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 기기 변환 영상 업로드 세션(접수 → 파일별 presign → 게시 → 취소). 한 멤버의 세션 작업과 레거시 업로드는
- * 멤버 행 락으로 직렬화해 슬롯당 게시물 1개를 지킨다.
+ * 멤버 행 락으로 직렬화해 슬롯당 게시물 1개를 지킨다. 목록 조회만 락 없이 읽는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -67,7 +67,10 @@ public class VideoUploadSessionService {
     private final Clock clock;
     private final PlatformTransactionManager transactionManager;
 
-    /** 같은 jobId 재요청은 기존 세션을 그대로 돌려준다(캡션이 다르면 409). 슬롯은 접수 시점에 고정한다. */
+    /**
+     * 같은 jobId 재요청은 기존 세션을 그대로 돌려준다(캡션이 다르면 409). 슬롯은 접수 시점에 고정한다.
+     * 그 슬롯에 게시 전인 내 세션만 남아 있으면 취소하고 새 세션이 대체한다. job_id를 잃은 앱도 다시 올릴 수 있다.
+     */
     @Transactional
     public VideoUploadSessionResponse reserve(Long userId, Long roomId, UUID jobId, String caption) {
         RoomMember member = lockMember(roomId, userId);
@@ -86,10 +89,18 @@ public class VideoUploadSessionService {
             throw new RoomNotActiveException();
         }
         LocalDateTime slotStart = SlotClock.currentSlotStart(room.startsAt(), now);
-        if (videoPostReader.hasActiveUpload(member.id(), slotStart)
-                || sessionReader.hasPending(member.id(), slotStart, now)) {
+        if (videoPostReader.hasActiveUpload(member.id(), slotStart)) {
             throw new DuplicateSlotUploadException();
         }
+        // 슬롯당 게시물 1개는 complete의 검사가 지킨다. 대체된 세션의 presign·complete는 취소로 거절된다.
+        sessionReader.findPending(member.id(), slotStart, now).forEach(stalled -> {
+            sessionWriter.save(stalled.cancelled());
+            log.atInfo()
+                    .addKeyValue("event", "VIDEO_UPLOAD_SESSION_REPLACED")
+                    .addKeyValue("uploadSessionId", stalled.id())
+                    .addKeyValue("replacedBy", jobId)
+                    .log("게시 전 업로드 세션을 새 접수로 대체");
+        });
         VideoUploadSession session = sessionWriter.insert(
                 VideoUploadSession.create(jobId, userId, roomId, member.id(), slotStart, now, caption));
         return VideoUploadSessionResponse.of(session, now);
@@ -98,6 +109,15 @@ public class VideoUploadSessionService {
     @Transactional
     public VideoUploadSessionResponse get(Long userId, Long roomId, UUID id) {
         return VideoUploadSessionResponse.of(loadOwned(userId, roomId, id), LocalDateTime.now(clock));
+    }
+
+    /** 이 방에서 내가 접수하고 아직 게시하지 않은 세션(슬롯 순). job_id를 잃은 앱이 남은 접수를 찾는 용도다. */
+    public List<VideoUploadSessionResponse> listPending(Long userId, Long roomId) {
+        RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId);
+        LocalDateTime now = LocalDateTime.now(clock);
+        return sessionReader.findPendingByMember(member.id(), now).stream()
+                .map(session -> VideoUploadSessionResponse.of(session, now))
+                .toList();
     }
 
     /** 이미 검증을 통과한 파일이면 URL 없이 uploaded=true를 돌려준다. */
