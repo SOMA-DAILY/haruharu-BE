@@ -103,6 +103,8 @@ public class AdminSecurityConfig {
                         // 방 편성 쓰기(#457)는 SUPER·OPERATOR. 목록 조회(GET)는 로그인만(CS 는 화면이 버튼을 숨김).
                         .requestMatchers(HttpMethod.POST, "/api/v1/admin/rooms/*/missions/**")
                         .hasAnyRole("SUPER", "OPERATOR")
+                        .requestMatchers("/api/v1/admin/mission-images", "/api/v1/admin/mission-images/**")
+                        .hasAnyRole("SUPER", "OPERATOR")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/admin/rooms/*/missions/**")
                         .hasAnyRole("SUPER", "OPERATOR")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/admin/rooms/*/missions/**")

@@ -7,7 +7,7 @@ import org.son.haruharu.domain.room.implement.RoomStatus;
 
 /** 미션의 시간과 취소 여부가 원본이다. 안내의 발송 성공 여부는 생명주기에 관여하지 않는다. */
 public record RoomMission(
-        Long id, Long roomId, MissionType type, MissionDefinition details,
+        Long id, Long roomId, MissionType type, MissionDefinition details, MissionImage image,
         LocalDateTime opensAt, LocalDateTime closesAt, LocalDateTime canceledAt,
         String createdBy, String updatedBy, LocalDateTime createdAt, LocalDateTime updatedAt
 ) {
@@ -25,7 +25,12 @@ public record RoomMission(
 
     public static RoomMission create(Long roomId, MissionType type, MissionDefinition details, LocalDateTime opensAt,
                                      LocalDateTime closesAt, String actor) {
-        return new RoomMission(null, roomId, type, details, opensAt, closesAt,
+        return create(roomId, type, details, null, opensAt, closesAt, actor);
+    }
+
+    public static RoomMission create(Long roomId, MissionType type, MissionDefinition details, MissionImage image,
+                                     LocalDateTime opensAt, LocalDateTime closesAt, String actor) {
+        return new RoomMission(null, roomId, type, details, image, opensAt, closesAt,
                 null, actor, actor, null, null);
     }
 
@@ -49,14 +54,14 @@ public record RoomMission(
         return room.endsAt() == null || closesAt.isBefore(room.endsAt()) ? closesAt : room.endsAt();
     }
 
-    public RoomMission update(MissionDefinition details, LocalDateTime opensAt,
+    public RoomMission update(MissionDefinition details, MissionImage image, LocalDateTime opensAt,
                               LocalDateTime closesAt, String actor, LocalDateTime now) {
-        return new RoomMission(id, roomId, type, details, opensAt, closesAt, canceledAt,
+        return new RoomMission(id, roomId, type, details, image, opensAt, closesAt, canceledAt,
                 createdBy, actor, createdAt, now);
     }
 
     public RoomMission cancel(String actor, LocalDateTime now) {
-        return new RoomMission(id, roomId, type, details, opensAt, closesAt,
+        return new RoomMission(id, roomId, type, details, image, opensAt, closesAt,
                 canceledAt == null ? now : canceledAt, createdBy, actor, createdAt, now);
     }
 }

@@ -96,6 +96,8 @@ class MissionDispatchIntegrationTest {
     @Autowired org.son.haruharu.domain.chat.application.ChatStompController stompController;
     @org.springframework.boot.test.web.server.LocalServerPort int port;
     @MockitoBean StompDeliveryPort delivery;
+    @MockitoBean org.son.haruharu.infrastructure.s3.S3StoragePort storage;
+    static final String IMAGE_KEY = "mission-images/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b-1080x720.jpg";
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
     org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementReader itemReader;
     @Autowired org.son.haruharu.domain.mission.chat.business.MissionDispatchStep step;
@@ -708,5 +710,63 @@ class MissionDispatchIntegrationTest {
         missionService.cancel(roomId,missionId(id),"admin:1");
         assertThat(memberProfiles.getMemberProfile(roomId,bobMemberId,alice).fields().stream()
                 .filter(f->f.key().equals("AGE")).findFirst().orElseThrow().visible()).isFalse();
+    }
+
+    @Test
+    void givenMissionWithImage_whenDispatchedAndRead_thenBubbleCarriesSignedImageEverywhere() throws Exception {
+        when(storage.head(IMAGE_KEY)).thenReturn(new org.son.haruharu.infrastructure.s3.S3StoragePort.ObjectMetadata(10, "image/jpeg"));
+        when(storage.publicBaseUrl()).thenReturn("https://bucket.example/");
+        when(storage.createPresignedImageGetUrl(anyString())).thenAnswer(i -> i.getArgument(0) + "?signed");
+        String url = "https://bucket.example/" + IMAGE_KEY + "?signed";
+        var start = now.minusMinutes(1);
+        long withImage = missionService.create(roomId, new RoomMissionCommand(MissionType.ANNOUNCEMENT,
+                new AnnouncementMissionDefinition("사진 있는 안내"), IMAGE_KEY, start, null,
+                new MissionAnnouncementCommand(MissionAnnouncementType.START, start, "사진을 확인해 주세요", false, null, null)),
+                "admin:1").missionId();
+        long reveal = missionService.create(roomId, new RoomMissionCommand(MissionType.PROFILE_REVEAL,
+                ProfileRevealMissionDefinition.from(List.of("MBTI")), IMAGE_KEY, start, null,
+                new MissionAnnouncementCommand(MissionAnnouncementType.START, start, "MBTI 공개", false, null, null)),
+                "admin:1").missionId();
+        long plain = missionId(addItem(roomId, start, List.of(), "사진 없는 안내", false));
+        // 저장은 details JSON 의 예약 키 image. 유형별 값과 한 칸에 있다.
+        assertThat(jdbc.queryForObject("select details::text from room_mission_instances where id=?", String.class, withImage))
+                .isEqualTo("{\"image\": {\"key\": \"" + IMAGE_KEY + "\", \"width\": 1080, \"height\": 720}, \"content\": \"사진 있는 안내\"}");
+
+        assertThat(dispatcher.dispatchDue()).isEqualTo(3);
+
+        // 실시간 방송: 추가 조회 없이 그릴 수 있게 서명 주소와 크기를 함께 보낸다.
+        var broadcasts = org.mockito.ArgumentCaptor.forClass(ChatMessageBroadcast.class);
+        verify(delivery, times(3)).sendToTopic(anyString(), broadcasts.capture(), anyString());
+        var byMission = new HashMap<Long, ChatMessageBroadcast>();
+        broadcasts.getAllValues().forEach(b -> byMission.put(b.mission().missionId(), b));
+        assertThat(byMission.get(withImage).mission().image())
+                .isEqualTo(new org.son.haruharu.domain.chat.implement.ChatMissionImage(IMAGE_KEY, url, 1080, 720));
+        assertThat(byMission.get(reveal).mission().image().key()).isEqualTo(IMAGE_KEY);
+        assertThat(byMission.get(plain).mission().image()).isNull();
+
+        // 기록 조회: 같은 모양. 삭제한 안내에는 미션도 사진도 내려가지 않는다.
+        var messages = chats.getMessages(chatId, alice, null, 20).messages();
+        assertThat(messages).filteredOn(m -> m.mission().missionId().equals(withImage)).singleElement()
+                .satisfies(m -> assertThat(m.mission().image().url()).isEqualTo(url));
+        assertThat(messages).filteredOn(m -> m.mission().missionId().equals(plain)).singleElement()
+                .satisfies(m -> assertThat(m.mission().image()).isNull());
+        long announcementId = messages.stream().filter(m -> m.mission().missionId().equals(withImage)).findFirst()
+                .orElseThrow().mission().announcementId();
+        announcements.deleteSentMessage(roomId, withImage, announcementId);
+        assertThat(chats.getMessages(chatId, alice, null, 20).messages()).filteredOn(m -> m.deleted()).singleElement()
+                .satisfies(m -> assertThat(m.mission()).isNull());
+
+        // 미션 조회: 주소가 만료되면 여기서 새로 받는다.
+        var looked = missionService.findForParticipant(roomId, alice, List.of(withImage, plain));
+        assertThat(looked).filteredOn(m -> m.missionId().equals(withImage)).singleElement()
+                .satisfies(m -> assertThat(m.image()).isEqualTo(
+                        new org.son.haruharu.domain.mission.common.business.dto.MissionImageResponse(IMAGE_KEY, url, 1080, 720)));
+        assertThat(looked).filteredOn(m -> m.missionId().equals(plain)).singleElement()
+                .satisfies(m -> assertThat(m.image()).isNull());
+        mvc.perform(get("/api/v1/rooms/" + roomId + "/mission-instances/" + withImage)
+                        .with(authentication(new UsernamePasswordAuthenticationToken(alice, null, List.of()))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.image.url").value(url))
+                .andExpect(jsonPath("$.data.image.width").value(1080))
+                .andExpect(jsonPath("$.data.details.image").doesNotExist());
     }
 }

@@ -71,6 +71,14 @@ public class AdminExceptionHandler {
                 .body(ApiResponse.error(new ApiErrorDetail("INVALID_INPUT", message)));
     }
 
+    /** multipart 상한(미션 사진 10MB) 초과. 기본 처리로 두면 500 으로 떨어진다. */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUploadTooLarge(
+            org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
+                .body(ApiResponse.error(new ApiErrorDetail("UPLOAD_TOO_LARGE", "10MB 이하 파일을 선택해 주세요.")));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest()

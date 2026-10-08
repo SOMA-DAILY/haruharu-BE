@@ -13,6 +13,7 @@ import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementNotifie
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementReader;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementStatus;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementWriter;
+import org.son.haruharu.domain.mission.chat.implement.MissionChatLookup;
 import org.son.haruharu.domain.mission.chat.implement.MissionNotification;
 import org.son.haruharu.domain.mission.common.implement.RoomMission;
 import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
@@ -29,6 +30,7 @@ public class MissionDispatchStep {
     private final RoomReader rooms;
     private final RoomMissionReader missions;
     private final List<MissionAnnouncementNotifier> notifiers;
+    private final MissionChatLookup chatLookup;
     private final MissionAnnouncementReader announcements;
     private final MissionAnnouncementWriter writer;
     private final ChatRoomReader chatRooms;
@@ -65,7 +67,8 @@ public class MissionDispatchStep {
         if (item.hasMessage()) {
             ChatMessage saved = messages.save(ChatMessage.mission(chatRoomId, item.content(), mission.id(), item.id()));
             messageId = saved.id();
-            var reference = new ChatMissionReference(mission.id(), item.id(), item.announcementType().name(), mission.type().name());
+            var reference = new ChatMissionReference(mission.id(), item.id(), item.announcementType().name(),
+                    mission.type().name(), chatLookup.image(mission));
             publisher.publishEvent(new ChatMessageBroadcastEvent(ChatMessageBroadcast.from(saved, reference)));
         }
         if (!writer.markSent(item.id(), messageId, now)) throw new MissionDispatchRejectedException("ANNOUNCEMENT_NOT_SENDING");

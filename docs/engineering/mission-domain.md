@@ -42,6 +42,7 @@ core/.../domain/mission/
 | `MissionDefinition` | 유형별 입력·조회 데이터 계약. `AnnouncementMissionDefinition`(본문), `ProfileRevealMissionDefinition`(공개 항목) |
 | `MissionTypeHandler` | 유형별 검증과 `details` JSON 변환, 안내 본문 생략 허용 여부. 저장소를 참조하지 않는다 |
 | `MissionTypeRegistry` | 유형별 Handler 선택. 현재 `ANNOUNCEMENT`, `PROFILE_REVEAL` 등록 |
+| `MissionImage` / `MissionImageStore` | 미션에 붙는 선택 사진 한 장(유형 공통)과 업로드·존재 확인·조회 주소 발급 |
 | `MissionProfileRevealSchedule` / `ProfileRevealAnnouncementNotifier` | 공개 미션의 시작 시각으로 프로필 항목을 열고, START 안내 때 새로 열리는 항목을 알린다 |
 | `MissionAnnouncement` / `mission_announcements` | 한 미션의 개별 게시 문구, 안내 용도, 예약·푸시·발송 상태 |
 | `ChatMessage` / `chat_messages` | 게시 당시 본문 스냅샷과 미션·안내 ID, 기존 답장·반응·삭제 기록 |
@@ -62,6 +63,10 @@ core/.../domain/mission/
 미션 한 건의 일정과 정의가 같은 행이므로 조인 없이 한 번에 읽고 함께 저장한다. DB는 `details`가 JSON 객체인지만 강제하고,
 유형별 모양(본문 500자, 허용 공개 항목)은 Handler 검증이 담당한다. 읽을 때는 모르는 값을 버리고 검증하지 않는다.
 키 이름을 바꾸거나 필수 값을 추가하면 기존 행의 데이터 이관이 필요하다.
+유형과 무관한 공통 속성인 사진은 같은 `details` 칸의 **예약 키 `image`**에 공통 코드가 저장한다
+(`{"content": "...", "image": {"key": "mission-images/…-1080x720.jpg", "width": 1080, "height": 720}}`).
+유형별 Handler는 이 키를 모르며 쓰지 않는다. 그래서 사진을 읽는 쪽은 유형을 따지지 않고 `mission.image()`만 본다.
+사진이 없는 미션에는 키 자체가 없다.
 `MissionAnnouncement`는 어떤 종류의 미션에도 붙일 수 있는 채팅 게시 계획이다. 공통 생성·수정 서비스는
 구체 유형 클래스를 모르며, 미션과 최초 게시 계획은 같은 트랜잭션이다.
 
@@ -119,6 +124,7 @@ app은 하위 패키지를 자동 스캔한다. admin은 필요한 빈만 명시
 | `GET /{missionId}` | 미션 정의·현재 상태 |
 | `PUT /{missionId}` | 시작 전 정의 전체 교체. `announcement`는 생략, 마감 null은 방 종료 추종 |
 | `POST /{missionId}/cancel` | 미션 취소. 반복 호출도 현재 취소 상태 반환 |
+| `POST /api/v1/admin/mission-images` | (방 경로 밖) 미션 사진 업로드. multipart `file` |
 | `GET /{missionId}/announcements` | 안내 목록. `after`, `size`, `announcements`·`next_cursor` |
 | `POST /{missionId}/announcements` | 추가 안내 생성 |
 | `PUT /{missionId}/announcements/{announcementId}` | SCHEDULED 안내 전체 교체. 안내 용도는 변경 불가 |
@@ -172,6 +178,24 @@ app은 하위 패키지를 자동 스캔한다. admin은 필요한 빈만 명시
 운영자는 안내를 먼저 수정하거나 취소한 뒤 미션 수정을 재시도한다. 요청 자체의 잘못된 일정·상세는
 기존처럼 400 `VALIDATION_ERROR`와 실제 요청 필드 경로를 반환한다.
 
+### 미션 사진
+
+미션에는 유형과 무관하게 사진을 한 장 붙일 수 있다(선택). 두 단계로 연결한다.
+
+1. `POST /api/v1/admin/mission-images`에 multipart `file`로 올린다. JPG·PNG, 10MB·2,500만 픽셀 이하이며
+   서버가 실제로 디코딩해 선언한 형식과 내용을 확인한다. 응답은 `{key, url, width, height}`다.
+   방을 만들기 전에도 올릴 수 있다. 쓰기 권한은 SUPER·OPERATOR.
+2. 미션 생성·수정 요청의 최상위 `image_key`에 그 `key`를 넣는다(`details` 밖). 방 생성의 `missions` 원소에서도 같다.
+   수정은 전체 교체이므로 `image_key`를 비우면 사진을 뗀다. 시작한 미션의 사진은 정의와 함께 고정된다.
+
+`image_key`는 서버가 지은 `mission-images/{uuid}-{가로}x{세로}.{png|jpg}` 형식이고 실제로 올라간 객체만 받는다.
+다른 경로의 키(유저 사진·영상)는 조회하지 않고 400 `image_key`로 거절한다. 이 검증이 없으면 임의 객체의 조회 주소가 노출된다.
+크기는 키 이름에서 읽으므로 사진 목록을 DB에 따로 두지 않는다. 미션에 붙이지 않은 업로드는 S3에 남으며 자동 정리는 없다.
+
+응답은 미션 응답과 채팅 메시지의 `mission` 객체에 `image: {key, url, width, height}`로 내려가고 없으면 `null`이다.
+`url`은 비공개 버킷의 단기 서명 주소(기본 1시간)로 조회·방송할 때마다 새로 발급한다. 클라이언트는 `url`을 저장하지 않고
+이미지 캐시는 `key`로 잡는다. 만료된 뒤에는 메시지 목록이나 미션 상세·lookup을 다시 조회해 새 주소를 받는다.
+
 안내 용도는 `START`, `REMINDER`, `RESULT`이며, 현재 RESULT는 운영자가 작성한 안내다. 자동 집계를 의미하지 않는다.
 안내는 미션 시작보다 빠르게 게시할 수 없다. 방이 열려 있으면 마감 후 RESULT 안내를 추가할 수 있다.
 안내 본문은 필수이며, 공개 미션(`PROFILE_REVEAL`)의 START만 본문 없이 허용한다(채팅 글 없이 공개 푸시만 전달).
@@ -203,13 +227,20 @@ REST 기록과 STOMP 방송은 같은 저장 메시지를 표현한다. 기존 U
     "mission_id": 10,
     "announcement_id": 101,
     "announcement_type": "START",
-    "interaction_type": "PROFILE_REVEAL"
+    "interaction_type": "PROFILE_REVEAL",
+    "image": {
+      "key": "mission-images/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b-1080x720.jpg",
+      "url": "https://…서명 주소",
+      "width": 1080,
+      "height": 720
+    }
   }
 }
 ```
 
-`interaction_type`은 미션 유형이다(`ANNOUNCEMENT`, `PROFILE_REVEAL`). 동적 미션 상태와 개인 응답은 공용 STOMP/Redis에 넣지 않는다. 채팅 한 페이지의 안내와 미션을 각각 한 번에 조회해 참조를 조합한다.
-삭제된 안내는 기존 삭제 문구·`deleted=true`, `mission=null`이며 인용도 unavailable이다.
+`interaction_type`은 미션 유형이다(`ANNOUNCEMENT`, `PROFILE_REVEAL`). `image`는 미션에 사진이 있을 때만 값이 있고
+REST 기록과 STOMP 방송 모두 추가 조회 없이 말풍선에 그릴 수 있게 서명 주소를 함께 보낸다. 동적 미션 상태와 개인 응답은 공용 STOMP/Redis에 넣지 않는다. 채팅 한 페이지의 안내와 미션을 각각 한 번에 조회해 참조를 조합한다.
+삭제된 안내는 기존 삭제 문구·`deleted=true`, `mission=null`이며 인용도 unavailable이다. 사진도 함께 내려가지 않는다.
 사용자 입력의 발신자·유형·미션 ID는 공식 메시지 생성에 사용하지 않는다.
 
 `MissionDispatchScheduler`가 유일한 안내 실행기다. 기존 `haruharu.chat.admin-message` 설정과 플래그를 재사용한다.
@@ -325,3 +356,5 @@ FE 코드 수정·기기 UI 확인·운영 DB 적용·배포는 이 검증에 �
 - 참가자 조회의 `REPEATABLE_READ + REQUIRES_NEW`는 공통 행과 상세 행을 따로 읽는 사이의 변경 때문에 필요했다.
   한 행이 되어 제거했고, 조회 중 일정·정의 변경 커밋 시 미래 정의가 노출되지 않음을 PostgreSQL에서 다시 검증했다.
 - `details`에 스키마 버전 값은 두지 않았다. 키 변경이 필요해지면 그 이관에서 함께 정한다.
+- 미션 사진(2026-10-08): 유형 공통 속성이라 `details`의 예약 키 `image`로 공통 코드가 다룬다. 배포 시 admin 태스크 역할에
+  `mission-images/*`의 `s3:PutObject`·`s3:GetObject`, app 태스크 역할에 `s3:GetObject` 권한이 필요하다(미확인).

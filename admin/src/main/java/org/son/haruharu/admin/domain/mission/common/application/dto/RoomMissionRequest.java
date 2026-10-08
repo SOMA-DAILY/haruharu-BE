@@ -2,6 +2,7 @@ package org.son.haruharu.admin.domain.mission.common.application.dto;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import org.son.haruharu.admin.domain.mission.chat.application.dto.MissionAnnouncementRequest;
 import org.son.haruharu.admin.domain.mission.types.announcement.application.dto.AnnouncementMissionRequest;
@@ -16,9 +17,11 @@ public record RoomMissionRequest(
                 @JsonSubTypes.Type(value = AnnouncementMissionRequest.class, name = "ANNOUNCEMENT"),
                 @JsonSubTypes.Type(value = ProfileRevealMissionRequest.class, name = "PROFILE_REVEAL")})
         MissionDetailsRequest details,
+        @Schema(description = "먼저 업로드한 미션 사진의 key(선택, 유형 공통). 수정에서 비우면 사진을 뗀다.", nullable = true)
+        String imageKey,
         LocalDateTime opensAt, LocalDateTime closesAt, MissionAnnouncementRequest announcement) {
     public RoomMissionCommand toCommand() {
-        return new RoomMissionCommand(type, details == null ? null : details.toDefinition(), opensAt, closesAt,
+        return new RoomMissionCommand(type, details == null ? null : details.toDefinition(), imageKey, opensAt, closesAt,
                 announcement == null ? null : announcement.toCommand());
     }
 }

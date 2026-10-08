@@ -7,6 +7,9 @@ public interface S3StoragePort {
 
     PresignedUpload createPresignedPutUrl(String key, String contentType);
 
+    /** 서버가 검증한 사진을 서버가 지은 키로 직접 올린다(클라이언트에 PUT 주소를 주지 않는 경로). */
+    void putImage(String key, String contentType, byte[] bytes);
+
     /**
      * 비공개 객체(영상 등)를 재생·조회할 수 있는 단기 presigned GET URL로 변환한다.
      * objectUrl이 null이면 null을, 우리 버킷(publicBaseUrl) 객체가 아니면 원본을 그대로 반환한다.

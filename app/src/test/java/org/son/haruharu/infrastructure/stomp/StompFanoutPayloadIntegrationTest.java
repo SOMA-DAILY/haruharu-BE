@@ -67,7 +67,10 @@ class StompFanoutPayloadIntegrationTest {
                 LocalDateTime.of(2026, 9, 26, 21, 0, 5), 7L,
                 List.of(new ReactionCountItem("LAUGH", 3)), null,
                 ReplyToView.of(880L, "선우", "원문", true), mission ? "MISSION" : "TEXT", "하루", false, "SYSTEM",
-                mission ? new org.son.haruharu.domain.chat.implement.ChatMissionReference(10L, 101L, "START", "ANNOUNCEMENT") : null);
+                mission ? new org.son.haruharu.domain.chat.implement.ChatMissionReference(10L, 101L, "START", "ANNOUNCEMENT",
+                        new org.son.haruharu.domain.chat.implement.ChatMissionImage(
+                                "mission-images/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b-1080x720.jpg",
+                                "https://bucket.example/signed?X-Amz-Signature=abc&X-Amz-Expires=3600", 1080, 720)) : null);
 
         // 발행 인스턴스 A: 실제 Boot 매퍼로 envelope 를 만든다(Redis 는 발행 문자열만 캡처)
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
@@ -97,7 +100,10 @@ class StompFanoutPayloadIntegrationTest {
                 .contains("\"message_type\":\"" + (mission ? "MISSION" : "TEXT") + "\"").contains("\"sender_name\":\"하루\"")
                 .contains("\"sender_type\":\"SYSTEM\"").contains("\"sender_id\":null");
         if (mission) assertThat(direct).contains("\"mission_id\":10", "\"announcement_id\":101",
-                "\"announcement_type\":\"START\"", "\"interaction_type\":\"ANNOUNCEMENT\"")
+                "\"announcement_type\":\"START\"", "\"interaction_type\":\"ANNOUNCEMENT\"",
+                "\"image\":{\"key\":\"mission-images/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b-1080x720.jpg\"",
+                "\"url\":\"https://bucket.example/signed?X-Amz-Signature=abc&X-Amz-Expires=3600\"",
+                "\"width\":1080", "\"height\":720")
                 .doesNotContain("my_response", "results");
         else assertThat(direct).contains("\"mission\":null");
     }

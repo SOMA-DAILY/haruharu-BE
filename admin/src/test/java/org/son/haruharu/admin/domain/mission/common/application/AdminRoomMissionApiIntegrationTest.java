@@ -17,11 +17,20 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -33,6 +42,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AdminRoomMissionApiIntegrationTest {
     @Autowired MockMvc mvc;
     @PersistenceContext EntityManager em;
+    @MockitoBean S3StoragePort storage;
+    static final String IMAGE_KEY = "mission-images/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b-1080x720.jpg";
     final LocalDateTime start = LocalDateTime.now().plusDays(2).withSecond(0).withNano(0);
     static UsernamePasswordAuthenticationToken role(String role) {
         return new UsernamePasswordAuthenticationToken(4L, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
@@ -273,5 +284,101 @@ class AdminRoomMissionApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(roomBody("[]").replace("\"missions\":[]", "\"chat_schedule\":[{\"message_content\":\"유실 금지\"}]")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.error.message").value("chat_schedule은 폐기되었습니다. missions를 사용해 주세요"));
+    }
+
+    static byte[] png(int width, int height) throws Exception {
+        var bytes = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(width, height, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", bytes);
+        return bytes.toByteArray();
+    }
+
+    void signedUrls() {
+        given(storage.publicBaseUrl()).willReturn("https://bucket.example/");
+        given(storage.createPresignedImageGetUrl(anyString())).willAnswer(i -> i.getArgument(0) + "?signed");
+    }
+
+    @Test
+    void givenOperator_whenUploadMissionImage_thenStoresValidatedFileAndReturnsKeyWithDimensions() throws Exception {
+        signedUrls();
+        byte[] bytes = png(32, 48);
+        var body = mvc.perform(multipart("/api/v1/admin/mission-images")
+                        .file(new MockMultipartFile("file", "mission.png", "image/png", bytes)).with(authentication(role("OPERATOR"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.width").value(32)).andExpect(jsonPath("$.data.height").value(48))
+                .andReturn().getResponse().getContentAsString();
+        String key = JsonPath.parse(body).read("$.data.key", String.class);
+        assertThat(key).startsWith("mission-images/").endsWith("-32x48.png");
+        assertThat(JsonPath.parse(body).read("$.data.url", String.class)).isEqualTo("https://bucket.example/" + key + "?signed");
+        verify(storage).putImage(eq(key), eq("image/png"), eq(bytes));
+
+        mvc.perform(multipart("/api/v1/admin/mission-images")
+                        .file(new MockMultipartFile("file", "fake.png", "image/png", "not an image".getBytes()))
+                        .with(authentication(role("OPERATOR"))))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.code").value("INVALID_MISSION_IMAGE"));
+        mvc.perform(multipart("/api/v1/admin/mission-images")
+                        .file(new MockMultipartFile("file", "mission.png", "image/png", bytes)).with(authentication(role("CS"))))
+                .andExpect(status().isForbidden());
+        verify(storage).putImage(any(), any(), any());
+    }
+
+    @Test
+    void givenUploadedImageKey_whenCreateAndReplaceMission_thenAttachesForAnyTypeAndPutWithoutKeyDetaches() throws Exception {
+        signedUrls();
+        given(storage.head(IMAGE_KEY)).willReturn(new S3StoragePort.ObjectMetadata(10, "image/jpeg"));
+        long room = room("[]");
+        var body = mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"ANNOUNCEMENT","details":{"content":"사진 있는 안내"},"image_key":"%s","opens_at":"%s"}
+                """.formatted(IMAGE_KEY, start)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.image.key").value(IMAGE_KEY))
+                .andExpect(jsonPath("$.data.image.url").value("https://bucket.example/" + IMAGE_KEY + "?signed"))
+                .andExpect(jsonPath("$.data.image.width").value(1080)).andExpect(jsonPath("$.data.image.height").value(720))
+                .andExpect(jsonPath("$.data.details.image").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        long mission = JsonPath.parse(body).read("$.data.mission_id", Long.class);
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"PROFILE_REVEAL","details":{"reveal_fields":["MBTI"]},"image_key":"%s","opens_at":"%s"}
+                """.formatted(IMAGE_KEY, start)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.image.key").value(IMAGE_KEY));
+        mvc.perform(get(base(room)).with(authentication(role("CS"))))
+                .andExpect(jsonPath("$.data.missions[0].image.key").value(IMAGE_KEY))
+                .andExpect(jsonPath("$.data.missions[1].image.width").value(1080));
+
+        mvc.perform(put(base(room) + "/" + mission).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"ANNOUNCEMENT","details":{"content":"사진 뗀 안내"},"opens_at":"%s"}
+                """.formatted(start)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.image").isEmpty());
+        mvc.perform(get(base(room) + "/" + mission).with(authentication(role("CS"))))
+                .andExpect(jsonPath("$.data.image").isEmpty())
+                .andExpect(jsonPath("$.data.details.content").value("사진 뗀 안내"));
+    }
+
+    @Test
+    void givenImageKeyNotUploadedOrOutsideMissionImages_whenCreate_thenFieldErrorAndNothingSaved() throws Exception {
+        long room = room("[]");
+        String missing = IMAGE_KEY.replace("3f2a", "0000");
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"ANNOUNCEMENT","details":{"content":"안내"},"image_key":"%s","opens_at":"%s"}
+                """.formatted(missing, start)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.fields[0].field").value("image_key"));
+        // 다른 유저의 사진·영상 키는 조회조차 하지 않고 거절한다.
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"ANNOUNCEMENT","details":{"content":"안내"},"image_key":"users/7/images/a.jpg","opens_at":"%s"}
+                """.formatted(start)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.fields[0].field").value("image_key"));
+        verify(storage, never()).head("users/7/images/a.jpg");
+        mvc.perform(post("/api/v1/admin/rooms").with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content(roomBody("""
+                [{"type":"ANNOUNCEMENT","details":{"content":"정상"},"opens_at":"%s"},
+                 {"type":"ANNOUNCEMENT","details":{"content":"안내"},"image_key":"%s","opens_at":"%s"}]
+                """.formatted(start, missing, start))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields[0].field").value("missions[1].image_key"));
+        mvc.perform(get(base(room)).with(authentication(role("CS")))).andExpect(jsonPath("$.data.missions").isEmpty());
     }
 }

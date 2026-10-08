@@ -57,11 +57,13 @@ class EntityAuditColumnRoundTripTest {
         var mission = new org.son.haruharu.domain.mission.common.implement.RoomMission(1L, 2L,
                 org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT,
                 new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition("안내"),
+                new org.son.haruharu.domain.mission.common.implement.MissionImage(
+                        "mission-images/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b-1080x720.jpg", 1080, 720),
                 CREATED_AT, CREATED_AT.plusDays(1), CREATED_AT.plusHours(1), "admin:1", "admin:2", CREATED_AT, CREATED_AT.plusMinutes(1));
         assertThat(org.son.haruharu.domain.mission.common.storage.RoomMissionEntity.from(mission, types).toDomain(types)).isEqualTo(mission);
         var reveal = new org.son.haruharu.domain.mission.common.implement.RoomMission(3L, 2L,
                 org.son.haruharu.domain.mission.common.implement.MissionType.PROFILE_REVEAL,
-                org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionDefinition.from(java.util.List.of("AGE", "MBTI")),
+                org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionDefinition.from(java.util.List.of("AGE", "MBTI")), null,
                 CREATED_AT, null, null, "admin:1", "admin:1", CREATED_AT, CREATED_AT);
         assertThat(org.son.haruharu.domain.mission.common.storage.RoomMissionEntity.from(reveal, types).toDomain(types)).isEqualTo(reveal);
         var announcement = new org.son.haruharu.domain.mission.chat.implement.MissionAnnouncement(10L,1L,2L,
