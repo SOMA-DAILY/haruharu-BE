@@ -1,17 +1,14 @@
-package org.son.haruharu.domain.mission.types.announcement.implement;
+package org.son.haruharu.domain.mission.types.profilereveal.implement;
 
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 import org.son.haruharu.domain.profile.implement.ProfileField;
 
 /**
- * 편성으로 공개하는 프로필 항목(#457, F2). 시트 표시 순서와 같다. PROFILE_REVEAL 푸시 문구(서버 고정값)를 함께 가진다.
- * DB 에는 쉼표 목록(`MBTI,INTO_NOW`)으로 저장한다.
+ * 공개 미션으로 여는 프로필 항목(#457, F2). 시트 표시 순서와 같다. PROFILE_REVEAL 푸시 문구(서버 고정값)를 함께 가진다.
+ * DB 에는 미션 details 의 `reveal_fields` 배열에 이름으로 저장한다.
  */
 public enum MissionRevealField {
     MBTI("MBTI", "다들 MBTI 뭘까요?", "영상 보면서 생각한 거랑 맞는지 봐요"),
@@ -41,26 +38,6 @@ public enum MissionRevealField {
             return Optional.empty();
         }
         return Arrays.stream(values()).filter(f -> f.name().equalsIgnoreCase(name.trim())).findFirst();
-    }
-
-    /** 쉼표 목록 → 표시 순서로 정렬한 중복 없는 목록. 모르는 값은 버린다(저장은 검증을 거친 값만 들어간다). */
-    public static List<MissionRevealField> parseCsv(String csv) {
-        if (csv == null || csv.isBlank()) {
-            return List.of();
-        }
-        Set<MissionRevealField> set = EnumSet.noneOf(MissionRevealField.class);
-        for (String part : csv.split(",")) {
-            parse(part).ifPresent(set::add);
-        }
-        return List.copyOf(set);
-    }
-
-    /** 표시 순서 쉼표 목록. 비어 있으면 null(컬럼 null). */
-    public static String join(Collection<MissionRevealField> fields) {
-        if (fields == null || fields.isEmpty()) {
-            return null;
-        }
-        return EnumSet.copyOf(fields).stream().map(Enum::name).collect(Collectors.joining(","));
     }
 
     /** 이 항목이 여는 프로필 시트 칸. 항목을 추가하면 여기서 컴파일이 막힌다. */

@@ -1,4 +1,4 @@
-package org.son.haruharu.domain.mission.types.announcement.implement;
+package org.son.haruharu.domain.mission.types.profilereveal.implement;
 
 import java.util.Arrays;
 import org.junit.jupiter.api.DisplayName;

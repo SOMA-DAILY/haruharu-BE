@@ -21,13 +21,12 @@ import org.son.haruharu.domain.mission.common.implement.MissionType;
 import org.son.haruharu.domain.mission.common.implement.RoomMission;
 import org.son.haruharu.domain.mission.common.storage.RoomMissionEntity;
 import org.son.haruharu.domain.mission.common.storage.RoomMissionJpaRepository;
-import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMission;
+import org.son.haruharu.domain.mission.common.implement.MissionDefinition;
+import org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry;
+import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
 import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition;
-import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionReader;
-import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementRevealPlan;
-import org.son.haruharu.domain.mission.types.announcement.implement.MissionRevealField;
-import org.son.haruharu.domain.mission.types.announcement.storage.AnnouncementMissionEntity;
-import org.son.haruharu.domain.mission.types.announcement.storage.AnnouncementMissionJpaRepository;
+import org.son.haruharu.domain.mission.types.profilereveal.implement.MissionRevealField;
+import org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionDefinition;
 import org.son.haruharu.domain.room.business.MemberProfileService;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.implement.*;
@@ -84,8 +83,8 @@ class MissionDispatchIntegrationTest {
     @Autowired RoomMissionService missionService;
     @Autowired MissionAnnouncementService announcements;
     @Autowired RoomMissionJpaRepository missionRows;
-    @Autowired AnnouncementMissionJpaRepository definitionRows;
-    @Autowired AnnouncementMissionReader definitionReader;
+    @Autowired RoomMissionReader missionReader;
+    @Autowired MissionTypeRegistry types;
     @Autowired MissionAnnouncementJpaRepository announcementRows;
     @Autowired MissionDispatchService dispatcher;
     @Autowired MemberProfileService memberProfiles;
@@ -107,7 +106,6 @@ class MissionDispatchIntegrationTest {
     @BeforeEach
     void setUp() {
         jdbc.update("delete from mission_announcements");
-        jdbc.update("delete from announcement_missions");
         jdbc.update("delete from room_mission_instances");
         now = LocalDateTime.now(clock);
         roomId = room(now.minusHours(25), now.plusHours(47));
@@ -136,10 +134,11 @@ class MissionDispatchIntegrationTest {
     }
 
     Long addItem(Long room, LocalDateTime runAt, List<String> reveal, String content, boolean push) {
-        var mission = missionRows.save(RoomMissionEntity.from(RoomMission.create(room, MissionType.ANNOUNCEMENT,
-                runAt, null, "admin:1"))).toDomain();
-        definitionRows.save(AnnouncementMissionEntity.from(AnnouncementMission.create(mission.id(),
-                AnnouncementMissionDefinition.from(content, reveal))));
+        // 공개 항목이 있으면 공개 미션(문구는 안내가 가진다), 없으면 안내형 미션.
+        MissionDefinition details = reveal.isEmpty() ? new AnnouncementMissionDefinition(content)
+                : ProfileRevealMissionDefinition.from(reveal);
+        var mission = missionRows.save(RoomMissionEntity.from(RoomMission.create(room, details.type(), details,
+                runAt, null, "admin:1"), types)).toDomain(types);
         return announcementRows.save(MissionAnnouncementEntity.from(MissionAnnouncement.scheduled(mission,
                 MissionAnnouncementType.START, runAt, content, push, null, null, "admin:1"))).toDomain().id();
     }
@@ -452,8 +451,8 @@ class MissionDispatchIntegrationTest {
         assertThat(ageBefore.value()).isNull();
         assertThat(ageBefore.revealAt()).isCloseTo(now.plusHours(3), within(1, java.time.temporal.ChronoUnit.MILLIS));
 
-        missionService.update(roomId, missionId(ageRow), new RoomMissionCommand(MissionType.ANNOUNCEMENT,
-                AnnouncementMissionDefinition.from(null, List.of("AGE")), now.minusMinutes(1), null, null), "admin:1");
+        missionService.update(roomId, missionId(ageRow), new RoomMissionCommand(MissionType.PROFILE_REVEAL,
+                ProfileRevealMissionDefinition.from(List.of("AGE")), now.minusMinutes(1), null, null), "admin:1");
 
         MemberProfileResponse after = memberProfiles.getMemberProfile(roomId, bobMemberId, alice);
         var ageAfter = after.fields().stream().filter(f -> f.key().equals("AGE")).findFirst().orElseThrow();
@@ -521,11 +520,11 @@ class MissionDispatchIntegrationTest {
         Long standaloneRoom = room(now.minusHours(1), now.plusHours(71));
         members.save(RoomMemberEntity.from(RoomMember.of(standaloneRoom, alice, "MALE", LocalDate.of(2003,1,1), now)));
         long future = missionService.create(standaloneRoom, new RoomMissionCommand(MissionType.ANNOUNCEMENT,
-                AnnouncementMissionDefinition.from("미래 비밀", List.of()), now.plusHours(1), null, null), "admin:1").missionId();
+                new AnnouncementMissionDefinition("미래 비밀"), now.plusHours(1), null, null), "admin:1").missionId();
         long open = missionService.create(standaloneRoom, new RoomMissionCommand(MissionType.ANNOUNCEMENT,
-                AnnouncementMissionDefinition.from("시작된 질문", List.of()), now.minusMinutes(1), null, null), "admin:1").missionId();
+                new AnnouncementMissionDefinition("시작된 질문"), now.minusMinutes(1), null, null), "admin:1").missionId();
         long closed = missionService.create(standaloneRoom, new RoomMissionCommand(MissionType.ANNOUNCEMENT,
-                AnnouncementMissionDefinition.from("마감된 질문", List.of()), now.minusMinutes(2), now.minusMinutes(1), null), "admin:1").missionId();
+                new AnnouncementMissionDefinition("마감된 질문"), now.minusMinutes(2), now.minusMinutes(1), null), "admin:1").missionId();
         String path = "/api/v1/rooms/"+standaloneRoom+"/mission-instances";
         long messagesBefore = jdbc.queryForObject("select count(*) from chat_messages",Long.class);
         assertThat(http(path+"/"+open, null).statusCode()).isEqualTo(401);
@@ -556,77 +555,103 @@ class MissionDispatchIntegrationTest {
     }
 
     @Test
-    void givenSubtypeOrAnnouncementStorageFailure_whenCreate_thenRollsBackWholeMission() {
-        jdbc.execute("ALTER TABLE announcement_missions ADD CONSTRAINT test_subtype_write CHECK(content <> '저장 거부')");
+    void givenDefinitionOrAnnouncementStorageFailure_whenCreate_thenRollsBackWholeMission() {
+        jdbc.execute("ALTER TABLE room_mission_instances ADD CONSTRAINT test_details_write CHECK(details->>'content' <> '저장 거부')");
         jdbc.execute("ALTER TABLE mission_announcements ADD CONSTRAINT test_plan_write CHECK(content <> '게시 거부')");
         try {
             var start = now.plusHours(1);
             assertThatThrownBy(() -> missionService.create(roomId, new RoomMissionCommand(MissionType.ANNOUNCEMENT,
-                    AnnouncementMissionDefinition.from("저장 거부", List.of()), start, null, null), "admin:1"))
+                    new AnnouncementMissionDefinition("저장 거부"), start, null, null), "admin:1"))
                     .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
             assertThat(missionRows.count()).isZero();
-            assertThat(definitionRows.count()).isZero();
             assertThatThrownBy(() -> missionService.create(roomId, new RoomMissionCommand(MissionType.ANNOUNCEMENT,
-                    AnnouncementMissionDefinition.from("정상 정의", List.of()), start, null,
+                    new AnnouncementMissionDefinition("정상 정의"), start, null,
                     new MissionAnnouncementCommand(MissionAnnouncementType.START, start, "게시 거부", false, null, null)), "admin:1"))
                     .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
             assertThat(missionRows.count()).isZero();
-            assertThat(definitionRows.count()).isZero();
             assertThat(announcementRows.count()).isZero();
         } finally {
-            jdbc.execute("ALTER TABLE announcement_missions DROP CONSTRAINT test_subtype_write");
+            jdbc.execute("ALTER TABLE room_mission_instances DROP CONSTRAINT test_details_write");
             jdbc.execute("ALTER TABLE mission_announcements DROP CONSTRAINT test_plan_write");
         }
     }
 
     @Test
-    void givenSubtypeStorageFailure_whenUpdating_thenPreservesCommonScheduleAndDefinitionAudit() {
+    void givenDefinitionStorageFailure_whenUpdating_thenPreservesScheduleDefinitionAndAudit() {
         var start = now.plusHours(1);
         long id = missionService.create(roomId, new RoomMissionCommand(MissionType.ANNOUNCEMENT,
-                AnnouncementMissionDefinition.from("원본", List.of("MBTI")), start, null, null), "admin:1").missionId();
-        var commonBefore = jdbc.queryForMap("select * from room_mission_instances where id=?", id);
-        var detailsBefore = jdbc.queryForMap("select * from announcement_missions where room_mission_id=?", id);
-        jdbc.execute("ALTER TABLE announcement_missions ADD CONSTRAINT test_subtype_write CHECK(content <> '저장 거부')");
+                new AnnouncementMissionDefinition("원본"), start, null, null), "admin:1").missionId();
+        var before = jdbc.queryForMap("select * from room_mission_instances where id=?", id);
+        assertThat(jdbc.queryForObject("select details::text from room_mission_instances where id=?", String.class, id))
+                .isEqualTo("{\"content\": \"원본\"}");
+        jdbc.execute("ALTER TABLE room_mission_instances ADD CONSTRAINT test_details_write CHECK(details->>'content' <> '저장 거부')");
         try {
             assertThatThrownBy(() -> missionService.update(roomId, id, new RoomMissionCommand(MissionType.ANNOUNCEMENT,
-                    AnnouncementMissionDefinition.from("저장 거부", List.of("AGE")), start.plusHours(1), null, null), "admin:2"))
+                    new AnnouncementMissionDefinition("저장 거부"), start.plusHours(1), null, null), "admin:2"))
                     .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
-            assertThat(jdbc.queryForMap("select * from room_mission_instances where id=?", id)).isEqualTo(commonBefore);
-            assertThat(jdbc.queryForMap("select * from announcement_missions where room_mission_id=?", id)).isEqualTo(detailsBefore);
+            assertThat(jdbc.queryForMap("select * from room_mission_instances where id=?", id)).isEqualTo(before);
         } finally {
-            jdbc.execute("ALTER TABLE announcement_missions DROP CONSTRAINT test_subtype_write");
+            jdbc.execute("ALTER TABLE room_mission_instances DROP CONSTRAINT test_details_write");
         }
         var updated = missionService.update(roomId, id, new RoomMissionCommand(MissionType.ANNOUNCEMENT,
-                AnnouncementMissionDefinition.from("수정", List.of("AGE")), start.plusHours(1), null, null), "admin:2");
-        assertThat(updated.details()).isEqualTo(AnnouncementMissionDefinition.from("수정", List.of("AGE")));
-        var detailsAfter = jdbc.queryForMap("select * from announcement_missions where room_mission_id=?", id);
-        assertThat(detailsAfter.get("created_at")).isEqualTo(detailsBefore.get("created_at"));
-        assertThat(detailsAfter.get("updated_at")).isNotNull();
+                new AnnouncementMissionDefinition("수정"), start.plusHours(1), null, null), "admin:2");
+        assertThat(updated.details()).isEqualTo(new AnnouncementMissionDefinition("수정"));
+        var after = jdbc.queryForMap("select * from room_mission_instances where id=?", id);
+        assertThat(after.get("created_at")).isEqualTo(before.get("created_at"));
+        assertThat(after.get("updated_by")).isEqualTo("admin:2");
+        assertThat(after.get("opens_at")).isNotEqualTo(before.get("opens_at"));
     }
 
     @Test
-    void givenStartedDefinitionOrEmptyStartPlan_whenUpdatingSubtype_thenPreservesSeenAndPlannedRules() {
+    void givenRevealMission_whenStored_thenKeepsFieldsAsJsonArrayAndRejectsNonObjectDetails() {
+        long id = missionService.create(roomId, new RoomMissionCommand(MissionType.PROFILE_REVEAL,
+                ProfileRevealMissionDefinition.from(List.of("AGE", "MBTI")), now.plusHours(1), null, null), "admin:1").missionId();
+        assertThat(jdbc.queryForObject("select details::text from room_mission_instances where id=?", String.class, id))
+                .isEqualTo("{\"reveal_fields\": [\"MBTI\", \"AGE\"]}");
+        assertThat(jdbc.queryForObject("select data_type from information_schema.columns "
+                + "where table_name='room_mission_instances' and column_name='details'", String.class)).isEqualTo("jsonb");
+        assertThat(missionService.get(roomId, id).details())
+                .isEqualTo(ProfileRevealMissionDefinition.from(List.of("MBTI", "AGE")));
+        assertThatThrownBy(() -> jdbc.update("update room_mission_instances set details=null where id=?", id))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void givenStartedOrAnnouncedRevealMission_whenUpdatingDefinition_thenPreservesSeenAndPlannedRules() {
         long opened = addItem(roomId, now.minusMinutes(1), List.of("AGE"), "공개한 규칙", false);
-        var replacement = AnnouncementMissionDefinition.from("다른 규칙", List.of());
+        var replacement = ProfileRevealMissionDefinition.from(List.of("DEPARTMENT"));
         assertThatThrownBy(() -> missionService.update(roomId, missionId(opened), new RoomMissionCommand(
-                MissionType.ANNOUNCEMENT, replacement, now.plusHours(2), null, null), "admin:2"))
+                MissionType.PROFILE_REVEAL, replacement, now.plusHours(2), null, null), "admin:2"))
                 .isInstanceOf(org.son.haruharu.domain.mission.common.business.exception.MissionNotEditableException.class);
-        assertThat(definitionReader.getByMissionId(missionId(opened)).definition().content()).isEqualTo("공개한 규칙");
+        assertThat(missionReader.getById(missionId(opened)).details())
+                .isEqualTo(ProfileRevealMissionDefinition.from(List.of("AGE")));
+        // 시작을 기존 예약 안내 뒤로 미루면 안내가 미션보다 먼저 나가게 된다.
         long future = addItem(roomId, now.plusHours(1), List.of("MBTI"), null, false);
         assertThatThrownBy(() -> missionService.update(roomId, missionId(future), new RoomMissionCommand(
-                MissionType.ANNOUNCEMENT, replacement, now.plusHours(1), null, null), "admin:2"))
+                MissionType.PROFILE_REVEAL, replacement, now.plusHours(2), null, null), "admin:2"))
                 .isInstanceOf(org.son.haruharu.domain.mission.common.business.exception.MissionAnnouncementConflictException.class);
-        assertThat(definitionReader.getByMissionId(missionId(future)).definition().revealFields()).containsExactly(MissionRevealField.MBTI);
+        assertThat(missionReader.getById(missionId(future)).details())
+                .isEqualTo(new ProfileRevealMissionDefinition(List.of(MissionRevealField.MBTI)));
+        // 유형은 바꿀 수 없고, 공개 미션에서 공개 항목을 비울 수 없다.
+        assertThatThrownBy(() -> missionService.update(roomId, missionId(future), new RoomMissionCommand(
+                MissionType.ANNOUNCEMENT, new AnnouncementMissionDefinition("안내로 변경"), now.plusHours(1), null, null), "admin:2"))
+                .isInstanceOf(org.son.haruharu.domain.mission.common.implement.exception.InvalidMissionException.class);
+        assertThatThrownBy(() -> missionService.update(roomId, missionId(future), new RoomMissionCommand(
+                MissionType.PROFILE_REVEAL, ProfileRevealMissionDefinition.from(List.of()), now.plusHours(1), null, null), "admin:2"))
+                .isInstanceOf(org.son.haruharu.domain.mission.common.implement.exception.InvalidMissionException.class);
     }
 
     @Test
-    void givenSoftDeletedParentOrSubtype_whenReadingRevealPlans_thenExcludesBoth() {
-        long commonDeleted = missionId(addItem(roomId, now.plusHours(1), List.of("AGE"), null, false));
-        long subtypeDeleted = missionId(addItem(roomId, now.plusHours(1), List.of("MBTI"), null, false));
+    void givenSoftDeletedOrOtherTypeMission_whenReadingRevealMissions_thenExcludesThem() {
+        long deleted = missionId(addItem(roomId, now.plusHours(1), List.of("AGE"), null, false));
         long retained = missionId(addItem(roomId, now.plusHours(1), List.of("DEPARTMENT"), null, false));
-        jdbc.update("update room_mission_instances set deleted_at=now() where id=?", commonDeleted);
-        jdbc.update("update announcement_missions set deleted_at=now() where room_mission_id=?", subtypeDeleted);
-        assertThat(definitionReader.findRevealPlans(roomId)).extracting(AnnouncementRevealPlan::missionId).containsExactly(retained);
+        addItem(roomId, now.plusHours(1), List.of(), "공개 없는 안내", false);
+        jdbc.update("update room_mission_instances set deleted_at=now() where id=?", deleted);
+        assertThat(missionReader.findByRoomIdAndType(roomId, MissionType.PROFILE_REVEAL))
+                .extracting(RoomMission::id).containsExactly(retained);
+        var fields = memberProfiles.getMemberProfile(roomId, bobMemberId, alice).fields();
+        assertThat(fields.stream().filter(f -> f.key().equals("DEPARTMENT")).findFirst().orElseThrow().revealAt()).isNotNull();
+        assertThat(fields.stream().filter(f -> f.key().equals("AGE")).findFirst().orElseThrow().revealAt()).isNull();
     }
 
     @Test

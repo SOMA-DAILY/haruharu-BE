@@ -4,8 +4,7 @@ SELECT status, count(*) FROM room_schedule_items GROUP BY status ORDER BY status
 SELECT count(*) AS linked_messages FROM chat_messages WHERE schedule_item_id IS NOT NULL;
 DO $$
 BEGIN
-    IF to_regclass('room_mission_instances') IS NOT NULL OR to_regclass('mission_announcements') IS NOT NULL
-        OR to_regclass('announcement_missions') IS NOT NULL THEN
+    IF to_regclass('room_mission_instances') IS NOT NULL OR to_regclass('mission_announcements') IS NOT NULL THEN
         RAISE EXCEPTION '486 target tables already exist; inspect migration state';
     END IF;
     IF EXISTS (SELECT 1 FROM room_schedule_items WHERE status = 'SENDING') THEN
@@ -31,5 +30,9 @@ BEGIN
     IF EXISTS (SELECT 1 FROM room_schedule_items WHERE reveal_fields IS NOT NULL
         AND reveal_fields !~ '^(MBTI|INTO_NOW|AGE|DEPARTMENT)(,(MBTI|INTO_NOW|AGE|DEPARTMENT))*$') THEN
         RAISE EXCEPTION 'Unknown profile reveal fields';
+    END IF;
+    IF EXISTS (SELECT 1 FROM room_schedule_items WHERE reveal_fields IS NULL
+        AND NULLIF(btrim(message_content),'') IS NULL) THEN
+        RAISE EXCEPTION 'Schedule item without content or reveal fields';
     END IF;
 END $$;

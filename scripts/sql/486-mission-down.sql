@@ -1,12 +1,10 @@
 -- Offline rollback ONLY before any new runtime writes. Keep backups for investigation; do not rerun up blindly.
 BEGIN;
-LOCK TABLE room_schedule_items, room_mission_instances, announcement_missions, mission_announcements, chat_messages IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE room_schedule_items, room_mission_instances, mission_announcements, chat_messages IN ACCESS EXCLUSIVE MODE;
 DO $$
 BEGIN
     IF EXISTS ((SELECT * FROM room_mission_instances EXCEPT SELECT * FROM room_mission_instances_backup_486)
         UNION ALL (SELECT * FROM room_mission_instances_backup_486 EXCEPT SELECT * FROM room_mission_instances))
-        OR EXISTS ((SELECT * FROM announcement_missions EXCEPT SELECT * FROM announcement_missions_backup_486)
-        UNION ALL (SELECT * FROM announcement_missions_backup_486 EXCEPT SELECT * FROM announcement_missions))
         OR EXISTS ((SELECT * FROM mission_announcements EXCEPT SELECT * FROM mission_announcements_backup_486)
         UNION ALL (SELECT * FROM mission_announcements_backup_486 EXCEPT SELECT * FROM mission_announcements))
         OR EXISTS ((SELECT * FROM room_schedule_items EXCEPT SELECT * FROM room_schedule_mission_backup_486)
@@ -35,6 +33,5 @@ BEGIN
     END LOOP;
 END $$;
 DROP TABLE mission_announcements;
-DROP TABLE announcement_missions;
 DROP TABLE room_mission_instances;
 COMMIT;

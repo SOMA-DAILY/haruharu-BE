@@ -12,9 +12,8 @@ import org.son.haruharu.domain.room.implement.Room;
 public record RoomMissionResponse(Long missionId, Long roomId, MissionType type, MissionDefinition details,
         LocalDateTime opensAt, LocalDateTime closesAt, LocalDateTime effectiveClosesAt,
         MissionStatus status, String interactionType, boolean requiresResponse, boolean canRespond) {
-    public static RoomMissionResponse of(RoomMission mission, Room room, LocalDateTime now,
-                                          MissionDefinition details, MissionTypeHandler handler) {
-        return new RoomMissionResponse(mission.id(), mission.roomId(), mission.type(), details,
+    public static RoomMissionResponse of(RoomMission mission, Room room, LocalDateTime now, MissionTypeHandler handler) {
+        return new RoomMissionResponse(mission.id(), mission.roomId(), mission.type(), mission.details(),
                 mission.opensAt(), mission.closesAt(), mission.effectiveClosesAt(room), mission.statusAt(now, room),
                 mission.type().name(), handler.requiresResponse(),
                 handler.requiresResponse() && mission.statusAt(now, room) == MissionStatus.OPEN);

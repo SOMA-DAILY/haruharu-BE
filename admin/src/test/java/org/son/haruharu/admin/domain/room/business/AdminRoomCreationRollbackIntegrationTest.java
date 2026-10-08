@@ -60,9 +60,9 @@ class AdminRoomCreationRollbackIntegrationTest {
                 base.finalSelectionClosesAt(), base.resultAt(), base.endsAt(), base.totalDays(), base.maxUses(),
                 base.inviteExpiresAt(),
                 List.of(new org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand(
-                        org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT, org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition.from("ok", List.of()), STARTS_AT, null, null),
+                        org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT, new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition("ok"), STARTS_AT, null, null),
                         new org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand(
-                                org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT, org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition.from(null, List.of()), STARTS_AT, null, null)));
+                                org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT, new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition(null), STARTS_AT, null, null)));
 
         assertThatThrownBy(() -> service.createRoomWithInvite(withSchedule, 1L))
                 .isInstanceOf(org.son.haruharu.domain.mission.common.implement.exception.InvalidMissionException.class);

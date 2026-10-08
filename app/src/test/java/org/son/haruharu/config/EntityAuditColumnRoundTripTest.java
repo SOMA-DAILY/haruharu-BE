@@ -51,14 +51,19 @@ class EntityAuditColumnRoundTripTest {
 
     @Test
     void givenMissionAndAnnouncement_whenRoundTrip_thenPreserveAuditAndAllReferences() {
+        var types = new org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry(java.util.List.of(
+                new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionHandler(),
+                new org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionHandler()));
         var mission = new org.son.haruharu.domain.mission.common.implement.RoomMission(1L, 2L,
                 org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT,
+                new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition("안내"),
                 CREATED_AT, CREATED_AT.plusDays(1), CREATED_AT.plusHours(1), "admin:1", "admin:2", CREATED_AT, CREATED_AT.plusMinutes(1));
-        assertThat(org.son.haruharu.domain.mission.common.storage.RoomMissionEntity.from(mission).toDomain()).isEqualTo(mission);
-        var definition = new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMission(1L,
-                org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition.from("안내", java.util.List.of("MBTI")),
-                CREATED_AT, CREATED_AT.plusMinutes(1));
-        assertThat(org.son.haruharu.domain.mission.types.announcement.storage.AnnouncementMissionEntity.from(definition).toDomain()).isEqualTo(definition);
+        assertThat(org.son.haruharu.domain.mission.common.storage.RoomMissionEntity.from(mission, types).toDomain(types)).isEqualTo(mission);
+        var reveal = new org.son.haruharu.domain.mission.common.implement.RoomMission(3L, 2L,
+                org.son.haruharu.domain.mission.common.implement.MissionType.PROFILE_REVEAL,
+                org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionDefinition.from(java.util.List.of("AGE", "MBTI")),
+                CREATED_AT, null, null, "admin:1", "admin:1", CREATED_AT, CREATED_AT);
+        assertThat(org.son.haruharu.domain.mission.common.storage.RoomMissionEntity.from(reveal, types).toDomain(types)).isEqualTo(reveal);
         var announcement = new org.son.haruharu.domain.mission.chat.implement.MissionAnnouncement(10L,1L,2L,
                 org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementType.START,CREATED_AT,"게시 문구",true,"제목","본문",
                 org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementStatus.SENT,null,50L,70L,"admin:1","admin:2",

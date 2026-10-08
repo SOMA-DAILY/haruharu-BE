@@ -17,8 +17,6 @@ import org.son.haruharu.domain.mission.common.business.dto.MissionPageResponse;
 import org.son.haruharu.domain.mission.common.business.dto.RoomMissionResponse;
 import org.son.haruharu.domain.mission.common.business.exception.MissionAnnouncementConflictException;
 import org.son.haruharu.domain.mission.common.business.exception.MissionNotEditableException;
-import org.son.haruharu.domain.mission.common.implement.MissionDefinition;
-import org.son.haruharu.domain.mission.common.implement.MissionDetailsReader;
 import org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry;
 import org.son.haruharu.domain.mission.common.implement.RoomMission;
 import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
@@ -27,8 +25,6 @@ import org.son.haruharu.domain.mission.common.implement.exception.InvalidMission
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -43,7 +39,6 @@ public class RoomMissionService {
     private final MissionAnnouncementService announcementService;
     private final RoomMemberReader members;
     private final MissionTypeRegistry types;
-    private final MissionDetailsReader detailsReader;
     private final Clock clock;
 
     @Transactional
@@ -52,11 +47,10 @@ public class RoomMissionService {
 
         RoomMission mission = definition(roomId, command, actor);
 
-        types.get(mission.type()).validate(command.details());
+        types.get(mission.type()).validate(mission.details());
         validateInitialAnnouncement(mission, command);
 
         RoomMission saved = writer.save(mission);
-        types.get(mission.type()).saveDefinition(saved.id(), command.details());
 
         if (command.announcement() != null) announcementService.add(roomId, saved.id(), command.announcement(), actor);
 
@@ -75,7 +69,7 @@ public class RoomMissionService {
         for (int i = 0; i < commands.size(); i++) {
             try {
                 var mission = definition(roomId, commands.get(i), actor);
-                types.get(mission.type()).validate(commands.get(i).details());
+                types.get(mission.type()).validate(mission.details());
                 validateInitialAnnouncement(mission, commands.get(i));
             } catch (InvalidMissionException e) {
                 String prefix = "missions[" + i + "].";
@@ -101,13 +95,13 @@ public class RoomMissionService {
             throw new MissionNotEditableException();
         if (command.type() != current.type() || command.announcement() != null)
             throw new InvalidMissionException("type", "유형은 변경할 수 없으며 안내는 별도 API로 수정해 주세요");
-        RoomMission updated = current.update(command.opensAt(), command.closesAt(), actor, now);
-        types.get(updated.type()).validate(command.details());
+        RoomMission updated = current.update(command.details(), command.opensAt(), command.closesAt(), actor, now);
+        types.get(updated.type()).validate(updated.details());
         // 정의 변경으로 기존 예약의 게시 시각이나 본문 생략 조건이 깨지지 않게 한다.
         for (MissionAnnouncement announcement : announcements.findByMissionId(missionId)) {
             if (announcement.status() == MissionAnnouncementStatus.SCHEDULED) {
                 try {
-                    announcementService.validate(updated, command.details(),
+                    announcementService.validate(updated,
                             new MissionAnnouncementCommand(
                                     announcement.announcementType(), announcement.runAt(), announcement.content(),
                                     announcement.push(), announcement.pushTitle(), announcement.pushBody()));
@@ -117,9 +111,7 @@ public class RoomMissionService {
                 }
             }
         }
-        RoomMission saved = writer.save(updated);
-        types.get(updated.type()).saveDefinition(saved.id(), command.details());
-        return response(saved, room, now);
+        return response(writer.save(updated), room, now);
     }
 
     @Transactional
@@ -143,8 +135,7 @@ public class RoomMissionService {
         return page(reader.page(roomId, after, size + 1), room, size, now());
     }
 
-    // 권한·공통 일정·유형별 상세를 한 스냅샷에서 읽는다. 바깥 READ_COMMITTED에 합류하지 않는다.
-    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRES_NEW)
+    // 일정과 유형별 정의는 같은 행이라 한 번의 조회로 일관되게 읽힌다. 공개 판정은 진입 시각으로 고정한다.
     public RoomMissionResponse getForParticipant(Long roomId, Long missionId, Long userId) {
         LocalDateTime now = now();
         Room room = room(roomId);
@@ -154,7 +145,6 @@ public class RoomMissionService {
         return response(mission, room, now);
     }
 
-    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRES_NEW)
     public MissionPageResponse listForParticipant(Long roomId, Long userId, Long after, int size) {
         LocalDateTime now = now();
         validatePage(after, size);
@@ -164,43 +154,36 @@ public class RoomMissionService {
         return page(reader.visiblePage(roomId, after, now, size + 1), room, size, now);
     }
 
-    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRES_NEW)
     public List<RoomMissionResponse> findForParticipant(Long roomId, Long userId, List<Long> ids) {
         LocalDateTime now = now();
         if (ids == null || ids.isEmpty() || ids.size() > 100 || ids.stream().anyMatch(id -> id == null || id <= 0))
             throw new InvalidMissionException("ids", "미션 ID를 1개부터 100개까지 지정해 주세요");
         Room room = room(roomId);
         members.getByRoomIdAndUserId(roomId, userId);
-        var visible = reader.findByIdsInRoom(roomId, ids).stream().filter(m -> visible(m, room, now)).toList();
-        var details = detailsReader.findAll(visible);
-        return visible.stream().map(m -> response(m, room, now, details.get(m.id()))).toList();
+        return reader.findByIdsInRoom(roomId, ids).stream().filter(m -> m.visibleAt(now, room))
+                .map(m -> response(m, room, now)).toList();
     }
 
     private RoomMission definition(Long roomId, RoomMissionCommand command, String actor) {
         if (command == null) throw new InvalidMissionException("mission", "미션 내용을 입력해 주세요");
-        return RoomMission.create(roomId, command.type(), command.opensAt(), command.closesAt(), actor);
+        return RoomMission.create(roomId, command.type(), command.details(), command.opensAt(), command.closesAt(), actor);
     }
 
     private void validateInitialAnnouncement(RoomMission mission, RoomMissionCommand command) {
         MissionAnnouncementCommand announcement = command.announcement();
         if (announcement == null) return;
         try {
-            announcementService.validate(mission, command.details(), announcement);
+            announcementService.validate(mission, announcement);
         } catch (InvalidMissionException e) {
             throw new InvalidMissionException(e.getFieldErrors().stream()
                     .map(error -> new ApiFieldError("announcement." + error.field(), error.message())).toList());
         }
     }
 
-    private boolean visible(RoomMission mission, Room room, LocalDateTime now) {
-        return mission.visibleAt(now, room);
-    }
-
     private MissionPageResponse page(List<RoomMission> missions, Room room, int size, LocalDateTime now) {
         boolean more = missions.size() > size;
         var selected = missions.stream().limit(size).toList();
-        var details = detailsReader.findAll(selected);
-        var items = selected.stream().map(m -> response(m, room, now, details.get(m.id()))).toList();
+        var items = selected.stream().map(m -> response(m, room, now)).toList();
         return new MissionPageResponse(items, more ? items.getLast().missionId() : null);
     }
 
@@ -210,11 +193,7 @@ public class RoomMissionService {
     }
 
     private RoomMissionResponse response(RoomMission mission, Room room, LocalDateTime now) {
-        return response(mission, room, now, detailsReader.get(mission));
-    }
-
-    private RoomMissionResponse response(RoomMission mission, Room room, LocalDateTime now, MissionDefinition details) {
-        return RoomMissionResponse.of(mission, room, now, details, types.get(mission.type()));
+        return RoomMissionResponse.of(mission, room, now, types.get(mission.type()));
     }
 
     private Room room(Long id) { return rooms.findById(id).orElseThrow(RoomNotFoundException::new); }

@@ -67,9 +67,17 @@ class MissionMigrationPostgresTest {
     void givenLegacyRows_whenUpVerifyDown_thenPreservesMessagesAndOneToOneMapping() throws Exception {
         script("486-mission-preflight.sql");script("486-mission-up.sql");script("486-mission-verify.sql");
         assertThat(count("SELECT count(*) FROM room_mission_instances")).isEqualTo(5);
-        assertThat(count("SELECT count(*) FROM announcement_missions")).isEqualTo(5);
-        assertThat(text("SELECT content FROM announcement_missions WHERE room_mission_id=100")).isEqualTo("과거 안내");
-        assertThat(count("SELECT count(*) FROM announcement_missions WHERE room_mission_id=104 AND deleted_at IS NOT NULL")).isEqualTo(1);
+        assertThat(text("SELECT to_regclass('announcement_missions')")).isNull();
+        // 공개 항목이 있던 편성은 공개 미션, 나머지는 안내형. 유형별 정의는 details jsonb 한 칸에 둔다.
+        assertThat(text("SELECT string_agg(id||':'||type, ',' ORDER BY id) FROM room_mission_instances"))
+                .isEqualTo("100:PROFILE_REVEAL,101:ANNOUNCEMENT,102:PROFILE_REVEAL,103:PROFILE_REVEAL,104:ANNOUNCEMENT");
+        assertThat(text("SELECT details::text FROM room_mission_instances WHERE id=100")).isEqualTo("{\"reveal_fields\": [\"MBTI\"]}");
+        assertThat(text("SELECT details::text FROM room_mission_instances WHERE id=101")).isEqualTo("{\"content\": \"예약 안내\"}");
+        assertThat(text("SELECT data_type FROM information_schema.columns WHERE table_name='room_mission_instances' AND column_name='details'")).isEqualTo("jsonb");
+        // 공개 미션의 채팅 문구는 안내 계획과 보낸 메시지에 남는다.
+        assertThat(text("SELECT content FROM mission_announcements WHERE id=100")).isEqualTo("과거 안내");
+        assertThat(text("SELECT content FROM chat_messages WHERE id=500")).isEqualTo("과거 안내");
+        assertThat(count("SELECT count(*) FROM mission_announcements WHERE id=102 AND content IS NULL")).isEqualTo(1);
         assertThat(count("SELECT count(*) FROM information_schema.columns WHERE table_name='room_mission_instances' AND column_name IN ('content','reveal_fields')")).isZero();
         assertThat(count("SELECT count(*) FROM mission_announcements WHERE legacy_schedule_item_id=id AND room_mission_id=id")).isEqualTo(5);
         assertThat(text("SELECT message_type FROM chat_messages WHERE id=500")).isEqualTo("MISSION");
@@ -83,7 +91,22 @@ class MissionMigrationPostgresTest {
         assertThat(text("SELECT message_type FROM chat_messages WHERE id=500")).isEqualTo("TEXT");
         assertThat(count("SELECT count(*) FROM chat_messages WHERE id=502 AND reply_to_message_id=500 AND video_post_id=12")).isEqualTo(1);
         assertThat(text("SELECT to_regclass('room_mission_instances')")).isNull();
-        assertThat(text("SELECT to_regclass('announcement_missions')")).isNull();
+    }
+
+    @Test
+    void givenMultipleRevealFields_whenUp_thenKeepsOrderAsJsonArray() throws Exception {
+        execute("UPDATE room_schedule_items SET reveal_fields='MBTI,INTO_NOW,AGE' WHERE id=100");
+        script("486-mission-preflight.sql");script("486-mission-up.sql");script("486-mission-verify.sql");
+        assertThat(text("SELECT details::text FROM room_mission_instances WHERE id=100"))
+                .isEqualTo("{\"reveal_fields\": [\"MBTI\", \"INTO_NOW\", \"AGE\"]}");
+    }
+
+    @Test
+    void givenScheduleWithoutContentOrRevealFields_whenPreflightAndUp_thenAbort() throws Exception {
+        execute("UPDATE room_schedule_items SET message_content='  ' WHERE id=101");
+        assertThatThrownBy(()->script("486-mission-preflight.sql")).isInstanceOf(SQLException.class).hasMessageContaining("without content");
+        assertThatThrownBy(()->script("486-mission-up.sql")).isInstanceOf(SQLException.class).hasMessageContaining("without content");
+        assertThat(text("SELECT to_regclass('room_mission_instances')")).isNull();
     }
 
     @Test
@@ -97,31 +120,29 @@ class MissionMigrationPostgresTest {
                 .isInstanceOf(SQLException.class).hasMessageContaining("uq_chat_messages_mission_announcement");
         assertThatThrownBy(()->execute("UPDATE chat_messages SET room_mission_id=100 WHERE id=502"))
                 .isInstanceOf(SQLException.class).hasMessageContaining("ck_chat_messages_mission_reference");
-        assertThat(count("INSERT INTO room_mission_instances(room_id,type,opens_at,created_at,updated_at) VALUES(1,'ANNOUNCEMENT',now(),now(),now()) RETURNING id")).isGreaterThan(104);
+        assertThat(count("INSERT INTO room_mission_instances(room_id,type,details,opens_at,created_at,updated_at) VALUES(1,'ANNOUNCEMENT','{\"content\":\"새 안내\"}',now(),now(),now()) RETURNING id")).isGreaterThan(104);
         assertThatThrownBy(()->script("486-mission-down.sql")).isInstanceOf(SQLException.class).hasMessageContaining("manual reconciliation");
         assertThat(count("SELECT count(*) FROM room_mission_instances")).isEqualTo(6);
     }
 
     @Test
-    void givenSubtypeReferences_whenMissingParentOrWrongType_thenDatabaseRejects() throws Exception {
+    void givenMigratedSchema_whenInvalidTypeOrDetails_thenDatabaseRejects() throws Exception {
         script("486-mission-up.sql");
-        assertThatThrownBy(() -> execute("UPDATE announcement_missions SET room_mission_id=999 WHERE room_mission_id=101"))
-                .isInstanceOf(SQLException.class).hasMessageContaining("fk_announcement_missions_type");
-        assertThatThrownBy(() -> execute("UPDATE announcement_missions SET mission_type='SELECTION' WHERE room_mission_id=101"))
-                .isInstanceOf(SQLException.class).hasMessageContaining("ck_announcement_missions_type");
-        // A future migration may expand the parent type enum, but existing subtype rows must still match.
-        execute("ALTER TABLE room_mission_instances DROP CONSTRAINT room_mission_instances_type_check");
+        assertThatThrownBy(() -> execute("UPDATE room_mission_instances SET details=NULL WHERE id=101"))
+                .isInstanceOf(SQLException.class).hasMessageContaining("details");
+        assertThatThrownBy(() -> execute("UPDATE room_mission_instances SET details='[\"MBTI\"]' WHERE id=101"))
+                .isInstanceOf(SQLException.class).hasMessageContaining("ck_room_mission_instances_details");
         assertThatThrownBy(() -> execute("UPDATE room_mission_instances SET type='SELECTION' WHERE id=101"))
-                .isInstanceOf(SQLException.class).hasMessageContaining("fk_announcement_missions_type");
+                .isInstanceOf(SQLException.class).hasMessageContaining("room_mission_instances_type_check");
     }
 
     @Test
-    void givenOnlySubtypeChangedAfterCutover_whenRollback_thenRequiresReconciliation() throws Exception {
+    void givenOnlyDetailsChangedAfterCutover_whenRollback_thenRequiresReconciliation() throws Exception {
         script("486-mission-up.sql");
-        execute("UPDATE announcement_missions SET content='변경' WHERE room_mission_id=101");
+        execute("UPDATE room_mission_instances SET details='{\"content\":\"변경\"}' WHERE id=101");
         assertThatThrownBy(() -> script("486-mission-down.sql"))
                 .isInstanceOf(SQLException.class).hasMessageContaining("manual reconciliation");
-        assertThat(text("SELECT content FROM announcement_missions WHERE room_mission_id=101")).isEqualTo("변경");
+        assertThat(text("SELECT details->>'content' FROM room_mission_instances WHERE id=101")).isEqualTo("변경");
     }
 
     @Test

@@ -16,7 +16,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand;
 import org.son.haruharu.domain.mission.common.business.dto.RoomMissionResponse;
-import org.son.haruharu.domain.mission.common.implement.MissionDetailsReader;
 import org.son.haruharu.domain.mission.common.implement.MissionType;
 import org.son.haruharu.domain.mission.common.implement.RoomMissionWriter;
 import org.son.haruharu.domain.mission.common.storage.exception.MissionNotFoundException;
@@ -94,7 +93,6 @@ class RoomMissionReadConsistencyIntegrationTest {
     @Autowired UserJpaRepository users;
     @Autowired PlatformTransactionManager transactions;
     @MockitoSpyBean RoomMissionWriter writer;
-    @MockitoSpyBean MissionDetailsReader details;
     @MockitoSpyBean RoomReader roomReader;
     long roomId, userId, missionId;
 
@@ -110,7 +108,7 @@ class RoomMissionReadConsistencyIntegrationTest {
 
     RoomMissionCommand command(String content, LocalDateTime start) {
         return new RoomMissionCommand(MissionType.ANNOUNCEMENT,
-                AnnouncementMissionDefinition.from(content, List.of()), start, null, null);
+                new AnnouncementMissionDefinition(content), start, null, null);
     }
 
     List<RoomMissionResponse> read(ReadPath path) {
@@ -142,20 +140,21 @@ class RoomMissionReadConsistencyIntegrationTest {
 
     @ParameterizedTest
     @EnumSource(ReadPath.class)
-    void givenDefinitionUpdateCommitsBetweenReads_whenParticipantReads_thenKeepsOneSnapshot(ReadPath path) throws Exception {
+    void givenScheduleAndDefinitionUpdateCommitsDuringRead_whenParticipantReads_thenNeverShowsFutureDefinition(ReadPath path) throws Exception {
         verifyConcurrentRead(path, false);
     }
 
     @Test
-    void givenAmbientReadCommittedTransaction_whenParticipantReads_thenStillKeepsOneSnapshot() throws Exception {
+    void givenAmbientReadCommittedTransaction_whenParticipantReads_thenStillNeverShowsFutureDefinition() throws Exception {
         verifyConcurrentRead(ReadPath.DETAIL, true);
     }
 
+    // 일정과 정의는 같은 행이다. 읽는 도중 수정이 커밋되면 새 일정에 따라 통째로 숨겨지고, 옛 일정에 새 정의가 섞이지 않는다.
     private void verifyConcurrentRead(ReadPath path, boolean ambientTransaction) throws Exception {
         var updateValidated = new CountDownLatch(1);
         var allowUpdate = new CountDownLatch(1);
-        var commonRead = new CountDownLatch(1);
-        var allowDetails = new CountDownLatch(1);
+        var roomRead = new CountDownLatch(1);
+        var allowMissionRead = new CountDownLatch(1);
         var participantThread = new AtomicReference<Thread>();
         doAnswer(invocation -> {
             updateValidated.countDown();
@@ -163,44 +162,50 @@ class RoomMissionReadConsistencyIntegrationTest {
             return invocation.callRealMethod();
         }).when(writer).save(any());
         doAnswer(invocation -> {
+            Object room = invocation.callRealMethod();
             if (Thread.currentThread() == participantThread.get()) {
-                commonRead.countDown();
-                await(allowDetails);
+                roomRead.countDown();
+                await(allowMissionRead);
             }
-            return invocation.callRealMethod();
-        }).when(details).findAll(anyCollection());
+            return room;
+        }).when(roomReader).findById(roomId);
 
         var executor = Executors.newFixedThreadPool(2);
         try {
-            // The writer passes the pre-start edit guard, then pauses before committing either row.
+            // The writer passes the pre-start edit guard, then pauses before committing the row.
             var update = executor.submit(() -> service.update(roomId, missionId,
                     command("다음 시간의 비공개 내용", opensAt.plusHours(1)), "admin:2"));
             await(updateValidated);
             clock.at(opensAt.plusSeconds(1));
             var reading = executor.submit(() -> {
                 participantThread.set(Thread.currentThread());
-                if (!ambientTransaction) return read(path);
-                var outer = new TransactionTemplate(transactions);
-                outer.setReadOnly(true);
-                outer.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
-                return outer.execute(status -> read(path));
+                try {
+                    if (!ambientTransaction) return read(path);
+                    var outer = new TransactionTemplate(transactions);
+                    outer.setReadOnly(true);
+                    outer.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+                    return outer.execute(status -> read(path));
+                } catch (MissionNotFoundException hidden) {
+                    return List.<RoomMissionResponse>of();
+                }
             });
-            await(commonRead);
+            await(roomRead);
             allowUpdate.countDown();
-            update.get(10, TimeUnit.SECONDS); // Includes commit of both the common and type-specific rows.
-            allowDetails.countDown();
+            update.get(10, TimeUnit.SECONDS); // Commits the schedule and the definition in one row.
+            allowMissionRead.countDown();
 
-            var response = reading.get(10, TimeUnit.SECONDS);
-            assertThat(response).hasSize(1);
-            assertThat(response.getFirst().opensAt()).isEqualTo(opensAt);
-            assertThat(response.getFirst().details()).isEqualTo(AnnouncementMissionDefinition.from("기존 공개 내용", List.of()));
-            assertThat(service.get(roomId, missionId).details())
-                    .isEqualTo(AnnouncementMissionDefinition.from("다음 시간의 비공개 내용", List.of()));
+            assertThat(reading.get(10, TimeUnit.SECONDS)).isEmpty();
+            var stored = service.get(roomId, missionId);
+            assertThat(stored.opensAt()).isEqualTo(opensAt.plusHours(1));
+            assertThat(stored.details()).isEqualTo(new AnnouncementMissionDefinition("다음 시간의 비공개 내용"));
             assertThatThrownBy(() -> service.getForParticipant(roomId, missionId, userId))
                     .isInstanceOf(MissionNotFoundException.class);
+            clock.at(opensAt.plusHours(1));
+            assertThat(read(path)).extracting(RoomMissionResponse::details)
+                    .containsExactly(new AnnouncementMissionDefinition("다음 시간의 비공개 내용"));
         } finally {
             allowUpdate.countDown();
-            allowDetails.countDown();
+            allowMissionRead.countDown();
             executor.shutdownNow();
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }

@@ -8,15 +8,12 @@ import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementReader;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementWriter;
 import org.son.haruharu.domain.mission.chat.storage.MissionAnnouncementRepositoryImpl;
 import org.son.haruharu.domain.mission.common.business.RoomMissionService;
-import org.son.haruharu.domain.mission.common.implement.MissionDetailsReader;
 import org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry;
 import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
 import org.son.haruharu.domain.mission.common.implement.RoomMissionWriter;
 import org.son.haruharu.domain.mission.common.storage.RoomMissionRepositoryImpl;
 import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionHandler;
-import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionReader;
-import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionWriter;
-import org.son.haruharu.domain.mission.types.announcement.storage.AnnouncementMissionRepositoryImpl;
+import org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionHandler;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.profile.storage.UserProfileRepositoryImpl;
 import org.son.haruharu.domain.room.business.RoomInviteService;
@@ -68,8 +65,7 @@ import org.springframework.context.annotation.Import;
         RoomMissionService.class, MissionAnnouncementService.class,
         RoomMissionReader.class, RoomMissionWriter.class,
         MissionAnnouncementReader.class, MissionAnnouncementWriter.class,
-        AnnouncementMissionHandler.class, MissionTypeRegistry.class, MissionDetailsReader.class,
-        AnnouncementMissionReader.class, AnnouncementMissionWriter.class, AnnouncementMissionRepositoryImpl.class,
+        MissionTypeRegistry.class, AnnouncementMissionHandler.class, ProfileRevealMissionHandler.class,
         RoomMissionRepositoryImpl.class, MissionAnnouncementRepositoryImpl.class,
         ChatMessageReader.class,
         ChatMessageWriter.class,

@@ -9,11 +9,11 @@ import org.son.haruharu.domain.chat.business.event.ChatMessageBroadcastEvent;
 import org.son.haruharu.domain.chat.implement.*;
 import org.son.haruharu.domain.mission.chat.business.exception.MissionDispatchRejectedException;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncement;
+import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementNotifier;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementReader;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementStatus;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementWriter;
 import org.son.haruharu.domain.mission.chat.implement.MissionNotification;
-import org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry;
 import org.son.haruharu.domain.mission.common.implement.RoomMission;
 import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
 import org.son.haruharu.domain.room.implement.*;
@@ -28,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MissionDispatchStep {
     private final RoomReader rooms;
     private final RoomMissionReader missions;
-    private final MissionTypeRegistry types;
+    private final List<MissionAnnouncementNotifier> notifiers;
     private final MissionAnnouncementReader announcements;
     private final MissionAnnouncementWriter writer;
     private final ChatRoomReader chatRooms;
@@ -71,7 +71,9 @@ public class MissionDispatchStep {
         if (!writer.markSent(item.id(), messageId, now)) throw new MissionDispatchRejectedException("ANNOUNCEMENT_NOT_SENDING");
         List<Long> recipients = members.findByChatRoomId(chatRoomId).stream().filter(m -> !m.hasLeft())
                 .map(ChatRoomMember::userId).toList();
-        return new SendResult(item, recipients, types.get(mission.type()).notificationsAfterAnnouncement(mission, item));
+        List<MissionNotification> notifications = notifiers.stream().filter(n -> n.type() == mission.type())
+                .flatMap(n -> n.afterAnnouncement(mission, item).stream()).toList();
+        return new SendResult(item, recipients, notifications);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

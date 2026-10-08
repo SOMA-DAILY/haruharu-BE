@@ -33,9 +33,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.video.storage",
         "org.son.haruharu.domain.chat.storage",
         "org.son.haruharu.domain.question.storage",
-        // #486: 공통 미션, 안내형 상세, 채팅 게시 계획
+        // #486: 공통 미션(유형별 정의는 details JSON), 채팅 게시 계획
         "org.son.haruharu.domain.mission.common.storage",
-        "org.son.haruharu.domain.mission.types.announcement.storage",
         "org.son.haruharu.domain.mission.chat.storage"
 })
 @EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.room.storage",
@@ -46,7 +45,6 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         // #486: 미션·게시 계획 저장과 보낸 운영 글 삭제
         "org.son.haruharu.domain.chat.storage",
         "org.son.haruharu.domain.mission.common.storage",
-        "org.son.haruharu.domain.mission.types.announcement.storage",
         "org.son.haruharu.domain.mission.chat.storage"})
 @Import({JpaConfig.class, ClockConfig.class, TimeZoneConfig.class})
 public class AdminApplication {

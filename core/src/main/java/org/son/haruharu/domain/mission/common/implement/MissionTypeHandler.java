@@ -1,21 +1,15 @@
 package org.son.haruharu.domain.mission.common.implement;
 
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
-import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncement;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementType;
-import org.son.haruharu.domain.mission.chat.implement.MissionNotification;
 
-/** 유형별 데이터·검증·저장·조회와 안내 후 알림을 소유한다. 호출 서비스의 트랜잭션을 사용한다. */
+/** 유형별 정의의 검증과 details JSON 변환을 소유한다. 저장소를 참조하지 않는다. */
 public interface MissionTypeHandler {
     MissionType type();
     void validate(MissionDefinition definition);
-    void saveDefinition(Long missionId, MissionDefinition definition);
-    Map<Long, MissionDefinition> loadDefinitions(Collection<Long> missionIds);
+    /** room_mission_instances.details 에 저장할 JSON 객체. 키 이름이 저장 계약이다. */
+    Map<String, Object> toStored(MissionDefinition definition);
+    MissionDefinition fromStored(Map<String, Object> stored);
     boolean requiresResponse();
     default boolean allowsEmptyAnnouncement(MissionAnnouncementType purpose, MissionDefinition definition) { return false; }
-    default List<MissionNotification> notificationsAfterAnnouncement(RoomMission mission, MissionAnnouncement announcement) {
-        return List.of();
-    }
 }

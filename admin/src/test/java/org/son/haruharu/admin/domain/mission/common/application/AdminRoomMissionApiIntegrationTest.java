@@ -52,7 +52,7 @@ class AdminRoomMissionApiIntegrationTest {
     String base(long room) { return "/api/v1/admin/rooms/"+room+"/missions"; }
     String mission(LocalDateTime at, String announcement) {
         return """
-          {"type":"ANNOUNCEMENT","details":{"content":"미션 본문","reveal_fields":["AGE","MBTI","AGE"]},
+          {"type":"PROFILE_REVEAL","details":{"reveal_fields":["AGE","MBTI","AGE"]},
            "opens_at":"%s","announcement":%s}
           """.formatted(at,announcement);
     }
@@ -82,6 +82,9 @@ class AdminRoomMissionApiIntegrationTest {
         mvc.perform(get(base(room)).with(authentication(role("CS"))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.missions.length()").value(5))
                 .andExpect(jsonPath("$.data.missions[0].opens_at").value(at.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)))
+                .andExpect(jsonPath("$.data.missions[0].type").value("PROFILE_REVEAL"))
+                .andExpect(jsonPath("$.data.missions[0].interaction_type").value("PROFILE_REVEAL"))
+                .andExpect(jsonPath("$.data.missions[0].details.content").doesNotExist())
                 .andExpect(jsonPath("$.data.missions[0].details.reveal_fields[0]").value("MBTI"))
                 .andExpect(jsonPath("$.data.missions[0].details.reveal_fields[1]").value("AGE"));
         assertThat(em.createQuery("select count(a) from MissionAnnouncementEntity a",Long.class).getSingleResult()).isEqualTo(5);
@@ -106,8 +109,8 @@ class AdminRoomMissionApiIntegrationTest {
     void givenInvalidRevealFieldsInMultipleMissions_whenCreatingRoom_thenReportsIndexedErrors() throws Exception {
         mvc.perform(post("/api/v1/admin/rooms").with(authentication(role("OPERATOR")))
                 .contentType(MediaType.APPLICATION_JSON).content(roomBody("""
-                [{"type":"ANNOUNCEMENT","details":{"reveal_fields":["INVALID"]},"opens_at":"%s"},
-                 {"type":"ANNOUNCEMENT","details":{"reveal_fields":[null]},"opens_at":"%s"}]
+                [{"type":"PROFILE_REVEAL","details":{"reveal_fields":["INVALID"]},"opens_at":"%s"},
+                 {"type":"PROFILE_REVEAL","details":{"reveal_fields":[null]},"opens_at":"%s"}]
                 """.formatted(start, start))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.fields[0].field").value("missions[0].details.reveal_fields"))
@@ -122,7 +125,9 @@ class AdminRoomMissionApiIntegrationTest {
                 {"details":{"content":"선행 상세","reveal_fields":[]},"opens_at":"%s","type":"ANNOUNCEMENT"}
                 """.formatted(start)))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.type").value("ANNOUNCEMENT"))
                 .andExpect(jsonPath("$.data.details.content").value("선행 상세"))
+                .andExpect(jsonPath("$.data.details.reveal_fields").doesNotExist())
                 .andExpect(jsonPath("$.data.content").doesNotExist())
                 .andExpect(jsonPath("$.data.reveal_fields").doesNotExist());
         for (String body : List.of(
@@ -133,6 +138,39 @@ class AdminRoomMissionApiIntegrationTest {
             mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
                     .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
         }
+    }
+
+    @Test
+    void givenDetailsOfAnotherType_whenCreatingMission_thenRejectsInsteadOfSilentlyDroppingThem() throws Exception {
+        long room = room("[]");
+        // 공개 항목은 안내형의 부가 필드가 아니라 별도 유형이다.
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"ANNOUNCEMENT","details":{"content":"본문","reveal_fields":["MBTI"]},"opens_at":"%s"}
+                """.formatted(start)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields[0].field").value("details.reveal_fields"));
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"PROFILE_REVEAL","details":{"content":"본문","reveal_fields":["MBTI"]},"opens_at":"%s"}
+                """.formatted(start)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields[0].field").value("details.content"));
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"PROFILE_REVEAL","details":{"reveal_fields":[]},"opens_at":"%s"}
+                """.formatted(start)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields[0].field").value("details.reveal_fields"));
+        mvc.perform(post("/api/v1/admin/rooms").with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content(roomBody("""
+                [{"type":"ANNOUNCEMENT","details":{"content":"정상"},"opens_at":"%s"},
+                 {"type":"ANNOUNCEMENT","details":{"content":"본문","reveal_fields":["MBTI"]},"opens_at":"%s"}]
+                """.formatted(start, start))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields[0].field").value("missions[1].details.reveal_fields"));
+        mvc.perform(get(base(room)).with(authentication(role("CS"))))
+                .andExpect(jsonPath("$.data.missions").isEmpty());
     }
 
     @Test

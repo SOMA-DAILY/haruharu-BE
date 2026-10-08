@@ -49,6 +49,10 @@ public class RoomMissionReader {
         return ids.isEmpty() ? List.of() : repository.findByIds(ids);
     }
 
+    public List<RoomMission> findByRoomIdAndType(Long roomId, MissionType type) {
+        return repository.findByRoomIdAndType(roomId, type);
+    }
+
     public List<RoomMission> visiblePage(Long roomId, Long afterId, java.time.LocalDateTime now, int limit) {
         return repository.findVisiblePage(roomId, afterId, now, limit);
     }

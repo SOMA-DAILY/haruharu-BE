@@ -4,6 +4,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.son.haruharu.domain.mission.common.implement.MissionType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -19,6 +20,8 @@ public interface RoomMissionJpaRepository extends JpaRepository<RoomMissionEntit
     List<RoomMissionEntity> findByRoomIdAndIdGreaterThanOrderByIdAsc(Long roomId, Long afterId, Pageable pageable);
 
     List<RoomMissionEntity> findByRoomIdAndIdIn(Long roomId, Collection<Long> ids);
+
+    List<RoomMissionEntity> findByRoomIdAndTypeOrderByIdAsc(Long roomId, MissionType type);
 
     List<RoomMissionEntity> findByRoomIdAndIdGreaterThanAndOpensAtLessThanEqualOrderByIdAsc(
             Long roomId, Long afterId, java.time.LocalDateTime now, Pageable pageable);

@@ -18,8 +18,6 @@ import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementContent
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementReader;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementStatus;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementWriter;
-import org.son.haruharu.domain.mission.common.implement.MissionDefinition;
-import org.son.haruharu.domain.mission.common.implement.MissionDetailsReader;
 import org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry;
 import org.son.haruharu.domain.mission.common.implement.RoomMission;
 import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
@@ -41,22 +39,21 @@ public class MissionAnnouncementService {
     private final ChatMessageReader messages;
     private final ChatMessageWriter messageWriter;
     private final MissionTypeRegistry types;
-    private final MissionDetailsReader detailsReader;
     private final Clock clock;
 
     @Transactional
     public MissionAnnouncementResponse add(Long roomId, Long missionId, MissionAnnouncementCommand command, String actor) {
         RoomMission mission = lockMission(roomId, missionId, true);
-        validate(mission, detailsReader.get(mission), command);
+        validate(mission, command);
         return response(writer.save(MissionAnnouncement.scheduled(mission, command.announcementType(), command.runAt(),
                 MissionAnnouncementContent.text(command.content()), Boolean.TRUE.equals(command.push()),
                 MissionAnnouncementContent.text(command.pushTitle()), MissionAnnouncementContent.text(command.pushBody()), actor)));
     }
 
-    public void validate(RoomMission mission, MissionDefinition details, MissionAnnouncementCommand command) {
+    public void validate(RoomMission mission, MissionAnnouncementCommand command) {
         MissionAnnouncementContent.validateAnnouncement(mission, command.announcementType(), command.runAt(),
                 command.content(), command.pushTitle(), command.pushBody(),
-                types.get(mission.type()).allowsEmptyAnnouncement(command.announcementType(), details));
+                types.get(mission.type()).allowsEmptyAnnouncement(command.announcementType(), mission.details()));
     }
 
     @Transactional
@@ -66,7 +63,7 @@ public class MissionAnnouncementService {
         MissionAnnouncement current = lockAnnouncement(mission, id);
         if (current.status() != MissionAnnouncementStatus.SCHEDULED || current.announcementType() != command.announcementType())
             throw new AnnouncementNotEditableException();
-        validate(mission, detailsReader.get(mission), command);
+        validate(mission, command);
         if (!writer.updateIfScheduled(id, command.runAt(), MissionAnnouncementContent.text(command.content()),
                 Boolean.TRUE.equals(command.push()), MissionAnnouncementContent.text(command.pushTitle()),
                 MissionAnnouncementContent.text(command.pushBody()), actor, now())) throw new AnnouncementNotEditableException();

@@ -2,16 +2,19 @@ package org.son.haruharu.domain.mission.common.storage;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.mission.common.implement.MissionType;
+import org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry;
 import org.son.haruharu.domain.mission.common.implement.RoomMission;
 
 @Entity
-@Table(name = "room_mission_instances", uniqueConstraints = {
+@Table(name = "room_mission_instances", uniqueConstraints =
         @UniqueConstraint(name = "uq_room_mission_instances_id_room", columnNames = {"id", "room_id"}),
-        @UniqueConstraint(name = "uq_room_mission_instances_id_type", columnNames = {"id", "type"})},
         indexes = @Index(name = "idx_room_mission_instances_room_open", columnList = "room_id, opens_at, id"),
         check = @CheckConstraint(name = "ck_room_mission_instances_window", constraint = "closes_at IS NULL OR closes_at > opens_at"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -26,6 +29,11 @@ public class RoomMissionEntity extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 30)
     private MissionType type;
+
+    // 유형별 정의. 유형마다 테이블을 두지 않고 type 이 해석 방법을 정한다(PostgreSQL jsonb).
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "details", nullable = false)
+    private Map<String, Object> details;
 
     @Column(name = "opens_at", nullable = false)
     private LocalDateTime opensAt;
@@ -42,11 +50,12 @@ public class RoomMissionEntity extends BaseEntity {
     @Column(name = "updated_by", length = 40)
     private String updatedBy;
 
-    public static RoomMissionEntity from(RoomMission value) {
+    public static RoomMissionEntity from(RoomMission value, MissionTypeRegistry types) {
         RoomMissionEntity entity = new RoomMissionEntity();
         entity.id = value.id();
         entity.roomId = value.roomId();
         entity.type = value.type();
+        entity.details = types.get(value.type()).toStored(value.details());
         entity.opensAt = value.opensAt();
         entity.closesAt = value.closesAt();
         entity.canceledAt = value.canceledAt();
@@ -57,8 +66,8 @@ public class RoomMissionEntity extends BaseEntity {
         return entity;
     }
 
-    public RoomMission toDomain() {
-        return new RoomMission(id, roomId, type, opensAt, closesAt, canceledAt,
+    public RoomMission toDomain(MissionTypeRegistry types) {
+        return new RoomMission(id, roomId, type, types.get(type).fromStored(details), opensAt, closesAt, canceledAt,
                 createdBy, updatedBy, createdAt, updatedAt);
     }
 }

@@ -1,5 +1,5 @@
 package org.son.haruharu.domain.mission.common.implement;
 
 public enum MissionType {
-    ANNOUNCEMENT
+    ANNOUNCEMENT, PROFILE_REVEAL
 }

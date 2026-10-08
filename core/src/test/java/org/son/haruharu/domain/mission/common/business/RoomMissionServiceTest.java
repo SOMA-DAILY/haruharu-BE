@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.mission.common.business;
 
 import java.time.*;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.mission.chat.business.MissionAnnouncementService;
@@ -9,7 +8,6 @@ import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementReader;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementWriter;
 import org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand;
 import org.son.haruharu.domain.mission.common.business.exception.MissionNotEditableException;
-import org.son.haruharu.domain.mission.common.implement.MissionDetailsReader;
 import org.son.haruharu.domain.mission.common.implement.MissionStatus;
 import org.son.haruharu.domain.mission.common.implement.MissionType;
 import org.son.haruharu.domain.mission.common.implement.MissionTypeHandler;
@@ -38,17 +36,15 @@ class RoomMissionServiceTest {
     final RoomMemberReader members = mock(RoomMemberReader.class);
     final MissionTypeHandler handler = mock(MissionTypeHandler.class);
     final MissionTypeRegistry types = mock(MissionTypeRegistry.class);
-    final MissionDetailsReader details = mock(MissionDetailsReader.class);
     @org.junit.jupiter.api.BeforeEach
     void typeDetails() {
         when(types.get(MissionType.ANNOUNCEMENT)).thenReturn(handler);
-        when(details.get(any())).thenReturn(AnnouncementMissionDefinition.from("질문", List.of()));
     }
     final RoomMissionService service = new RoomMissionService(rooms, reader, writer, announcements,
-            announcementWriter, announcementService, members, types, details, clock);
+            announcementWriter, announcementService, members, types, clock);
 
     RoomMission mission(LocalDateTime opensAt) {
-        return new RoomMission(10L, 1L, MissionType.ANNOUNCEMENT, opensAt, null, null,
+        return new RoomMission(10L, 1L, MissionType.ANNOUNCEMENT, new AnnouncementMissionDefinition("질문"), opensAt, null, null,
                 "admin:1", "admin:1", now.minusDays(1), now.minusDays(1));
     }
 
@@ -77,7 +73,7 @@ class RoomMissionServiceTest {
         when(rooms.findByIdForUpdate(1L)).thenReturn(Optional.of(room));
         when(reader.getForUpdateInRoom(1L, 10L)).thenReturn(mission(now));
         assertThatThrownBy(() -> service.update(1L, 10L,
-                new RoomMissionCommand(MissionType.ANNOUNCEMENT, AnnouncementMissionDefinition.from("변경", List.of()), now.plusHours(1), null, null), "admin:1"))
+                new RoomMissionCommand(MissionType.ANNOUNCEMENT, new AnnouncementMissionDefinition("변경"), now.plusHours(1), null, null), "admin:1"))
                 .isInstanceOf(MissionNotEditableException.class);
         verifyNoInteractions(writer);
     }
@@ -89,7 +85,7 @@ class RoomMissionServiceTest {
         when(writer.save(any())).thenAnswer(i -> i.getArgument(0));
         var result = service.cancel(1L, 10L, "admin:2");
         assertThat(result.status()).isEqualTo(MissionStatus.CANCELED);
-        assertThat(result.details()).isEqualTo(AnnouncementMissionDefinition.from("질문", List.of()));
+        assertThat(result.details()).isEqualTo(new AnnouncementMissionDefinition("질문"));
         verify(announcementWriter).cancelScheduledForMission(10L, "admin:2", now);
     }
 }
