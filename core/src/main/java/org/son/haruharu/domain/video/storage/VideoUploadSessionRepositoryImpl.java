@@ -7,6 +7,7 @@ import org.son.haruharu.domain.video.implement.VideoUploadSessionRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,9 +24,19 @@ public class VideoUploadSessionRepositoryImpl implements VideoUploadSessionRepos
     }
 
     @Override
-    public boolean existsPending(Long memberId, LocalDateTime slotStart, LocalDateTime now) {
-        return jpaRepository.existsByMemberIdAndSlotStartAndPostIdIsNullAndCancelledFalseAndExpiresAtAfter(
-                memberId, slotStart, now);
+    public List<VideoUploadSession> findPending(Long memberId, LocalDateTime slotStart, LocalDateTime now) {
+        return jpaRepository.findByMemberIdAndSlotStartAndPostIdIsNullAndCancelledFalseAndExpiresAtAfter(
+                        memberId, slotStart, now).stream()
+                .map(VideoUploadSessionEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<VideoUploadSession> findPendingByMember(Long memberId, LocalDateTime now) {
+        return jpaRepository.findByMemberIdAndPostIdIsNullAndCancelledFalseAndExpiresAtAfterOrderBySlotStartAsc(
+                        memberId, now).stream()
+                .map(VideoUploadSessionEntity::toDomain)
+                .toList();
     }
 
     @Override

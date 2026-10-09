@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.video.implement;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,7 +25,11 @@ public class VideoUploadSessionReader {
                 .orElseThrow(VideoUploadUnavailableException::new);
     }
 
-    public boolean hasPending(Long memberId, LocalDateTime slotStart, LocalDateTime now) {
-        return videoUploadSessionRepository.existsPending(memberId, slotStart, now);
+    public List<VideoUploadSession> findPending(Long memberId, LocalDateTime slotStart, LocalDateTime now) {
+        return videoUploadSessionRepository.findPending(memberId, slotStart, now);
+    }
+
+    public List<VideoUploadSession> findPendingByMember(Long memberId, LocalDateTime now) {
+        return videoUploadSessionRepository.findPendingByMember(memberId, now);
     }
 }

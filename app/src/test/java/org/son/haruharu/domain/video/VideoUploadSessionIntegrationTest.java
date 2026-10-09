@@ -25,9 +25,11 @@ import org.son.haruharu.domain.video.business.VideoService;
 import org.son.haruharu.domain.video.business.VideoUploadSessionService;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
 import org.son.haruharu.domain.video.business.dto.VideoUploadSessionResponse;
+import org.son.haruharu.domain.video.business.exception.DuplicateSlotUploadException;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoUploadSession;
 import org.son.haruharu.domain.video.implement.VideoUploadSessionRepository;
+import org.son.haruharu.domain.video.implement.exception.VideoUploadUnavailableException;
 import org.son.haruharu.domain.video.storage.VideoPostJpaRepository;
 import org.son.haruharu.infrastructure.s3.PresignedUpload;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
@@ -190,12 +192,158 @@ class VideoUploadSessionIntegrationTest {
     }
 
     @Test
-    void givenDifferentJobs_whenReservedConcurrently_thenOneReservation() throws Exception {
+    void givenDifferentJobs_whenReservedConcurrently_thenExactlyOneStaysPending() throws Exception {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+
         List<Object> results = race(
-                () -> service.reserve(user, room, UUID.randomUUID(), null),
-                () -> service.reserve(user, room, UUID.randomUUID(), null));
+                () -> service.reserve(user, room, first, null),
+                () -> service.reserve(user, room, second, null));
+
+        assertThat(results).noneMatch(Exception.class::isInstance);
+        assertThat(service.listPending(user, room)).hasSize(1);
+        assertThat(List.of(first, second).stream()
+                .filter(id -> sessions.findById(id).orElseThrow().isCancelled()).count()).isEqualTo(1);
+    }
+
+    @Test
+    void givenUnpublishedReservation_whenAnotherJobReservedInSameSlot_thenReplacesIt() {
+        UUID stalled = UUID.randomUUID();
+        UUID retried = UUID.randomUUID();
+        service.reserve(user, room, stalled, null);
+
+        VideoUploadSessionResponse accepted = service.reserve(user, room, retried, null);
+
+        assertThat(accepted.status()).isEqualTo("pending");
+        assertThat(sessions.findById(stalled).orElseThrow().isCancelled()).isTrue();
+        assertThatThrownBy(() -> service.presign(user, room, stalled, "feed", null))
+                .isInstanceOf(VideoUploadUnavailableException.class);
+        assertThatThrownBy(() -> service.complete(user, room, stalled))
+                .isInstanceOf(VideoUploadUnavailableException.class);
+        assertThat(service.complete(user, room, retried).videoPostId()).isNotNull();
+        assertThat(activePosts()).hasSize(1);
+    }
+
+    @Test
+    void givenPendingReservationInEarlierSlot_whenReservingCurrentSlot_thenEarlierOneStaysPublishable() {
+        LocalDateTime now = LocalDateTime.now(clock);
+        // 같은 방의 다른 멤버 접수로 현재 슬롯만 알아낸다. 내 세션은 건드리지 않는다.
+        LocalDateTime currentSlot = service.reserve(other, room, UUID.randomUUID(), null).slotStart();
+        UUID earlier = store(user, room, member, currentSlot.minusHours(1), now);
+
+        service.reserve(user, room, UUID.randomUUID(), null);
+
+        assertThat(sessions.findById(earlier).orElseThrow().isCancelled()).isFalse();
+        assertThat(service.listPending(user, room)).hasSize(2);
+        assertThat(service.complete(user, room, earlier).slotStart()).isEqualTo(currentSlot.minusHours(1));
+    }
+
+    @Test
+    void givenPublishedPost_whenAnotherJobReservedInSameSlot_thenRejectsAsAlreadyUploaded() {
+        UUID published = UUID.randomUUID();
+        UUID retried = UUID.randomUUID();
+        service.reserve(user, room, published, null);
+        service.complete(user, room, published);
+
+        assertThatThrownBy(() -> service.reserve(user, room, retried, null))
+                .isInstanceOf(DuplicateSlotUploadException.class);
+
+        assertThat(sessions.findById(retried)).isEmpty();
+        assertThat(activePosts()).hasSize(1);
+    }
+
+    @Test
+    void givenCompletionInProgress_whenNewReservationArrives_thenWaitsAndIsRejectedByThePublishedPost() throws Exception {
+        UUID publishing = UUID.randomUUID();
+        UUID retried = UUID.randomUUID();
+        service.reserve(user, room, publishing, null);
+        CountDownLatch promoting = new CountDownLatch(1);
+        CountDownLatch allowPromote = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            promoting.countDown();
+            if (!allowPromote.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("promote timed out");
+            }
+            return null;
+        }).when(storage).promote(anyString(), anyString(), anyString());
+
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            Future<Long> completion = pool.submit(() -> service.complete(user, room, publishing).videoPostId());
+            assertThat(promoting.await(5, TimeUnit.SECONDS)).isTrue();
+            Future<?> reservation = pool.submit(() -> service.reserve(user, room, retried, null));
+            try {
+                // 게시 트랜잭션이 멤버 락을 쥐고 있어 새 접수는 게시 결과가 정해질 때까지 기다린다.
+                assertThatThrownBy(() -> reservation.get(1, TimeUnit.SECONDS)).isInstanceOf(TimeoutException.class);
+            } finally {
+                allowPromote.countDown();
+            }
+            Long postId = completion.get(5, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> reservation.get(5, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(DuplicateSlotUploadException.class);
+            VideoUploadSession published = sessions.findById(publishing).orElseThrow();
+            assertThat(published.postId()).isEqualTo(postId);
+            assertThat(published.isCancelled()).isFalse();
+            assertThat(sessions.findById(retried)).isEmpty();
+            assertThat(activePosts()).hasSize(1);
+        }
+    }
+
+    @Test
+    void givenCompletionRacingWithNewReservation_whenBothRun_thenSlotKeepsOnePost() throws Exception {
+        UUID stalled = UUID.randomUUID();
+        UUID retried = UUID.randomUUID();
+        service.reserve(user, room, stalled, null);
+
+        List<Object> results = race(
+                () -> service.complete(user, room, stalled),
+                () -> service.reserve(user, room, retried, null));
 
         assertThat(results.stream().filter(Exception.class::isInstance).count()).isEqualTo(1);
+        if (results.get(0) instanceof Exception) {
+            // 새 접수가 먼저 처리됐다. 멈춘 접수는 취소됐고 새 접수만 게시할 수 있다.
+            assertThat(sessions.findById(stalled).orElseThrow().isCancelled()).isTrue();
+            assertThat(service.complete(user, room, retried).videoPostId()).isNotNull();
+        } else {
+            VideoUploadSession published = sessions.findById(stalled).orElseThrow();
+            assertThat(published.postId()).isNotNull();
+            assertThat(published.isCancelled()).isFalse();
+            assertThat(sessions.findById(retried)).isEmpty();
+        }
+        assertThat(activePosts()).hasSize(1);
+    }
+
+    @Test
+    void givenSessionsInEveryState_whenListingMine_thenReturnsOnlyMyPendingOnesInSlotOrder() throws Exception {
+        LocalDateTime now = LocalDateTime.now(clock);
+        UUID current = UUID.randomUUID();
+        LocalDateTime currentSlot = service.reserve(user, room, current, null).slotStart();
+        UUID earlier = store(user, room, member, currentSlot.minusHours(1), now);
+        store(user, room, member, currentSlot.minusHours(2), now.minusHours(3));
+        UUID cancelled = store(user, room, member, currentSlot.minusHours(3), now);
+        sessions.save(sessions.findById(cancelled).orElseThrow().cancelled());
+        UUID published = store(user, room, member, currentSlot.minusHours(4), now);
+        // 테스트 스키마에는 post_id FK가 없어 게시물 없이 게시 완료 상태만 만든다.
+        sessions.save(sessions.findById(published).orElseThrow().completed(1L));
+        service.reserve(other, room, UUID.randomUUID(), null);
+        Long anotherRoom = rooms.save(RoomEntity.from(Room.createScheduled(now.minusHours(1), now.plusDays(1),
+                now.plusDays(1).plusHours(1), now.plusDays(1).plusHours(2), now.plusDays(2), 3))).toDomain().id();
+        members.save(RoomMemberEntity.from(RoomMember.of(anotherRoom, user, "MALE", null, now)));
+        service.reserve(user, anotherRoom, UUID.randomUUID(), null);
+
+        mvc.perform(get("/api/v1/rooms/" + room + "/video-upload-sessions").with(as(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].id").value(earlier.toString()))
+                .andExpect(jsonPath("$.data[0].status").value("pending"))
+                .andExpect(jsonPath("$.data[0].slot_start").exists())
+                .andExpect(jsonPath("$.data[1].id").value(current.toString()));
+    }
+
+    @Test
+    void givenNonMember_whenListingSessions_thenForbidden() throws Exception {
+        mvc.perform(get("/api/v1/rooms/" + room + "/video-upload-sessions").with(as(9100003L)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("ROOM_403_NOT_MEMBER"));
     }
 
     @Test
@@ -384,6 +532,13 @@ class VideoUploadSessionIntegrationTest {
         assertThatThrownBy(() -> service.complete(user, room, cancelled)).hasMessageContaining("취소");
         assertThat(sessions.findById(cancelled).map(VideoUploadSession::isCancelled)).contains(true);
         verify(storage, never()).promote(anyString(), anyString(), anyString());
+    }
+
+    /** 접수 시각을 직접 정해 세션 행을 만든다(만료는 접수 2시간 뒤). */
+    private UUID store(Long userId, Long roomId, Long memberId, LocalDateTime slotStart, LocalDateTime reservedAt) {
+        UUID id = UUID.randomUUID();
+        sessions.save(VideoUploadSession.create(id, userId, roomId, memberId, slotStart, reservedAt, null));
+        return id;
     }
 
     private List<?> activePosts() {
