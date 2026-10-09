@@ -101,6 +101,12 @@ public class S3StorageAdapter implements S3StoragePort {
     }
 
     @Override
+    public void putImage(String key, String contentType, byte[] bytes) {
+        s3Client.putObject(PutObjectRequest.builder().bucket(properties.s3().bucket()).key(key)
+                .contentType(contentType).build(), software.amazon.awssdk.core.sync.RequestBody.fromBytes(bytes));
+    }
+
+    @Override
     public ObjectMetadata head(String key) {
         try {
             var response = s3Client.headObject(HeadObjectRequest.builder()

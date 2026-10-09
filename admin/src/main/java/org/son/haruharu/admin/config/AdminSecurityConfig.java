@@ -101,11 +101,13 @@ public class AdminSecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/rooms/*/members/*")
                         .hasAnyRole("SUPER", "OPERATOR")
                         // 방 편성 쓰기(#457)는 SUPER·OPERATOR. 목록 조회(GET)는 로그인만(CS 는 화면이 버튼을 숨김).
-                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/rooms/*/schedule/**")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/rooms/*/missions/**")
                         .hasAnyRole("SUPER", "OPERATOR")
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/rooms/*/schedule/**")
+                        .requestMatchers("/api/v1/admin/mission-images", "/api/v1/admin/mission-images/**")
                         .hasAnyRole("SUPER", "OPERATOR")
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/admin/rooms/*/schedule/**")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/admin/rooms/*/missions/**")
+                        .hasAnyRole("SUPER", "OPERATOR")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/admin/rooms/*/missions/**")
                         .hasAnyRole("SUPER", "OPERATOR")
                         // 초대코드는 "인증 없이 방에 들어갈 수 있는 자격증명"이라 조회도 쓰기와 같은 권한으로 막는다.
                         // 방 조회 권한(전체)에 코드 원문까지 딸려가면 CS 계정이 임의 방에 입장할 수 있다(#318 보안리뷰).

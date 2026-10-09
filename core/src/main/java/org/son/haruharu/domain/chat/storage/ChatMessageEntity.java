@@ -23,12 +23,20 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "chat_messages", uniqueConstraints = {
         @UniqueConstraint(name="uq_chat_messages_reply_request", columnNames={"chat_room_id", "sender_id", "client_request_id"}),
-        @UniqueConstraint(name="uq_chat_messages_schedule_item", columnNames="schedule_item_id")
+        @UniqueConstraint(name="uq_chat_messages_schedule_item", columnNames="schedule_item_id"),
+        @UniqueConstraint(name="uq_chat_messages_mission_announcement", columnNames="mission_announcement_id")
 }, indexes = {
         @Index(name = "idx_chat_messages_room_id", columnList = "chat_room_id, id"),
-        @Index(name = "idx_chat_messages_reply_to", columnList = "reply_to_message_id")
-}, check = @CheckConstraint(name = "ck_chat_messages_sender",
-        constraint = "(sender_type = 'USER' AND sender_id IS NOT NULL) OR (sender_type = 'SYSTEM' AND sender_id IS NULL)"))
+        @Index(name = "idx_chat_messages_reply_to", columnList = "reply_to_message_id"),
+        @Index(name = "idx_chat_messages_room_mission", columnList = "room_mission_id")
+}, check = {
+        @CheckConstraint(name = "ck_chat_messages_sender",
+                constraint = "(sender_type = 'USER' AND sender_id IS NOT NULL) OR (sender_type = 'SYSTEM' AND sender_id IS NULL)"),
+        @CheckConstraint(name = "ck_chat_messages_mission_reference",
+                constraint = "(message_type = 'TEXT' AND room_mission_id IS NULL AND mission_announcement_id IS NULL) "
+                        + "OR (message_type = 'MISSION' AND sender_type = 'SYSTEM' AND room_mission_id IS NOT NULL "
+                        + "AND room_mission_id > 0 AND mission_announcement_id IS NOT NULL AND mission_announcement_id > 0)")
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatMessageEntity extends BaseEntity {
 
@@ -72,6 +80,12 @@ public class ChatMessageEntity extends BaseEntity {
     @Column(name = "schedule_item_id")
     private Long scheduleItemId;
 
+    @Column(name = "room_mission_id")
+    private Long roomMissionId;
+
+    @Column(name = "mission_announcement_id")
+    private Long missionAnnouncementId;
+
     // 운영자 삭제. 전역 @SoftDelete(deleted_at)는 행을 숨겨 '삭제된 메시지'를 못 내리므로 별도 컬럼.
     @Column(name = "admin_deleted_at")
     private LocalDateTime adminDeletedAt;
@@ -93,6 +107,8 @@ public class ChatMessageEntity extends BaseEntity {
         entity.replyPreviewContent = message.replyPreviewContent();
         entity.messageType = message.messageType();
         entity.scheduleItemId = message.scheduleItemId();
+        entity.roomMissionId = message.roomMissionId();
+        entity.missionAnnouncementId = message.missionAnnouncementId();
         entity.adminDeletedAt = message.adminDeletedAt();
         entity.deleteBroadcastAt = message.deleteBroadcastAt();
         entity.createdAt = message.createdAt();
@@ -102,6 +118,6 @@ public class ChatMessageEntity extends BaseEntity {
     public ChatMessage toDomain() {
         return new ChatMessage(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId,
                 replyToMessageId, replyPreviewSender, replyPreviewContent, messageType, scheduleItemId,
-                adminDeletedAt, deleteBroadcastAt, senderType);
+                adminDeletedAt, deleteBroadcastAt, senderType, roomMissionId, missionAnnouncementId);
     }
 }

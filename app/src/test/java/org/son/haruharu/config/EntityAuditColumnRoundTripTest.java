@@ -2,7 +2,6 @@ package org.son.haruharu.config;
 
 import java.time.LocalDateTime;
 import java.util.Map;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.block.implement.Block;
@@ -48,6 +47,30 @@ class EntityAuditColumnRoundTripTest {
         assertThat(org.son.haruharu.domain.question.storage.QuestionEntity.from(question).toDomain()).isEqualTo(question);
         var grant = new org.son.haruharu.domain.question.implement.QuestionGrant(1L,1L,100L,true,CREATED_AT);
         assertThat(org.son.haruharu.domain.question.storage.QuestionGrantEntity.from(grant).toDomain()).isEqualTo(grant);
+    }
+
+    @Test
+    void givenMissionAndAnnouncement_whenRoundTrip_thenPreserveAuditAndAllReferences() {
+        var types = new org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry(java.util.List.of(
+                new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionHandler(),
+                new org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionHandler()));
+        var mission = new org.son.haruharu.domain.mission.common.implement.RoomMission(1L, 2L,
+                org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT,
+                new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition("안내"),
+                new org.son.haruharu.domain.mission.common.implement.MissionImage(
+                        "mission-images/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b-1080x720.jpg", 1080, 720),
+                CREATED_AT, CREATED_AT.plusDays(1), CREATED_AT.plusHours(1), "admin:1", "admin:2", CREATED_AT, CREATED_AT.plusMinutes(1));
+        assertThat(org.son.haruharu.domain.mission.common.storage.RoomMissionEntity.from(mission, types).toDomain(types)).isEqualTo(mission);
+        var reveal = new org.son.haruharu.domain.mission.common.implement.RoomMission(3L, 2L,
+                org.son.haruharu.domain.mission.common.implement.MissionType.PROFILE_REVEAL,
+                org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionDefinition.from(java.util.List.of("AGE", "MBTI")), null,
+                CREATED_AT, null, null, "admin:1", "admin:1", CREATED_AT, CREATED_AT);
+        assertThat(org.son.haruharu.domain.mission.common.storage.RoomMissionEntity.from(reveal, types).toDomain(types)).isEqualTo(reveal);
+        var announcement = new org.son.haruharu.domain.mission.chat.implement.MissionAnnouncement(10L,1L,2L,
+                org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementType.START,CREATED_AT,"게시 문구",true,"제목","본문",
+                org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementStatus.SENT,null,50L,70L,"admin:1","admin:2",
+                CREATED_AT.plusMinutes(2),CREATED_AT,CREATED_AT.plusMinutes(3));
+        assertThat(org.son.haruharu.domain.mission.chat.storage.MissionAnnouncementEntity.from(announcement).toDomain()).isEqualTo(announcement);
     }
 
     @Test

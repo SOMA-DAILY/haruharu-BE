@@ -2,6 +2,7 @@ package org.son.haruharu.domain.chat.business.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
+import org.son.haruharu.domain.chat.implement.ChatMissionReference;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,20 +22,27 @@ public record MessagePageResponse(
             @Schema(description = "반응 타입별 개수(많은 순)") List<ReactionCountItem> reactions,
             @Schema(description = "내 반응(없으면 null)", example = "LAUGH", nullable = true) String myReaction,
             @Schema(description = "답장 인용(답장 아니면 null)", nullable = true) ReplyToView replyTo,
-            @Schema(description = "내용 유형(TEXT)", example = "TEXT") String messageType,
+            @Schema(description = "내용 유형(TEXT 또는 MISSION)", example = "TEXT") String messageType,
             @Schema(description = "운영 글이면 '하루', 아니면 null(앱이 members 에서 찾음)", nullable = true) String senderName,
             @Schema(description = "운영자가 지운 메시지면 true(content 는 '삭제된 메시지')") boolean deleted,
-            @Schema(description = "발신자 유형(USER 또는 SYSTEM)", example = "SYSTEM") String senderType
+            @Schema(description = "발신자 유형(USER 또는 SYSTEM)", example = "SYSTEM") String senderType,
+            @Schema(description = "미션 참조. 일반·삭제된 메시지에는 null", nullable = true) ChatMissionReference mission
     ) {
         public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt) {
-            this(messageId, senderId, content, sentAt, null, List.of(), null, null, "TEXT", null, false, "USER");
+            this(messageId, senderId, content, sentAt, null, List.of(), null, null, "TEXT", null, false, "USER", null);
         }
 
         public static MessageItem of(ChatMessage message, List<ReactionCountItem> reactions, String myReaction,
                                      ReplyToView replyTo) {
+            return of(message, reactions, myReaction, replyTo, null);
+        }
+
+        public static MessageItem of(ChatMessage message, List<ReactionCountItem> reactions, String myReaction,
+                                     ReplyToView replyTo, ChatMissionReference mission) {
             return new MessageItem(message.id(), message.senderId(), message.displayContent(), message.createdAt(),
                     message.videoPostId(), reactions, myReaction, replyTo, message.messageType().name(),
-                    message.senderName(), message.isAdminDeleted(), message.senderType().name());
+                    message.senderName(), message.isAdminDeleted(), message.senderType().name(),
+                    message.isAdminDeleted() ? null : mission);
         }
     }
 
