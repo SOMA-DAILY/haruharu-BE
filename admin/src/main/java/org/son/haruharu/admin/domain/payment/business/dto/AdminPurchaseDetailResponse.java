@@ -13,10 +13,11 @@ public record AdminPurchaseDetailResponse(
         @Schema(description = "구매 유저 id", example = "42") Long userId,
         @Schema(description = "구매 유저 닉네임(미설정 시 null)", nullable = true, example = "하루") String nickname,
         @Schema(description = "상품 id", example = "3") Long productId,
-        @Schema(description = "스토어 상품 id", example = "groom_60") String storeProductId,
+        @Schema(description = "스토어 상품 id", example = "ticket_1") String storeProductId,
         @Schema(description = "스토어 거래 id", example = "1000000123456789") String storeTransactionId,
         @Schema(description = "스토어", example = "APP_STORE") IapStore store,
-        @Schema(description = "지급 코인", example = "60") long coinAmount,
+        @Schema(description = "지급 티켓", example = "1") long ticketAmount,
+        @Schema(description = "환불됐지만 이미 사용해 회수하지 못한 티켓(없으면 0)", example = "0") long unrevokedTicketAmount,
         @Schema(description = "상태", example = "OWNED") IapPurchaseStatus status,
         @Schema(description = "구매 시각") LocalDateTime purchasedAt,
         @Schema(description = "환불 시각(미환불이면 null)", nullable = true) LocalDateTime refundedAt
@@ -25,7 +26,7 @@ public record AdminPurchaseDetailResponse(
         return new AdminPurchaseDetailResponse(
                 purchase.id(), purchase.userId(), nickname,
                 purchase.productId(), purchase.storeProductId(), purchase.storeTransactionId(),
-                purchase.store(), purchase.coinAmount(),
+                purchase.store(), purchase.ticketAmount(), purchase.unrevokedTicketAmount(),
                 purchase.status(), purchase.purchasedAt(), purchase.refundedAt());
     }
 }

@@ -22,4 +22,9 @@ public class IapPurchaseRepositoryImpl implements IapPurchaseRepository {
     public Optional<IapPurchase> findByStoreTransactionId(String storeTransactionId) {
         return jpaRepository.findByStoreTransactionId(storeTransactionId).map(IapPurchaseEntity::toDomain);
     }
+
+    @Override
+    public Optional<IapPurchase> findByStoreTransactionIdForUpdate(String storeTransactionId) {
+        return jpaRepository.findByStoreTransactionIdForUpdate(storeTransactionId).map(IapPurchaseEntity::toDomain);
+    }
 }

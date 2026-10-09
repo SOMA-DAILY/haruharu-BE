@@ -21,7 +21,7 @@ import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
-import org.son.haruharu.domain.coin.business.CoinService;
+import org.son.haruharu.domain.ticket.business.TicketService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserReader;
@@ -59,7 +59,7 @@ class AuthServiceTest {
     @Mock UserCredentialReader userCredentialReader;
     @Mock UserCredentialWriter userCredentialWriter;
     @Mock IdentityService identityService;
-    @Mock CoinService coinService;
+    @Mock TicketService ticketService;
     @Mock RefreshTokenReader refreshTokenReader;
     @Mock RefreshTokenWriter refreshTokenWriter;
     @Mock JwtProvider jwtProvider;
@@ -73,7 +73,7 @@ class AuthServiceTest {
         authService = new AuthService(
             oAuthProviderRegistry, userReader, userWriter,
             userCredentialReader, userCredentialWriter,
-            identityService, coinService,
+            identityService, ticketService,
             refreshTokenReader, refreshTokenWriter, jwtProvider
         );
     }
@@ -107,7 +107,7 @@ class AuthServiceTest {
         then(userWriter).should().save(savedCaptor.capture());
         assertThat(savedCaptor.getValue().status()).isEqualTo(UserStatus.ONBOARDING);
         then(userCredentialWriter).should().save(any());
-        then(coinService).should().grantSignupBonus(userId);
+        then(ticketService).should().createWallet(userId);
     }
 
     @Test
@@ -201,7 +201,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("탈퇴 직후 같은 OAuth로 재로그인 시 차단 없이 재가입되고 signup 보너스는 지급되지 않는다")
+    @DisplayName("탈퇴 직후 같은 OAuth로 재로그인 시 차단 없이 재가입되고 새 지갑이 만들어진다")
     void givenJustWithdrawnCredential_whenAuthenticate_thenReSignupWithoutBonus() {
         Long newUserId = 2L;
         SocialAuthCommand command = new SocialAuthCommand(ProviderType.KAKAO, "valid-id-token");
@@ -211,7 +211,7 @@ class AuthServiceTest {
         given(oAuthProviderRegistry.get(ProviderType.KAKAO)).willReturn(oAuthProvider);
         given(oAuthProvider.verify("valid-id-token")).willReturn(userInfo);
         given(userCredentialReader.findByProviderTypeAndProviderId("KAKAO", "kakao-sub-123")).willReturn(Optional.empty());
-        // 탈퇴 잔존 행이 파기됨(=복귀 유저) → 보너스 skip
+        // 탈퇴 잔존 행이 파기됨(=복귀 유저)
         given(userCredentialWriter.purgeWithdrawnBefore(eq("KAKAO"), eq("kakao-sub-123"), any())).willReturn(1);
         given(userWriter.save(any())).willReturn(created);
         given(userCredentialWriter.save(any())).willReturn(new UserCredential(20L, newUserId, "KAKAO", "kakao-sub-123"));
@@ -223,7 +223,7 @@ class AuthServiceTest {
 
         assertThat(result.userStatus()).isEqualTo("ONBOARDING");
         then(userCredentialWriter).should().save(any());
-        then(coinService).should(never()).grantSignupBonus(any());
+        then(ticketService).should().createWallet(newUserId);
     }
 
     // ===================== refresh =====================

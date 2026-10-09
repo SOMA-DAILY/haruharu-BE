@@ -15,7 +15,7 @@ import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
 import org.son.haruharu.domain.auth.implement.UserCredential;
 import org.son.haruharu.domain.auth.implement.UserCredentialReader;
 import org.son.haruharu.domain.auth.implement.UserCredentialWriter;
-import org.son.haruharu.domain.coin.business.CoinService;
+import org.son.haruharu.domain.ticket.business.TicketService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.implement.VerificationStatus;
 import org.son.haruharu.domain.user.implement.User;
@@ -57,7 +57,7 @@ public class AuthService {
     private final UserCredentialReader userCredentialReader;
     private final UserCredentialWriter userCredentialWriter;
     private final IdentityService identityService;
-    private final CoinService coinService;
+    private final TicketService ticketService;
     private final RefreshTokenReader refreshTokenReader;
     private final RefreshTokenWriter refreshTokenWriter;
     private final JwtProvider jwtProvider;
@@ -87,9 +87,7 @@ public class AuthService {
     /**
      * 활성 연동이 없는 소셜 계정 가입 처리. 탈퇴 후 재가입은 즉시 허용한다(#245).
      * 탈퇴 잔존 행은 물리 파기(unique 슬롯 해제)한 뒤 신규 User를 생성하며, 파기된 행이 있으면
-     * 복귀 유저로 판정해 signup 보너스를 재지급하지 않는다(credential 단위 1회성).
-     * 주의: 이 returning 판정이 보너스 재지급을 막는 유일한 지점이다 — grantSignupBonus 의 멱등성은
-     * userId 기준이라 재가입으로 새 userId 가 생기면 무력하다.
+     * 복귀 유저로 판정해 로그에 남긴다.
      * threshold 에 주입 Clock 이 아닌 시스템 시각을 쓰는 이유: 비교 대상인 deleted_at 은 Hibernate
      * @SoftDelete(TIMESTAMP)가 시스템 시각으로 기록하므로 같은 기준으로 비교한다.
      */
@@ -99,12 +97,8 @@ public class AuthService {
 
         User created = userWriter.save(new User(null, UserStatus.ONBOARDING, null));
         userCredentialWriter.save(new UserCredential(null, created.id(), providerType, providerId));
-        // 보너스 지급 여부와 무관하게 지갑을 먼저 만든다(#298). 예전에는 보너스 지급의 부수효과로
-        // 지갑이 생겨서, 보너스를 skip하는 복귀 유저는 지갑 없이 시작했다.
-        coinService.createWallet(created.id());
-        if (!returning) {
-            coinService.grantSignupBonus(created.id());
-        }
+        // 잔액 변경 경로가 "지갑은 항상 존재한다"를 전제하므로 가입 시점에 만든다(#298).
+        ticketService.createWallet(created.id());
         // providerId 는 소셜 계정 식별자(PII)라 남기지 않는다.
         log.info("auth signup userId={} provider={} returning={}", created.id(), providerType, returning);
         return created;

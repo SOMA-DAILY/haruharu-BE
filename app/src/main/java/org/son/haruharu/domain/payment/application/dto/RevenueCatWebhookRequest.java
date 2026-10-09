@@ -35,6 +35,7 @@ public record RevenueCatWebhookRequest(Event event) {
                 IapStore.from(event.store()),
                 event.transactionId(),
                 purchasedAt,
+                event.environment(),
                 rawPayload
         );
     }

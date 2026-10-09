@@ -33,7 +33,7 @@ class AdminIapProductApiIntegrationTest {
     @Autowired JsonMapper jsonMapper;
 
     private static final String CREATE_BODY = """
-            {"store_product_id":"groom_60","store":"APP_STORE","coin_amount":60,"bonus_amount":0,"price":9800,"currency":"KRW"}""";
+            {"store_product_id":"groom_60","store":"APP_STORE","ticket_amount":60,"price":9800,"currency":"KRW"}""";
 
     private static UsernamePasswordAuthenticationToken auth(String role) {
         return new UsernamePasswordAuthenticationToken(1L, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
@@ -46,7 +46,8 @@ class AdminIapProductApiIntegrationTest {
                         .with(authentication(auth("SUPER"))).contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.store_product_id").value("groom_60"))
-                .andExpect(jsonPath("$.data.coin_amount").value(60))
+                .andExpect(jsonPath("$.data.ticket_amount").value(60))
+                .andExpect(jsonPath("$.data.bonus_amount").doesNotExist())
                 .andReturn();
         long id = jsonMapper.readTree(created.getResponse().getContentAsString()).get("data").get("id").asLong();
 
@@ -59,7 +60,7 @@ class AdminIapProductApiIntegrationTest {
                         .content("{\"price\":8900}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.price").value(8900))
-                .andExpect(jsonPath("$.data.coin_amount").value(60)); // 유지
+                .andExpect(jsonPath("$.data.ticket_amount").value(60)); // 유지
     }
 
     @Test

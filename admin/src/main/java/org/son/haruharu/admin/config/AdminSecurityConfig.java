@@ -89,8 +89,10 @@ public class AdminSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/v1/admin/auth/login").permitAll()
                         .requestMatchers("/actuator/health", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                        // 코인 상품 카탈로그 관리(생성·목록·수정)는 SUPER 전용.
+                        // 티켓 상품 카탈로그 관리(생성·목록·수정)는 SUPER 전용.
                         .requestMatchers("/api/v1/admin/iap/products", "/api/v1/admin/iap/products/**").hasRole("SUPER")
+                        // 운영진 티켓 지급은 재화를 만들어내는 쓰기라 SUPER 전용(#492).
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/users/*/tickets").hasRole("SUPER")
                         // 어드민 계정 관리(생성·목록·역할/상태 변경)는 SUPER 전용.
                         .requestMatchers("/api/v1/admin/admins", "/api/v1/admin/admins/**").hasRole("SUPER")
                         // 방 운영 쓰기(생성·코드 발급·성별 부여)는 SUPER·OPERATOR 전용(#318).

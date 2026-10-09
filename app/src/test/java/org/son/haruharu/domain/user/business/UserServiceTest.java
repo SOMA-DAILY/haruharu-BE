@@ -10,7 +10,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.auth.business.AuthService;
-import org.son.haruharu.domain.coin.business.CoinService;
+import org.son.haruharu.domain.ticket.business.TicketService;
 import org.son.haruharu.domain.identity.business.IdentityService;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
 import org.son.haruharu.domain.profile.business.ProfileService;
@@ -50,7 +50,7 @@ class UserServiceTest {
     @Mock ProfileService profileService;
     @Mock IdentityService identityService;
     @Mock ValueService valueService;
-    @Mock CoinService coinService;
+    @Mock TicketService ticketService;
     @Mock AuthService authService;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
@@ -62,7 +62,7 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userReader, userWriter, profileService, identityService, valueService, coinService, authService, clock);
+        userService = new UserService(userReader, userWriter, profileService, identityService, valueService, ticketService, authService, clock);
     }
 
     @Test
@@ -220,7 +220,7 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("로그인한 유저가 탈퇴 시 프로필·이미지·가치관·구름 지갑을 soft-delete 캐스케이드하고 상태가 DELETED로 변경된다")
+    @DisplayName("로그인한 유저가 탈퇴 시 프로필·이미지·가치관·티켓 지갑을 soft-delete 캐스케이드하고 상태가 DELETED로 변경된다")
     void givenLoggedInUser_whenWithdraw_thenCascadesSoftDeleteAndSetsDeleted() {
         Long userId = 1L;
         User user = new User(userId, UserStatus.ACTIVE, LocalDateTime.now());
@@ -232,7 +232,7 @@ class UserServiceTest {
 
         then(profileService).should().deleteProfileAndImages(userId);
         then(valueService).should().deleteAnswers(userId);
-        then(coinService).should().deleteWallet(userId);
+        then(ticketService).should().deleteWallet(userId);
         then(identityService).should().deleteIdentity(userId);
         then(authService).should().deleteCredentials(userId);
 

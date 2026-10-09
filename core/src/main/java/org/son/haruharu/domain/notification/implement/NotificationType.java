@@ -48,7 +48,7 @@ public enum NotificationType {
     // ── C. 시스템 / 거래 ──
     // 폐기된 자동매칭 환불 알림의 이력 호환용. 발송 트리거는 제거됨.
     COIN_REFUNDED("☁️ 구름 %d개를 돌려드렸어요", "이번엔 인연이 닿지 않았지만, 다음 기회에 다시 만나요", true, NotificationCategory.TRANSACTIONAL),
-    PAYMENT_COMPLETED("☁️ 충전 완료!", "구름 %d개가 충전됐어요. 새로운 인연에 한 걸음 더 가까워졌어요", false, NotificationCategory.TRANSACTIONAL),
+    PAYMENT_COMPLETED("🎟️ 결제 완료!", "티켓 %d장이 지급됐어요. 새로운 인연에 한 걸음 더 가까워졌어요", false, NotificationCategory.TRANSACTIONAL),
 
     // 폐기된 자동매칭 재참여 알림의 이력 호환용. 발송 트리거는 제거됨.
     WINBACK("💫 새로운 인연이 도착했어요", "오늘 밤 매칭에 당신의 자리를 남겨뒀어요. 지금 신청해보세요", false, NotificationCategory.MARKETING);
