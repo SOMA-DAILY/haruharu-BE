@@ -33,7 +33,7 @@ class ChatMessageSentEventListenerTest {
     @BeforeEach
     void setUp() {
         listener = new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService,
-                new ChatFeatureProperties(null, null, null));
+                new ChatFeatureProperties(null, null));
     }
 
     @Test
@@ -97,7 +97,7 @@ class ChatMessageSentEventListenerTest {
     }
 
     private static ChatFeatureProperties replyPush(boolean enabled) {
-        return new ChatFeatureProperties(null, new ChatFeatureProperties.ReplyPush(enabled), 999L);
+        return new ChatFeatureProperties(null, new ChatFeatureProperties.ReplyPush(enabled));
     }
 
     private static ChatMessageSentEvent replyEvent(Long replyToSender) {

@@ -190,9 +190,9 @@ public class ChatService {
         return broadcast;
     }
 
-    /** 운영 글 원문은 '하루'(시스템 유저는 방 멤버가 아니라 가명이 없다, #457). */
+    /** 시스템 안내의 인용 이름은 유저 프로필 조회 없이 '하루'로 표시한다. */
     private String replySenderName(ChatRoom chatRoom, ChatMessage original) {
-        return original.isAdmin() ? original.senderName() : participants.displayName(chatRoom, original.senderId());
+        return original.isSystem() ? original.senderName() : participants.displayName(chatRoom, original.senderId());
     }
 
     /** 답장 원문: 같은 채팅방의 (삭제되지 않은, 운영자가 지우지 않은) 메시지여야 한다. */
@@ -310,7 +310,7 @@ public class ChatService {
         unreadExcluded.add(userId);
         Optional<ChatMessage> last = chatMessageReader.findLast(chatRoomId, excludedSenders);
         long unread = chatMessageReader.countUnread(chatRoomId, me.lastReadMessageId(), unreadExcluded);
-        String lastMessage = last.map(ChatMessage::content).orElse(null);
+        String lastMessage = last.map(ChatMessage::displayContent).orElse(null);
         LocalDateTime lastMessageAt = last.map(ChatMessage::createdAt).orElse(null);
 
         if (room.type() == ChatRoomType.GROUP) {

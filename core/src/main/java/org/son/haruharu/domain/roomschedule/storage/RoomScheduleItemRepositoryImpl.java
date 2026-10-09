@@ -32,6 +32,11 @@ public class RoomScheduleItemRepositoryImpl implements RoomScheduleItemRepositor
     }
 
     @Override
+    public Optional<RoomScheduleItem> findByIdForUpdate(Long id) {
+        return jpaRepository.findByIdForUpdate(id).map(RoomScheduleItemEntity::toDomain);
+    }
+
+    @Override
     public List<RoomScheduleItem> findByRoomId(Long roomId) {
         return jpaRepository.findByRoomIdOrderByRunAtAscIdAsc(roomId).stream()
                 .map(RoomScheduleItemEntity::toDomain).toList();
@@ -68,6 +73,12 @@ public class RoomScheduleItemRepositoryImpl implements RoomScheduleItemRepositor
     @Override
     public int markFailed(Long id, RoomScheduleStatus from, String reason, LocalDateTime now) {
         return jpaRepository.markFailed(id, reason, now, from, FAILED);
+    }
+
+    @Override
+    public int markFailedIfUnchanged(RoomScheduleItem snapshot, String reason, LocalDateTime now) {
+        return jpaRepository.markFailedIfUnchanged(snapshot.id(), snapshot.status(), FAILED,
+                snapshot.runAt(), snapshot.updatedAt(), reason, now);
     }
 
     @Override

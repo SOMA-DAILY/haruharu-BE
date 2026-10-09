@@ -63,7 +63,7 @@ public class ChatMessageReactionService {
     public MessageReactionResponse toggle(Long userId, Long chatRoomId, Long messageId, ReactionType type) {
         requireActiveMember(chatRoomId, userId);
         ChatMessage message = requireMessage(chatRoomId, messageId);
-        if (message.senderId().equals(userId)) {
+        if (message.isOwnedBy(userId)) {
             throw new CannotReactToOwnMessageException();
         }
         if (message.isAdminDeleted()) {
@@ -105,7 +105,7 @@ public class ChatMessageReactionService {
     public List<MessageReactorResponse> getReactors(Long userId, Long chatRoomId, Long messageId) {
         ChatRoom chatRoom = requireActiveMember(chatRoomId, userId);
         ChatMessage message = requireMessage(chatRoomId, messageId);
-        if (!message.senderId().equals(userId)) {
+        if (!message.isOwnedBy(userId)) {
             throw new ChatReactionOwnerOnlyException();
         }
         return reactionReader.findByMessageId(messageId).stream()

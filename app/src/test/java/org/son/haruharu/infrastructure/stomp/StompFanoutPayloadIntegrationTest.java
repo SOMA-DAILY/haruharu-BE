@@ -62,10 +62,10 @@ class StompFanoutPayloadIntegrationTest {
     void givenChatBroadcast_whenRelayedThroughFanout_thenSameJsonAsDirectSend() {
         // given
         // 중첩 객체(reply_to·reactions)와 #456·#457 필드까지 기본값이 아닌 값으로 채워 팬아웃 왕복을 확인한다
-        ChatMessageBroadcast broadcast = new ChatMessageBroadcast(1024L, 12L, 102L, "안녕",
+        ChatMessageBroadcast broadcast = new ChatMessageBroadcast(1024L, 12L, null, "안녕",
                 LocalDateTime.of(2026, 9, 26, 21, 0, 5), 7L,
                 List.of(new ReactionCountItem("LAUGH", 3)), null,
-                ReplyToView.of(880L, "선우", "원문", true), "ADMIN", "하루", false);
+                ReplyToView.of(880L, "선우", "원문", true), "TEXT", "하루", false, "SYSTEM");
 
         // 발행 인스턴스 A: 실제 Boot 매퍼로 envelope 를 만든다(Redis 는 발행 문자열만 캡처)
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
@@ -92,7 +92,8 @@ class StompFanoutPayloadIntegrationTest {
         assertThat(viaFanout).isEqualTo(direct);
         assertThat(direct).contains("\"message_id\":1024").contains("\"video_post_id\":7")
                 .contains("\"reply_to\":{\"message_id\":880").contains("\"reactions\":[{\"type\":\"LAUGH\",\"count\":3}]")
-                .contains("\"message_type\":\"ADMIN\"").contains("\"sender_name\":\"하루\"");
+                .contains("\"message_type\":\"TEXT\"").contains("\"sender_name\":\"하루\"")
+                .contains("\"sender_type\":\"SYSTEM\"").contains("\"sender_id\":null");
     }
 
     private StompFanoutRuntime runtime(String instanceId) {

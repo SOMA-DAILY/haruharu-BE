@@ -41,4 +41,8 @@ public class RoomScheduleItemWriter {
     public boolean markFailed(Long id, RoomScheduleStatus from, String reason, LocalDateTime now) {
         return repository.markFailed(id, from, reason, now) == 1;
     }
+
+    public boolean markFailedIfUnchanged(RoomScheduleItem snapshot, String reason, LocalDateTime now) {
+        return repository.markFailedIfUnchanged(snapshot, reason, now) == 1;
+    }
 }

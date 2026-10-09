@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.chat.implement;
 
 import java.time.LocalDateTime;
+import org.son.haruharu.domain.chat.implement.exception.InvalidChatSenderException;
 
 /** 채팅 메시지. createdAt이 전송 시각(BaseEntity). 실제 전송은 #60(STOMP)에서 처리한다. */
 public record ChatMessage(
@@ -19,12 +20,17 @@ public record ChatMessage(
         ChatMessageType messageType,
         Long scheduleItemId,
         LocalDateTime adminDeletedAt,
-        LocalDateTime deleteBroadcastAt
+        LocalDateTime deleteBroadcastAt,
+        ChatSenderType senderType
 ) {
     /** 운영자가 지운 메시지 대신 내려주는 문구(#457). */
     public static final String DELETED_CONTENT = "삭제된 메시지";
 
     public ChatMessage {
+        if (senderType == null || (senderType == ChatSenderType.USER && senderId == null)
+                || (senderType == ChatSenderType.SYSTEM && senderId != null)) {
+            throw new InvalidChatSenderException();
+        }
         if (messageType == null) {
             messageType = ChatMessageType.TEXT;
         }
@@ -34,7 +40,7 @@ public record ChatMessage(
                        Long videoPostId, String clientRequestId, Long replyToMessageId, String replyPreviewSender,
                        String replyPreviewContent) {
         this(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId, replyToMessageId,
-                replyPreviewSender, replyPreviewContent, ChatMessageType.TEXT, null, null, null);
+                replyPreviewSender, replyPreviewContent, ChatMessageType.TEXT, null, null, null, ChatSenderType.USER);
     }
 
     /** 답장 미리보기로 남기는 원문 앞부분 글자 수(codePoint). */
@@ -60,14 +66,18 @@ public record ChatMessage(
                 original.id(), originalSenderName, previewOf(original.content()));
     }
 
-    /** 운영 글(#457). 발신자는 운영 전용 시스템 유저(채팅방 멤버 아님). */
-    public static ChatMessage admin(Long chatRoomId, Long systemUserId, String content, Long scheduleItemId) {
-        return new ChatMessage(null, chatRoomId, systemUserId, content, null, null, null, null, null, null,
-                ChatMessageType.ADMIN, scheduleItemId, null, null);
+    /** 인가된 운영 요청의 실행 경로에서 생성하는 계정 없는 시스템 안내. */
+    public static ChatMessage system(Long chatRoomId, String content, Long scheduleItemId) {
+        return new ChatMessage(null, chatRoomId, null, content, null, null, null, null, null, null,
+                ChatMessageType.TEXT, scheduleItemId, null, null, ChatSenderType.SYSTEM);
     }
 
-    public boolean isAdmin() {
-        return messageType == ChatMessageType.ADMIN;
+    public boolean isSystem() {
+        return senderType == ChatSenderType.SYSTEM;
+    }
+
+    public boolean isOwnedBy(Long userId) {
+        return senderType == ChatSenderType.USER && senderId.equals(userId);
     }
 
     public boolean isAdminDeleted() {
@@ -81,7 +91,7 @@ public record ChatMessage(
 
     /** 화면에 보일 발신자 이름. 운영 글만 '하루', 나머지는 null(앱이 members 에서 찾는다). */
     public String senderName() {
-        return isAdmin() ? ChatMessageType.SYSTEM_SENDER_NAME : null;
+        return isSystem() ? ChatSenderType.SYSTEM_SENDER_NAME : null;
     }
 
     /** 단체 채팅에 저장되는 영상 답장. clientRequestId로 재시도를 멱등 처리한다. */
