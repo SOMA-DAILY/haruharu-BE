@@ -1,8 +1,4 @@
 spring:
-  servlet:
-    multipart:
-      max-file-size: 10MB
-      max-request-size: 11MB
   application:
     name: haruharu-admin
 
@@ -66,7 +62,3 @@ management:
   endpoint:
     health:
       show-details: never
-
-haruharu:
-  chat:
-    system-user-id: ${CHAT_SYSTEM_USER_ID:0}

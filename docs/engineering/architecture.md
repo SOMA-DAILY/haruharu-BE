@@ -268,7 +268,7 @@ public static UserEntity from(User user) {
 - `room` — rooms(초대코드·어드민 스케줄·status) · room_members · room_invites(신규) · final_selections · match_results
 - `video` — video_posts(슬롯 시간창) · video_reactions
 - `chat` — chat_rooms(GROUP/DIRECT) · chat_room_members · chat_messages
-- `mission` — missions(카탈로그) · room_missions(인스턴스)
+- 자동 미션 도메인은 #482에서 폐기. 과거 미션 테이블·영상의 `mission_id`는 데이터 호환을 위해 보존하며 런타임 엔티티·배치·API는 제공하지 않는다.
 - `notification` — device_tokens · notification_settings · notification_history (FCM)
 - `report` — reports
 

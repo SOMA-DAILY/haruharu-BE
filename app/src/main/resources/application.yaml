@@ -87,7 +87,7 @@ haruharu:
       start: ${NOTIFICATION_QUIET_HOURS_START:00:00}
       end: ${NOTIFICATION_QUIET_HOURS_END:08:00}
     # 슬롯 시작 푸시 배치 런처(#440). enabled=false 면 스케줄 launch 만 끈다(Job 빈은 남음).
-    # cron: 미션 배정(매분 0초)·outcome(매분 30초)과 같은 초에 두지 말 것 — JobRepository SERIALIZABLE 충돌로 한쪽이 실행되지 못한다.
+    # cron: 다른 배치와 같은 초에 두지 말 것 — JobRepository SERIALIZABLE 충돌로 한쪽이 실행되지 못한다.
     slot-start:
       enabled: ${SLOT_START_NOTIFICATION_ENABLED:true}
       cron: ${SLOT_START_NOTIFICATION_CRON:15 0 * * * *}
@@ -95,22 +95,6 @@ haruharu:
     reconcile:
       enabled: ${ROOM_RECONCILE_ENABLED:true}
       cron: ${ROOM_RECONCILE_CRON:45 */5 * * * *}
-  mission:
-    assignment:
-      enabled: ${MISSION_ASSIGNMENT_ENABLED:true}
-      lead-minutes: ${MISSION_ASSIGNMENT_LEAD_MINUTES:60}
-      batch-size: ${MISSION_ASSIGNMENT_BATCH_SIZE:100}
-      cron: ${MISSION_ASSIGNMENT_CRON:0 * * * * *}
-      # 활성 배정 정책. RANDOM_V1 은 Rule V1 효과 비교용 대조군으로 남겨둔다.
-      policy: ${MISSION_ASSIGNMENT_POLICY:RULE_V1}
-    # settle-minutes: 시간창 종료 후 집계까지 두는 여유. 활동 이벤트가 AFTER_COMMIT이라 지연 도착분을 놓치지 않는다.
-    # cron: assignment(매분 0초)와 같은 초에 두지 말 것. Spring Batch JobRepository 는 SERIALIZABLE 로
-    #       메타데이터를 쓰므로 두 잡이 동시에 launch 하면 직렬화 충돌로 한쪽이 아예 실행되지 못한다.
-    outcome:
-      enabled: ${MISSION_OUTCOME_ENABLED:true}
-      settle-minutes: ${MISSION_OUTCOME_SETTLE_MINUTES:5}
-      batch-size: ${MISSION_OUTCOME_BATCH_SIZE:100}
-      cron: ${MISSION_OUTCOME_CRON:30 * * * * *}
   # 첫 가입 1회 보너스 구름(#232). 정책값은 코드 @DefaultValue가 아닌 이 yaml 리터럴로 관리.
   coin:
     signup-bonus: 20
@@ -128,7 +112,7 @@ haruharu:
     admin-message:
       # 방 편성 발송 잡 — 운영 글, ADMIN_MESSAGE / PROFILE_REVEAL 푸시
       enabled: ${CHAT_ADMIN_MESSAGE_ENABLED:false}
-      # cron: 미션 배정(0초)·슬롯 알림(15초)·outcome(30초)과 같은 초에 두지 말 것
+      # cron: 슬롯 알림(15초)·방 상태 갱신(45초)과 같은 초에 두지 말 것
       cron: ${CHAT_ADMIN_MESSAGE_CRON:20 * * * * *}
       batch-size: ${CHAT_ADMIN_MESSAGE_BATCH_SIZE:1000}
       # run_at·방 시작·행 수정 중 늦은 시각에서 이만큼 지나면 FAILED(EXPIRED)

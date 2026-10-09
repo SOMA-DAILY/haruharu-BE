@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.son.haruharu.domain.video.implement.exception.VideoUploadUnavailableException;
+import org.son.haruharu.domain.video.implement.exception.InvalidVideoCaptionException;
 
 /**
  * 기기 변환 영상의 업로드 세션. id는 클라이언트가 만든 작업 id라 재시도해도 같은 세션을 가리킨다.
@@ -25,6 +26,10 @@ public record VideoUploadSession(
 
     public static VideoUploadSession create(UUID id, Long userId, Long roomId, Long memberId,
                                             LocalDateTime slotStart, LocalDateTime now, String caption) {
+        // #482: 신규 생성만 20자로 제한하고, DB 복원·기존 세션 재시도는 과거 원문을 보존한다.
+        if (caption != null && caption.length() > 20) {
+            throw new InvalidVideoCaptionException();
+        }
         return new VideoUploadSession(id, userId, roomId, memberId, slotStart, now.plusHours(TTL_HOURS),
                 caption, null, false);
     }

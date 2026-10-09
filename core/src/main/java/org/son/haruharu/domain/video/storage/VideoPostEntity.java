@@ -39,6 +39,7 @@ public class VideoPostEntity {
     @Column
     private Long missionId;
 
+    // #482: 신규 요청은 20자, #475에서 저장된 21~100자 캡션은 보존한다.
     @Column(length = 100)
     private String caption;
 

@@ -39,6 +39,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -72,6 +73,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class VideoUploadSessionIntegrationTest {
 
     @Container
@@ -87,34 +89,16 @@ class VideoUploadSessionIntegrationTest {
         registry.add("spring.jpa.properties.hibernate.dialect", () -> "org.hibernate.dialect.PostgreSQLDialect");
     }
 
-    private final VideoUploadSessionService service;
-    private final VideoService legacy;
-    private final VideoUploadSessionRepository sessions;
-    private final RoomJpaRepository rooms;
-    private final RoomMemberJpaRepository members;
-    private final VideoPostJpaRepository posts;
-    private final MockMvc mvc;
-    private final PlatformTransactionManager transactionManager;
-    private final JdbcTemplate jdbc;
-    private final Clock clock;
-
-    @Autowired
-    VideoUploadSessionIntegrationTest(VideoUploadSessionService service, VideoService legacy,
-                                      VideoUploadSessionRepository sessions, RoomJpaRepository rooms,
-                                      RoomMemberJpaRepository members, VideoPostJpaRepository posts,
-                                      MockMvc mvc, PlatformTransactionManager transactionManager,
-                                      JdbcTemplate jdbc, Clock clock) {
-        this.service = service;
-        this.legacy = legacy;
-        this.sessions = sessions;
-        this.rooms = rooms;
-        this.members = members;
-        this.posts = posts;
-        this.mvc = mvc;
-        this.transactionManager = transactionManager;
-        this.jdbc = jdbc;
-        this.clock = clock;
-    }
+    @Autowired VideoUploadSessionService service;
+    @Autowired VideoService legacy;
+    @Autowired VideoUploadSessionRepository sessions;
+    @Autowired RoomJpaRepository rooms;
+    @Autowired RoomMemberJpaRepository members;
+    @Autowired VideoPostJpaRepository posts;
+    @Autowired MockMvc mvc;
+    @Autowired PlatformTransactionManager transactionManager;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired Clock clock;
     @MockitoBean S3StoragePort storage;
 
     private final Long user = 9100001L;
@@ -136,27 +120,54 @@ class VideoUploadSessionIntegrationTest {
     }
 
     @Test
-    void givenHundredCharacterCaption_whenReservedAndPublished_thenBothStorageStagesPreserveIt() throws Exception {
-        UUID id = UUID.randomUUID();
-        String caption = "가".repeat(100);
-        mvc.perform(post("/api/v1/rooms/" + room + "/video-upload-sessions")
-                .with(as(user)).contentType("application/json")
-                .content("{\"job_id\":\"" + id + "\",\"caption\":\"" + caption + "\"}"))
-                .andExpect(status().isOk());
-
-        assertThat(sessions.findById(id).orElseThrow().caption()).isEqualTo(caption);
-        Long postId = service.complete(user, room, id).videoPostId();
-        assertThat(posts.findById(postId).orElseThrow().toDomain().caption()).isEqualTo(caption);
+    void givenNewCaptionOver20_whenReserveOrUpload_thenBadRequest() throws Exception {
+        var auth = authentication(new UsernamePasswordAuthenticationToken(user, null, List.of()));
+        mvc.perform(post("/api/v1/rooms/{roomId}/video-upload-sessions", room).with(auth)
+                        .contentType("application/json")
+                        .content("{\"job_id\":\"" + UUID.randomUUID() + "\",\"caption\":\"" + "가".repeat(21) + "\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/rooms/{roomId}/video-posts", room).with(auth)
+                        .contentType("application/json")
+                        .content("{\"video_url\":\"https://test/users/" + user + "/videos/test.mp4\",\"caption\":\""
+                                + "가".repeat(21) + "\"}"))
+                .andExpect(status().isBadRequest());
+        assertThat(activePosts()).isEmpty();
     }
 
     @Test
-    void givenOverlongCaption_whenReserved_thenRejectsBeforeCreatingSession() throws Exception {
+    void givenNewCaptionAt20_whenReserveOrUpload_thenAccepted() throws Exception {
+        mvc.perform(post("/api/v1/rooms/{roomId}/video-upload-sessions", room)
+                        .with(authentication(new UsernamePasswordAuthenticationToken(user, null, List.of())))
+                        .contentType("application/json")
+                        .content("{\"job_id\":\"" + UUID.randomUUID() + "\",\"caption\":\"" + "가".repeat(20) + "\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/rooms/{roomId}/video-posts", room)
+                        .with(authentication(new UsernamePasswordAuthenticationToken(other, null, List.of())))
+                        .contentType("application/json")
+                        .content("{\"video_url\":\"https://test/users/" + other + "/videos/test.mp4\",\"caption\":\""
+                                + "가".repeat(20) + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.caption").value("가".repeat(20)));
+    }
+
+    @Test
+    void givenExistingLongCaptionSession_whenCompleted_thenCaptionIsPreserved() throws Exception {
         UUID id = UUID.randomUUID();
-        mvc.perform(post("/api/v1/rooms/" + room + "/video-upload-sessions")
-                .with(as(user)).contentType("application/json")
-                .content("{\"job_id\":\"" + id + "\",\"caption\":\"" + "가".repeat(101) + "\"}"))
-                .andExpect(status().isBadRequest());
-        assertThat(sessions.findById(id)).isEmpty();
+        service.reserve(user, room, id, "인사");
+        // #475가 이미 적용된 DB의 미완료 세션. 신규 요청의 20자 제한과는 별개다.
+        jdbc.execute("ALTER TABLE video_upload_sessions ALTER COLUMN caption TYPE VARCHAR(100)");
+        String original = "가".repeat(100);
+        jdbc.update("UPDATE video_upload_sessions SET caption = ? WHERE id = ?", original, id);
+
+        mvc.perform(post("/api/v1/rooms/{roomId}/video-upload-sessions", room).with(as(user))
+                        .contentType("application/json")
+                        .content("{\"job_id\":\"" + id + "\",\"caption\":\"" + original + "\"}"))
+                .andExpect(status().isOk());
+        Long postId = service.complete(user, room, id).videoPostId();
+
+        assertThat(posts.findById(postId).orElseThrow().toDomain().caption()).isEqualTo(original);
+        assertThat(sessions.findById(id).orElseThrow().caption()).isEqualTo(original);
+        assertThat(service.complete(user, room, id).caption()).isEqualTo(original);
     }
 
     @Test

@@ -91,8 +91,6 @@ public class AdminSecurityConfig {
                         .requestMatchers("/actuator/health", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // 코인 상품 카탈로그 관리(생성·목록·수정)는 SUPER 전용.
                         .requestMatchers("/api/v1/admin/iap/products", "/api/v1/admin/iap/products/**").hasRole("SUPER")
-                        // 미션 문구 카탈로그 관리(생성·목록·수정)는 SUPER 전용.
-                        .requestMatchers("/api/v1/admin/missions", "/api/v1/admin/missions/**").hasRole("SUPER")
                         // 어드민 계정 관리(생성·목록·역할/상태 변경)는 SUPER 전용.
                         .requestMatchers("/api/v1/admin/admins", "/api/v1/admin/admins/**").hasRole("SUPER")
                         // 방 운영 쓰기(생성·코드 발급·성별 부여)는 SUPER·OPERATOR 전용(#318).
@@ -116,8 +114,6 @@ public class AdminSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/rooms/*/selections", "/api/v1/admin/rooms/*/activities",
                                 "/api/v1/admin/rooms/*/activity/summary")
                         .hasAnyRole("SUPER", "OPERATOR")
-                        .requestMatchers("/api/v1/admin/rooms/*/operator-missions",
-                                "/api/v1/admin/rooms/*/operator-missions/**").hasAnyRole("SUPER", "OPERATOR")
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         // 401·403 모두 ApiResponse 표준 포맷으로 응답(컨테이너 기본 에러 우회 방지).

@@ -3,7 +3,6 @@ package org.son.haruharu.admin.domain.room.business.command;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.son.haruharu.domain.mission.business.command.CreateRoomMissionSlotCommand;
 import org.son.haruharu.domain.room.business.command.CreateRoomCommand;
 import org.son.haruharu.domain.roomschedule.business.command.ScheduleItemCommand;
 
@@ -21,8 +20,6 @@ public record CreateAdminRoomCommand(
         int totalDays,
         Integer maxUses,
         LocalDateTime inviteExpiresAt,
-        boolean missionEnabled,
-        List<CreateRoomMissionSlotCommand> missionSlots,
         // 채팅 편성(#457). 비면 0줄.
         List<ScheduleItemCommand> chatSchedule
 ) {

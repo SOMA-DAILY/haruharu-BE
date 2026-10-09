@@ -10,23 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ChatDeliveryService {
     private final ChatRoomReader chatRoomReader;
-    private final org.son.haruharu.domain.chat.implement.ChatMessageReader messageReader;
 
-    private final org.son.haruharu.domain.chat.implement.ChatMissionPresenter missionPresenter;
-
-    public ChatDeliveryService(ChatRoomReader chatRoomReader, org.son.haruharu.domain.chat.implement.ChatMessageReader messageReader, org.son.haruharu.domain.chat.implement.ChatMissionPresenter missionPresenter) {
+    public ChatDeliveryService(ChatRoomReader chatRoomReader) {
         this.chatRoomReader = chatRoomReader;
-        this.messageReader = messageReader;
-        this.missionPresenter = missionPresenter;
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void deliverMessage(org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast original,
-            java.util.function.Consumer<org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast> delivery) {
-        if (chatRoomReader.lockIfPresent(original.chatRoomId()) && chatRoomReader.findById(original.chatRoomId()).isPresent()) {
-            messageReader.findById(original.messageId()).ifPresent(message ->
-                    delivery.accept(org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast.from(message, missionPresenter.present(message.visibleMission()))));
-        }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

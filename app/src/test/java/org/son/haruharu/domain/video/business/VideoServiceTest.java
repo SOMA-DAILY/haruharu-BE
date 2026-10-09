@@ -20,9 +20,6 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
-import org.son.haruharu.domain.video.business.command.VideoCaptionUpdateCommand;
-import org.son.haruharu.domain.video.implement.exception.InvalidVideoCaptionException;
-import org.son.haruharu.domain.video.storage.exception.VideoPostNotFoundException;
 import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
 import org.son.haruharu.domain.video.business.exception.DuplicateSlotUploadException;
 import org.son.haruharu.domain.video.business.exception.InvalidVideoExtensionException;
@@ -115,7 +112,7 @@ class VideoServiceTest {
         var command = new VideoUploadCommand(url, null, "안녕");
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(me);
-        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(activeRoom(roomId)));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom(roomId)));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(videoPostReader.hasActiveUpload(memberId, SLOT_AT_12)).willReturn(false);
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
@@ -135,7 +132,7 @@ class VideoServiceTest {
     void givenNotActiveRoom_whenUpload_thenThrows() {
         Long userId = 1L;
         Long roomId = 11L;
-        var command = new VideoUploadCommand(BASE + "users/" + userId + "/videos/v.mp4", null, null);
+        var command = new VideoUploadCommand(BASE + "x", null, null);
         // starts_at 20:00 → serviceAt(12)에선 아직 시작 전 → statusAt=PENDING
         LocalDateTime starts = DATE.atTime(20, 0);
         Room pending = new Room(roomId, RoomStatus.PENDING, DATE, 3, null, null,
@@ -143,8 +140,7 @@ class VideoServiceTest {
                 starts.plusDays(2).plusHours(3), starts.plusDays(3));
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(500L, userId));
-        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(pending));
-        given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
+        given(roomReader.findById(roomId)).willReturn(Optional.of(pending));
 
         assertThatThrownBy(() -> serviceAt(12).upload(userId, roomId, command))
             .isInstanceOf(RoomNotActiveException.class);
@@ -160,7 +156,7 @@ class VideoServiceTest {
         var command = new VideoUploadCommand(url, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId));
-        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(activeRoom(roomId)));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom(roomId)));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(videoPostReader.hasActiveUpload(memberId, SLOT_AT_12)).willReturn(true);
 
@@ -178,8 +174,7 @@ class VideoServiceTest {
         var command = new VideoUploadCommand(url, null, null);
 
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(memberId, userId));
-        // 업로드는 방 행을 잠그고 시작한다(#474, 운영자 미션 발송과 직렬화).
-        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(activeRoom(roomId)));
+        given(roomReader.findById(roomId)).willReturn(Optional.of(activeRoom(roomId)));
         given(s3StoragePort.publicBaseUrl()).willReturn(BASE);
         given(videoPostReader.hasActiveUpload(memberId, SLOT_AT_12)).willReturn(false);
         given(videoPostWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
@@ -228,56 +223,5 @@ class VideoServiceTest {
 
         assertThatThrownBy(() -> serviceAt(12).delete(userId, postId))
             .isInstanceOf(NotVideoOwnerException.class);
-    }
-
-    @Test
-    @DisplayName("작성자는 캡션 컬럼만 수정하며 업로드 이벤트를 발생시키지 않는다")
-    void givenOwner_whenUpdateCaption_thenOnlyWritesCaption() {
-        VideoPost post = new VideoPost(1L, 30L, SLOT_AT_12, null, "원문", "video", "thumb",
-                false, null, null, SLOT_AT_12.plusMinutes(1));
-        given(videoPostReader.getEditableById(1L)).willReturn(post);
-        given(roomMemberReader.getById(30L)).willReturn(member(30L, 1L));
-
-        var result = serviceAt(12).updateCaption(1L, 1L, new VideoCaptionUpdateCommand("  새 문구  "));
-
-        assertThat(result.videoPostId()).isEqualTo(1L);
-        assertThat(result.caption()).isEqualTo("새 문구");
-        then(videoPostWriter).should().updateCaption(1L, "새 문구");
-        then(eventPublisher).shouldHaveNoInteractions();
-        then(roomReader).shouldHaveNoInteractions();
-    }
-
-    @Test
-    @DisplayName("다른 사람의 영상은 캡션 수정 전에 거부한다")
-    void givenNonOwner_whenUpdateCaption_thenDoesNotWrite() {
-        VideoPost post = new VideoPost(1L, 30L, SLOT_AT_12, null, "원문", "video", null,
-                false, null, null, SLOT_AT_12);
-        given(videoPostReader.getEditableById(1L)).willReturn(post);
-        given(roomMemberReader.getById(30L)).willReturn(member(30L, 2L));
-        assertThatThrownBy(() -> serviceAt(12).updateCaption(1L, 1L, new VideoCaptionUpdateCommand("변경")))
-                .isInstanceOf(NotVideoOwnerException.class);
-        then(videoPostWriter).shouldHaveNoInteractions();
-    }
-
-    @Test
-    @DisplayName("HTTP 검증을 거치지 않아도 101자 문구는 저장하지 않는다")
-    void givenTooLongCaption_whenUpdateCaption_thenDoesNotWrite() {
-        VideoPost post = new VideoPost(1L, 30L, SLOT_AT_12, null, "원문", "video", null,
-                false, null, null, SLOT_AT_12);
-        given(videoPostReader.getEditableById(1L)).willReturn(post);
-        given(roomMemberReader.getById(30L)).willReturn(member(30L, 1L));
-        assertThatThrownBy(() -> serviceAt(12).updateCaption(1L, 1L, new VideoCaptionUpdateCommand("가".repeat(101))))
-                .isInstanceOf(InvalidVideoCaptionException.class);
-        then(videoPostWriter).shouldHaveNoInteractions();
-    }
-
-    @Test
-    @DisplayName("삭제된 영상의 캡션 수정은 조회 단계에서 거절한다")
-    void givenDeletedVideo_whenUpdateCaption_thenDoesNotReadOwnerOrWrite() {
-        given(videoPostReader.getEditableById(1L)).willThrow(new VideoPostNotFoundException());
-        assertThatThrownBy(() -> serviceAt(12).updateCaption(1L, 1L, new VideoCaptionUpdateCommand("변경")))
-                .isInstanceOf(VideoPostNotFoundException.class);
-        then(roomMemberReader).shouldHaveNoInteractions();
-        then(videoPostWriter).shouldHaveNoInteractions();
     }
 }

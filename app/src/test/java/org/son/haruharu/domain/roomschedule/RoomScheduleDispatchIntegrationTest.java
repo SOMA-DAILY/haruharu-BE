@@ -305,7 +305,7 @@ class RoomScheduleDispatchIntegrationTest {
                 .andExpect(jsonPath("$.data.messages[1].sender_id").value(SYSTEM_USER));
         assertThat(jdbc.queryForObject("select delete_broadcast_at from chat_messages where id=?", LocalDateTime.class,
                 messageId)).isNotNull();
-        // 참가자 채팅 수/미션 활동에는 안 잡힌다: ChatMessageSentEvent 를 안 타므로 CHAT 알림도 운영 글 몫은 없다
+        // 참가자 채팅 수에는 안 잡힌다: ChatMessageSentEvent 를 안 타므로 CHAT 알림도 운영 글 몫은 없다
         assertThat(jdbc.queryForObject("select count(*) from chat_messages where chat_room_id=? and message_type='TEXT'",
                 Long.class, chatId)).isEqualTo(2);
     }

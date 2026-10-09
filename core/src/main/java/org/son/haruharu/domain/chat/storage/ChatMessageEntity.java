@@ -15,7 +15,6 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageType;
-import org.son.haruharu.domain.chat.implement.ChatMission;
 
 import java.time.LocalDateTime;
 
@@ -70,22 +69,6 @@ public class ChatMessageEntity extends BaseEntity {
     @Column(name = "delete_broadcast_at")
     private LocalDateTime deleteBroadcastAt;
 
-    // 운영자 미션 카드(#474). 미션 1건당 카드 1개(unique). 삭제 표시는 위 admin_deleted_at 을 같이 쓴다.
-    @Column(name = "operator_mission_id", unique = true)
-    private Long operatorMissionId;
-
-    @Column(name = "mission_image_id")
-    private Long missionImageId;
-
-    @Column(name = "mission_room_id")
-    private Long missionRoomId;
-
-    @Column(name = "mission_template_id", length = 20)
-    private String missionTemplateId;
-
-    @Column(name = "mission_title", length = 40)
-    private String missionTitle;
-
     public static ChatMessageEntity from(ChatMessage message) {
         ChatMessageEntity entity = new ChatMessageEntity();
         entity.id = message.id();
@@ -102,21 +85,12 @@ public class ChatMessageEntity extends BaseEntity {
         entity.adminDeletedAt = message.adminDeletedAt();
         entity.deleteBroadcastAt = message.deleteBroadcastAt();
         entity.createdAt = message.createdAt();
-        if (message.mission() != null) {
-            entity.operatorMissionId = message.mission().missionId();
-            entity.missionRoomId = message.mission().roomId();
-            entity.missionImageId = message.mission().imageId();
-            entity.missionTemplateId = message.mission().templateId();
-            entity.missionTitle = message.mission().title();
-        }
         return entity;
     }
 
     public ChatMessage toDomain() {
-        ChatMission mission = operatorMissionId == null ? null
-                : new ChatMission(operatorMissionId, missionRoomId, missionTemplateId, missionTitle, missionImageId, null);
         return new ChatMessage(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId,
                 replyToMessageId, replyPreviewSender, replyPreviewContent, messageType, scheduleItemId,
-                adminDeletedAt, deleteBroadcastAt, mission);
+                adminDeletedAt, deleteBroadcastAt);
     }
 }

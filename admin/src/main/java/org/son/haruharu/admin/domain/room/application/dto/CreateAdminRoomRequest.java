@@ -4,12 +4,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import org.son.haruharu.admin.domain.room.business.command.CreateAdminRoomCommand;
-import org.son.haruharu.domain.mission.business.command.CreateRoomMissionSlotCommand;
-import org.son.haruharu.domain.mission.implement.MissionPeriod;
 
 /**
  * 방 생성 요청(#318). 시각 5개는 운영진이 방마다 직접 입력한다(9시 고정 폐기).
@@ -32,37 +29,14 @@ public record CreateAdminRoomRequest(
         @Positive Integer maxUses,
         @Schema(description = "초대코드 만료 시각(null이면 무기한)", nullable = true)
         LocalDateTime inviteExpiresAt,
-        @Schema(description = "이전 클라이언트 호환용(#474). 새 방은 자동 미션 슬롯을 만들지 않으므로 값은 무시한다.",
-                deprecated = true, nullable = true)
-        Boolean missionEnabled,
-        @Schema(description = "이전 클라이언트 호환용(#474). 새 방에는 자동 미션 슬롯을 생성하지 않는다.",
-                deprecated = true, nullable = true)
-        List<MissionSlotRequest> missionSlots,
         @Schema(description = "채팅 편성(#457, 선택). 어드민 화면 기본 5줄을 고친 그대로 저장된다. 서버 기본값 없음(비면 0줄). "
                 + "줄마다 run_at 필수, 시각 제한 없음.", nullable = true)
         List<ScheduleItemRequest> chatSchedule
 ) {
     public CreateAdminRoomCommand toCommand() {
         return new CreateAdminRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
-                resultAt, endsAt, totalDays, maxUses, inviteExpiresAt, Boolean.TRUE.equals(missionEnabled),
-                missionSlots == null ? null : missionSlots.stream().filter(java.util.Objects::nonNull)
-                        .map(MissionSlotRequest::toCommand).toList(),
+                resultAt, endsAt, totalDays, maxUses, inviteExpiresAt,
                 chatSchedule == null ? List.of()
                         : chatSchedule.stream().filter(java.util.Objects::nonNull).map(ScheduleItemRequest::toCommand).toList());
-    }
-
-    public record MissionSlotRequest(
-            @Schema(description = "방 진행 일차", example = "1")
-            @Positive int dayNumber,
-            @Schema(description = "일차 내 시간대", example = "MORNING")
-            @NotNull MissionPeriod period,
-            @Schema(description = "카드 노출 시작", example = "2026-08-20T21:00:00")
-            @NotNull LocalDateTime opensAt,
-            @Schema(description = "카드 노출 종료", example = "2026-08-21T02:00:00")
-            @NotNull LocalDateTime closesAt
-    ) {
-        public CreateRoomMissionSlotCommand toCommand() {
-            return new CreateRoomMissionSlotCommand(dayNumber, period, opensAt, closesAt);
-        }
     }
 }

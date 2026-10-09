@@ -82,14 +82,12 @@ class ChatServiceTest {
 
     @BeforeEach
     void setUp() {
-        var presenter=org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatMissionPresenter.class);
-        org.mockito.Mockito.lenient().when(presenter.prepare(org.mockito.ArgumentMatchers.anyList())).thenReturn(mission -> mission);
         chatService = new ChatService(chatRoomReader, chatRoomWriter, chatRoomMemberReader,
                 chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, userService,
                 roomMemberReader, roomReader, blockReader,
-                new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader, presenter),
+                new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader),
                 new ChatParticipantPolicy(chatRoomReader, chatRoomMemberReader, roomMemberReader, profileService, userService, blockReader),
-                eventPublisher, clock, presenter);
+                eventPublisher, clock);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -929,24 +927,6 @@ class ChatServiceTest {
         given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(membership(ROOM, ME, null)));
         given(chatRoomReader.findById(ROOM)).willReturn(Optional.empty());
         assertThat(chatService.getMyRooms(ME).chatRooms()).isEmpty();
-    }
-
-    @Test @DisplayName("참고 사진이 없는 메시지 또는 삭제 카드의 사진 조회는 404이다")
-    void givenMissingOrDeletedPhoto_whenGetImage_thenNotFound() {
-        given(chatRoomMemberReader.findMembership(ROOM,ME)).willReturn(Optional.of(membership(ROOM,ME,null)));
-        given(chatRoomReader.getById(ROOM)).willReturn(groupRoom(ROOM,99L));
-        given(chatMessageReader.findById(42L)).willReturn(Optional.empty());
-        assertThatThrownBy(() -> chatService.getMissionImage(ROOM,ME,42L)).isInstanceOf(org.son.haruharu.domain.chat.storage.exception.ChatMissionImageNotFoundException.class);
-        var card=new org.son.haruharu.domain.chat.implement.ChatMission(8L,99L,"DAY2_3","미션",1L,null);
-        given(chatMessageReader.findById(42L)).willReturn(Optional.of(new ChatMessage(42L,ROOM,7L,"내용",LocalDateTime.now(clock),null,null,null,null,null,
-                org.son.haruharu.domain.chat.implement.ChatMessageType.ADMIN,null,LocalDateTime.now(clock),null,card)));
-        assertThatThrownBy(() -> chatService.getMissionImage(ROOM,ME,42L)).isInstanceOf(org.son.haruharu.domain.chat.storage.exception.ChatMissionImageNotFoundException.class);
-    }
-    @Test @DisplayName("회원이 아니면 참고 사진 메시지를 읽기 전에 접근을 거부한다")
-    void givenNonMember_whenGetImage_thenForbiddenBeforeLookup() {
-        given(chatRoomMemberReader.findMembership(ROOM,ME)).willReturn(Optional.empty());
-        assertThatThrownBy(() -> chatService.getMissionImage(ROOM,ME,42L)).isInstanceOf(org.son.haruharu.domain.chat.business.exception.ChatNotMemberException.class);
-        then(chatMessageReader).shouldHaveNoInteractions();
     }
 
 }
