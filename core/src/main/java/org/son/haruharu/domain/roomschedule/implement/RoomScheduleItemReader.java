@@ -30,6 +30,10 @@ public class RoomScheduleItemReader {
         return repository.findById(itemId);
     }
 
+    public RoomScheduleItem getForUpdate(Long itemId) {
+        return repository.findByIdForUpdate(itemId).orElseThrow(ScheduleItemNotFoundException::new);
+    }
+
     /**
      * 편성으로 공개를 정하는 방인지(#457). 공개 행을 전부 취소한 방도 true — 취소한 항목이 옛 DAY3 규칙으로 열리면 안 된다.
      */

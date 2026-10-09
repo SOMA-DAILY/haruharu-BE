@@ -51,8 +51,8 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     public Optional<ChatMessage> findLast(Long chatRoomId, Set<Long> excludeSenderIds) {
         Optional<ChatMessageEntity> row = excludeSenderIds.isEmpty()
                 ? chatMessageJpaRepository.findFirstByChatRoomIdOrderByIdDesc(chatRoomId)
-                : chatMessageJpaRepository.findFirstByChatRoomIdAndSenderIdNotInOrderByIdDesc(
-                        chatRoomId, excludeSenderIds);
+                : chatMessageJpaRepository.findLastExcludingSenders(
+                        chatRoomId, excludeSenderIds, PageRequest.of(0, 1)).stream().findFirst();
         return row.map(ChatMessageEntity::toDomain);
     }
 
@@ -60,8 +60,9 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     public long countUnread(Long chatRoomId, Long lastReadMessageId, Set<Long> excludeSenderIds) {
         // 커서가 없으면(한 번도 안 읽음) 0L 기준 — IDENTITY id는 1부터라 전체가 안읽음으로 집계된다.
         long cursor = (lastReadMessageId == null) ? 0L : lastReadMessageId;
-        return chatMessageJpaRepository.countByChatRoomIdAndIdGreaterThanAndSenderIdNotIn(
-                chatRoomId, cursor, excludeSenderIds);
+        return excludeSenderIds.isEmpty()
+                ? chatMessageJpaRepository.countByChatRoomIdAndIdGreaterThan(chatRoomId, cursor)
+                : chatMessageJpaRepository.countUnreadExcludingSenders(chatRoomId, cursor, excludeSenderIds);
     }
 
     @Override

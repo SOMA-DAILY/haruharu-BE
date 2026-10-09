@@ -235,7 +235,7 @@ class AdminRoomScheduleApiIntegrationTest {
 
         mockMvc.perform(delete(url).with(authentication(operator()))).andExpect(status().isConflict());
 
-        ChatMessageEntity message = ChatMessageEntity.from(ChatMessage.admin(77L, 1L, "하루방이 열렸어요", itemId));
+        ChatMessageEntity message = ChatMessageEntity.from(ChatMessage.system(77L, "하루방이 열렸어요", itemId));
         em.persist(message);
         Long messageId = message.toDomain().id();
         em.createQuery("update RoomScheduleItemEntity i set i.status = org.son.haruharu.domain.roomschedule.implement"

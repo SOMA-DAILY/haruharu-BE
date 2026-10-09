@@ -30,7 +30,7 @@ public class AdminRoomActivityQueryRepository implements RoomActivityRepository 
                    null, null, null, null, null, null, null, false, null, null
             from chat_messages c join chat_rooms r on r.id = c.chat_room_id
             where r.room_id = :roomId and r.type = 'GROUP' and r.deleted_at is null and c.deleted_at is null
-              and c.message_type <> 'ADMIN'
+              and c.sender_type = 'USER'
             union all
             select 'REACTION', x.id, x.created_at, x.user_id, m.user_id, null,
                    v.id, v.video_url, v.thumbnail_url, v.caption, x.reaction_type, null, null, v.is_hidden, v.mission_id, v.slot_start

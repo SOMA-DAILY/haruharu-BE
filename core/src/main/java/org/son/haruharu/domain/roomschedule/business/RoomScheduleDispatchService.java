@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.roomschedule.business;
 
 import lombok.extern.slf4j.Slf4j;
+import org.son.haruharu.common.exception.BusinessException;
 import org.son.haruharu.config.ChatFeatureProperties;
 import org.son.haruharu.domain.chat.business.AdminChatMessageService;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
@@ -64,7 +65,7 @@ public class RoomScheduleDispatchService {
     public int dispatchDue() {
         LocalDateTime now = LocalDateTime.now(clock);
         for (RoomScheduleItem stuck : itemReader.findSendingSince(now.minusMinutes(settings.stuckMinutes()), settings.batchSize())) {
-            step.fail(stuck.id(), RoomScheduleStatus.SENDING, "STUCK", now);
+            step.failIfUnchanged(stuck, "STUCK", now);
         }
         int sent = 0;
         for (RoomScheduleItem item : itemReader.findDue(now, settings.batchSize())) {
@@ -83,12 +84,12 @@ public class RoomScheduleDispatchService {
     private boolean dispatchOne(RoomScheduleItem item, LocalDateTime now) {
         Optional<Room> found = roomReader.findById(item.roomId());
         if (found.isEmpty()) {
-            step.fail(item.id(), RoomScheduleStatus.SCHEDULED, "ROOM_NOT_FOUND", now);
+            step.failIfUnchanged(item, "ROOM_NOT_FOUND", now);
             return false;
         }
         Room room = found.get();
         if (effectiveAt(item, room).isBefore(now.minusMinutes(settings.expireMinutes()))) {
-            step.fail(item.id(), RoomScheduleStatus.SCHEDULED, "EXPIRED", now);
+            step.failIfUnchanged(item, "EXPIRED", now);
             return false;
         }
         RoomStatus status = room.statusAt(now);
@@ -96,7 +97,7 @@ public class RoomScheduleDispatchService {
             return false; // 방이 열리면 보낸다
         }
         if (status == RoomStatus.ENDED || status == RoomStatus.CANCELLED) {
-            step.fail(item.id(), RoomScheduleStatus.SCHEDULED, "ROOM_ENDED", now);
+            step.failIfUnchanged(item, "ROOM_ENDED", now);
             return false;
         }
         Optional<ChatRoom> chatRoom = chatRoomReader.findByRoomId(item.roomId());
@@ -110,7 +111,7 @@ public class RoomScheduleDispatchService {
         RoomScheduleItem claimed = itemReader.findById(item.id()).orElse(item);
         List<Long> recipients;
         try {
-            recipients = step.send(claimed, chatRoom.get().id(), now);
+            recipients = step.send(claimed, chatRoom.get().id());
         } catch (Exception e) {
             step.fail(item.id(), RoomScheduleStatus.SENDING, failReason(e), now);
             log.error("방 편성 발송 실패: itemId={}", item.id(), e);
@@ -163,7 +164,8 @@ public class RoomScheduleDispatchService {
     }
 
     static String failReason(Exception e) {
-        String reason = e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage());
-        return reason.length() > 200 ? reason.substring(0, 200) : reason;
+        // DB 예외의 상세 값이나 운영 글을 감사 필드에 복사하지 않는다.
+        return e instanceof BusinessException business
+                ? business.getCode() : e.getClass().getSimpleName();
     }
 }
