@@ -28,7 +28,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.room.storage",
         "org.son.haruharu.domain.user.storage",
         "org.son.haruharu.domain.profile.storage",
-        "org.son.haruharu.domain.coin.storage",
+        "org.son.haruharu.domain.ticket.storage",
         "org.son.haruharu.domain.payment.storage",
         "org.son.haruharu.domain.video.storage",
         "org.son.haruharu.domain.chat.storage",
@@ -45,7 +45,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         // #486: 미션·게시 계획 저장과 보낸 운영 글 삭제
         "org.son.haruharu.domain.chat.storage",
         "org.son.haruharu.domain.mission.common.storage",
-        "org.son.haruharu.domain.mission.chat.storage"})
+        "org.son.haruharu.domain.mission.chat.storage",
+        // #492: 운영진 티켓 지급(TicketService→지갑·원장 JpaRepository) 배선.
+        "org.son.haruharu.domain.ticket.storage"})
 @Import({JpaConfig.class, ClockConfig.class, TimeZoneConfig.class})
 public class AdminApplication {
 

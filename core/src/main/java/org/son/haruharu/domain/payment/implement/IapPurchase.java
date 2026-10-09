@@ -10,7 +10,8 @@ public record IapPurchase(
         String storeProductId,
         String storeTransactionId,
         IapStore store,
-        long coinAmount,
+        long ticketAmount,
+        long unrevokedTicketAmount,
         IapPurchaseStatus status,
         LocalDateTime purchasedAt,
         LocalDateTime refundedAt
@@ -22,17 +23,22 @@ public record IapPurchase(
             String storeProductId,
             String storeTransactionId,
             IapStore store,
-            long coinAmount,
+            long ticketAmount,
             LocalDateTime purchasedAt
     ) {
         return new IapPurchase(null, userId, productId, storeProductId, storeTransactionId,
-                store, coinAmount, IapPurchaseStatus.OWNED, purchasedAt, null);
+                store, ticketAmount, 0L, IapPurchaseStatus.OWNED, purchasedAt, null);
     }
 
-    /** 환불 전이: REFUNDED로 바꾸고 환불 시각을 기록한 새 인스턴스 반환. */
-    public IapPurchase refunded(LocalDateTime refundedAt) {
+    /**
+     * 환불 전이: REFUNDED로 바꾸고 환불 시각을 기록한 새 인스턴스 반환.
+     * revokedTicketAmount는 실제로 회수한 수량이다. 이미 써버려 회수하지 못한 나머지는
+     * unrevokedTicketAmount로 남긴다(잔액은 0 아래로 내려가지 않는다, #492).
+     */
+    public IapPurchase refunded(LocalDateTime refundedAt, long revokedTicketAmount) {
         return new IapPurchase(id, userId, productId, storeProductId, storeTransactionId,
-                store, coinAmount, IapPurchaseStatus.REFUNDED, purchasedAt, refundedAt);
+                store, ticketAmount, ticketAmount - revokedTicketAmount,
+                IapPurchaseStatus.REFUNDED, purchasedAt, refundedAt);
     }
 
     public boolean isOwned() {

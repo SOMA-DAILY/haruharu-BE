@@ -39,7 +39,7 @@ class AdminPurchaseServiceTest {
 
     private IapPurchase purchase(Long id, Long userId) {
         return new IapPurchase(id, userId, 3L, "groom_60", "txn-" + id, IapStore.APP_STORE,
-                60, IapPurchaseStatus.OWNED, LocalDateTime.of(2026, 7, 15, 10, 0), null);
+                60, 0, IapPurchaseStatus.OWNED, LocalDateTime.of(2026, 7, 15, 10, 0), null);
     }
 
     private UserProfile profile(Long userId, String nickname) {

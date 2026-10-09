@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/** 어드민 코인 상품 카탈로그 관리. 생성·목록·수정(전부 SUPER 권한 — AdminSecurityConfig에서 제한). */
+/** 어드민 티켓 상품 카탈로그 관리. 생성·목록·수정(전부 SUPER 권한 — AdminSecurityConfig에서 제한). */
 @Service
 @Transactional(readOnly = true)
 public class AdminIapProductService {
@@ -37,7 +37,7 @@ public class AdminIapProductService {
         }
         IapProduct saved = adminIapProductWriter.save(IapProduct.create(
                 command.storeProductId(), command.store(),
-                command.coinAmount(), command.bonusAmount(), command.price(), command.currency()));
+                command.ticketAmount(), command.price(), command.currency()));
         return AdminIapProductResponse.from(saved);
     }
 
@@ -47,8 +47,7 @@ public class AdminIapProductService {
         // 부분 수정: 제공된 필드만 갱신. storeProductId·store는 불변.
         IapProduct updated = new IapProduct(
                 existing.id(), existing.storeProductId(), existing.store(),
-                command.coinAmount() != null ? command.coinAmount() : existing.coinAmount(),
-                command.bonusAmount() != null ? command.bonusAmount() : existing.bonusAmount(),
+                command.ticketAmount() != null ? command.ticketAmount() : existing.ticketAmount(),
                 command.price() != null ? command.price() : existing.price(),
                 command.currency() != null ? command.currency() : existing.currency(),
                 command.active() != null ? command.active() : existing.active());

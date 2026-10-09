@@ -4,8 +4,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.son.haruharu.domain.coin.implement.CoinWallet;
-import org.son.haruharu.domain.coin.storage.CoinWalletEntity;
+import org.son.haruharu.domain.ticket.implement.TicketWallet;
+import org.son.haruharu.domain.ticket.storage.TicketWalletEntity;
 import org.son.haruharu.domain.payment.implement.IapPurchase;
 import org.son.haruharu.domain.payment.implement.IapStore;
 import org.son.haruharu.domain.payment.storage.IapPurchaseEntity;
@@ -75,13 +75,13 @@ class AdminUserApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("유저 상세는 프로필·코인잔액·결제이력·참여이력을 조합해 반환한다")
-    void userDetail_assemblesProfileCoinPaymentParticipation() throws Exception {
+    @DisplayName("유저 상세는 프로필·티켓잔액·결제이력·참여이력을 조합해 반환한다")
+    void userDetail_assemblesProfileTicketPaymentParticipation() throws Exception {
         LocalDateTime now = LocalDateTime.now();
         Long userId = persistUser(UserStatus.ACTIVE);
         em.persist(UserProfileEntity.from(new UserProfile(null, userId, "서울", "직장인", 168, "INFP", "여울", null, null, null)));
-        em.persist(CoinWalletEntity.from(new CoinWallet(null, userId, 100L, 50L, null)));
-        em.persist(IapPurchaseEntity.from(IapPurchase.owned(userId, 1L, "coin_100", "tx-1", IapStore.APP_STORE, 100, now)));
+        em.persist(TicketWalletEntity.from(new TicketWallet(null, userId, 3L, null)));
+        em.persist(IapPurchaseEntity.from(IapPurchase.owned(userId, 1L, "ticket_1", "tx-1", IapStore.APP_STORE, 100, now)));
         RoomEntity room = RoomEntity.from(Room.create(LocalDate.now(), 3).started(now));
         em.persist(room);
         Long roomId = room.toDomain().id();
@@ -92,10 +92,9 @@ class AdminUserApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.user_id").value(userId))
                 .andExpect(jsonPath("$.data.profile.nickname").value("여울"))
-                .andExpect(jsonPath("$.data.coin.paid").value(100))
-                .andExpect(jsonPath("$.data.coin.total").value(150))
+                .andExpect(jsonPath("$.data.ticket.balance").value(3))
                 .andExpect(jsonPath("$.data.payments.length()").value(1))
-                .andExpect(jsonPath("$.data.payments[0].store_product_id").value("coin_100"))
+                .andExpect(jsonPath("$.data.payments[0].store_product_id").value("ticket_1"))
                 .andExpect(jsonPath("$.data.participations.length()").value(1))
                 .andExpect(jsonPath("$.data.participations[0].room_id").value(roomId));
     }

@@ -5,8 +5,8 @@ import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
 import org.son.haruharu.admin.domain.user.implement.UserParticipation;
 import org.son.haruharu.admin.domain.user.implement.UserWithProfile;
-import org.son.haruharu.domain.coin.implement.CoinWallet;
-import org.son.haruharu.domain.coin.storage.CoinWalletEntity;
+import org.son.haruharu.domain.ticket.implement.TicketWallet;
+import org.son.haruharu.domain.ticket.storage.TicketWalletEntity;
 import org.son.haruharu.domain.payment.implement.IapPurchase;
 import org.son.haruharu.domain.payment.storage.IapPurchaseEntity;
 import org.son.haruharu.domain.profile.implement.UserProfile;
@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 어드민 유저 조회. admin 전용 JPQL over core 엔티티(user/profile/coin/payment/room).
+ * 어드민 유저 조회. admin 전용 JPQL over core 엔티티(user/profile/ticket/payment/room).
  * 목록은 user↔profile ad-hoc left join(닉네임 표시·검색). 소프트삭제는 Hibernate가 자동 필터.
  */
 @Repository
@@ -67,11 +67,11 @@ public class AdminUserQueryRepository {
                 .getResultList().stream().findFirst().map(UserProfileEntity::toDomain);
     }
 
-    public Optional<CoinWallet> findWallet(Long userId) {
+    public Optional<TicketWallet> findWallet(Long userId) {
         return entityManager.createQuery(
-                        "select w from CoinWalletEntity w where w.userId = :userId", CoinWalletEntity.class)
+                        "select w from TicketWalletEntity w where w.userId = :userId", TicketWalletEntity.class)
                 .setParameter("userId", userId)
-                .getResultList().stream().findFirst().map(CoinWalletEntity::toDomain);
+                .getResultList().stream().findFirst().map(TicketWalletEntity::toDomain);
     }
 
     public List<IapPurchase> findPurchases(Long userId) {

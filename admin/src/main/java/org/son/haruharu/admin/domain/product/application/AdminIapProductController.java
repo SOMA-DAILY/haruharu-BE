@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Admin IAP Product", description = "코인 상품 카탈로그 관리(SUPER 전용)")
+@Tag(name = "Admin IAP Product", description = "티켓 상품 카탈로그 관리(SUPER 전용)")
 @RestController
 @RequestMapping("/api/v1/admin/iap/products")
 public class AdminIapProductController {
@@ -30,19 +30,19 @@ public class AdminIapProductController {
         this.adminIapProductService = adminIapProductService;
     }
 
-    @Operation(summary = "코인 상품 생성", description = "storeProductId 중복 시 409. SUPER 전용.")
+    @Operation(summary = "티켓 상품 생성", description = "storeProductId 중복 시 409. SUPER 전용.")
     @PostMapping
     public ApiResponse<AdminIapProductResponse> create(@RequestBody @Valid CreateIapProductRequest request) {
         return ApiResponse.ok(adminIapProductService.create(request.toCommand()));
     }
 
-    @Operation(summary = "코인 상품 목록", description = "활성/비활성 전체. SUPER 전용.")
+    @Operation(summary = "티켓 상품 목록", description = "활성/비활성 전체. SUPER 전용.")
     @GetMapping
     public ApiResponse<List<AdminIapProductResponse>> list() {
         return ApiResponse.ok(adminIapProductService.getProducts());
     }
 
-    @Operation(summary = "코인 상품 수정", description = "보낸 필드만 부분 갱신(코인·보너스·가격·통화·활성). SUPER 전용.")
+    @Operation(summary = "티켓 상품 수정", description = "보낸 필드만 부분 갱신(티켓 수량·가격·통화·활성). SUPER 전용.")
     @PatchMapping("/{id}")
     public ApiResponse<AdminIapProductResponse> update(
             @Parameter(description = "상품 id", example = "1") @PathVariable Long id,

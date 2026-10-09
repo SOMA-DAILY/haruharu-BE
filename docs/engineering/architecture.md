@@ -76,7 +76,7 @@ app/src/main/java/org/son/haruharu/
 
 admin/src/main/java/org/son/haruharu/admin/
 ├── AdminApplication.java                     # @SpringBootApplication
-├── domain/{account,dashboard,payment,product,room,user}/
+├── domain/{account,dashboard,payment,product,room,ticket,user}/
 │                                             # 어드민 전용 도메인은 4계층 전부 이 모듈에 둔다
 ├── common/ · config/ · handler/ · security/ · bootstrap/
 ```
@@ -98,7 +98,7 @@ admin/src/main/java/org/son/haruharu/admin/
 | 어드민 전용 조회·관리 기능 | `admin/domain/{domain}/` 4계층 전부 |
 
 **어드민 전용 도메인 규칙:** `admin/`은 core 도메인 객체·Entity를 읽어 조인 조회하는 것을 허용한다
-(예: `AdminUserQueryRepository`가 `UserEntity`·`CoinWalletEntity`·`RoomMemberEntity`를 함께 조회).
+(예: `AdminUserQueryRepository`가 `UserEntity`·`TicketWalletEntity`·`RoomMemberEntity`를 함께 조회).
 어드민은 여러 도메인을 가로지르는 조회가 본질이므로, core에 어드민 전용 쿼리를 넣지 말고
 `admin/domain/{domain}/storage/`에 `Admin*QueryRepository`로 둔다.
 
@@ -277,13 +277,12 @@ public static UserEntity from(User user) {
 - 이전 자동 미션 도메인은 #482에서 폐기. 과거 미션 테이블·영상의 `mission_id`는 데이터 호환을 위해 보존하며 런타임 엔티티·배치·API는 제공하지 않는다.
 - `notification` — device_tokens · notification_settings · notification_history (FCM)
 - `report` — reports
+- `ticket` — ticket_wallet(단일 잔액) · ticket_ledger(append-only). 사유는 구매·사용·환불 회수·운영 지급(#492). 사용처 연결 전까지 API 는 기본 OFF
+- `payment` — iap_product · iap_purchase · iap_webhook_event. RevenueCat webhook 으로만 구매·환불을 받는다(#492). 기본 OFF
 
 **보류 (비활성 잔존, 삭제 X):**
 - `identity` — user_identities. PASS 실명인증 → 지연인증(성별/실명 필요 시점에만)
 - `value` — value_questions · user_value_answers. 가치관(MVP 온보딩 제외)
-
-**폐기 (새 MVP 비활성/제거 대상):**
-- `coin` · `payment`(IAP)
 
 **제거 완료(#451):** `matching`(대기열 자동매칭). 구형 방 활성화·종료 배치도 제거하며 초대코드 방 생명주기는 `RoomStatusReconciler`가 처리한다. 기존 원장·알림 이력의 enum 값과 과거 SQL은 데이터 호환성을 위해 보존한다.
 

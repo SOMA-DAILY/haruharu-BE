@@ -37,7 +37,7 @@ class AdminIapProductServiceTest {
     }
 
     private IapProduct product(Long id) {
-        return new IapProduct(id, "groom_60", IapStore.APP_STORE, 60, 0, 9800, "KRW", true);
+        return new IapProduct(id, "groom_60", IapStore.APP_STORE, 60, 9800, "KRW", true);
     }
 
     @Test
@@ -47,11 +47,11 @@ class AdminIapProductServiceTest {
         given(adminIapProductWriter.save(any())).willReturn(product(1L));
 
         AdminIapProductResponse result = service.create(
-                new CreateIapProductCommand("groom_60", IapStore.APP_STORE, 60, 0, 9800, "KRW"));
+                new CreateIapProductCommand("groom_60", IapStore.APP_STORE, 60, 9800, "KRW"));
 
         assertThat(result.id()).isEqualTo(1L);
         assertThat(result.storeProductId()).isEqualTo("groom_60");
-        assertThat(result.coinAmount()).isEqualTo(60);
+        assertThat(result.ticketAmount()).isEqualTo(60);
     }
 
     @Test
@@ -60,7 +60,7 @@ class AdminIapProductServiceTest {
         given(adminIapProductReader.existsByStoreProductId("groom_60")).willReturn(true);
 
         assertThatThrownBy(() -> service.create(
-                new CreateIapProductCommand("groom_60", IapStore.APP_STORE, 60, 0, 9800, "KRW")))
+                new CreateIapProductCommand("groom_60", IapStore.APP_STORE, 60, 9800, "KRW")))
                 .isInstanceOf(AdminIapProductDuplicateException.class);
         verify(adminIapProductWriter, never()).save(any());
     }
@@ -73,10 +73,10 @@ class AdminIapProductServiceTest {
 
         // 가격만 변경
         AdminIapProductResponse result = service.update(1L,
-                new UpdateIapProductCommand(null, null, 8900, null, null));
+                new UpdateIapProductCommand(null, 8900, null, null));
 
         assertThat(result.price()).isEqualTo(8900);
-        assertThat(result.coinAmount()).isEqualTo(60); // 유지
+        assertThat(result.ticketAmount()).isEqualTo(60); // 유지
         assertThat(result.storeProductId()).isEqualTo("groom_60"); // 불변
         assertThat(result.active()).isTrue(); // 유지
     }
@@ -87,7 +87,7 @@ class AdminIapProductServiceTest {
         given(adminIapProductReader.getById(99L)).willThrow(new AdminIapProductNotFoundException());
 
         assertThatThrownBy(() -> service.update(99L,
-                new UpdateIapProductCommand(null, null, 8900, null, null)))
+                new UpdateIapProductCommand(null, 8900, null, null)))
                 .isInstanceOf(AdminIapProductNotFoundException.class);
     }
 }

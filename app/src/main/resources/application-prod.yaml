@@ -15,6 +15,7 @@ jwt:
 
 revenuecat:
   webhook-secret: ${REVENUECAT_WEBHOOK_SECRET}
+  accept-sandbox: false  # 운영은 실결제만 적립한다(#492). 샌드박스 이벤트는 기록만 남긴다
 
 oauth:
   providers:

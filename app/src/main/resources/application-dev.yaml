@@ -18,6 +18,7 @@ jwt:
 
 revenuecat:
   webhook-secret: ${REVENUECAT_WEBHOOK_SECRET}
+  accept-sandbox: true  # 개발 서버는 스토어 테스트 계정(샌드박스) 결제로 검증한다(#492)
 
 oauth:
   providers:

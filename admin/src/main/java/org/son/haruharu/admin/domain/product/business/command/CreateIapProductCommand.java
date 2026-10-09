@@ -5,8 +5,7 @@ import org.son.haruharu.domain.payment.implement.IapStore;
 public record CreateIapProductCommand(
         String storeProductId,
         IapStore store,
-        long coinAmount,
-        long bonusAmount,
+        long ticketAmount,
         int price,
         String currency
 ) {

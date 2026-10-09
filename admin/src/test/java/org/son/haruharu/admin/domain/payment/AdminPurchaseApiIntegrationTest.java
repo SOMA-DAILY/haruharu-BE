@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -93,6 +94,28 @@ class AdminPurchaseApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(id))
                 .andExpect(jsonPath("$.data.store_transaction_id").value("txn-detail"));
+    }
+
+    @Test
+    @DisplayName("환불됐지만 회수하지 못한 티켓 수량이 목록과 상세에 노출된다")
+    void refundedPurchase_exposesUnrevokedTicketAmount() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        // 2장 구매 → 1장 사용 후 환불 → 1장만 회수, 1장 미회수
+        IapPurchaseEntity entity = IapPurchaseEntity.from(IapPurchase.owned(
+                903L, 3L, "ticket_2", "txn-refunded", IapStore.APP_STORE, 2, now.minusDays(1)).refunded(now, 1));
+        em.persist(entity);
+        em.flush();
+        Long id = entity.toDomain().id();
+
+        mockMvc.perform(get("/api/v1/admin/iap/purchases").param("status", "REFUNDED").with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[?(@.id == " + id + ")].unrevoked_ticket_amount").value(hasItem(1)));
+
+        mockMvc.perform(get("/api/v1/admin/iap/purchases/{id}", id).with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("REFUNDED"))
+                .andExpect(jsonPath("$.data.ticket_amount").value(2))
+                .andExpect(jsonPath("$.data.unrevoked_ticket_amount").value(1));
     }
 
     @Test
