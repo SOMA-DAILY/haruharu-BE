@@ -381,4 +381,74 @@ class AdminRoomMissionApiIntegrationTest {
                 .andExpect(jsonPath("$.error.fields[0].field").value("missions[1].image_key"));
         mvc.perform(get(base(room)).with(authentication(role("CS")))).andExpect(jsonPath("$.data.missions").isEmpty());
     }
+
+    @Test
+    void givenRecordingType_whenCreateReplaceAndList_thenTypeMarksRecordingMissionWithOptionalImage() throws Exception {
+        signedUrls();
+        given(storage.head(IMAGE_KEY)).willReturn(new S3StoragePort.ObjectMetadata(10, "image/jpeg"));
+        long room = room("[]");
+        var body = mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"RECORDING","details":{"content":"오늘 먹은 점심을 찍어 올려주세요"},"opens_at":"%s",
+                 "announcement":{"announcement_type":"START","run_at":"%s","content":"점심 인증 미션이 열렸어요","push":false}}
+                """.formatted(start, start)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.type").value("RECORDING"))
+                .andExpect(jsonPath("$.data.interaction_type").value("RECORDING"))
+                .andExpect(jsonPath("$.data.details.content").value("오늘 먹은 점심을 찍어 올려주세요"))
+                .andExpect(jsonPath("$.data.image").isEmpty())
+                .andExpect(jsonPath("$.data.requires_response").value(false))
+                .andReturn().getResponse().getContentAsString();
+        long mission = JsonPath.parse(body).read("$.data.mission_id", Long.class);
+        // 사진은 유형과 무관하게 같은 자리(image_key)로 붙인다.
+        mvc.perform(put(base(room) + "/" + mission).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"RECORDING","details":{"content":"사진 예시처럼 찍어 주세요"},"image_key":"%s","opens_at":"%s"}
+                """.formatted(IMAGE_KEY, start)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.type").value("RECORDING"))
+                .andExpect(jsonPath("$.data.image.key").value(IMAGE_KEY));
+        long roomWithInitial = room("""
+                [{"type":"RECORDING","details":{"content":"첫날 인사 영상"},"opens_at":"%s"},
+                 {"type":"ANNOUNCEMENT","details":{"content":"일반 안내"},"opens_at":"%s"}]
+                """.formatted(start, start));
+        mvc.perform(get(base(roomWithInitial)).with(authentication(role("CS"))))
+                .andExpect(jsonPath("$.data.missions[0].type").value("RECORDING"))
+                .andExpect(jsonPath("$.data.missions[1].type").value("ANNOUNCEMENT"));
+    }
+
+    @Test
+    void givenInvalidRecordingMission_whenCreateOrChangeType_thenFieldErrors() throws Exception {
+        long room = room("[]");
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"RECORDING","details":{},"opens_at":"%s"}
+                """.formatted(start)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.fields[0].field").value("details.content"));
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"RECORDING","details":{"content":"촬영","reveal_fields":["MBTI"]},"opens_at":"%s"}
+                """.formatted(start)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields[0].field").value("details.reveal_fields"));
+        // 촬영 미션의 안내도 본문이 필요하다.
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"RECORDING","details":{"content":"촬영"},"opens_at":"%s",
+                 "announcement":{"announcement_type":"START","run_at":"%s","content":null,"push":false}}
+                """.formatted(start, start)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields[0].field").value("announcement.content"));
+        // 만든 뒤에는 유형을 바꿀 수 없다(안내형 → 촬영).
+        long announcementMission = JsonPath.parse(mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"ANNOUNCEMENT","details":{"content":"안내"},"opens_at":"%s"}
+                """.formatted(start))).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString())
+                .read("$.data.mission_id", Long.class);
+        mvc.perform(put(base(room) + "/" + announcementMission).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"RECORDING","details":{"content":"촬영으로 변경"},"opens_at":"%s"}
+                """.formatted(start)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.fields[0].field").value("type"));
+    }
 }

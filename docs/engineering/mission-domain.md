@@ -16,8 +16,10 @@ core/.../domain/mission/
 ├── types/
 │   ├── announcement/
 │   │   └── implement/        # 안내형 정의·검증·details 변환
-│   └── profilereveal/
-│       └── implement/        # 프로필 공개형 정의·공개 시각 규칙·공개 알림
+│   ├── profilereveal/
+│   │   └── implement/        # 프로필 공개형 정의·공개 시각 규칙·공개 알림
+│   └── recording/
+│       └── implement/        # 촬영형 정의·검증·details 변환
 └── chat/
     ├── business/             # 게시 계획 관리·발송·메시지 삭제
     ├── implement/            # MissionAnnouncement, 채팅 참조 연결
@@ -39,9 +41,9 @@ core/.../domain/mission/
 | 구성 | 책임 |
 | --- | --- |
 | `RoomMission` / `room_mission_instances` | 모든 미션의 공통 ID·방·유형·시작·선택적 마감·취소·감사 기록과 유형별 정의(`details jsonb`) |
-| `MissionDefinition` | 유형별 입력·조회 데이터 계약. `AnnouncementMissionDefinition`(본문), `ProfileRevealMissionDefinition`(공개 항목) |
+| `MissionDefinition` | 유형별 입력·조회 데이터 계약. `AnnouncementMissionDefinition`(본문), `ProfileRevealMissionDefinition`(공개 항목), `RecordingMissionDefinition`(촬영 주제) |
 | `MissionTypeHandler` | 유형별 검증과 `details` JSON 변환, 안내 본문 생략 허용 여부. 저장소를 참조하지 않는다 |
-| `MissionTypeRegistry` | 유형별 Handler 선택. 현재 `ANNOUNCEMENT`, `PROFILE_REVEAL` 등록 |
+| `MissionTypeRegistry` | 유형별 Handler 선택. 현재 `ANNOUNCEMENT`, `PROFILE_REVEAL`, `RECORDING` 등록 |
 | `MissionImage` / `MissionImageStore` | 미션에 붙는 선택 사진 한 장(유형 공통)과 업로드·존재 확인·조회 주소 발급 |
 | `MissionProfileRevealSchedule` / `ProfileRevealAnnouncementNotifier` | 공개 미션의 시작 시각으로 프로필 항목을 열고, START 안내 때 새로 열리는 항목을 알린다 |
 | `MissionAnnouncement` / `mission_announcements` | 한 미션의 개별 게시 문구, 안내 용도, 예약·푸시·발송 상태 |
@@ -59,6 +61,7 @@ core/.../domain/mission/
 | --- | --- |
 | `ANNOUNCEMENT` | `{"content": "오늘의 대화를 시작해 주세요"}` |
 | `PROFILE_REVEAL` | `{"reveal_fields": ["MBTI", "AGE"]}` |
+| `RECORDING` | `{"content": "오늘 먹은 점심을 찍어 올려주세요"}` |
 
 미션 한 건의 일정과 정의가 같은 행이므로 조인 없이 한 번에 읽고 함께 저장한다. DB는 `details`가 JSON 객체인지만 강제하고,
 유형별 모양(본문 500자, 허용 공개 항목)은 Handler 검증이 담당한다. 읽을 때는 모르는 값을 버리고 검증하지 않는다.
@@ -162,6 +165,7 @@ app은 하위 패키지를 자동 스캔한다. admin은 필요한 빈만 명시
 | --- | --- | --- |
 | `ANNOUNCEMENT` | `{"content": "..."}` | 본문 필수, 500자 |
 | `PROFILE_REVEAL` | `{"reveal_fields": ["MBTI", "INTO_NOW", "AGE", "DEPARTMENT"]}` | 항목 하나 이상. 중복 제거 후 표시 순서로 정렬 |
+| `RECORDING` | `{"content": "..."}` | 촬영 주제 필수, 500자 |
 
 다른 유형의 필드는 조용히 버리지 않고 400으로 거절한다. `ANNOUNCEMENT`에 비어 있지 않은 `reveal_fields`를 보내면
 `details.reveal_fields`, `PROFILE_REVEAL`에 `content`를 보내면 `details.content` 오류다. 공개와 함께 채팅 글을 올리려면
@@ -196,6 +200,16 @@ app은 하위 패키지를 자동 스캔한다. admin은 필요한 빈만 명시
 `url`은 비공개 버킷의 단기 서명 주소(기본 1시간)로 조회·방송할 때마다 새로 발급한다. 클라이언트는 `url`을 저장하지 않고
 이미지 캐시는 `key`로 잡는다. 만료된 뒤에는 메시지 목록이나 미션 상세·lookup을 다시 조회해 새 주소를 받는다.
 
+### 촬영 미션 (#496)
+
+`RECORDING`은 참가자에게 촬영을 요청하는 미션이다. 클라이언트는 미션 응답의 `type`과 채팅 메시지의
+`mission.interaction_type`이 `RECORDING`인지로 촬영 미션을 판단해 촬영 진입을 보여준다. 사진(`image`)은 유형 공통
+속성이라 촬영 미션에도 있을 수도 없을 수도 있으며, 사진 유무로 촬영 미션을 판단하지 않는다.
+
+서버는 유형을 구분해 주는 것까지만 한다. 촬영한 영상은 기존 영상 업로드로 저장하고 미션과 연결하지 않으므로
+`requires_response`는 `false`이고, 누가 미션을 수행했는지 서버는 알지 못한다. 참여 집계·미션 영상 모아 보기·보상이
+필요해지면 이 유형 위에 영상과 미션의 연결을 추가한다. 촬영 미션의 안내는 안내형처럼 본문이 필수이고 프로필을 열지 않는다.
+
 안내 용도는 `START`, `REMINDER`, `RESULT`이며, 현재 RESULT는 운영자가 작성한 안내다. 자동 집계를 의미하지 않는다.
 안내는 미션 시작보다 빠르게 게시할 수 없다. 방이 열려 있으면 마감 후 RESULT 안내를 추가할 수 있다.
 안내 본문은 필수이며, 공개 미션(`PROFILE_REVEAL`)의 START만 본문 없이 허용한다(채팅 글 없이 공개 푸시만 전달).
@@ -205,7 +219,7 @@ app은 하위 패키지를 자동 스캔한다. admin은 필요한 빈만 명시
 참가자 기준 경로는 `/api/v1/rooms/{roomId}/mission-instances`이다. 폐기한 자동 미션 `/missions` 경로와 구분한다.
 
 - `GET /`: 공개된 미션 커서 목록(`after`, `size`).
-- `GET /{missionId}`: 공개된 미션 상세. 현재 두 유형 모두 `requires_response=false`, `can_respond=false`.
+- `GET /{missionId}`: 공개된 미션 상세. 현재 유형은 모두 `requires_response=false`, `can_respond=false`.
 - `GET /lookup?ids=10,11`: 최대 100개 일괄 보충 조회. 다른 방·숨김·없는 ID는 제외한다.
 
 이 조회들은 메시지를 생성하지 않는다. 공통 상태·시각·`interaction_type`과 유형별 `details`를 반환하고 운영 감사·푸시 설정은 제외한다.
@@ -238,7 +252,7 @@ REST 기록과 STOMP 방송은 같은 저장 메시지를 표현한다. 기존 U
 }
 ```
 
-`interaction_type`은 미션 유형이다(`ANNOUNCEMENT`, `PROFILE_REVEAL`). `image`는 미션에 사진이 있을 때만 값이 있고
+`interaction_type`은 미션 유형이다(`ANNOUNCEMENT`, `PROFILE_REVEAL`, `RECORDING`). `image`는 미션에 사진이 있을 때만 값이 있고
 REST 기록과 STOMP 방송 모두 추가 조회 없이 말풍선에 그릴 수 있게 서명 주소를 함께 보낸다. 동적 미션 상태와 개인 응답은 공용 STOMP/Redis에 넣지 않는다. 채팅 한 페이지의 안내와 미션을 각각 한 번에 조회해 참조를 조합한다.
 삭제된 안내는 기존 삭제 문구·`deleted=true`, `mission=null`이며 인용도 unavailable이다. 사진도 함께 내려가지 않는다.
 사용자 입력의 발신자·유형·미션 ID는 공식 메시지 생성에 사용하지 않는다.
@@ -358,3 +372,6 @@ FE 코드 수정·기기 UI 확인·운영 DB 적용·배포는 이 검증에 �
 - `details`에 스키마 버전 값은 두지 않았다. 키 변경이 필요해지면 그 이관에서 함께 정한다.
 - 미션 사진(2026-10-08): 유형 공통 속성이라 `details`의 예약 키 `image`로 공통 코드가 다룬다. 배포 시 admin 태스크 역할에
   `mission-images/*`의 `s3:PutObject`·`s3:GetObject`, app 태스크 역할에 `s3:GetObject` 권한이 필요하다(미확인).
+- 촬영 미션 유형(2026-10-10, #496): `RECORDING` 추가. 유형 값 목록은 DB `type` CHECK에도 있으므로, #496 이전에
+  `room_mission_instances`가 만들어진 DB에는 `scripts/sql/496-mission-type-recording-up.sql`을 app/admin 배포 전에 적용한다
+  (재실행 가능). 적용하지 않으면 기동은 되지만 촬영 미션 저장이 실패한다. 새로 이관하는 DB는 `486-mission-up.sql`이 같은 목록으로 만든다.

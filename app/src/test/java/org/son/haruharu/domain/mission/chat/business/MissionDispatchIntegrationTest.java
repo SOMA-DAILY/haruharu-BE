@@ -27,6 +27,7 @@ import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
 import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition;
 import org.son.haruharu.domain.mission.types.profilereveal.implement.MissionRevealField;
 import org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionDefinition;
+import org.son.haruharu.domain.mission.types.recording.implement.RecordingMissionDefinition;
 import org.son.haruharu.domain.room.business.MemberProfileService;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
 import org.son.haruharu.domain.room.implement.*;
@@ -768,5 +769,60 @@ class MissionDispatchIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.image.url").value(url))
                 .andExpect(jsonPath("$.data.image.width").value(1080))
                 .andExpect(jsonPath("$.data.details.image").doesNotExist());
+    }
+
+    @Test
+    void givenRecordingMission_whenDispatchedAndRead_thenClientsSeeRecordingTypeAndNothingElseChanges() throws Exception {
+        jdbc.update("delete from notification_history");
+        when(storage.head(IMAGE_KEY)).thenReturn(new org.son.haruharu.infrastructure.s3.S3StoragePort.ObjectMetadata(10, "image/jpeg"));
+        when(storage.publicBaseUrl()).thenReturn("https://bucket.example/");
+        when(storage.createPresignedImageGetUrl(anyString())).thenAnswer(i -> i.getArgument(0) + "?signed");
+        var start = now.minusMinutes(1);
+        long recording = missionService.create(roomId, new RoomMissionCommand(MissionType.RECORDING,
+                new RecordingMissionDefinition("오늘 먹은 점심을 찍어 올려주세요"), start, null,
+                new MissionAnnouncementCommand(MissionAnnouncementType.START, start, "점심 인증 미션이 열렸어요", true, null, null)),
+                "admin:1").missionId();
+        long withImage = missionService.create(roomId, new RoomMissionCommand(MissionType.RECORDING,
+                new RecordingMissionDefinition("예시처럼 찍어 주세요"), IMAGE_KEY, start, null,
+                new MissionAnnouncementCommand(MissionAnnouncementType.START, start, "예시 사진을 확인해 주세요", false, null, null)),
+                "admin:1").missionId();
+        assertThat(jdbc.queryForObject("select type from room_mission_instances where id=?", String.class, recording))
+                .isEqualTo("RECORDING");
+        assertThat(jdbc.queryForObject("select details::text from room_mission_instances where id=?", String.class, recording))
+                .isEqualTo("{\"content\": \"오늘 먹은 점심을 찍어 올려주세요\"}");
+
+        assertThat(dispatcher.dispatchDue()).isEqualTo(2);
+
+        // 채팅 말풍선: 실시간 방송과 기록 조회 모두 interaction_type 으로 촬영 미션을 구분한다.
+        var broadcasts = org.mockito.ArgumentCaptor.forClass(ChatMessageBroadcast.class);
+        verify(delivery, times(2)).sendToTopic(anyString(), broadcasts.capture(), anyString());
+        assertThat(broadcasts.getAllValues()).allSatisfy(b -> {
+            assertThat(b.messageType()).isEqualTo("MISSION");
+            assertThat(b.mission().interactionType()).isEqualTo("RECORDING");
+        });
+        var messages = chats.getMessages(chatId, alice, null, 20).messages();
+        assertThat(messages).hasSize(2).allSatisfy(m -> assertThat(m.mission().interactionType()).isEqualTo("RECORDING"));
+        assertThat(messages).filteredOn(m -> m.mission().missionId().equals(recording)).singleElement()
+                .satisfies(m -> assertThat(m.mission().image()).isNull());
+        assertThat(messages).filteredOn(m -> m.mission().missionId().equals(withImage)).singleElement()
+                .satisfies(m -> assertThat(m.mission().image().key()).isEqualTo(IMAGE_KEY));
+
+        // 미션 조회: 참가자가 유형으로 판단한다. 서버는 제출을 받지 않는다.
+        mvc.perform(get("/api/v1/rooms/" + roomId + "/mission-instances/" + recording)
+                        .with(authentication(new UsernamePasswordAuthenticationToken(alice, null, List.of()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.type").value("RECORDING"))
+                .andExpect(jsonPath("$.data.interaction_type").value("RECORDING"))
+                .andExpect(jsonPath("$.data.details.content").value("오늘 먹은 점심을 찍어 올려주세요"))
+                .andExpect(jsonPath("$.data.status").value("OPEN"))
+                .andExpect(jsonPath("$.data.requires_response").value(false))
+                .andExpect(jsonPath("$.data.can_respond").value(false))
+                .andExpect(jsonPath("$.data.image").isEmpty());
+
+        // 촬영 미션은 프로필을 열지 않고 공개 푸시도 보내지 않는다. 안내 푸시만 나간다.
+        assertThat(inbox("PROFILE_REVEAL")).isZero();
+        assertThat(inbox("ADMIN_MESSAGE")).isEqualTo(3);
+        assertThat(memberProfiles.getMemberProfile(roomId, bobMemberId, alice).fields())
+                .allSatisfy(f -> assertThat(f.revealAt()).isNull());
     }
 }

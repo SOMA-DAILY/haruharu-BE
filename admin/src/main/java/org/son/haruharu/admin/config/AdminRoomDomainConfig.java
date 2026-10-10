@@ -16,6 +16,7 @@ import org.son.haruharu.domain.mission.common.implement.RoomMissionWriter;
 import org.son.haruharu.domain.mission.common.storage.RoomMissionRepositoryImpl;
 import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionHandler;
 import org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionHandler;
+import org.son.haruharu.domain.mission.types.recording.implement.RecordingMissionHandler;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.profile.storage.UserProfileRepositoryImpl;
 import org.son.haruharu.domain.room.business.RoomInviteService;
@@ -70,6 +71,7 @@ import org.springframework.context.annotation.Import;
         RoomMissionReader.class, RoomMissionWriter.class,
         MissionAnnouncementReader.class, MissionAnnouncementWriter.class,
         MissionTypeRegistry.class, AnnouncementMissionHandler.class, ProfileRevealMissionHandler.class,
+        RecordingMissionHandler.class,
         RoomMissionRepositoryImpl.class, MissionAnnouncementRepositoryImpl.class,
         ChatMessageReader.class,
         ChatMessageWriter.class,
