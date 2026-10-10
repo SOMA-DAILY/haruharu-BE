@@ -6,15 +6,18 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.video.application.dto.ReactionRequest;
+import org.son.haruharu.domain.video.application.dto.VideoCaptionUpdateRequest;
 import org.son.haruharu.domain.video.application.dto.VideoPresignRequest;
 import org.son.haruharu.domain.video.application.dto.VideoUploadRequest;
 import org.son.haruharu.domain.video.business.VideoReactionService;
 import org.son.haruharu.domain.video.business.VideoService;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
+import org.son.haruharu.domain.video.business.dto.VideoCaptionResponse;
 import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
 import org.son.haruharu.domain.video.business.dto.VideoUploadUrlResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -47,7 +50,7 @@ public class VideoController {
 
     @Operation(summary = "영상 업로드(현재 슬롯 제출)",
             description = "presign으로 올린 영상을 특정 방의 현재 슬롯에 제출한다. 슬롯은 서버가 방 시작 상대 정시(slot_start)로 자동 판정하므로 "
-                    + "클라는 슬롯을 지정하지 않는다. body 필드는 video_url(본인 업로드 경로여야 함), thumbnail_url, caption(최대 20자). "
+                    + "클라는 슬롯을 지정하지 않는다. body 필드는 video_url(본인 업로드 경로여야 함), thumbnail_url, caption(최대 100자). "
                     + "에러: 방 멤버가 아니면 인가 실패, 방 없음 ROOM_NOT_FOUND(404), 진행 중(ACTIVE)이 아닌 방 VIDEO_ROOM_NOT_ACTIVE(409), "
                     + "본인 경로가 아닌 video_url이면 VIDEO_INVALID_URL(400), 이미 현재 슬롯에 올렸으면 VIDEO_SLOT_ALREADY_UPLOADED(409).")
     @PostMapping("/rooms/{roomId}/video-posts")
@@ -83,5 +86,19 @@ public class VideoController {
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(videoReactionService.toggle(userId, videoPostId, request.reactionType()));
+    }
+
+    @Operation(summary = "본인 영상 캡션 수정",
+            description = "본인이 올린 영상의 캡션만 수정한다(최대 100자). 빈 문구는 캡션을 제거한다. "
+                    + "영상·썸네일·슬롯·게시 시각·반응은 유지한다. "
+                    + "에러: 존재하지 않거나 삭제·숨김 처리된 영상이면 VIDEO_404_NOT_FOUND(404), "
+                    + "본인 영상이 아니면 VIDEO_403_NOT_OWNER(403).")
+    @PatchMapping("/video-posts/{videoPostId}/caption")
+    public ApiResponse<VideoCaptionResponse> updateCaption(
+            @Parameter(description = "캡션을 수정할 영상 id", example = "10") @PathVariable Long videoPostId,
+            @Valid @RequestBody VideoCaptionUpdateRequest request,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(videoService.updateCaption(userId, videoPostId, request.toCommand()));
     }
 }

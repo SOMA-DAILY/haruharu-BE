@@ -12,7 +12,9 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
+import org.son.haruharu.domain.video.business.command.VideoCaptionUpdateCommand;
 import org.son.haruharu.domain.video.business.command.VideoUploadCommand;
+import org.son.haruharu.domain.video.business.dto.VideoCaptionResponse;
 import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
 import org.son.haruharu.domain.video.business.dto.VideoUploadUrlResponse;
 import org.son.haruharu.domain.video.business.exception.DuplicateSlotUploadException;
@@ -121,6 +123,18 @@ public class VideoService {
             throw new NotVideoOwnerException();
         }
         videoPostWriter.save(post.deletedAt(LocalDateTime.now(clock)));
+    }
+
+    @Transactional
+    public VideoCaptionResponse updateCaption(Long userId, Long videoPostId, VideoCaptionUpdateCommand command) {
+        VideoPost post = videoPostReader.getEditableById(videoPostId);
+        RoomMember owner = roomMemberReader.getById(post.roomMemberId());
+        if (!owner.userId().equals(userId)) {
+            throw new NotVideoOwnerException();
+        }
+        VideoPost updated = post.withCaption(command.caption());
+        videoPostWriter.updateCaption(videoPostId, updated.caption());
+        return VideoCaptionResponse.from(updated);
     }
 
     private void validateOwnUrl(Long userId, String videoUrl) {

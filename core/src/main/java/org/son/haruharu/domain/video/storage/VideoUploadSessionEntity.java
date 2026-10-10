@@ -38,7 +38,6 @@ public class VideoUploadSessionEntity {
     @Column(nullable = false)
     private LocalDateTime expiresAt;
 
-    // #482: 기존 긴 캡션 세션의 완료·재시도를 위해 저장 길이는 축소하지 않는다.
     @Column(length = 100)
     private String caption;
 

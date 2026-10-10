@@ -8,6 +8,9 @@ public interface VideoPostRepository {
 
     VideoPost save(VideoPost post);
 
+    /** 활성·비숨김 영상의 캡션 컬럼만 변경한다. 수정할 수 없으면 false. */
+    boolean updateCaption(Long videoPostId, String caption);
+
     Optional<VideoPost> findById(Long id);
 
     /** 주어진 슬롯 창 중 이 멤버가 업로드(미삭제)한 slot_start들. 슬롯별 잠금 판정용 배치 조회. */

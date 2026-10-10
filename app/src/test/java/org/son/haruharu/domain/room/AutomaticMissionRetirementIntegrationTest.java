@@ -32,7 +32,7 @@ class AutomaticMissionRetirementIntegrationTest {
                 .andExpect(status().isNotFound());
         String specification = mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(specification).doesNotContain("/missions", "mission-recording", "mission-image", "/caption");
+        assertThat(specification).doesNotContain("/missions", "mission-recording", "mission-image");
         assertThat(specification).contains("/api/v1/rooms/{roomId}/video-posts", "/api/v1/rooms/{roomId}/today");
     }
 }

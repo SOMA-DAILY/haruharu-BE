@@ -4,6 +4,6 @@ import org.son.haruharu.common.exception.BadRequestException;
 
 public class InvalidVideoCaptionException extends BadRequestException {
     public InvalidVideoCaptionException() {
-        super("INVALID_INPUT", "신규 영상 캡션은 20자 이하여야 합니다.");
+        super("VIDEO_CAPTION_TOO_LONG", "캡션은 100자까지 작성할 수 있어요.");
     }
 }
