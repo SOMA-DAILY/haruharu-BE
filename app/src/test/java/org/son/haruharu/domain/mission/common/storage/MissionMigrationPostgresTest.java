@@ -155,4 +155,48 @@ class MissionMigrationPostgresTest {
         assertThatThrownBy(()->script("486-mission-up.sql")).isInstanceOf(SQLException.class).hasMessageContaining("Unclassified");
         assertThat(text("SELECT to_regclass('chat_message_mission_backup_486')")).isNull();
     }
+
+    @Test
+    void givenSchemaWithoutRecordingType_whenApply496_thenAllowsRecordingAndIsRerunnable() throws Exception {
+        script("486-mission-up.sql");
+        // #496 이전에 이관했거나 Hibernate가 만든 DB: 두 유형만 허용하는 CHECK가 생성된 이름으로 걸려 있다.
+        execute("""
+            ALTER TABLE room_mission_instances DROP CONSTRAINT room_mission_instances_type_check;
+            ALTER TABLE room_mission_instances ADD CONSTRAINT legacy_generated_type_check
+                CHECK (type IN ('ANNOUNCEMENT','PROFILE_REVEAL'));
+            """);
+        String insert = "INSERT INTO room_mission_instances(room_id,type,details,opens_at,created_at,updated_at) "
+                + "VALUES(1,'RECORDING','{\"content\":\"점심 인증\"}',now(),now(),now())";
+        assertThatThrownBy(() -> execute(insert)).isInstanceOf(SQLException.class).hasMessageContaining("legacy_generated_type_check");
+
+        script("496-mission-type-recording-up.sql");
+        script("496-mission-type-recording-up.sql");
+        execute(insert);
+        assertThat(count("SELECT count(*) FROM room_mission_instances WHERE type='RECORDING'")).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM pg_constraint c JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attname='type' "
+                + "WHERE c.conrelid='room_mission_instances'::regclass AND c.contype='c' AND a.attnum=ANY(c.conkey)")).isEqualTo(1);
+        // 다른 제약과 기존 행은 그대로다.
+        assertThat(count("SELECT count(*) FROM room_mission_instances WHERE type IN ('ANNOUNCEMENT','PROFILE_REVEAL')")).isEqualTo(5);
+        assertThatThrownBy(() -> execute("UPDATE room_mission_instances SET type='SELECTION' WHERE id=101"))
+                .isInstanceOf(SQLException.class).hasMessageContaining("room_mission_instances_type_check");
+        assertThatThrownBy(() -> execute("UPDATE room_mission_instances SET details='[]' WHERE id=101"))
+                .isInstanceOf(SQLException.class).hasMessageContaining("ck_room_mission_instances_details");
+
+        // 촬영 미션이 있으면 되돌리지 않는다. 없앤 뒤에는 두 유형만 허용하던 상태로 돌아간다.
+        assertThatThrownBy(() -> script("496-mission-type-recording-down.sql"))
+                .isInstanceOf(SQLException.class).hasMessageContaining("manual reconciliation");
+        execute("DELETE FROM room_mission_instances WHERE type='RECORDING'");
+        script("496-mission-type-recording-down.sql");
+        assertThatThrownBy(() -> execute(insert)).isInstanceOf(SQLException.class).hasMessageContaining("room_mission_instances_type_check");
+    }
+
+    @Test
+    void givenFreshMigration_whenUp_thenRecordingTypeIsAllowedWithout496() throws Exception {
+        script("486-mission-up.sql");
+        execute("INSERT INTO room_mission_instances(room_id,type,details,opens_at,created_at,updated_at) "
+                + "VALUES(1,'RECORDING','{\"content\":\"점심 인증\"}',now(),now(),now())");
+        // 이미 새 목록인 DB에 496을 돌려도 결과가 같다.
+        script("496-mission-type-recording-up.sql");
+        assertThat(count("SELECT count(*) FROM room_mission_instances WHERE type='RECORDING'")).isEqualTo(1);
+    }
 }

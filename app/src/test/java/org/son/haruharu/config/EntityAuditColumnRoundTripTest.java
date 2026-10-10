@@ -53,7 +53,8 @@ class EntityAuditColumnRoundTripTest {
     void givenMissionAndAnnouncement_whenRoundTrip_thenPreserveAuditAndAllReferences() {
         var types = new org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry(java.util.List.of(
                 new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionHandler(),
-                new org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionHandler()));
+                new org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionHandler(),
+                new org.son.haruharu.domain.mission.types.recording.implement.RecordingMissionHandler()));
         var mission = new org.son.haruharu.domain.mission.common.implement.RoomMission(1L, 2L,
                 org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT,
                 new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition("안내"),
@@ -66,6 +67,11 @@ class EntityAuditColumnRoundTripTest {
                 org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionDefinition.from(java.util.List.of("AGE", "MBTI")), null,
                 CREATED_AT, null, null, "admin:1", "admin:1", CREATED_AT, CREATED_AT);
         assertThat(org.son.haruharu.domain.mission.common.storage.RoomMissionEntity.from(reveal, types).toDomain(types)).isEqualTo(reveal);
+        var recording = new org.son.haruharu.domain.mission.common.implement.RoomMission(4L, 2L,
+                org.son.haruharu.domain.mission.common.implement.MissionType.RECORDING,
+                new org.son.haruharu.domain.mission.types.recording.implement.RecordingMissionDefinition("점심 인증"), null,
+                CREATED_AT, null, null, "admin:1", "admin:1", CREATED_AT, CREATED_AT);
+        assertThat(org.son.haruharu.domain.mission.common.storage.RoomMissionEntity.from(recording, types).toDomain(types)).isEqualTo(recording);
         var announcement = new org.son.haruharu.domain.mission.chat.implement.MissionAnnouncement(10L,1L,2L,
                 org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementType.START,CREATED_AT,"게시 문구",true,"제목","본문",
                 org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementStatus.SENT,null,50L,70L,"admin:1","admin:2",
