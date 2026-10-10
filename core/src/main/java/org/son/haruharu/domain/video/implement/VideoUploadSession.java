@@ -26,8 +26,7 @@ public record VideoUploadSession(
 
     public static VideoUploadSession create(UUID id, Long userId, Long roomId, Long memberId,
                                             LocalDateTime slotStart, LocalDateTime now, String caption) {
-        // #482: 신규 생성만 20자로 제한하고, DB 복원·기존 세션 재시도는 과거 원문을 보존한다.
-        if (caption != null && caption.length() > 20) {
+        if (caption != null && caption.length() > VideoPost.MAX_CAPTION_LENGTH) {
             throw new InvalidVideoCaptionException();
         }
         return new VideoUploadSession(id, userId, roomId, memberId, slotStart, now.plusHours(TTL_HOURS),

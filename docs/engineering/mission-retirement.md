@@ -22,9 +22,8 @@
 | `POST /api/v1/rooms/{roomId}/missions/{roomMissionId}/impression` | 제거, 인증된 요청 404 |
 | `/api/v1/admin/missions`와 revision·상태 하위 경로 | 제거, 인증된 요청 404 |
 | #477의 operator-missions·mission-image·mission-recording | 롤백으로 제거 |
-| `PATCH /api/v1/video-posts/{videoPostId}/caption` | 롤백으로 제거 |
-| 신규 영상·신규 업로드 세션 캡션 | 최대 20자 |
-| 기존 21~100자 캡션 세션 | 조회·동일 job_id/캡션 접수 재시도·완료 보존. 신규 세션으로 긴 캡션을 등록할 수 없음 |
+| `PATCH /api/v1/video-posts/{videoPostId}/caption` | 롤백으로 제거했다가 #498에서 복구 |
+| 영상·업로드 세션 캡션 | 롤백으로 20자가 됐다가 #498에서 최대 100자로 복구 |
 | `missionAssignmentJob`, `missionOutcomeJob` 내부 실행 | Job 등록 제거, 인증된 내부 요청 404, 실행 기록 추가 없음 |
 | `MISSION_ASSIGNMENT_*`, `MISSION_OUTCOME_*` | 소비하는 코드 제거. 예전 환경변수가 남아 있어도 재활성화되지 않음 |
 
@@ -46,19 +45,18 @@ SUPER/OPERATOR로 유지한다. FE/admin 저장소는 이번 작업에서 수정
 채팅의 과거 미션 메타데이터 컬럼은 DB에 남아도 무시된다. 기본 ADMIN 메시지 내용과
 기존 삭제 표시를 사용하며, 새 미션 카드 메타데이터는 응답하지 않는다.
 
-캡션의 저장 매핑은 `VARCHAR(100)`으로 유지한다. 입력 제한 복원을 이유로
-`VARCHAR(20)`으로 축소하거나 긴 캡션을 잘라내지 않는다. app prod는 `ddl-auto=validate`,
-admin 기본은 `none`, 두 dev 프로필은 `update`이므로 특히 dev도 축소 매핑을 사용하지 않는다.
-과거 SQL이 미적용된 20자 DB에는 긴 캡션 데이터가 없으며, 필요하면 #475의 확장 SQL을
-별도 배포 절차로 적용한다. 이번 작업에서 실제 환경 DB나 S3는 변경하지 않았다.
+캡션의 저장 매핑은 `VARCHAR(100)`으로 유지한다. `VARCHAR(20)`으로 축소하거나 긴 캡션을
+잘라내지 않는다. app prod는 `ddl-auto=validate`, admin 기본은 `none`, 두 dev 프로필은
+`update`이므로 특히 dev도 축소 매핑을 사용하지 않는다. #498에서 입력 제한을 100자로
+복구했으므로, 확장 SQL이 미적용된 20자 DB에는 배포 전에 `scripts/sql/475-video-caption-up.sql`을
+적용하고 `475-video-caption-verify.sql`로 확인한다. 이번 작업에서 실제 환경 DB나 S3는 변경하지 않았다.
 
 361·363·365·367·371·379·402·449 SQL은 적용 이력과 검증을 위해 원래 위치에 보존한다.
 신규 설치에 미션 테이블은 필요 없다. 해당 up/down SQL을 폐기 절차로 실행하지 않는다.
-#474/#475 SQL은 롤백으로 현재 트리에서 빠졌지만 다음 이력에서 원문을 확인할 수 있다.
+#474 SQL은 롤백으로 현재 트리에서 빠졌지만 다음 이력에서 원문을 확인할 수 있다. #475 SQL은 #498에서 복원했다.
 
 ```sh
 git show 37fdb27ca5e5ffe87d180fdf187b5d7209e3b2e1:scripts/sql/474-operator-missions-up.sql
-git show 37fdb27ca5e5ffe87d180fdf187b5d7209e3b2e1:scripts/sql/475-video-caption-up.sql
 ```
 
 ## 배포 전 확인
@@ -68,7 +66,7 @@ git show 37fdb27ca5e5ffe87d180fdf187b5d7209e3b2e1:scripts/sql/475-video-caption-
 
 1. `scripts/sql/482-mission-retirement-verify.sql`을 읽기 전용으로 실행해 테이블/컬럼 존재,
    잔존 상태·예약·긴 캡션의 건수를 기록한다. 콘텐츠·사용자 식별자는 출력하지 않는다.
-2. FE/admin에서 폐기 경로 호출을 제거하고 신규 캡션 제한을 맞춘다.
+2. FE/admin에서 폐기 경로 호출을 제거한다. 캡션 제한은 #498 기준 100자다.
 3. 구버전 app/admin 인스턴스와 외부 오케스트레이터의 미션 Job 호출이 남지 않게 교체한다.
    저장소의 배포 워크플로에는 두 Job의 외부 호출이 발견되지 않았다. 외부 운영 설정은 별도 확인한다.
 4. 교체 후 읽기 전용 집계를 재실행해 미션 데이터가 추가 생성·갱신되지 않는지 확인한다.

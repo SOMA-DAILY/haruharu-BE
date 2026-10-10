@@ -120,44 +120,41 @@ class VideoUploadSessionIntegrationTest {
     }
 
     @Test
-    void givenNewCaptionOver20_whenReserveOrUpload_thenBadRequest() throws Exception {
+    void givenNewCaptionOver100_whenReserveOrUpload_thenBadRequest() throws Exception {
         var auth = authentication(new UsernamePasswordAuthenticationToken(user, null, List.of()));
         mvc.perform(post("/api/v1/rooms/{roomId}/video-upload-sessions", room).with(auth)
                         .contentType("application/json")
-                        .content("{\"job_id\":\"" + UUID.randomUUID() + "\",\"caption\":\"" + "가".repeat(21) + "\"}"))
+                        .content("{\"job_id\":\"" + UUID.randomUUID() + "\",\"caption\":\"" + "가".repeat(101) + "\"}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post("/api/v1/rooms/{roomId}/video-posts", room).with(auth)
                         .contentType("application/json")
                         .content("{\"video_url\":\"https://test/users/" + user + "/videos/test.mp4\",\"caption\":\""
-                                + "가".repeat(21) + "\"}"))
+                                + "가".repeat(101) + "\"}"))
                 .andExpect(status().isBadRequest());
         assertThat(activePosts()).isEmpty();
     }
 
     @Test
-    void givenNewCaptionAt20_whenReserveOrUpload_thenAccepted() throws Exception {
+    void givenNewCaptionAt100_whenReserveOrUpload_thenAccepted() throws Exception {
         mvc.perform(post("/api/v1/rooms/{roomId}/video-upload-sessions", room)
                         .with(authentication(new UsernamePasswordAuthenticationToken(user, null, List.of())))
                         .contentType("application/json")
-                        .content("{\"job_id\":\"" + UUID.randomUUID() + "\",\"caption\":\"" + "가".repeat(20) + "\"}"))
+                        .content("{\"job_id\":\"" + UUID.randomUUID() + "\",\"caption\":\"" + "가".repeat(100) + "\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/v1/rooms/{roomId}/video-posts", room)
                         .with(authentication(new UsernamePasswordAuthenticationToken(other, null, List.of())))
                         .contentType("application/json")
                         .content("{\"video_url\":\"https://test/users/" + other + "/videos/test.mp4\",\"caption\":\""
-                                + "가".repeat(20) + "\"}"))
+                                + "가".repeat(100) + "\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.caption").value("가".repeat(20)));
+                .andExpect(jsonPath("$.data.caption").value("가".repeat(100)));
     }
 
     @Test
-    void givenExistingLongCaptionSession_whenCompleted_thenCaptionIsPreserved() throws Exception {
+    void givenHundredCharacterCaptionSession_whenRetriedAndCompleted_thenCaptionIsPreserved() throws Exception {
         UUID id = UUID.randomUUID();
-        service.reserve(user, room, id, "인사");
-        // #475가 이미 적용된 DB의 미완료 세션. 신규 요청의 20자 제한과는 별개다.
-        jdbc.execute("ALTER TABLE video_upload_sessions ALTER COLUMN caption TYPE VARCHAR(100)");
         String original = "가".repeat(100);
-        jdbc.update("UPDATE video_upload_sessions SET caption = ? WHERE id = ?", original, id);
+        service.reserve(user, room, id, original);
 
         mvc.perform(post("/api/v1/rooms/{roomId}/video-upload-sessions", room).with(as(user))
                         .contentType("application/json")
