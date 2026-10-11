@@ -22,24 +22,27 @@ public class AdminRoomActivityQueryRepository implements RoomActivityRepository 
                    cast(null as bigint) as target_user_id, cast(null as text) as content,
                    v.id as video_id, v.video_url, v.thumbnail_url, v.caption,
                    cast(null as text) as reaction_type, cast(null as text) as answer,
-                   cast(null as timestamp) as answered_at, v.is_hidden as hidden, v.mission_id, v.slot_start
+                   cast(null as timestamp) as answered_at, v.is_hidden as hidden, v.mission_id, v.slot_start,
+                   cast(null as text) as reply_type
             from video_posts v join room_members m on m.id = v.room_member_id
             where m.room_id = :roomId and m.deleted_at is null and v.deleted_at is null
             union all
             select 'CHAT', c.id, c.created_at, c.sender_id, null, c.content,
-                   null, null, null, null, null, null, null, false, null, null
+                   null, null, null, null, null, null, null, false, null, null,
+                   case when c.video_post_id is not null then 'VIDEO'
+                        when c.reply_to_message_id is not null then 'MESSAGE' end
             from chat_messages c join chat_rooms r on r.id = c.chat_room_id
             where r.room_id = :roomId and r.type = 'GROUP' and r.deleted_at is null and c.deleted_at is null
               and c.sender_type = 'USER'
             union all
             select 'REACTION', x.id, x.created_at, x.user_id, m.user_id, null,
-                   v.id, v.video_url, v.thumbnail_url, v.caption, x.reaction_type, null, null, v.is_hidden, v.mission_id, v.slot_start
+                   v.id, v.video_url, v.thumbnail_url, v.caption, x.reaction_type, null, null, v.is_hidden, v.mission_id, v.slot_start, null
             from video_reactions x join video_posts v on v.id = x.video_post_id
             join room_members m on m.id = v.room_member_id
             where m.room_id = :roomId and m.deleted_at is null and v.deleted_at is null
             union all
             select 'QUESTION', q.id, q.created_at, q.sender_user_id, q.recipient_user_id, q.content,
-                   null, null, null, null, null, q.answer, q.answered_at, false, null, null
+                   null, null, null, null, null, q.answer, q.answered_at, false, null, null, null
             from anonymous_questions q where q.room_id = :roomId and q.deleted_at is null
             """;
 
@@ -72,7 +75,7 @@ public class AdminRoomActivityQueryRepository implements RoomActivityRepository 
                 .setFirstResult(offset).setMaxResults(limit).getResultList();
         return rows.stream().map(r -> new RoomActivity((String) r[0], number(r[1]), time(r[2]),
                 number(r[3]), number(r[4]), (String) r[5], number(r[6]), (String) r[7], (String) r[8],
-                (String) r[9], (String) r[10], (String) r[11], time(r[12]), Boolean.TRUE.equals(r[13]), number(r[14]), time(r[15])))
+                (String) r[9], (String) r[10], (String) r[11], time(r[12]), Boolean.TRUE.equals(r[13]), number(r[14]), time(r[15]), (String) r[16]))
                 .toList();
     }
 

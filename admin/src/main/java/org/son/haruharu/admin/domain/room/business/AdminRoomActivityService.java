@@ -39,7 +39,7 @@ public class AdminRoomActivityService {
                         toParticipant(activities.participant(members, a.targetUserId())), a.content(),
                         a.videoId() == null ? null : new Video(a.videoId(), media.createPresignedGetUrl(a.videoUrl()),
                                 media.createPresignedImageGetUrl(a.thumbnailUrl()), a.caption(), a.hidden(), a.missionId(), a.slotStart()),
-                        a.reactionType(), a.answer(), a.answeredAt())).toList();
+                        a.reactionType(), a.answer(), a.answeredAt(), a.replyType())).toList();
         return PageResponse.of(content, page, size, activities.count(filter));
     }
 

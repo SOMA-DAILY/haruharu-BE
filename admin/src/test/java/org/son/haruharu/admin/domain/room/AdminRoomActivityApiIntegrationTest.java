@@ -1,6 +1,7 @@
 package org.son.haruharu.admin.domain.room;
 
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -255,5 +256,42 @@ class AdminRoomActivityApiIntegrationTest {
         mvc.perform(get("/api/v1/admin/rooms/{id}/activity/summary", room).with(authentication(auth())))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.counts.chats").value(0))
                 .andExpect(jsonPath("$.data.counts.questions").value(0)).andExpect(jsonPath("$.data.counts.answers").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("채팅 활동 조회 시 일반 글·글 답장·영상 답장의 답장 종류가 구분되어 내려온다")
+    void givenPlainMessageReplyAndVideoReply_whenListChats_thenReplyTypeDistinguished() throws Exception {
+        long room = room();
+        long a = member(room, 101);
+        member(room, 102);
+        long v = video(a, START.plusHours(1), false);
+        var chatRoom = ChatRoomEntity.from(ChatRoom.createGroup(room));
+        em.persist(chatRoom);
+        em.flush();
+        long chatRoomId = chatRoom.toDomain().id();
+        var plain = ChatMessageEntity.from(new ChatMessage(null, chatRoomId, 101L, "안녕하세요", START.plusHours(2)));
+        em.persist(plain);
+        em.flush();
+        var reply = ChatMessageEntity.from(new ChatMessage(null, chatRoomId, 102L, "반가워요", null, null, null,
+                plain.toDomain().id(), "참여자101", "안녕하세요"));
+        em.persist(reply);
+        var videoReply = ChatMessageEntity.from(ChatMessage.videoReply(chatRoomId, 102L, "영상 잘 봤어요", v, "req-1"));
+        em.persist(videoReply);
+        em.flush();
+        // JPA auditing의 현재 시각 대신 순서가 명확한 fixture 시각으로 맞춘다.
+        long[] ids = {plain.toDomain().id(), reply.toDomain().id(), videoReply.toDomain().id()};
+        for (int i = 0; i < ids.length; i++) {
+            em.createNativeQuery("update chat_messages set created_at = :at where id = :id")
+                    .setParameter("at", START.plusHours(2).plusMinutes(i)).setParameter("id", ids[i]).executeUpdate();
+        }
+
+        mvc.perform(get("/api/v1/admin/rooms/{id}/activities", room).param("type", "CHAT").param("order", "asc").with(authentication(auth())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.page.total_elements").value(3))
+                .andExpect(jsonPath("$.data.content[0].content").value("안녕하세요"))
+                .andExpect(jsonPath("$.data.content[0].reply_type").isEmpty())
+                .andExpect(jsonPath("$.data.content[1].reply_type").value("MESSAGE"))
+                .andExpect(jsonPath("$.data.content[2].reply_type").value("VIDEO"));
+        mvc.perform(get("/api/v1/admin/rooms/{id}/activities", room).param("type", "VIDEO").with(authentication(auth())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.content[0].reply_type").isEmpty());
     }
 }
