@@ -6,7 +6,9 @@ import java.time.LocalDateTime;
 public record RoomActivity(
         String type, long id, LocalDateTime occurredAt, Long actorUserId, Long targetUserId,
         String content, Long videoId, String videoUrl, String thumbnailUrl, String caption,
-        String reactionType, String answer, LocalDateTime answeredAt, boolean hidden, Long missionId, LocalDateTime slotStart) {
+        String reactionType, String answer, LocalDateTime answeredAt, boolean hidden, Long missionId, LocalDateTime slotStart,
+        // 채팅의 답장 종류: MESSAGE(글 답장) · VIDEO(영상 답장) · null(답장 아님, 채팅 외 활동)
+        String replyType) {
     public record Count(String type, Long actorUserId, Long targetUserId, long count) {}
     public record Filter(Long roomId, LocalDateTime from, LocalDateTime to, Long userId, String type) {}
     public record Participant(long userId, String name) {}
