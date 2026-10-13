@@ -48,6 +48,7 @@ public class RedisStompSubscribeListener implements MessageListener {
             switch (envelope.kind()) {
                 case TOPIC -> localDelivery.sendToTopic(envelope.destination(), envelope.payload());
                 case USER -> localDelivery.sendToUser(envelope.userId(), envelope.destination(), envelope.payload());
+                case ROOM_CLOSED -> localDelivery.closeRoom(Long.valueOf(envelope.destination()), envelope.payload());
             }
         } catch (RuntimeException e) {
             // 본문은 채팅 내용이라 남기지 않는다

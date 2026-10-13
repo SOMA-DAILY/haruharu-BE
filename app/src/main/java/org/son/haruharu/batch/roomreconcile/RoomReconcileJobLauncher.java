@@ -37,10 +37,10 @@ public class RoomReconcileJobLauncher {
         this.clock = clock;
     }
 
-    @Scheduled(cron = "${haruharu.room.reconcile.cron:45 */5 * * * *}", zone = "Asia/Seoul")
+    @Scheduled(cron = "${haruharu.room.reconcile.cron:45 * * * * *}", zone = "Asia/Seoul")
     public void launch() {
         LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MINUTES);
-        LocalDateTime bucket = now.withMinute(now.getMinute() / 5 * 5);
+        LocalDateTime bucket = now;
         JobParameters parameters = new JobParametersBuilder()
                 .addString("bucket", bucket.toString())
                 .toJobParameters();

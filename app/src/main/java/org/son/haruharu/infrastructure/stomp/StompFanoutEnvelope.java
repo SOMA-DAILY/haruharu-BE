@@ -12,5 +12,5 @@ import tools.jackson.databind.JsonNode;
 public record StompFanoutEnvelope(String origin, Kind kind, String destination, String userId, String guard,
                                   JsonNode payload) {
 
-    public enum Kind { TOPIC, USER }
+    public enum Kind { TOPIC, USER, ROOM_CLOSED }
 }

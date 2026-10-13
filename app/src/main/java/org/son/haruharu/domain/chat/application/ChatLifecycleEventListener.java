@@ -35,7 +35,7 @@ public class ChatLifecycleEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void close(ChatRoomClosedEvent event) {
         RoomClosedPayload payload = new RoomClosedPayload("CHAT_ROOM_CLOSED", event.chatRoomId());
-        deliveryPort.sendToTopic("/sub/chat-rooms/" + event.chatRoomId(), payload);
+        deliveryPort.closeRoom(event.chatRoomId(), payload);
         event.memberUserIds().forEach(userId -> deliveryPort.sendToUser(
                 userId.toString(), "/queue/chat-room-events", payload));
     }

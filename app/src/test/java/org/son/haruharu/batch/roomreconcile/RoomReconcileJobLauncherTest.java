@@ -57,15 +57,15 @@ class RoomReconcileJobLauncherTest {
     }
 
     @Test
-    @DisplayName("bucket 은 실행 시각을 5분 단위로 내림한 시각이다 — 날짜 bucket 이면 하루 첫 실행 뒤 전부 멱등 스킵된다")
-    void givenMidInterval_whenLaunch_thenBucketIsFiveMinuteFloor() throws Exception {
+    @DisplayName("bucket 은 실행 시각을 1분 단위로 내림한 시각이다 — 날짜 bucket 이면 하루 첫 실행 뒤 전부 멱등 스킵된다")
+    void givenMidInterval_whenLaunch_thenBucketIsMinuteFloor() throws Exception {
         launcherAt(LocalDateTime.of(2026, 10, 2, 14, 7, 45)).launch();
 
-        assertThat(launchedBucket()).isEqualTo("2026-10-02T14:05");
+        assertThat(launchedBucket()).isEqualTo("2026-10-02T14:07");
     }
 
     @Test
-    @DisplayName("cron 발화 시각(5분 경계 + 45초)은 그 5분 경계 bucket 이 된다")
+    @DisplayName("cron 발화 시각(1분 경계 + 45초)은 그 1분 경계 bucket 이 된다")
     void givenCronFireTime_whenLaunch_thenBucketIsThatBoundary() throws Exception {
         launcherAt(LocalDateTime.of(2026, 10, 2, 14, 10, 45)).launch();
 

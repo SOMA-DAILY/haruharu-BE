@@ -137,7 +137,8 @@ class ChatRoomLeaveIntegrationTest {
         chatService.leaveRoom(roomId, a);
         chatService.leaveRoom(roomId, b);
         var payload = new org.son.haruharu.domain.chat.application.ChatLifecycleEventListener.RoomClosedPayload("CHAT_ROOM_CLOSED", roomId);
-        org.mockito.Mockito.verify(messaging).convertAndSend("/sub/chat-rooms/" + roomId, payload);
+        org.mockito.Mockito.verify(messaging).convertAndSend(org.mockito.ArgumentMatchers.eq("/sub/chat-rooms/" + roomId),
+                org.mockito.ArgumentMatchers.eq(payload), org.mockito.ArgumentMatchers.any(java.util.Map.class));
         org.mockito.Mockito.verify(messaging).convertAndSendToUser(a.toString(), "/queue/chat-room-events", payload);
         org.mockito.Mockito.verify(messaging).convertAndSendToUser(b.toString(), "/queue/chat-room-events", payload);
     }

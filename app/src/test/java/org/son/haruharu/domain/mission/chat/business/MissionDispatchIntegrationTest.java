@@ -390,6 +390,16 @@ class MissionDispatchIntegrationTest {
     }
 
     @Test
+    void closedChatRejectsAnnouncementEvenWithinMissionTimeWindow() {
+        Long id = addItem(roomId, now.minusMinutes(1), List.of(), "종료 후 안내", false);
+        jdbc.update("update chat_rooms set close_at=? where id=?", now, chatId);
+        dispatcher.dispatchDue();
+        assertThat(item(id).get("status")).isEqualTo("FAILED");
+        assertThat(item(id).get("fail_reason")).isEqualTo("ROOM_ENDED");
+        assertThat(adminMessages(chatId)).isZero();
+    }
+
+    @Test
     @DisplayName("만료 기준 = max(run_at, 방 시작, updated_at): 손 안 댄 옛 행만 EXPIRED, 방금 만들거나 고친 행은 과거 시각이어도 나간다")
     void expiryUsesUpdatedAt() {
         Long untouched = addItem(roomId, now.minusMinutes(90), List.of(), "옛 행", false);

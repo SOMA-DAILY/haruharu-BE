@@ -25,6 +25,30 @@ import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class StompAuthChannelInterceptorTest {
+    @Mock org.springframework.context.ApplicationEventPublisher events;
+    @Mock org.son.haruharu.domain.chat.business.ChatDeliveryService delivery;
+
+    @org.junit.jupiter.api.BeforeEach
+    void activeRoom() {
+        org.mockito.Mockito.lenient().when(delivery.isActive(org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("인증된 참여자가 종료 방을 구독하거나 전송하면 요청만 버리고 종료 안내를 발행한다")
+    void closedRoomDoesNotRaiseProtocolError() {
+        given(chatRoomMemberReader.findMembership(10L, 7L)).willReturn(Optional.of(member(10L, 7L)));
+        given(delivery.isActive(10L)).willReturn(false);
+        for (var command : new StompCommand[]{StompCommand.SUBSCRIBE, StompCommand.SEND}) {
+            var headers = StompHeaderAccessor.create(command);
+            headers.setSessionId("session");
+            headers.setUser(new StompPrincipal(7L));
+            headers.setDestination(command == StompCommand.SUBSCRIBE ? "/sub/chat-rooms/10/events" : "/pub/chat-rooms/10/messages");
+            headers.setLeaveMutable(true);
+            assertThat(interceptor().preSend(message(headers), channel)).isNull();
+        }
+        org.mockito.Mockito.verify(events, org.mockito.Mockito.times(2)).publishEvent(
+                new org.son.haruharu.infrastructure.stomp.StompRoomClosedNotice("session", "7", 10L));
+    }
     @Test @DisplayName("서버 전용 STOMP 명령은 클라이언트에서 사용할 수 없다")
     void serverCommandsCannotBypassSendAuthorization() {
         for (StompCommand command : new StompCommand[]{StompCommand.MESSAGE,StompCommand.CONNECTED,StompCommand.ERROR,StompCommand.RECEIPT}) {
@@ -75,7 +99,7 @@ class StompAuthChannelInterceptorTest {
     private final MessageChannel channel = mock(MessageChannel.class);
 
     private StompAuthChannelInterceptor interceptor() {
-        return new StompAuthChannelInterceptor(jwtProvider, chatRoomMemberReader);
+        return new StompAuthChannelInterceptor(jwtProvider, chatRoomMemberReader, delivery, events);
     }
 
     private StompHeaderAccessor connectAccessor(String authHeader) {

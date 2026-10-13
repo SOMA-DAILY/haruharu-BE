@@ -102,11 +102,12 @@ class EntityAuditColumnRoundTripTest {
     @Test
     @DisplayName("ChatRoomEntity.from()은 createdAt을 복원한다")
     void givenChatRoomWithCreatedAt_whenFromThenToDomain_thenCreatedAtSurvives() {
-        ChatRoom chatRoom = new ChatRoom(1L, ChatRoomType.DIRECT, null, 10L, CREATED_AT);
+        ChatRoom chatRoom = new ChatRoom(1L, ChatRoomType.GROUP, 10L, null, CREATED_AT).close(CREATED_AT.plusDays(3));
 
         ChatRoom restored = ChatRoomEntity.from(chatRoom).toDomain();
 
         assertThat(restored.createdAt()).isEqualTo(CREATED_AT);
+        assertThat(restored.closeAt()).isEqualTo(chatRoom.closeAt());
     }
 
     @Test

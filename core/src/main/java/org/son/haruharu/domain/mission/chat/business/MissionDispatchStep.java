@@ -63,6 +63,7 @@ public class MissionDispatchStep {
         ChatRoom chatRoom = chatRooms.getById(chatRoomId);
         if (chatRoom.type() != ChatRoomType.GROUP || !room.id().equals(chatRoom.roomId()))
             throw new MissionDispatchRejectedException("MISSION_CHAT_ROOM_MISMATCH");
+        if (chatRoom.closeAt() != null) throw new MissionDispatchRejectedException("ROOM_ENDED");
         Long messageId = null;
         if (item.hasMessage()) {
             ChatMessage saved = messages.save(ChatMessage.mission(chatRoomId, item.content(), mission.id(), item.id()));
