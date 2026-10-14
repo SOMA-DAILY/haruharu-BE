@@ -158,7 +158,7 @@ def _reconcile_alert_period() -> timedelta:
 
 def should_alert_outage(logical_date: datetime | None, prev_success_start: datetime | None,
                         prev_run_logical_date: datetime | None, period: timedelta | None = None) -> bool:
-    """5분 주기 DAG 의 실패 알림을 '연속 실패가 period 이상 이어질 때, period 마다 한 번' 으로 줄인다(#469).
+    """주기적 DAG의 실패 알림을 '연속 실패가 period 이상 이어질 때, period마다 한 번'으로 줄인다(#469, #502).
 
     상태(카운터·변수)를 저장하지 않는다 — Airflow 가 주는 '마지막 성공 run 의 시작 시각' 과 '직전 run 의 logical_date' 로 판단한다.
       outage = 이번 run logical_date − 마지막 성공 run 시작 시각

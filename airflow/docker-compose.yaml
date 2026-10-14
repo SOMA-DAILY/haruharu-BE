@@ -175,6 +175,14 @@ services:
     <<: *airflow-common
     profiles:
       - debug
+    # Java/Python이 같은 bucket 사례를 검증한다. 테스트 전용 서비스에만 공유 fixture를 마운트한다.
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+      - ${AIRFLOW_PROJ_DIR:-.}/tests:/opt/airflow/tests
+      - ${AIRFLOW_PROJ_DIR:-.}/../app/src/test/resources/batch:/opt/app/src/test/resources/batch:ro
     environment:
       <<: *airflow-common-env
       CONNECTION_CHECK_MAX_COUNT: "0"

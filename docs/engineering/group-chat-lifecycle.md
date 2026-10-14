@@ -38,8 +38,11 @@ UNSUBSCRIBE 자체는 SEND를 막지 않으므로 서버의 작성 검사는 유
 
 | 작업 | 기본값 |
 | --- | --- |
-| 방 상태 Batch | `ROOM_RECONCILE_CRON=45 * * * * *` — 매분 45초, Asia/Seoul |
+| Airflow 방 상태 Batch | `room_reconcile`: `* * * * *` — 매분, Asia/Seoul |
+| app 방 상태 Batch 폴백 | `ROOM_RECONCILE_CRON=45 * * * * *` — 매분 45초, Asia/Seoul. 45초 간격이 아님 |
 | 각 app의 구독 정리 | `CHAT_SUBSCRIPTION_RECONCILE_DELAY_MS=10000` — fixed delay |
+
+Airflow와 app은 같은 KST 분 단위 `bucket`을 Spring Batch 실행 식별자로 사용한다. 같은 분의 완료된 실행은 다시 실행하지 않으며, Airflow 장애 시 app이 처리하도록 `ROOM_RECONCILE_ENABLED=true`를 유지한다. 환경변수로 이전 5분 cron을 지정했다면 새 기본값을 덮어쓰므로 배포 시 함께 확인한다. 재시도·실패 알림 정책은 [Airflow 운영 문서](../../airflow/README.md)를 따른다.
 
 정상 상황에서 종료 예정 시각부터 다음 Batch까지 최대 약 1분 + 실행 지연이 생길 수 있다. `close_at` 커밋 후 작성·새 구독·전달은 차단되며, 종료 이벤트 유실 또는 admin 취소의 구독 제거는 다음 app 정리 주기에 수행한다. 10초는 고정 보장 시간이 아니며 처리·스케줄러 지연이 더해진다.
 

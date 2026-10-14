@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -15,6 +16,8 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvFileSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -54,6 +57,15 @@ class RoomReconcileJobLauncherTest {
         ArgumentCaptor<JobParameters> parameters = ArgumentCaptor.forClass(JobParameters.class);
         then(jobOperator).should().start(eq(roomReconcileJob), parameters.capture());
         return parameters.getValue().getString("bucket");
+    }
+
+    @ParameterizedTest
+    @CsvFileSource(resources = "/batch/room-reconcile-minute-buckets.csv", numLinesToSkip = 1)
+    @DisplayName("Airflow와 공유한 시각 사례에서 같은 분 단위 bucket을 사용한다")
+    void matchesAirflowMinuteBucketContract(String instantUtc, String expected) throws Exception {
+        var clock = Clock.fixed(Instant.parse(instantUtc), SEOUL);
+        new RoomReconcileJobLauncher(jobOperator, roomReconcileJob, clock).launch();
+        assertThat(launchedBucket()).isEqualTo(expected);
     }
 
     @Test
