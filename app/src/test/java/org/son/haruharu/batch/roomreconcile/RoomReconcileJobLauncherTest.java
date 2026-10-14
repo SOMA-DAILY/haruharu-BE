@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -16,8 +15,6 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvFileSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -59,25 +56,16 @@ class RoomReconcileJobLauncherTest {
         return parameters.getValue().getString("bucket");
     }
 
-    @ParameterizedTest
-    @CsvFileSource(resources = "/batch/room-reconcile-minute-buckets.csv", numLinesToSkip = 1)
-    @DisplayName("Airflow와 공유한 시각 사례에서 같은 분 단위 bucket을 사용한다")
-    void matchesAirflowMinuteBucketContract(String instantUtc, String expected) throws Exception {
-        var clock = Clock.fixed(Instant.parse(instantUtc), SEOUL);
-        new RoomReconcileJobLauncher(jobOperator, roomReconcileJob, clock).launch();
-        assertThat(launchedBucket()).isEqualTo(expected);
-    }
-
     @Test
-    @DisplayName("bucket 은 실행 시각을 1분 단위로 내림한 시각이다 — 날짜 bucket 이면 하루 첫 실행 뒤 전부 멱등 스킵된다")
-    void givenMidInterval_whenLaunch_thenBucketIsMinuteFloor() throws Exception {
+    @DisplayName("bucket 은 실행 시각을 5분 단위로 내림한 시각이다 — 날짜 bucket 이면 하루 첫 실행 뒤 전부 멱등 스킵된다")
+    void givenMidInterval_whenLaunch_thenBucketIsFiveMinuteFloor() throws Exception {
         launcherAt(LocalDateTime.of(2026, 10, 2, 14, 7, 45)).launch();
 
-        assertThat(launchedBucket()).isEqualTo("2026-10-02T14:07");
+        assertThat(launchedBucket()).isEqualTo("2026-10-02T14:05");
     }
 
     @Test
-    @DisplayName("cron 발화 시각(1분 경계 + 45초)은 그 1분 경계 bucket 이 된다")
+    @DisplayName("cron 발화 시각(5분 경계 + 45초)은 그 5분 경계 bucket 이 된다")
     void givenCronFireTime_whenLaunch_thenBucketIsThatBoundary() throws Exception {
         launcherAt(LocalDateTime.of(2026, 10, 2, 14, 10, 45)).launch();
 
@@ -137,6 +125,10 @@ class RoomReconcileJobLauncherTest {
         assertThatCode(() -> CronExpression.parse(roomReconcile))
                 .as("잘못된 cron 이면 @Scheduled 등록 단계에서 앱 부팅이 실패한다")
                 .doesNotThrowAnyException();
+        assertThat(CronExpression.parse(roomReconcile)
+                .next(LocalDateTime.of(2026, 10, 2, 14, 5, 45)))
+                .as("앱 폴백은 기존 Airflow와 같은 5분 주기의 45초에 실행된다")
+                .isEqualTo(LocalDateTime.of(2026, 10, 2, 14, 10, 45));
         assertThat(secondsField(roomReconcile))
                 .isNotEqualTo(secondsField(cronByJob.get("SLOT_START_NOTIFICATION")))
                 .isNotEqualTo(secondsField(cronByJob.get("CHAT_ADMIN_MESSAGE")));

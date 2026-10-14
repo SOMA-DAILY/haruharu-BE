@@ -38,18 +38,17 @@ def bucket_for(run_after: datetime | None, data_interval_end: datetime | None = 
     return _reference_kst(run_after, data_interval_end, logical_date).date().isoformat()
 
 
-def minute_bucket_for(run_after: datetime | None, data_interval_end: datetime | None = None,
-                      logical_date: datetime | None = None) -> str:
-    """이 DAG Run 이 담당하는 1분 구간 = KST 시각의 초를 제거한 ``yyyy-MM-ddTHH:mm`` (#502).
+def five_minute_bucket_for(run_after: datetime | None, data_interval_end: datetime | None = None,
+                           logical_date: datetime | None = None) -> str:
+    """이 DAG Run 이 담당하는 5분 구간 = KST 시각을 5분 단위로 내린 ``yyyy-MM-ddTHH:mm`` (#469).
 
-    앱 ``RoomReconcileJobLauncher`` 의 bucket(KST ``LocalDateTime`` 분 단위 내림 → ``toString()``)과
+    앱 ``RoomReconcileJobLauncher`` 의 bucket(KST ``LocalDateTime`` 5분 내림 → ``toString()``, 초가 0 이라 초 표기 없음)과
     **같은 문자열**이어야 한다. 그래야 앱 cron 폴백과 Airflow 가 같은 구간을 두고 JobInstance 하나로 수렴한다 —
     문자열이 한 글자라도 다르면 별개 JobInstance 가 되어 같은 구간이 두 번 돈다.
-    스케줄 run 은 run_after 가 분 경계, 수동 run 은 트리거 시각이 속한 분이 된다.
-    재시도에서는 현재 시각 대신 원래 run_after를 유지하여 같은 JobInstance로 수렴한다.
+    스케줄 run 은 run_after 가 정확히 5분 경계(CronTriggerTimetable), 수동 run 은 트리거 시각이 속한 구간이 된다.
     """
     kst = _reference_kst(run_after, data_interval_end, logical_date)
-    floored = kst.replace(second=0, microsecond=0)
+    floored = kst.replace(minute=kst.minute - kst.minute % 5, second=0, microsecond=0)
     return floored.strftime("%Y-%m-%dT%H:%M")
 
 

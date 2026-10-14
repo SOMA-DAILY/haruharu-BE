@@ -185,7 +185,7 @@ def _alerted_runs(runs, prev_success, period=None):
 
 @pytest.mark.usefixtures("default_alert_period")
 class TestShouldAlertOutage:
-    """room_reconcile(#469) 실패 알림 억제. 매분 도는 DAG에서 run마다 알리면 장애 1시간에 60건이 간다.
+    """room_reconcile(#469) 실패 알림 억제. 5분마다 도는 DAG 라 run 마다 알리면 장애 1시간에 12건이 간다.
 
     규칙: outage = 이번 run logical_date − 마지막 성공 run 시작 시각. outage 가 period(기본 30분)의 새 배수를 **직전 run 이후 처음
     넘은 run** 에서만 알린다(floor(outage/period) 가 직전 run 보다 커졌을 때). 좁은 시간 창이 아니라 경계 통과로 판단하므로
@@ -200,10 +200,6 @@ class TestShouldAlertOutage:
         runs = [_t(10, m) for m in range(5, 60, 5)] + [_t(11, m) for m in range(0, 60, 5)]
         # 경과 34분57초·64분57초·94분57초 run — 30분마다 정확히 1건
         assert _alerted_runs(runs, _t(10, 0, 3)) == [_t(10, 35), _t(11, 5), _t(11, 35)]
-
-    def test_minute_schedule_still_alerts_only_once_per_thirty_minutes(self):
-        runs = [_t(10, m) for m in range(1, 60)] + [_t(11, m) for m in range(60)]
-        assert _alerted_runs(runs, _t(10, 0, 3)) == [_t(10, 31), _t(11, 1), _t(11, 31)]
 
     def test_exact_boundary_alerts_once(self):
         assert _alerted_runs([_t(10, m) for m in range(5, 60, 5)], _t(10, 0, 0)) == [_t(10, 30)]

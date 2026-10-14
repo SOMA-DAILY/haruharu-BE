@@ -94,7 +94,7 @@ haruharu:
   room:
     reconcile:
       enabled: ${ROOM_RECONCILE_ENABLED:true}
-      cron: ${ROOM_RECONCILE_CRON:45 * * * * *}
+      cron: ${ROOM_RECONCILE_CRON:45 */5 * * * *}
   # 티켓·결제(#492). 티켓 사용처가 붙기 전까지 기본 OFF 로 둔다.
   ticket:
     enabled: false  # 티켓 잔액·내역 API off

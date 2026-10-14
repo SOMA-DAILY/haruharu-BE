@@ -100,44 +100,32 @@ REST API(v2)는 `POST /auth/token {username,password}` 로 JWT 를 받아 `Autho
 - 데드라인 콜백은 triggerer 이벤트 루프에서 돈다. 동기 HTTP 는 `asyncio.to_thread` 로 내려 루프를 막지 않는다.
 - 시크릿 스코프: 배치 토큰(Connection)은 태스크를 실행하는 scheduler(LocalExecutor)에만, Slack 웹훅은 콜백을 실행하는 dag-processor·triggerer·scheduler(`room_reconcile` 태스크 콜백, #469)에만 주입한다. `.env` 는 compose 치환에만 쓰고 컨테이너에 통째로 넣지 않는다.
 
-## 두 번째 DAG: `room_reconcile` (#469, #502)
+## 두 번째 DAG: `room_reconcile` (#469)
 
-방 status 전이 + 최종선택 동시공개 resolve 잡(`roomReconcileJob`, #466)을 매분 트리거한다. GROUP 채팅 종료 확정을 빠르게 반영하도록 #502에서 5분 주기를 1분으로 줄였다.
+방 status 전이 + 최종선택 동시공개 resolve 잡(`roomReconcileJob`, #466)을 5분마다 트리거한다.
 
 ```text
-매분(KST) ──▶ start_job : POST .../jobs/roomReconcileJob/executions {"bucket": "2026-10-02T14:07"}
-                         HTTP 10s, 시도당 실행 상한 15s, retries 1, 재시도 대기 상한 5s
-             ──▶ wait_job  : GET .../executions/{id} 5초 폴링(HTTP 3s), 센서 timeout 10s, poke 실행 상한 5s (reschedule)
+매 5분(KST) ──▶ start_job : POST .../jobs/roomReconcileJob/executions {"bucket": "2026-10-02T14:05"}  (HTTP 20s, retries 2, 대기 상한 30s)
+             ──▶ wait_job  : GET .../executions/{id} 15초 폴링(HTTP 10s), 90초 상한 (reschedule)
              실패          : 태스크 on_failure_callback → 억제 규칙 통과 시에만 웹훅 (데드라인 없음)
 ```
 
 | 항목 | `notification_cleanup` | `room_reconcile` |
 |---|---|---|
-| 주기 | 매일 04:00 | 매분 (`* * * * *`) |
-| bucket | KST 날짜 `yyyy-MM-dd` (`bucket_for`) | KST 분 단위 내림 `yyyy-MM-ddTHH:mm` (`minute_bucket_for`) |
-| 앱 `@Scheduled` 런처 | **끔** (`NOTIFICATION_CLEANUP_SCHEDULER_ENABLED=false`) | **켜 둠** (`ROOM_RECONCILE_ENABLED=true`, `45 * * * * *`) — 매분 45초 폴백 |
+| 주기 | 매일 04:00 | 매 5분 |
+| bucket | KST 날짜 `yyyy-MM-dd` (`bucket_for`) | KST 5분 내림 `yyyy-MM-ddTHH:mm` (`five_minute_bucket_for`) |
+| 앱 `@Scheduled` 런처 | **끔** (`NOTIFICATION_CLEANUP_SCHEDULER_ENABLED=false`) | **켜 둠** (`ROOM_RECONCILE_ENABLED=true`, 45초 `*/5`) — 폴백 |
 | 실패 알림 | DAG 콜백, run 마다 | 태스크 콜백, 장애 지속 시 주기당 1건 |
-| 데드라인 | logical_date + 15분 | 없음 — 설정상 실행·재시도 예산 55초를 테스트로 고정. 스케줄러·Pool 대기는 별도 |
+| 데드라인 | logical_date + 15분 | 없음 — 대신 run 최악 소요 ≤ 4분(시도 3×20s + 대기 2×30s + 센서 90s + poke 10s = 220s)을 테스트로 고정 |
 | 백필 | 의미 있음(날짜별 정리) | 의미 없음(잡은 실제 시각으로 reconcile) — `catchup=False` |
 
 **앱 cron 을 끄지 않는 이유.** 이 잡은 매칭 성사(MatchResult·DIRECT 채팅·성사 푸시)를 포함한다. 앱 cron 을 끄면 Airflow 장애가 곧
 매칭 중단인데 Airflow 생존 감시는 아직 없다. 두 경로는 **같은 bucket 문자열**을 쓰므로 `BATCH_JOB_INSTANCE (JOB_NAME, JOB_KEY)` 유니크로
 구간당 한 번만 실행된다. Airflow 가 정각 직후, 앱이 45초에 발화하니 평소엔 Airflow 가 실행하고 앱은 `ALREADY_COMPLETED` 로 스킵한다.
-bucket 문자열이 한 글자라도 다르면 별개 JobInstance 가 되어 같은 구간이 두 번 돈다. 양쪽 테스트
-(`RoomReconcileJobLauncherTest` ↔ `test_haruharu_batch.py`)가 [공유 CSV](../app/src/test/resources/batch/room-reconcile-minute-buckets.csv)를 읽어
-5분 경계 밖인 `14:07`, 정각과 앱 실행 시각인 45초, KST 자정 전후의 문자열 일치를 확인한다. 재시도는 현재 시각 대신 원래 run의 `run_after`를 사용한다.
+bucket 문자열이 한 글자라도 다르면 별개 JobInstance 가 되어 같은 구간이 두 번 돈다 — 그래서 양쪽 테스트가 같은 시각·같은 문자열을 고정한다
+(`RoomReconcileJobLauncherTest` ↔ `TestFiveMinuteBucketFor`).
 
-**실행 시간 예산.** 시작 태스크 2회 × `execution_timeout` 15초 + 재시도 대기 5초 + 센서 `timeout` 10초 + 마지막 폴링 대기 5초 + poke 5초 = 55초다.
-센서는 poke 이후 timeout을 검사하므로, 제한 직전 미완료 응답이 오면 다음 폴링 대기와 poke 실행까지 포함한다.
-HTTP timeout은 전체 실행 시간을 제한하지 않으므로 태스크 실행 상한도 지정한다. Pool·worker·센서 reschedule 대기와 스케줄러 지연은 별도여서
-실제 DAG 종료가 1분 안에 이루어진다는 보장은 없다. 앞 run이 늦으면 `max_active_runs=1`로 다음 run이 기다리고 앱 폴백이 계속 동작한다.
-동기 HTTP 호출이 타임아웃돼도 앱의 Batch 실행은 취소되지 않으며, 같은 bucket 재시도는 실행 중/완료 상태에 따라 처리된다.
-
-**전환 시 확인.** `45 * * * * *`는 45초 간격이 아니라 매분 45초 실행이다. 앱 환경변수에 기존 `ROOM_RECONCILE_CRON=45 */5 * * * *`가
-남아 있으면 새 기본값을 덮어쓰므로 함께 변경한다. Airflow cron과 bucket 함수를 함께 배포해야 하며, cron만 1분으로 바꾸고 5분 bucket을 유지하면
-5분 안의 나머지 실행이 이미 완료된 JobInstance로 처리된다. 앱 폴백 활성화와 Airflow DAG의 unpause 상태도 유지한다.
-
-**알림 억제 (상태 없음).** 1분 DAG 를 run 마다 알리면 앱 장애 1시간에 60건이다. 태스크 컨텍스트의 `prev_start_date_success`
+**알림 억제 (상태 없음).** 5분 DAG 를 run 마다 알리면 앱 장애 1시간에 12건이다. 태스크 컨텍스트의 `prev_start_date_success`
 (마지막 성공 run 의 시작 시각)로 `outage = 이번 logical_date − 그 시각` 을 구하고, `ti.get_previous_dagrun()` 으로 직전 run 의 outage 도 구해
 `floor(outage / period)`(period 기본 30분)가 **직전 run 보다 커진 run** — period 의 새 배수를 처음 넘은 run — 에서만 알린다 →
 장애 30·60·90분… 에 한 건씩. 좁은 시간 창(`outage % period < 5분`)으로 판단하면 run 이 밀려 10분 간격이 될 때 창을 계속 놓쳐

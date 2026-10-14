@@ -38,17 +38,14 @@ UNSUBSCRIBE 자체는 SEND를 막지 않으므로 서버의 작성 검사는 유
 
 | 작업 | 기본값 |
 | --- | --- |
-| Airflow 방 상태 Batch | `room_reconcile`: `* * * * *` — 매분, Asia/Seoul |
-| app 방 상태 Batch 폴백 | `ROOM_RECONCILE_CRON=45 * * * * *` — 매분 45초, Asia/Seoul. 45초 간격이 아님 |
+| 방 상태 Batch | `ROOM_RECONCILE_CRON=45 */5 * * * *` — 5분마다 45초, Asia/Seoul. 기존 Airflow 5분 실행의 폴백 |
 | 각 app의 구독 정리 | `CHAT_SUBSCRIPTION_RECONCILE_DELAY_MS=10000` — fixed delay |
 
-Airflow와 app은 같은 KST 분 단위 `bucket`을 Spring Batch 실행 식별자로 사용한다. 같은 분의 완료된 실행은 다시 실행하지 않으며, Airflow 장애 시 app이 처리하도록 `ROOM_RECONCILE_ENABLED=true`를 유지한다. 환경변수로 이전 5분 cron을 지정했다면 새 기본값을 덮어쓰므로 배포 시 함께 확인한다. 재시도·실패 알림 정책은 [Airflow 운영 문서](../../airflow/README.md)를 따른다.
-
-정상 상황에서 종료 예정 시각부터 다음 Batch까지 최대 약 1분 + 실행 지연이 생길 수 있다. `close_at` 커밋 후 작성·새 구독·전달은 차단되며, 종료 이벤트 유실 또는 admin 취소의 구독 제거는 다음 app 정리 주기에 수행한다. 10초는 고정 보장 시간이 아니며 처리·스케줄러 지연이 더해진다.
+종료 예정 시각부터 다음 Batch까지 약 5분의 지연을 허용한다. 실제 지연에는 처리·스케줄러 대기가 더해지므로 5분 내 종료를 보장하지 않는다. 그동안 `close_at=NULL`인 일반 채팅은 허용하며, `close_at` 커밋 후 작성·새 구독·전달을 차단한다. 종료 이벤트 유실 또는 admin 취소의 구독 제거는 다음 app 정리 주기에 수행한다. 10초는 고정 보장 시간이 아니며 처리·스케줄러 지연이 더해진다.
 
 Batch가 멈추면 아직 `close_at=NULL`인 방은 계속 열려 있다. 재시작 후 미처리 상태 전이를 수행하면서 닫힌다. 반대로 이미 저장된 `close_at`은 서버 재시작이나 Redis 장애로 유실되지 않는다. app의 구독 정리는 `close_at`을 새로 채우지 않는다. 과거 ENDED/CANCELLED 데이터는 배치 대상에서 제외될 수 있으므로 아래 보정이 필수다.
 
-Redis는 `ROOM_CLOSED` envelope로 다른 app의 구독도 정리한다. 일회성 이벤트가 유실돼도 DB 상태를 주기적으로 다시 확인한다. Batch 실행 식별자는 분 단위 `bucket`이므로 분당 여러 번 실행하려면 식별 단위도 바꿔야 한다.
+Redis는 `ROOM_CLOSED` envelope로 다른 app의 구독도 정리한다. 일회성 이벤트가 유실돼도 DB 상태를 주기적으로 다시 확인한다. Batch 실행 식별자는 기존 Airflow와 같은 KST 5분 단위 `bucket`이다. 예를 들어 14:07:45는 `14:05`로 내린다. 실행 주기를 변경한다면 양쪽의 식별 단위도 함께 맞춰야 한다.
 
 ## 클라이언트 계약
 
