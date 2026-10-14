@@ -41,7 +41,7 @@ class AdminUserServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AdminUserService(adminUserReader);
+        service = new AdminUserService(adminUserReader, java.time.Clock.systemDefaultZone());
     }
 
     private User user(Long id, UserStatus status) {

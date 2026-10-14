@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.son.haruharu.admin.common.PageResponse;
 import org.son.haruharu.admin.domain.user.business.AdminUserService;
 import org.son.haruharu.admin.domain.user.business.dto.AdminUserDetailResponse;
+import org.son.haruharu.admin.domain.user.business.dto.AdminUserRoomHistoryResponse;
 import org.son.haruharu.admin.domain.user.business.dto.AdminUserSummary;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.user.implement.UserStatus;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "Admin User", description = "운영 유저 조회")
 @RestController
@@ -41,5 +44,13 @@ public class AdminUserController {
     public ApiResponse<AdminUserDetailResponse> user(
             @Parameter(description = "유저 id", example = "901") @PathVariable Long userId) {
         return ApiResponse.ok(adminUserService.getUser(userId));
+    }
+
+    @Operation(summary = "유저 방 참여 이력",
+            description = "참여한 방마다 상태·일정·가명·최종 선택·받은 선택 수·결과·활동 수(최신 입장순). SUPER·OPERATOR 전용. 없는 id는 404.")
+    @GetMapping("/users/{userId}/rooms")
+    public ApiResponse<List<AdminUserRoomHistoryResponse>> userRooms(
+            @Parameter(description = "유저 id", example = "901") @PathVariable Long userId) {
+        return ApiResponse.ok(adminUserService.getUserRooms(userId));
     }
 }

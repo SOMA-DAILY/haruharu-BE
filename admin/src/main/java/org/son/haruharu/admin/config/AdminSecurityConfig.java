@@ -118,6 +118,9 @@ public class AdminSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/rooms/*/selections", "/api/v1/admin/rooms/*/activities",
                                 "/api/v1/admin/rooms/*/activity/summary")
                         .hasAnyRole("SUPER", "OPERATOR")
+                        // 유저별 방 참여 이력(#508)은 같은 최종 선택·활동 정보를 유저 기준으로 모은 것이라 같은 권한.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/admin/users/*/rooms")
+                        .hasAnyRole("SUPER", "OPERATOR")
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         // 401·403 모두 ApiResponse 표준 포맷으로 응답(컨테이너 기본 에러 우회 방지).
