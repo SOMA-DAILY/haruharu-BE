@@ -15,6 +15,7 @@ import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementStatus;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementWriter;
 import org.son.haruharu.domain.mission.chat.implement.MissionChatLookup;
 import org.son.haruharu.domain.mission.chat.implement.MissionNotification;
+import org.son.haruharu.domain.mission.common.implement.MissionType;
 import org.son.haruharu.domain.mission.common.implement.RoomMission;
 import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
 import org.son.haruharu.domain.room.implement.*;
@@ -76,7 +77,7 @@ public class MissionDispatchStep {
                 .map(ChatRoomMember::userId).toList();
         List<MissionNotification> notifications = notifiers.stream().filter(n -> n.type() == mission.type())
                 .flatMap(n -> n.afterAnnouncement(mission, item).stream()).toList();
-        return new SendResult(item, recipients, notifications);
+        return new SendResult(item, mission.type(), recipients, notifications);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -89,5 +90,6 @@ public class MissionDispatchStep {
         return writer.markFailedIfUnchanged(snapshot, reason, now);
     }
 
-    public record SendResult(MissionAnnouncement announcement, List<Long> recipients, List<MissionNotification> notifications) {}
+    public record SendResult(MissionAnnouncement announcement, MissionType missionType, List<Long> recipients,
+                             List<MissionNotification> notifications) {}
 }

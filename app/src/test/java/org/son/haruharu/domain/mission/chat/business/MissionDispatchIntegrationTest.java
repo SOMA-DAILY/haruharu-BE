@@ -343,6 +343,9 @@ class MissionDispatchIntegrationTest {
                 String.class)).isEqualTo("새 정보가 공개됐어요");
         assertThat(jdbc.queryForObject("select body from notification_history where type='ADMIN_MESSAGE' limit 1",
                 String.class)).isEqualTo("방 채팅에 새 공지가 올라왔어요");
+        // 촬영 미션이 아닌 안내 제목엔 [공지] 머리말이 붙는다(#505).
+        assertThat(jdbc.queryForObject("select title from notification_history where type='ADMIN_MESSAGE' limit 1",
+                String.class)).isEqualTo("[공지] 📢 하루 공지");
         // 참가자 CHAT 푸시에 안 섞인다
         assertThat(inbox("CHAT")).isZero();
     }
@@ -822,6 +825,9 @@ class MissionDispatchIntegrationTest {
         // 촬영 미션은 프로필을 열지 않고 공개 푸시도 보내지 않는다. 안내 푸시만 나간다.
         assertThat(inbox("PROFILE_REVEAL")).isZero();
         assertThat(inbox("ADMIN_MESSAGE")).isEqualTo(3);
+        // 촬영 미션 안내 제목엔 [미션] 머리말이 붙는다(#505).
+        assertThat(jdbc.queryForList("select distinct title from notification_history where type='ADMIN_MESSAGE'",
+                String.class)).containsExactly("[미션] 📢 하루 공지");
         assertThat(memberProfiles.getMemberProfile(roomId, bobMemberId, alice).fields())
                 .allSatisfy(f -> assertThat(f.revealAt()).isNull());
     }
