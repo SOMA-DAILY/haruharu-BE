@@ -21,6 +21,7 @@ import org.son.haruharu.domain.notification.implement.NotificationSettingReader;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.infrastructure.fcm.PushMessage;
 import org.son.haruharu.infrastructure.fcm.PushPort;
+import org.son.haruharu.infrastructure.fcm.PushStyle;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -77,6 +78,53 @@ class PushSendServiceTest {
                 .containsEntry("type", "ROOM_MATCHED")
                 .containsEntry("roomId", "7");
         then(deviceTokenWriter).should(never()).deleteAllByTokens(anyCollection());
+    }
+
+    @Test
+    @DisplayName("기본 발송은 보통 알림으로 표시 방식 정보를 함께 싣는다(#505)")
+    void givenPlainSend_whenSend_thenAlertLevelWithoutGroup() {
+        given(deviceTokenReader.findAllByUserIds(List.of(1L)))
+                .willReturn(List.of(new DeviceToken(10L, 1L, "token-1")));
+        given(pushPort.send(any())).willReturn(List.of());
+
+        service.sendToUsers(List.of(1L), NotificationType.ROOM_STARTED, Map.of("roomId", "7"));
+
+        ArgumentCaptor<PushMessage> captor = ArgumentCaptor.forClass(PushMessage.class);
+        then(pushPort).should().send(captor.capture());
+        assertThat(captor.getValue().style()).isEqualTo(PushStyle.NORMAL);
+        assertThat(captor.getValue().data()).containsEntry("pushLevel", "ALERT").doesNotContainKey("groupKey");
+    }
+
+    @Test
+    @DisplayName("push 는 알림함에 저장하지 않고 받은 문구·표시 방식 그대로 보낸다(#505)")
+    void givenStyledPush_whenPush_thenSendsStyleWithoutInbox() {
+        given(deviceTokenReader.findAllByUserIds(List.of(1L)))
+                .willReturn(List.of(new DeviceToken(10L, 1L, "token-1")));
+        given(pushPort.send(any())).willReturn(List.of());
+
+        service.push(List.of(1L), NotificationType.CHAT, Map.of("chatRoomId", "9"),
+                "💬 새 메시지 3개", "윤슬님이 메시지를 보냈어요", PushStyle.quiet("chat:9"));
+
+        ArgumentCaptor<PushMessage> captor = ArgumentCaptor.forClass(PushMessage.class);
+        then(pushPort).should().send(captor.capture());
+        PushMessage message = captor.getValue();
+        assertThat(message.title()).isEqualTo("💬 새 메시지 3개");
+        assertThat(message.style()).isEqualTo(PushStyle.quiet("chat:9"));
+        assertThat(message.data())
+                .containsEntry("type", "CHAT")
+                .containsEntry("pushLevel", "QUIET")
+                .containsEntry("groupKey", "chat:9");
+        then(notificationHistoryService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("saveInbox 는 타입 기본 문구로 알림함에만 저장하고 푸시는 보내지 않는다(#505)")
+    void givenSaveInbox_whenCalled_thenOnlyInbox() {
+        service.saveInbox(List.of(1L, 2L), NotificationType.CHAT, Map.of("chatRoomId", "9"), "윤슬");
+
+        then(notificationHistoryService).should().saveAll(List.of(1L, 2L), NotificationType.CHAT,
+                NotificationType.CHAT.title(), "윤슬님이 메시지를 보냈어요", Map.of("chatRoomId", "9"));
+        then(pushPort).shouldHaveNoInteractions();
     }
 
     @Test

@@ -14,8 +14,9 @@ public enum NotificationType {
     // 폐기된 자동매칭 알림. 기존 알림/발송 이력의 enum 역직렬화용으로 유지.
     ROOM_MATCHED("🎉 오늘의 인연이 정해졌어요", "3일간 함께할 인연이 도착했어요. 내일 만나요", true, NotificationCategory.ACTIVITY),
     ROOM_STARTED("👋 하루방이 열렸어요", "지금 첫 영상으로 인사를 건네보세요", true, NotificationCategory.ACTIVITY),
-    SLOT_START("🎬 새로운 하루를 남길 시간", "서로의 하루를 확인하고, 오늘의 나도 남겨보세요", false, NotificationCategory.ACTIVITY),
-    SLOT_DEADLINE_SOON("⏰ 30분 뒤 마감!", "오늘의 하루, 아직 안 남겼어요", false, NotificationCategory.ACTIVITY),
+    // 미션 알림은 묶음·잡담 알림 사이에서 눈에 띄게 [미션] 머리말을 붙인다(#505).
+    SLOT_START("[미션] 🎬 새로운 하루를 남길 시간", "서로의 하루를 확인하고, 오늘의 나도 남겨보세요", false, NotificationCategory.ACTIVITY),
+    SLOT_DEADLINE_SOON("[미션] ⏰ 30분 뒤 마감!", "오늘의 하루, 아직 안 남겼어요", false, NotificationCategory.ACTIVITY),
     FINAL_SELECTION_OPEN("💘 마음을 전할 시간이에요", "3일간 지켜본 그 사람, 오늘 선택할 수 있어요", true, NotificationCategory.ACTIVITY),
 
     // ── B. 소셜 상호작용 ──
@@ -39,6 +40,7 @@ public enum NotificationType {
 
     // ── E. 채팅 P0(#455) ──
     // 운영 글 푸시. bodyArgs = [제목, 본문] — PushSendService 가 title/body 에 같은 인자를 넣으므로 자리를 지정한다.
+    // 제목 머리말([공지]·[미션])은 발송하는 MissionDispatchService 가 미션 종류로 붙인다(#505).
     ADMIN_MESSAGE("%1$s", "%2$s", true, NotificationCategory.ACTIVITY),
     // 프로필 항목 공개 푸시. bodyArgs = [제목, 본문](RevealField 문구). 00~08시엔 알림함에만 남는다.
     PROFILE_REVEAL("%1$s", "%2$s", true, NotificationCategory.ACTIVITY),

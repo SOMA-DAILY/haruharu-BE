@@ -15,6 +15,7 @@ import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncement;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementReader;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementStatus;
 import org.son.haruharu.domain.mission.chat.implement.MissionNotification;
+import org.son.haruharu.domain.mission.common.implement.MissionType;
 import org.son.haruharu.domain.mission.common.implement.RoomMission;
 import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
 import org.son.haruharu.domain.notification.business.PushSendService;
@@ -36,6 +37,8 @@ import org.springframework.stereotype.Service;
 public class MissionDispatchService {
 
     static final String DEFAULT_PUSH_TITLE = "📢 하루 공지";
+    static final String NOTICE_TAG = "[공지]";
+    static final String MISSION_TAG = "[미션]";
     static final String DEFAULT_PUSH_BODY = "방 채팅에 새 공지가 올라왔어요";
 
     private final MissionAnnouncementReader itemReader;
@@ -153,11 +156,20 @@ public class MissionDispatchService {
         // 운영 글 원문은 보내지 않는다. 00~08시엔 PushSendService 가 알림함에만 남긴다(quietHoursExempt=false).
         if (item.push() && item.hasMessage()) {
             pushSendService.sendToUsers(recipients, NotificationType.ADMIN_MESSAGE, data,
-                    orDefault(item.pushTitle(), DEFAULT_PUSH_TITLE), orDefault(item.pushBody(), DEFAULT_PUSH_BODY));
+                    tagged(result.missionType(), orDefault(item.pushTitle(), DEFAULT_PUSH_TITLE)),
+                    orDefault(item.pushBody(), DEFAULT_PUSH_BODY));
         }
         for (MissionNotification notification : result.notifications()) {
             pushSendService.sendToUsers(recipients, notification.type(), data, notification.title(), notification.body());
         }
+    }
+
+    /** 운영 글 제목 앞에 촬영 미션은 [미션], 그 밖의 안내는 [공지]를 붙인다(#505). 운영자가 이미 붙였으면 그대로 둔다. */
+    static String tagged(MissionType missionType, String title) {
+        if (title.startsWith(NOTICE_TAG) || title.startsWith(MISSION_TAG)) {
+            return title;
+        }
+        return (missionType == MissionType.RECORDING ? MISSION_TAG : NOTICE_TAG) + " " + title;
     }
 
     private static String orDefault(String value, String fallback) {
