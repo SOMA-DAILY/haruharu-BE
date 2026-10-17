@@ -88,7 +88,7 @@ class ChatServiceTest {
                 new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader,
                         org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatMissionLookup.class)),
                 new ChatParticipantPolicy(chatRoomReader, chatRoomMemberReader, roomMemberReader, profileService, userService, blockReader),
-                eventPublisher, clock);
+                eventPublisher, clock, new ChatRoomLifecyclePolicy());
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -113,6 +113,21 @@ class ChatServiceTest {
 
     private ChatRoom groupRoom(Long chatRoomId, Long roomId) {
         return new ChatRoom(chatRoomId, ChatRoomType.GROUP, roomId, null, LocalDateTime.now(clock));
+    }
+
+    @Test
+    @DisplayName("close_at이 있으면 GROUP 메시지를 저장하지 않는다")
+    void givenClosedGroup_whenSend_thenForbidden() {
+        var now = LocalDateTime.now(clock);
+        given(chatRoomReader.getById(ROOM)).willReturn(groupRoom(ROOM, 77L).close(now));
+        given(chatRoomMemberReader.findMembership(ROOM, ME))
+                .willReturn(Optional.of(membership(ROOM, ME, null)));
+
+
+        assertThatThrownBy(() -> chatService.sendMessage(ROOM, ME, "늦은 메시지"))
+                .isInstanceOf(org.son.haruharu.common.exception.ForbiddenException.class);
+        then(chatMessageWriter).shouldHaveNoInteractions();
+        then(eventPublisher).shouldHaveNoInteractions();
     }
 
     @Test
@@ -424,6 +439,7 @@ class ChatServiceTest {
                 List.of(2L), "민준", LocalDateTime.now(clock)));
         // GROUP은 가명을 쓰므로 실명 조회(getNickname)를 하지 않는다
         then(profileService).should(never()).getNickname(any());
+        then(roomReader).shouldHaveNoInteractions();
     }
 
     @Test

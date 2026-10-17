@@ -11,8 +11,19 @@ public record ChatRoom(
         ChatRoomType type,
         Long roomId,
         Long matchResultId,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        LocalDateTime closeAt
 ) {
+    public ChatRoom(Long id, ChatRoomType type, Long roomId, Long matchResultId, LocalDateTime createdAt) {
+        this(id, type, roomId, matchResultId, createdAt, null);
+    }
+
+    /** 실제 종료 처리 시각. 예정 종료 시각은 소개팅방이 관리한다. */
+    public ChatRoom close(LocalDateTime at) {
+        if (closeAt != null) return this;
+        return new ChatRoom(id, type, roomId, matchResultId, createdAt, java.util.Objects.requireNonNull(at));
+    }
+
     /** 소개팅방 전체 그룹채팅: 방 시작(RoomStartedEvent) 시 자동 생성. roomId당 1방(멱등). */
     public static ChatRoom createGroup(Long roomId) {
         return new ChatRoom(null, ChatRoomType.GROUP, roomId, null, null);

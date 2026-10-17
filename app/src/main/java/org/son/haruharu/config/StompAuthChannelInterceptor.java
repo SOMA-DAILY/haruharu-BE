@@ -1,12 +1,19 @@
 package org.son.haruharu.config;
 
+import org.springframework.messaging.support.ExecutorChannelInterceptor;
+import org.springframework.messaging.MessageHandler;
+import org.springframework.messaging.simp.broker.SimpleBrokerMessageHandler;
+import lombok.extern.slf4j.Slf4j;
+
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
+import org.son.haruharu.domain.chat.business.ChatDeliveryService;
 import org.son.haruharu.utils.JwtProvider;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
-import org.springframework.messaging.support.ChannelInterceptor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.son.haruharu.infrastructure.stomp.StompRoomClosedNotice;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 
@@ -22,17 +29,23 @@ import java.util.regex.Pattern;
  * 프레임을 거부한다(#168 — 클라이언트가 토큰 문제와 권한 문제를 구별할 수 있게).
  */
 @Component
-public class StompAuthChannelInterceptor implements ChannelInterceptor {
+@Slf4j
+public class StompAuthChannelInterceptor implements ExecutorChannelInterceptor {
 
     private static final Pattern CHAT_ROOM_TOPIC = Pattern.compile("/sub/chat-rooms/(\\d+)(?:/events)?");
     private static final Pattern CHAT_MESSAGE_ENDPOINT = Pattern.compile("/pub/chat-rooms/(\\d+)/messages");
 
     private final JwtProvider jwtProvider;
     private final ChatRoomMemberReader chatRoomMemberReader;
+    private final ChatDeliveryService delivery;
+    private final ApplicationEventPublisher events;
 
-    public StompAuthChannelInterceptor(JwtProvider jwtProvider, ChatRoomMemberReader chatRoomMemberReader) {
+    public StompAuthChannelInterceptor(JwtProvider jwtProvider, ChatRoomMemberReader chatRoomMemberReader,
+                                       ChatDeliveryService delivery, ApplicationEventPublisher events) {
         this.jwtProvider = jwtProvider;
         this.chatRoomMemberReader = chatRoomMemberReader;
+        this.delivery = delivery;
+        this.events = events;
     }
 
     @Override
@@ -51,9 +64,9 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         if (StompCommand.CONNECT.equals(command) || StompCommand.STOMP.equals(command)) {
             accessor.setUser(authenticate(accessor));
         } else if (StompCommand.SUBSCRIBE.equals(command)) {
-            authorizeSubscription(accessor);
+            if (!authorizeSubscription(accessor)) return null;
         } else if (StompCommand.SEND.equals(command)) {
-            authorizeSend(accessor);
+            if (!authorizeSend(accessor)) return null;
         } else if (command == StompCommand.UNSUBSCRIBE || command == StompCommand.DISCONNECT
                 || command == StompCommand.ACK || command == StompCommand.NACK) {
             currentUserId(accessor);
@@ -63,7 +76,24 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         return message;
     }
 
-    private void authorizeSend(StompHeaderAccessor accessor) {
+    @Override
+    public Message<?> beforeHandle(Message<?> message, MessageChannel channel,
+                                    MessageHandler handler) {
+        var accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        if (handler instanceof SimpleBrokerMessageHandler
+                && accessor != null && accessor.getCommand() == StompCommand.SUBSCRIBE) {
+            // inbound executor에서 대기하는 동안 종료되었으면 broker에 등록하지 않는다.
+            try {
+                if (!authorizeSubscription(accessor)) return null;
+            } catch (RuntimeException denied) {
+                log.warn("STOMP 구독 등록 직전 권한 확인 실패: sessionId={}", accessor.getSessionId(), denied);
+                return null;
+            }
+        }
+        return message;
+    }
+
+    private boolean authorizeSend(StompHeaderAccessor accessor) {
         Long userId = currentUserId(accessor);
         String destination = accessor.getDestination();
         Matcher matcher = CHAT_MESSAGE_ENDPOINT.matcher(destination == null ? "" : destination);
@@ -72,6 +102,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         if (chatRoomMemberReader.findMembership(chatRoomId, userId).filter(member -> !member.hasLeft()).isEmpty()) {
             throw new StompAuthorizationException();
         }
+        return activeOrNotify(accessor, chatRoomId);
     }
 
     private StompPrincipal authenticate(StompHeaderAccessor accessor) {
@@ -94,14 +125,14 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
      * 그 외 모든 destination(와일드카드 /sub/chat-rooms/*, /sub/** 등)은 거부한다.
      * (default-allow면 SimpleBroker의 AntPathMatcher 와일드카드 구독으로 타 방 메시지를 도청할 수 있다.)
      */
-    private void authorizeSubscription(StompHeaderAccessor accessor) {
+    private boolean authorizeSubscription(StompHeaderAccessor accessor) {
         Long userId = currentUserId(accessor);
         String destination = accessor.getDestination();
         if (destination == null) {
             throw new StompAuthorizationException();
         }
         if (destination.startsWith("/user/")) {
-            return;
+            return true;
         }
         Matcher matcher = CHAT_ROOM_TOPIC.matcher(destination);
         if (!matcher.matches()) {
@@ -114,6 +145,13 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         if (!member) {
             throw new StompAuthorizationException();
         }
+        return activeOrNotify(accessor, chatRoomId);
+    }
+
+    private boolean activeOrNotify(StompHeaderAccessor accessor, Long chatRoomId) {
+        if (delivery.isActive(chatRoomId)) return true;
+        events.publishEvent(new StompRoomClosedNotice(accessor.getSessionId(), accessor.getUser().getName(), chatRoomId));
+        return false;
     }
 
     private Long parseChatRoomId(String raw) {

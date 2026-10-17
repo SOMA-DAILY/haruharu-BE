@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.chat.implement;
 
+import java.time.LocalDateTime;
+
 import org.springframework.stereotype.Component;
 
 @Component
@@ -17,5 +19,9 @@ public class ChatRoomWriter {
 
     public void delete(Long id) {
         chatRoomRepository.deleteById(id);
+    }
+
+    public boolean closeGroup(Long roomId, LocalDateTime closeAt) {
+        return chatRoomRepository.closeGroupByRoomId(roomId, closeAt);
     }
 }

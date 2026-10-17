@@ -76,10 +76,12 @@ class VideoReplyServiceTest {
                         targets,
                         storage,
                         events,
-                        clock);
+                        clock, new ChatRoomLifecyclePolicy());
     }
 
     void setupRoom() {
+        lenient().when(rooms.getIdByRoomId(1L)).thenReturn(10L);
+        lenient().when(rooms.getById(10L)).thenReturn(new ChatRoom(10L, ChatRoomType.GROUP, 1L, null, now));
         lenient()
                 .when(rooms.getByRoomId(1L))
                 .thenReturn(new ChatRoom(10L, ChatRoomType.GROUP, 1L, null, now));
@@ -134,6 +136,19 @@ class VideoReplyServiceTest {
                                     m.videoPostId(),
                                     m.clientRequestId());
                         });
+    }
+
+    @Test
+    @DisplayName("저장 상태 갱신 전에도 종료 시각부터 새 영상 답장을 저장하지 않는다")
+    void send_rejectsDeadlineBeforeBatch() {
+        setupSend();
+        when(sourceRooms.findById(1L)).thenReturn(Optional.of(new Room(
+                1L, RoomStatus.ACTIVE, now.toLocalDate(), 3, now.minusDays(3), null,
+                now.minusDays(3), now.minusHours(2), now.minusHours(1), now.minusMinutes(30), now)));
+        assertThatThrownBy(() -> service.send(1L, 30L, 2L, "hello", key))
+                .isInstanceOf(VideoReplyInvalidException.class);
+        verify(writer, never()).save(any());
+        verifyNoInteractions(events);
     }
 
     @Test

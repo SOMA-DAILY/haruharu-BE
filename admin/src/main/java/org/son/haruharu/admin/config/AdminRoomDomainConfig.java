@@ -3,6 +3,12 @@ package org.son.haruharu.admin.config;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.storage.ChatMessageRepositoryImpl;
+import org.son.haruharu.domain.chat.business.GroupChatCloseListener;
+import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
+import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
+import org.son.haruharu.domain.chat.storage.ChatRoomRepositoryImpl;
+import org.son.haruharu.domain.chat.storage.ChatRoomMemberRepositoryImpl;
 import org.son.haruharu.domain.mission.chat.business.MissionAnnouncementService;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementReader;
 import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementWriter;
@@ -49,6 +55,10 @@ import org.springframework.context.annotation.Import;
         // business — 방·초대코드 생성 유스케이스에 필요한 서비스만 가져온다.
         RoomService.class,
         RoomInviteService.class,
+        // #502: admin 취소도 원본 방과 같은 트랜잭션에서 chat_rooms.close_at을 기록한다.
+        GroupChatCloseListener.class,
+        ChatRoomReader.class, ChatRoomWriter.class, ChatRoomMemberReader.class,
+        ChatRoomRepositoryImpl.class, ChatRoomMemberRepositoryImpl.class,
         // implement — 위 서비스가 쓰는 협력자만.
         RoomReader.class,
         RoomWriter.class,

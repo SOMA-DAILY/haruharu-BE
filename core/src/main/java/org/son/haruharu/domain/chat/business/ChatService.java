@@ -29,6 +29,7 @@ import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.user.business.UserService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -71,6 +72,7 @@ public class ChatService {
     private final ChatParticipantPolicy participants;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+    private final ChatRoomLifecyclePolicy lifecycle;
 
     public ChatService(ChatRoomReader chatRoomReader,
                        ChatRoomWriter chatRoomWriter,
@@ -86,7 +88,7 @@ public class ChatService {
                        ChatMessageViews chatMessageViews,
                        ChatParticipantPolicy participants,
                        ApplicationEventPublisher eventPublisher,
-                       Clock clock) {
+                       Clock clock, ChatRoomLifecyclePolicy lifecycle) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomWriter = chatRoomWriter;
         this.chatRoomMemberReader = chatRoomMemberReader;
@@ -102,6 +104,7 @@ public class ChatService {
         this.participants = participants;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
+        this.lifecycle = lifecycle;
     }
 
     /**
@@ -131,14 +134,21 @@ public class ChatService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createGroupRoom(Long roomId) {
-        if (roomReader.findByIdForUpdate(roomId).isEmpty()) {
+        var source = roomReader.findByIdForUpdate(roomId).orElse(null);
+        if (source == null) {
             return;
         }
         if (chatRoomReader.existsByRoomId(roomId)) {
             return;
         }
-        ChatRoom room = chatRoomWriter.save(ChatRoom.createGroup(roomId));
         LocalDateTime now = LocalDateTime.now(clock);
+        ChatRoom group = ChatRoom.createGroup(roomId);
+        // 지연된 시작 이벤트가 종료·취소 뒤 도착해도 채팅을 다시 열지 않는다.
+        if (source.status() == RoomStatus.ENDED
+                || source.status() == RoomStatus.CANCELLED) {
+            group = group.close(now);
+        }
+        ChatRoom room = chatRoomWriter.save(group);
         roomMemberReader.getByRoomId(roomId).forEach(member ->
                 chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), member.userId(), now)));
     }
@@ -179,6 +189,7 @@ public class ChatService {
         ChatMessage toSave = original == null
                 ? ChatMessage.create(chatRoomId, senderId, content)
                 : ChatMessage.reply(chatRoomId, senderId, content, original, replySenderName(chatRoom, original));
+        lifecycle.requireActive(chatRoom);
         ChatMessage saved = chatMessageWriter.save(toSave);
         // 발신자 표시 이름(#393): GROUP은 방 세션 가명, DIRECT는 매칭쌍이라 실명. 푸시 본문("OO님이…")에 그대로 실린다.
         String senderNickname = participants.displayName(chatRoom, senderId);

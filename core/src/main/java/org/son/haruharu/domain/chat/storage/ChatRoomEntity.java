@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import java.time.LocalDateTime;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
@@ -47,6 +48,9 @@ public class ChatRoomEntity extends BaseEntity {
     @Column(name = "match_result_id")
     private Long matchResultId;
 
+    @Column(name = "close_at")
+    private LocalDateTime closeAt;
+
     public static ChatRoomEntity from(ChatRoom chatRoom) {
         ChatRoomEntity entity = new ChatRoomEntity();
         entity.id = chatRoom.id();
@@ -54,10 +58,11 @@ public class ChatRoomEntity extends BaseEntity {
         entity.roomId = chatRoom.roomId();
         entity.matchResultId = chatRoom.matchResultId();
         entity.createdAt = chatRoom.createdAt();
+        entity.closeAt = chatRoom.closeAt();
         return entity;
     }
 
     public ChatRoom toDomain() {
-        return new ChatRoom(id, type, roomId, matchResultId, createdAt);
+        return new ChatRoom(id, type, roomId, matchResultId, createdAt, closeAt);
     }
 }

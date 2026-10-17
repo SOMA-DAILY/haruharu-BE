@@ -34,6 +34,7 @@ import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class ChatMessageReactionServiceTest {
+    @Mock ChatRoomLifecyclePolicy lifecycle;
 
     private static final Long CHAT = 10L;
     private static final Long MSG = 100L;
@@ -55,7 +56,7 @@ class ChatMessageReactionServiceTest {
     @BeforeEach
     void setUp() {
         service = new ChatMessageReactionService(chatRoomReader, chatRoomMemberReader, chatMessageReader,
-                reactionReader, reactionWriter, participants, eventPublisher, clock);
+                reactionReader, reactionWriter, participants, eventPublisher, clock, lifecycle);
     }
 
     private void memberAndMessage(Long userId) {

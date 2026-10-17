@@ -155,6 +155,21 @@ class StompRedisFanoutIntegrationTest {
         publishForeign(kind, userId, destination, null);
     }
 
+    @Test
+    @DisplayName("다른 인스턴스의 종료 이벤트는 활성 전달 가드 없이 로컬 구독 정리를 실행한다")
+    void foreignClosureRemovesLocalSubscriptionsEvenAfterRoomBecameInactive() {
+        var payload = jsonMapper.valueToTree(new org.son.haruharu.domain.chat.application.ChatLifecycleEventListener
+                .RoomClosedPayload("CHAT_ROOM_CLOSED", 12L));
+        redisTemplate.convertAndSend(chatFanoutTopic.getTopic(), jsonMapper.writeValueAsString(
+                new StompFanoutEnvelope("instance-other", StompFanoutEnvelope.Kind.ROOM_CLOSED,
+                        "12", null, null, payload)));
+        ArgumentCaptor<Object> received = ArgumentCaptor.forClass(Object.class);
+        verify(localDelivery, timeout(5_000)).closeRoom(eq(12L), received.capture());
+        assertThat(((JsonNode) received.getValue()).get("type").asText()).isEqualTo("CHAT_ROOM_CLOSED");
+        assertThat(((JsonNode) received.getValue()).get("chat_room_id").asLong()).isEqualTo(12L);
+        verify(deliveryGuard, never()).allows(anyString());
+    }
+
     private void publishForeign(StompFanoutEnvelope.Kind kind, String userId, String destination, String guard) {
         JsonNode payload = jsonMapper.valueToTree(Map.of("message_id", 1024));
         String json = jsonMapper.writeValueAsString(

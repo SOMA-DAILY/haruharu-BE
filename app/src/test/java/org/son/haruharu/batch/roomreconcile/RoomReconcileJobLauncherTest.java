@@ -125,6 +125,10 @@ class RoomReconcileJobLauncherTest {
         assertThatCode(() -> CronExpression.parse(roomReconcile))
                 .as("잘못된 cron 이면 @Scheduled 등록 단계에서 앱 부팅이 실패한다")
                 .doesNotThrowAnyException();
+        assertThat(CronExpression.parse(roomReconcile)
+                .next(LocalDateTime.of(2026, 10, 2, 14, 5, 45)))
+                .as("앱 폴백은 기존 Airflow와 같은 5분 주기의 45초에 실행된다")
+                .isEqualTo(LocalDateTime.of(2026, 10, 2, 14, 10, 45));
         assertThat(secondsField(roomReconcile))
                 .isNotEqualTo(secondsField(cronByJob.get("SLOT_START_NOTIFICATION")))
                 .isNotEqualTo(secondsField(cronByJob.get("CHAT_ADMIN_MESSAGE")));

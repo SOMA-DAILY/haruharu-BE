@@ -26,19 +26,22 @@ public class AdminChatMessageService {
     private final ChatMessageReader chatMessageReader;
     private final ChatMessageWriter chatMessageWriter;
     private final ApplicationEventPublisher eventPublisher;
+    private final ChatRoomLifecyclePolicy lifecycle;
 
     public AdminChatMessageService(ChatRoomReader chatRoomReader, ChatMessageReader chatMessageReader,
                                    ChatMessageWriter chatMessageWriter,
-                                   ApplicationEventPublisher eventPublisher) {
+                                   ApplicationEventPublisher eventPublisher, ChatRoomLifecyclePolicy lifecycle) {
         this.chatRoomReader = chatRoomReader;
         this.chatMessageReader = chatMessageReader;
         this.chatMessageWriter = chatMessageWriter;
         this.eventPublisher = eventPublisher;
+        this.lifecycle = lifecycle;
     }
 
     @Transactional
     public ChatMessage sendAsSystem(Long chatRoomId, String content, Long scheduleItemId) {
         chatRoomReader.lockForUpdate(chatRoomId); // 유저 메시지와 id 순서를 맞춘다
+        lifecycle.requireActive(chatRoomReader.getById(chatRoomId));
         ChatMessage saved = chatMessageWriter.save(ChatMessage.system(chatRoomId, content, scheduleItemId));
         eventPublisher.publishEvent(new ChatMessageBroadcastEvent(ChatMessageBroadcast.from(saved)));
         return saved;

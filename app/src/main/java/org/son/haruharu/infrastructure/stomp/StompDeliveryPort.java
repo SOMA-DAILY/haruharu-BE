@@ -18,4 +18,7 @@ public interface StompDeliveryPort {
 
     /** 사용자 세션의 개인 목적지(예: /queue/chat-room-events)로 전달한다. */
     void sendToUser(String userId, String topic, Object payload);
+
+    /** 종료 알림을 라우팅한 뒤 해당 방의 두 토픽 구독만 제거한다. */
+    void closeRoom(Long chatRoomId, Object payload);
 }

@@ -108,12 +108,12 @@ class RoomStatusTransitionServiceTest {
     }
 
     @Test
-    @DisplayName("ENDED 전이에는 알림이 없다")
-    void givenPastEndsAt_whenTransition_thenEndedWithoutEvent() {
+    @DisplayName("ENDED 전이에는 GROUP 실시간 종료 이벤트를 발행한다")
+    void givenPastEndsAt_whenTransition_thenPublishesRoomEnded() {
         boolean changed = transition(roomWith(RoomStatus.SELECTING), ENDS_AT.plusMinutes(1));
 
         assertThat(changed).isTrue();
-        then(eventPublisher).should(never()).publishEvent(any());
+        then(eventPublisher).should().publishEvent(new org.son.haruharu.domain.room.business.event.RoomEndedEvent(1L));
     }
 
     @Test

@@ -17,6 +17,8 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
+import org.springframework.context.ApplicationEventPublisher;
+import org.son.haruharu.domain.room.business.event.RoomEndedEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,13 +30,16 @@ public class RoomService {
     private final RoomWriter roomWriter;
     private final RoomMemberReader roomMemberReader;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     public RoomService(RoomReader roomReader, RoomWriter roomWriter,
-                       RoomMemberReader roomMemberReader, Clock clock) {
+                       RoomMemberReader roomMemberReader, Clock clock,
+                       ApplicationEventPublisher events) {
         this.roomReader = roomReader;
         this.roomWriter = roomWriter;
         this.roomMemberReader = roomMemberReader;
         this.clock = clock;
+        this.events = events;
     }
 
     /**
@@ -90,6 +95,7 @@ public class RoomService {
             throw new RoomAlreadyEndedException();
         }
         roomWriter.save(room.cancelled());
+        events.publishEvent(new RoomEndedEvent(roomId));
     }
 
     public RoomResponse getMyRoom(Long userId) {
