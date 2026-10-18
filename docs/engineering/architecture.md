@@ -76,7 +76,7 @@ app/src/main/java/org/son/haruharu/
 
 admin/src/main/java/org/son/haruharu/admin/
 ├── AdminApplication.java                     # @SpringBootApplication
-├── domain/{account,dashboard,payment,product,room,ticket,user}/
+├── domain/{account,cohort,dashboard,payment,product,room,ticket,user}/
 │                                             # 어드민 전용 도메인은 4계층 전부 이 모듈에 둔다
 ├── common/ · config/ · handler/ · security/ · bootstrap/
 ```
@@ -279,6 +279,7 @@ public static UserEntity from(User user) {
 - `report` — reports
 - `ticket` — ticket_wallet(단일 잔액) · ticket_ledger(append-only). 사유는 구매·사용·환불 회수·운영 지급(#492). 사용처 연결 전까지 API 는 기본 OFF
 - `payment` — iap_product · iap_purchase · iap_webhook_event. RevenueCat webhook 으로만 구매·환불을 받는다(#492). 기본 OFF
+- `cohort` — recruit_tracks(모집 트랙·추가 문항 jsonb) · cohorts(트랙별 기수 번호·신청 기간·상태). 트랙당 OPEN 1개는 부분 유니크 + 트랙 행 잠금(#510). 앱 조회는 `haruharu.cohort.enabled` 기본 OFF
 
 **보류 (비활성 잔존, 삭제 X):**
 - `identity` — user_identities. PASS 실명인증 → 지연인증(성별/실명 필요 시점에만)
