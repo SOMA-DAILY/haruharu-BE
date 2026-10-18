@@ -277,9 +277,9 @@ public static UserEntity from(User user) {
 - 이전 자동 미션 도메인은 #482에서 폐기. 과거 미션 테이블·영상의 `mission_id`는 데이터 호환을 위해 보존하며 런타임 엔티티·배치·API는 제공하지 않는다.
 - `notification` — device_tokens · notification_settings · notification_history (FCM)
 - `report` — reports
-- `ticket` — ticket_wallet(단일 잔액) · ticket_ledger(append-only). 사유는 구매·사용·환불 회수·운영 지급(#492). 사용처 연결 전까지 API 는 기본 OFF
+- `ticket` — ticket_wallet(단일 잔액) · ticket_ledger(append-only). 사유는 구매·사용·환불 회수·운영 지급(#492)·사용 반환(USE_REFUND, #511). 첫 사용처는 기수 신청(#511). 티켓 API 는 기본 OFF
 - `payment` — iap_product · iap_purchase · iap_webhook_event. RevenueCat webhook 으로만 구매·환불을 받는다(#492). 기본 OFF
-- `cohort` — recruit_tracks(모집 트랙·추가 문항 jsonb) · cohorts(트랙별 기수 번호·신청 기간·상태). 트랙당 OPEN 1개는 부분 유니크 + 트랙 행 잠금(#510). 앱 조회는 `haruharu.cohort.enabled` 기본 OFF
+- `cohort` — recruit_tracks(모집 트랙·추가 문항 jsonb) · cohorts(트랙별 기수 번호·신청 기간·상태) · cohort_applications(기수 신청, 옛 matching_queue 대체). 트랙당 OPEN 1개는 부분 유니크 + 트랙 행 잠금(#510). 신청은 참가권 1장을 같은 트랜잭션에서 쓰고, 진행 중 신청 사람당 1건은 지갑 잠금 + 부분 유니크, 상태 전이는 조건부 UPDATE(#511). 잠금 순서 기수 → 방 → 신청(id 순) → 지갑. 앱 API 는 `haruharu.cohort.enabled` 기본 OFF
 
 **보류 (비활성 잔존, 삭제 X):**
 - `identity` — user_identities. PASS 실명인증 → 지연인증(성별/실명 필요 시점에만)
