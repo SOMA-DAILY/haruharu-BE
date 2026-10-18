@@ -80,6 +80,23 @@ class EntityAuditColumnRoundTripTest {
     }
 
     @Test
+    @DisplayName("모집 트랙·기수 Entity는 문항과 감사 시각을 포함해 모든 칸을 왕복 보존한다")
+    void givenRecruitTrackAndCohort_whenRoundTrip_thenPreserveAllFields() {
+        var track = new org.son.haruharu.domain.cohort.implement.RecruitTrack(1L, "seoul-student", "서울 대학생", "서울",
+                org.son.haruharu.domain.cohort.implement.RecruitAudience.STUDENT, 20, 29, java.util.List.of(
+                        new org.son.haruharu.domain.cohort.implement.TrackQuestion("grade", "학년",
+                                org.son.haruharu.domain.cohort.implement.TrackQuestionType.CHOICE, true,
+                                java.util.List.of("1학년", "2학년"))),
+                1, true, CREATED_AT, CREATED_AT.plusMinutes(1));
+        assertThat(org.son.haruharu.domain.cohort.storage.RecruitTrackEntity.from(track).toDomain()).isEqualTo(track);
+        var cohort = new org.son.haruharu.domain.cohort.implement.Cohort(2L, 1L, 6,
+                org.son.haruharu.domain.cohort.implement.CohortStatus.SETTLED, CREATED_AT, CREATED_AT.plusDays(5),
+                CREATED_AT.plusDays(6), "10월 마지막 주", 6, null, CREATED_AT.plusDays(7), "admin:1",
+                CREATED_AT, CREATED_AT.plusDays(7));
+        assertThat(org.son.haruharu.domain.cohort.storage.CohortEntity.from(cohort).toDomain()).isEqualTo(cohort);
+    }
+
+    @Test
     @DisplayName("BlockEntity.from()은 createdAt을 복원한다")
     void givenBlockWithCreatedAt_whenFromThenToDomain_thenCreatedAtSurvives() {
         Block block = new Block(1L, 10L, 20L, CREATED_AT);

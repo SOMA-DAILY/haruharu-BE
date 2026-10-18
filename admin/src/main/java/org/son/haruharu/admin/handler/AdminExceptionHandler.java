@@ -16,6 +16,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.util.DisconnectedClientHelper;
 
@@ -77,6 +78,14 @@ public class AdminExceptionHandler {
             org.springframework.web.multipart.MaxUploadSizeExceededException e) {
         return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
                 .body(ApiResponse.error(new ApiErrorDetail("UPLOAD_TOO_LARGE", "10MB 이하 파일을 선택해 주세요.")));
+    }
+
+    /** 쿼리·경로 값의 형식 오류(예: status=INVALID, trackId=abc). 유저 서버와 같은 INVALID_TYPE. 값은 남기지 않는다. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        log.warn("400 code=INVALID_TYPE param={}", e.getName());
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(new ApiErrorDetail("INVALID_TYPE", "잘못된 타입의 요청입니다.")));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
