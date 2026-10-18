@@ -80,6 +80,11 @@ public record RecruitTrack(
         return revised;
     }
 
+    /** 나이(신청 판정은 연 나이)가 트랙 범위(양 끝 포함) 안인지. */
+    public boolean acceptsAge(int age) {
+        return age >= minAge && age <= maxAge;
+    }
+
     private void collectErrors(List<ApiFieldError> errors, Integer minAge, Integer maxAge) {
         if (isBlank(label) || label.length() > LABEL_MAX) {
             errors.add(new ApiFieldError("label", "트랙 이름은 1~" + LABEL_MAX + "자여야 합니다."));

@@ -111,6 +111,15 @@ public class TicketService {
                 command.reason(), command.refType(), command.refId());
     }
 
+    /**
+     * 지갑 행 잠금만 건다. 사용 전에 다른 확인(예: 진행 중인 기수 신청)이 필요할 때 먼저 잡아
+     * 같은 유저의 요청을 한 줄로 세운다(#511). 같은 트랜잭션의 이후 spend 는 같은 잠금을 다시 쓴다.
+     */
+    @Transactional
+    public void lockWallet(Long userId) {
+        ticketWalletReader.getByUserIdForUpdate(userId);
+    }
+
     /** 티켓 사용. 잔액이 부족하면 예외로 거절한다. */
     @Transactional
     public void spend(TicketSpendCommand command) {

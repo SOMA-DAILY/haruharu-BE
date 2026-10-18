@@ -130,6 +130,32 @@ class ProfileServiceTest {
     }
 
     @Test
+    @DisplayName("기수 신청 연락처는 세 칸만 UPDATE 하고, 프로필이 없을 때만 새로 만든다")
+    void givenApplicantContact_whenSave_thenTargetedUpdateOrCreate() {
+        given(userProfileWriter.updateApplicantContact(eq(1L), eq("한국대"), eq("컴퓨터공학과"), eq("01012345678"), any()))
+            .willReturn(true);
+        profileService.saveApplicantContact(1L, "한국대", "컴퓨터공학과", "01012345678");
+        then(userProfileWriter).should(never()).save(any());
+
+        given(userProfileWriter.updateApplicantContact(eq(2L), any(), any(), any(), any())).willReturn(false);
+        profileService.saveApplicantContact(2L, "한국대", "컴퓨터공학과", "01012345678");
+        ArgumentCaptor<UserProfile> created = ArgumentCaptor.forClass(UserProfile.class);
+        then(userProfileWriter).should().save(created.capture());
+        assertThat(created.getValue()).isEqualTo(new UserProfile(null, 2L, null, "한국대", null, null, null, null, null,
+            null, null, "컴퓨터공학과", null, "01012345678"));
+    }
+
+    @Test
+    @DisplayName("마이페이지 프로필 수정은 기수 신청에서 받은 번호를 지우지 않는다")
+    void givenProfileWithPhone_whenApplyUpdateCommand_thenKeepsPhone() {
+        UserProfile existing = new UserProfile(1L, 1L, "부산", "한국대", 175, "INFP", "기존닉", null, null, null,
+            2003, "컴퓨터공학과", "러닝", "01012345678");
+        UpdateProfileCommand command = new UpdateProfileCommand("서울", "한국대", 175, "INFP", "새닉네임", null, null, null);
+
+        assertThat(command.applyTo(existing).phone()).isEqualTo("01012345678");
+    }
+
+    @Test
     @DisplayName("프로필이 없는 신규 유저가 수정 요청 시 새 프로필을 생성해 저장한다")
     void givenNoProfile_whenUpdateProfile_thenCreatesAndSaves() {
         Long userId = 1L;

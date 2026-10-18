@@ -9,6 +9,9 @@ public interface CohortRepository {
 
     Optional<Cohort> findByIdForUpdate(Long id);
 
+    /** 공유 잠금(FOR SHARE). 신청끼리는 동시에 들어오고, 기수 취소·정산(배타 잠금)과는 한 줄로 선다. */
+    Optional<Cohort> findByIdForShare(Long id);
+
     /** 엔티티를 영속성 컨텍스트에 올리지 않고 트랙 id 만 읽는다. 이후 잠금 조회가 최신 행을 보게 한다. */
     Optional<Long> findTrackIdById(Long id);
 

@@ -16,6 +16,10 @@ public interface CohortJpaRepository extends JpaRepository<CohortEntity, Long> {
     @Query("select c from CohortEntity c where c.id = :id")
     Optional<CohortEntity> findByIdForUpdate(@Param("id") Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select c from CohortEntity c where c.id = :id")
+    Optional<CohortEntity> findByIdForShare(@Param("id") Long id);
+
     @Query("select c.trackId from CohortEntity c where c.id = :id")
     Optional<Long> findTrackIdById(@Param("id") Long id);
 
