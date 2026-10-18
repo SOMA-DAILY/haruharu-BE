@@ -270,7 +270,7 @@ public static UserEntity from(User user) {
 - `auth` — user_credentials · refresh_tokens. OAuth 연결·JWT 세션
 - `profile` — user_profiles · user_images. 온보딩=닉네임만 (옛 필드 nullable 잔존)
 - `agreement` — user_agreements. 약관 동의
-- `room` — rooms(초대코드·어드민 스케줄·status) · room_members · room_invites(신규) · final_selections · match_results
+- `room` — rooms(초대코드·어드민 스케줄·status·기수·성별 정원) · room_members(입장 경로 INVITE/APPLICATION) · room_invites(신규) · final_selections · match_results. 초대코드 정원(`max_uses`)은 INVITE 멤버만 세고, 방 전체 성별 정원은 rooms 가 따로 갖는다. 입장(가명·저장·`RoomMemberJoinedEvent`)은 `RoomMemberJoiner` 한 경로로 초대코드 입장과 앱 신청자 배정이 함께 쓴다(#513)
 - `video` — video_posts(슬롯 시간창) · video_reactions
 - `chat` — chat_rooms(GROUP/DIRECT) · chat_room_members · chat_messages
 - `mission` — #486의 공통 방 미션(`common`), 안내형 상세(`types/announcement`), 채팅 게시 계획(`chat`).
