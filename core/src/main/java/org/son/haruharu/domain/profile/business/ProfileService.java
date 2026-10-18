@@ -20,6 +20,7 @@ import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -92,6 +93,17 @@ public class ProfileService {
     public void deleteProfileAndImages(Long userId) {
         deleteAllImages(userId);
         userProfileWriter.deleteByUserId(userId);
+    }
+
+    /**
+     * 기수 신청서의 학교·학과·번호를 프로필에 옮겨 적는다(#511). 학교는 affiliation 칸에 둔다.
+     * 세 칸만 UPDATE 해 같은 시각의 다른 프로필 수정을 덮어쓰지 않는다. 프로필이 없으면 그 세 칸으로 새로 만든다.
+     */
+    @Transactional
+    public void saveApplicantContact(Long userId, String school, String department, String phone) {
+        if (!userProfileWriter.updateApplicantContact(userId, school, department, phone, LocalDateTime.now())) {
+            userProfileWriter.save(UserProfile.empty(userId).withApplicantContact(school, department, phone));
+        }
     }
 
     @Transactional

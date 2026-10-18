@@ -97,6 +97,33 @@ class EntityAuditColumnRoundTripTest {
     }
 
     @Test
+    @DisplayName("기수 신청 Entity는 답·설문·종료 기록과 감사 시각을 포함해 모든 칸을 왕복 보존한다")
+    void givenCohortApplication_whenRoundTrip_thenPreserveAllFields() {
+        var application = new org.son.haruharu.domain.cohort.implement.CohortApplication(1L, 7L, 3L, 2L,
+                org.son.haruharu.domain.cohort.implement.CohortApplicationStatus.NOT_ASSIGNED,
+                org.son.haruharu.domain.cohort.implement.ApplicantGender.FEMALE, "FEMALE",
+                java.time.LocalDate.of(2003, 5, 1), "한국대", "컴퓨터공학과", Map.of("grade", "3학년"), "인스타그램",
+                org.son.haruharu.domain.cohort.implement.FriendPreference.SAME_ROOM, "설레요", CREATED_AT.plusHours(1),
+                1, CREATED_AT, CREATED_AT.plusHours(2),
+                org.son.haruharu.domain.cohort.implement.ApplicationReviewReason.GENDER_MISMATCH, 9L,
+                CREATED_AT.plusDays(1), "admin:1", CREATED_AT.plusDays(2),
+                org.son.haruharu.domain.cohort.implement.ApplicationCloseReason.COHORT_CANCELLED,
+                CREATED_AT.plusDays(2), "메모", CREATED_AT, CREATED_AT.plusDays(2));
+        assertThat(org.son.haruharu.domain.cohort.storage.CohortApplicationEntity.from(application).toDomain())
+                .isEqualTo(application);
+    }
+
+    @Test
+    @DisplayName("프로필 Entity는 기수 신청 번호(phone)까지 왕복 보존한다")
+    void givenProfileWithPhone_whenRoundTrip_thenPreservePhone() {
+        var profile = new org.son.haruharu.domain.profile.implement.UserProfile(1L, 7L, "서울", "한국대", 175, "INFP",
+                "닉", null, null, org.son.haruharu.domain.profile.implement.Gender.MALE, 2003, "컴퓨터공학과", "러닝",
+                "01012345678");
+        assertThat(org.son.haruharu.domain.profile.storage.UserProfileEntity.from(profile).toDomain())
+                .isEqualTo(profile);
+    }
+
+    @Test
     @DisplayName("BlockEntity.from()은 createdAt을 복원한다")
     void givenBlockWithCreatedAt_whenFromThenToDomain_thenCreatedAtSurvives() {
         Block block = new Block(1L, 10L, 20L, CREATED_AT);

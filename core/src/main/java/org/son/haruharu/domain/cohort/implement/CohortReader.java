@@ -25,6 +25,14 @@ public class CohortReader {
         return cohortRepository.findByIdForUpdate(id).orElseThrow(CohortNotFoundException::new);
     }
 
+    /**
+     * 신청 경로의 기수 공유 잠금(#511). 신청끼리는 막지 않고, 같은 기수의 취소·정산(배타 잠금)과는 한 줄로 세운다.
+     * 트랙은 잠그지 않는다 — 어드민 공개(트랙 → 기수)와 교착하지 않게.
+     */
+    public Cohort getByIdForShare(Long id) {
+        return cohortRepository.findByIdForShare(id).orElseThrow(CohortNotFoundException::new);
+    }
+
     public Long getTrackId(Long id) {
         return cohortRepository.findTrackIdById(id).orElseThrow(CohortNotFoundException::new);
     }

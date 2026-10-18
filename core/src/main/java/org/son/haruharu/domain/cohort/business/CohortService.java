@@ -3,10 +3,15 @@ package org.son.haruharu.domain.cohort.business;
 import org.son.haruharu.domain.cohort.business.command.CreateCohortCommand;
 import org.son.haruharu.domain.cohort.business.command.UpdateCohortCommand;
 import org.son.haruharu.domain.cohort.business.dto.CohortResponse;
+import org.son.haruharu.domain.cohort.business.exception.CohortHasAssignedApplicationsException;
 import org.son.haruharu.domain.cohort.business.exception.CohortOpenAlreadyExistsException;
 import org.son.haruharu.domain.cohort.business.exception.CohortSequenceDuplicateException;
 import org.son.haruharu.domain.cohort.business.exception.RecruitTrackInactiveException;
+import org.son.haruharu.domain.cohort.implement.ApplicationCloseReason;
 import org.son.haruharu.domain.cohort.implement.Cohort;
+import org.son.haruharu.domain.cohort.implement.CohortApplication;
+import org.son.haruharu.domain.cohort.implement.CohortApplicationReader;
+import org.son.haruharu.domain.cohort.implement.CohortApplicationStatus;
 import org.son.haruharu.domain.cohort.implement.CohortReader;
 import org.son.haruharu.domain.cohort.implement.CohortStatus;
 import org.son.haruharu.domain.cohort.implement.CohortWriter;
@@ -34,13 +39,18 @@ public class CohortService {
     private final RecruitTrackReader trackReader;
     private final CohortReader cohortReader;
     private final CohortWriter cohortWriter;
+    private final CohortApplicationReader applicationReader;
+    private final CohortApplicationClosingService applicationClosingService;
     private final Clock clock;
 
     public CohortService(RecruitTrackReader trackReader, CohortReader cohortReader, CohortWriter cohortWriter,
-                         Clock clock) {
+                         CohortApplicationReader applicationReader,
+                         CohortApplicationClosingService applicationClosingService, Clock clock) {
         this.trackReader = trackReader;
         this.cohortReader = cohortReader;
         this.cohortWriter = cohortWriter;
+        this.applicationReader = applicationReader;
+        this.applicationClosingService = applicationClosingService;
         this.clock = clock;
     }
 
@@ -90,11 +100,22 @@ public class CohortService {
         return CohortResponse.of(cohortWriter.save(opened), locked.track(), now());
     }
 
-    /** DRAFT·OPEN → CANCELLED. 신청자 반환은 신청 기능(#511 이후)에서 이 전이에 붙인다. */
+    /**
+     * DRAFT·OPEN → CANCELLED. 배정 전 신청은 모두 미배정(COHORT_CANCELLED)으로 닫고 참가권을 돌려준다(#511) —
+     * 운영진 사정이라 다음 신청에 우선순위를 준다. 방에 배정된 신청이 있으면 취소하지 않는다(방 처리는 #517).
+     * 기수 배타 잠금이 새 신청(공유 잠금)을 막고, 신청은 id 순으로 잠근다.
+     */
     @Transactional
     public CohortResponse cancel(Long cohortId) {
         Locked locked = lock(cohortId);
-        return CohortResponse.of(cohortWriter.save(locked.cohort().cancel()), locked.track(), now());
+        Cohort cancelled = locked.cohort().cancel();
+        if (applicationReader.existsAssigned(cohortId)) throw new CohortHasAssignedApplicationsException();
+        LocalDateTime now = now();
+        for (CohortApplication application : applicationReader.lockBeforeAssignment(cohortId)) {
+            applicationClosingService.closeBeforeAssignment(application, CohortApplicationStatus.NOT_ASSIGNED,
+                    ApplicationCloseReason.COHORT_CANCELLED, now);
+        }
+        return CohortResponse.of(cohortWriter.save(cancelled), locked.track(), now);
     }
 
     /**

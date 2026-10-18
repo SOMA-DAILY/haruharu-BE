@@ -10,10 +10,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.cohort.business.command.CreateCohortCommand;
 import org.son.haruharu.domain.cohort.business.command.UpdateCohortCommand;
 import org.son.haruharu.domain.cohort.business.dto.CohortResponse;
+import org.son.haruharu.domain.cohort.business.exception.CohortHasAssignedApplicationsException;
 import org.son.haruharu.domain.cohort.business.exception.CohortOpenAlreadyExistsException;
 import org.son.haruharu.domain.cohort.business.exception.CohortSequenceDuplicateException;
 import org.son.haruharu.domain.cohort.business.exception.RecruitTrackInactiveException;
+import org.son.haruharu.domain.cohort.implement.ApplicationCloseReason;
 import org.son.haruharu.domain.cohort.implement.Cohort;
+import org.son.haruharu.domain.cohort.implement.CohortApplication;
+import org.son.haruharu.domain.cohort.implement.CohortApplicationReader;
+import org.son.haruharu.domain.cohort.implement.CohortApplicationStatus;
 import org.son.haruharu.domain.cohort.implement.CohortReader;
 import org.son.haruharu.domain.cohort.implement.CohortStatus;
 import org.son.haruharu.domain.cohort.implement.CohortWriter;
@@ -49,12 +54,14 @@ class CohortServiceTest {
     @Mock RecruitTrackReader trackReader;
     @Mock CohortReader cohortReader;
     @Mock CohortWriter cohortWriter;
+    @Mock CohortApplicationReader applicationReader;
+    @Mock CohortApplicationClosingService closingService;
     CohortService service;
 
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(NOW.atZone(SEOUL).toInstant(), SEOUL);
-        service = new CohortService(trackReader, cohortReader, cohortWriter, clock);
+        service = new CohortService(trackReader, cohortReader, cohortWriter, applicationReader, closingService, clock);
     }
 
     private RecruitTrack track(boolean active) {
@@ -158,6 +165,47 @@ class CohortServiceTest {
         given(cohortWriter.save(any())).willAnswer(invocation -> invocation.getArgument(0));
 
         assertThat(service.cancel(10L).status()).isEqualTo(CohortStatus.CANCELLED);
+    }
+
+    private CohortApplication application(Long id, Long userId) {
+        return new CohortApplication(id, userId, 10L, 1L, CohortApplicationStatus.QUEUED, null, null, null, "한국대",
+                "컴퓨터공학과", null, null, null, null, null, 0, NOW, NOW, null, null, null, null, null, null, null,
+                null, NOW, NOW);
+    }
+
+    @Test
+    @DisplayName("기수를 취소하면 배정 전 신청을 id 순으로 모두 미배정(COHORT_CANCELLED)으로 닫고 참가권을 돌려준다")
+    void givenPendingApplications_whenCancel_thenClosesEachAsNotAssignedWithRefund() {
+        given(cohortReader.getTrackId(10L)).willReturn(1L);
+        given(trackReader.getByIdForUpdate(1L)).willReturn(track(true));
+        given(cohortReader.getByIdForUpdate(10L)).willReturn(cohort(CohortStatus.OPEN));
+        CohortApplication first = application(100L, 7L);
+        CohortApplication second = application(101L, 8L);
+        given(applicationReader.lockBeforeAssignment(10L)).willReturn(List.of(first, second));
+        given(cohortWriter.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.cancel(10L).status()).isEqualTo(CohortStatus.CANCELLED);
+
+        InOrder order = inOrder(cohortReader, applicationReader, closingService);
+        order.verify(cohortReader).getByIdForUpdate(10L);
+        order.verify(applicationReader).lockBeforeAssignment(10L);
+        order.verify(closingService).closeBeforeAssignment(first, CohortApplicationStatus.NOT_ASSIGNED,
+                ApplicationCloseReason.COHORT_CANCELLED, NOW);
+        order.verify(closingService).closeBeforeAssignment(second, CohortApplicationStatus.NOT_ASSIGNED,
+                ApplicationCloseReason.COHORT_CANCELLED, NOW);
+    }
+
+    @Test
+    @DisplayName("방에 배정된 신청이 있으면 기수를 취소하지 않고 아무 신청도 닫지 않는다")
+    void givenAssignedApplication_whenCancel_thenRejectsWithoutClosing() {
+        given(cohortReader.getTrackId(10L)).willReturn(1L);
+        given(trackReader.getByIdForUpdate(1L)).willReturn(track(true));
+        given(cohortReader.getByIdForUpdate(10L)).willReturn(cohort(CohortStatus.OPEN));
+        given(applicationReader.existsAssigned(10L)).willReturn(true);
+
+        assertThatThrownBy(() -> service.cancel(10L)).isInstanceOf(CohortHasAssignedApplicationsException.class);
+        verifyNoInteractions(closingService);
+        verify(cohortWriter, never()).save(any());
     }
 
     @Test

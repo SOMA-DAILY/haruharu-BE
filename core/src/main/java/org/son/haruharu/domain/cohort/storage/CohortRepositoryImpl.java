@@ -26,6 +26,11 @@ public class CohortRepositoryImpl implements CohortRepository {
     }
 
     @Override
+    public Optional<Cohort> findByIdForShare(Long id) {
+        return jpaRepository.findByIdForShare(id).map(CohortEntity::toDomain);
+    }
+
+    @Override
     public Optional<Long> findTrackIdById(Long id) {
         return jpaRepository.findTrackIdById(id);
     }

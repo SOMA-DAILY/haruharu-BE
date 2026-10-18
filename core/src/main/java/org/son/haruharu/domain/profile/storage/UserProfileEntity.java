@@ -58,6 +58,10 @@ public class UserProfileEntity extends BaseEntity {
     @Column(length = 40)
     private String intoNow;
 
+    // 기수 신청 때 받는 휴대전화 번호(숫자만, #511).
+    @Column(length = 20)
+    private String phone;
+
     public static UserProfileEntity from(UserProfile userProfile) {
         var entity = new UserProfileEntity();
         entity.id = userProfile.id();
@@ -73,6 +77,7 @@ public class UserProfileEntity extends BaseEntity {
         entity.birthYear = userProfile.birthYear();
         entity.department = userProfile.department();
         entity.intoNow = userProfile.intoNow();
+        entity.phone = userProfile.phone();
         return entity;
     }
 
@@ -90,7 +95,8 @@ public class UserProfileEntity extends BaseEntity {
                 gender,
                 birthYear,
                 department,
-                intoNow
+                intoNow,
+                phone
         );
     }
 }

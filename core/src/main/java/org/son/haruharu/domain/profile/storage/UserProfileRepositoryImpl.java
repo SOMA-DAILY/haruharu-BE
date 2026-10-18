@@ -4,6 +4,7 @@ import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +34,12 @@ public class UserProfileRepositoryImpl implements UserProfileRepository {
     @Override
     public UserProfile save(UserProfile userProfile) {
         return userProfileJpaRepository.save(UserProfileEntity.from(userProfile)).toDomain();
+    }
+
+    @Override
+    public int updateApplicantContact(Long userId, String school, String department, String phone,
+                                      LocalDateTime now) {
+        return userProfileJpaRepository.updateApplicantContact(userId, school, department, phone, now);
     }
 
     @Override
