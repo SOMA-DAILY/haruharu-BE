@@ -26,6 +26,7 @@ import org.son.haruharu.domain.mission.types.recording.implement.RecordingMissio
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.profile.storage.UserProfileRepositoryImpl;
 import org.son.haruharu.domain.room.business.RoomInviteService;
+import org.son.haruharu.domain.room.business.RoomMemberJoiner;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.implement.InviteCodeGenerator;
 import org.son.haruharu.domain.room.implement.RoomInviteReader;
@@ -55,6 +56,8 @@ import org.springframework.context.annotation.Import;
         // business — 방·초대코드 생성 유스케이스에 필요한 서비스만 가져온다.
         RoomService.class,
         RoomInviteService.class,
+        // #513: 방 입장 공통 경로(가명·저장·입장 이벤트). RoomInviteService 가 의존하고 앱 신청자 배정(#516)도 쓴다.
+        RoomMemberJoiner.class,
         // #502: admin 취소도 원본 방과 같은 트랜잭션에서 chat_rooms.close_at을 기록한다.
         GroupChatCloseListener.class,
         ChatRoomReader.class, ChatRoomWriter.class, ChatRoomMemberReader.class,

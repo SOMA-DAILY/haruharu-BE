@@ -37,6 +37,27 @@ class RoomTest {
     }
 
     @Test
+    @DisplayName("기수·이름·성별 정원을 주고 만든 방은 모든 상태 전이에서 그 값을 보존한다(#513)")
+    void givenComposition_whenStatusChanges_thenCompositionIsPreserved() {
+        RoomComposition composition = RoomComposition.of(4L, "서울 6기 1조", 3, 3);
+        Room room = Room.createScheduled(SCHED_START, SCHED_START.plusHours(4), SCHED_START.plusHours(6),
+                SCHED_START.plusHours(7), SCHED_START.plusHours(8), 3, composition);
+
+        assertThat(room.composition()).isEqualTo(composition);
+        assertThat(room.materialized(RoomStatus.ACTIVE).composition()).isEqualTo(composition);
+        assertThat(room.cancelled().composition()).isEqualTo(composition);
+        assertThat(room.started(SCHED_START).composition()).isEqualTo(composition);
+        assertThat(room.ended(SCHED_START.plusDays(3)).composition()).isEqualTo(composition);
+    }
+
+    @Test
+    @DisplayName("기존 방(기수·정원 미지정)은 빈 편성 정보를 갖는다")
+    void givenLegacyRoom_whenCreate_thenCompositionIsEmpty() {
+        assertThat(scheduledRoom().composition()).isEqualTo(RoomComposition.NONE);
+        assertThat(activeRoom(3, STARTED_AT).composition()).isEqualTo(RoomComposition.NONE);
+    }
+
+    @Test
     @DisplayName("createScheduled: PENDING·시각 세팅·scheduledDate=시작일")
     void givenTimes_whenCreateScheduled_thenPendingWithTimes() {
         Room room = scheduledRoom();

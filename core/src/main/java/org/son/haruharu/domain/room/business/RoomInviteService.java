@@ -5,26 +5,23 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.son.haruharu.domain.room.business.dto.JoinRoomResponse;
-import org.son.haruharu.domain.room.business.event.RoomMemberJoinedEvent;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotFoundException;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.InviteCodeGenerator;
-import org.son.haruharu.domain.room.implement.PseudonymPool;
 import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomEntryPath;
 import org.son.haruharu.domain.room.implement.RoomInvite;
 import org.son.haruharu.domain.room.implement.RoomInviteReader;
 import org.son.haruharu.domain.room.implement.RoomInviteStatus;
 import org.son.haruharu.domain.room.implement.RoomInviteWriter;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
-import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.profile.implement.Gender;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,31 +33,28 @@ public class RoomInviteService {
     private final RoomInviteWriter roomInviteWriter;
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
-    private final RoomMemberWriter roomMemberWriter;
+    private final RoomMemberJoiner roomMemberJoiner;
     private final InviteCodeGenerator inviteCodeGenerator;
     private final UserProfileReader userProfileReader;
-    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public RoomInviteService(RoomInviteReader roomInviteReader, RoomInviteWriter roomInviteWriter,
                              RoomReader roomReader, RoomMemberReader roomMemberReader,
-                             RoomMemberWriter roomMemberWriter, InviteCodeGenerator inviteCodeGenerator,
-                             UserProfileReader userProfileReader,
-                             ApplicationEventPublisher eventPublisher, Clock clock) {
+                             RoomMemberJoiner roomMemberJoiner, InviteCodeGenerator inviteCodeGenerator,
+                             UserProfileReader userProfileReader, Clock clock) {
         this.roomInviteReader = roomInviteReader;
         this.roomInviteWriter = roomInviteWriter;
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
-        this.roomMemberWriter = roomMemberWriter;
+        this.roomMemberJoiner = roomMemberJoiner;
         this.inviteCodeGenerator = inviteCodeGenerator;
         this.userProfileReader = userProfileReader;
-        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
     /**
-     * 초대코드로 방 입장. room-first 잠금 아래 같은 방 재입장은 멱등 처리하고 active membership을
-     * 잠긴 초대코드의 maxUses(또는 null 무제한)와 비교한다.
+     * 초대코드로 방 입장. room-first 잠금 아래 같은 방 재입장은 멱등 처리하고, 초대코드로 들어온 멤버 수(#513)를
+     * 잠긴 초대코드의 maxUses(또는 null 무제한)와 비교한다 — 운영진이 배정한 앱 신청자는 웹 몫 자리를 쓰지 않는다.
      */
     @Transactional
     public JoinRoomResponse join(Long userId, String code) {
@@ -90,7 +84,7 @@ public class RoomInviteService {
             return new JoinRoomResponse(room.id());
         }
 
-        if (!invite.hasCapacity(roomMemberReader.countByRoomId(room.id()))) {
+        if (!invite.hasCapacity(roomMemberReader.countByRoomIdAndEntryPath(room.id(), RoomEntryPath.INVITE))) {
             throw new InviteCodeNotUsableException();
         }
 
@@ -99,12 +93,10 @@ public class RoomInviteService {
                 .map(UserProfile::gender)
                 .map(Gender::name)
                 .orElse(null);
-        // 가명 배정(#393): 같은 성별 기존 멤버 수를 입장 순번(0-based)으로 써서 배정한다. gender 미상이면 배정 스킵(null).
-        String pseudonym = gender == null ? null
-                : PseudonymPool.assign(gender, (int) roomMemberReader.countByRoomIdAndGender(room.id(), gender));
-        roomMemberWriter.save(RoomMember.of(room.id(), userId, gender, null, now).withPseudonym(pseudonym));
+        // 가명 배정(#393)·저장·입장 이벤트는 앱 신청자 배정과 같은 공통 경로를 쓴다(#513).
+        // 코드 사용 횟수는 그 뒤에 올린다 — 입장 이벤트 리스너(그룹채팅 등록)는 usedCount 를 읽지 않고, 실패하면 함께 롤백된다.
+        roomMemberJoiner.join(RoomMember.of(room.id(), userId, gender, null, now));
         roomInviteWriter.save(invite.incrementUsed());
-        eventPublisher.publishEvent(new RoomMemberJoinedEvent(room.id(), userId, now));
         return new JoinRoomResponse(room.id());
     }
 

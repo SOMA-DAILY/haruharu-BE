@@ -5,13 +5,17 @@ import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import org.hibernate.annotations.ColumnDefault;
 import org.son.haruharu.common.entity.BaseEntity;
+import org.son.haruharu.domain.room.implement.RoomEntryPath;
 import org.son.haruharu.domain.room.implement.RoomMember;
 
 import lombok.AccessLevel;
@@ -49,6 +53,17 @@ public class RoomMemberEntity extends BaseEntity {
     @Column(nullable = false)
     private LocalDateTime joinedAt;
 
+    // #513: 들어온 경로. 기존 행은 모두 초대코드 입장이라 DB 기본값 INVITE 로 채운다
+    // (ddl-auto 가 먼저 칸을 더해도 NOT NULL 추가가 기존 행에서 실패하지 않게).
+    @Enumerated(EnumType.STRING)
+    @ColumnDefault("'INVITE'")
+    @Column(nullable = false, length = 20)
+    private RoomEntryPath entryPath;
+
+    // #513: APPLICATION 이면 배정한 기수 신청 id. FK·유니크는 513 SQL 이 걸고, entry_path 와의 짝 규칙은 RoomMember(도메인)가 지킨다.
+    @Column
+    private Long applicationId;
+
     public static RoomMemberEntity from(RoomMember member) {
         RoomMemberEntity entity = new RoomMemberEntity();
         entity.id = member.id();
@@ -58,10 +73,12 @@ public class RoomMemberEntity extends BaseEntity {
         entity.pseudonym = member.pseudonym();
         entity.birthday = member.birthday();
         entity.joinedAt = member.joinedAt();
+        entity.entryPath = member.entryPath();
+        entity.applicationId = member.applicationId();
         return entity;
     }
 
     public RoomMember toDomain() {
-        return new RoomMember(id, roomId, userId, gender, pseudonym, birthday, joinedAt);
+        return new RoomMember(id, roomId, userId, gender, pseudonym, birthday, joinedAt, entryPath, applicationId);
     }
 }
