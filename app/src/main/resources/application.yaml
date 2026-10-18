@@ -100,6 +100,9 @@ haruharu:
     enabled: false  # 티켓 잔액·내역 API off
   payment:
     enabled: false  # 결제(IAP) webhook·상품 API off
+  # 앱 기수 신청(#510~). 앱 화면이 붙기 전까지 기본 OFF. 어드민 트랙·기수 관리는 이 값과 무관하다.
+  cohort:
+    enabled: ${COHORT_ENABLED:false}  # 앱 /api/v1/recruit/** off
   # 채팅 P0(#455). 플래그는 기본 OFF 로 배포하고 앱 배포 뒤 켠다(지금 앱은 새 푸시 타입과 운영 말풍선을 모른다).
   chat:
     # 각 app 인스턴스의 실제 구독을 확인한다. 방 상태 Batch 런처 토글과 독립적이다(#502).
