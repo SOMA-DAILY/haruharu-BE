@@ -157,4 +157,15 @@ class CohortApplicationTest {
         assertThatThrownBy(() -> pending(ApplicantGender.MALE).approved(NOW))
                 .isInstanceOf(CohortApplicationNotApprovableException.class);
     }
+
+    @Test
+    @DisplayName("방에 넣을 성별은 편성 대기이고 PASS 성별이 신청 성별과 같을 때만 있다")
+    void givenStatusAndGenders_whenAssignableGender_thenOnlyQueuedAndMatching() {
+        CohortApplication queued = pending(ApplicantGender.MALE).screen("MALE", LocalDate.of(2003, 1, 1), TRACK, NOW);
+        assertThat(queued.assignableGender()).contains(ApplicantGender.MALE);
+        assertThat(pending(ApplicantGender.MALE).assignableGender()).isEmpty();
+        assertThat(new CohortApplication(5L, 7L, 3L, 1L, CohortApplicationStatus.QUEUED, ApplicantGender.FEMALE, "MALE",
+                null, "한국대", "컴퓨터공학과", null, null, null, null, null, 0, NOW, NOW, null, null, null, null, null,
+                null, null, null, NOW, NOW).assignableGender()).isEmpty();
+    }
 }
