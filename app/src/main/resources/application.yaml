@@ -92,6 +92,8 @@ haruharu:
       enabled: ${SLOT_START_NOTIFICATION_ENABLED:true}
       cron: ${SLOT_START_NOTIFICATION_CRON:15 0 * * * *}
   room:
+    # 초대코드 새 입장 PASS 본인확인 필수(#514). 기본 false — 앱이 IDENTITY_REQUIRED 를 처리하는 버전 배포 뒤 켠다.
+    join-identity-required: ${ROOM_JOIN_IDENTITY_REQUIRED:false}
     reconcile:
       enabled: ${ROOM_RECONCILE_ENABLED:true}
       cron: ${ROOM_RECONCILE_CRON:45 */5 * * * *}

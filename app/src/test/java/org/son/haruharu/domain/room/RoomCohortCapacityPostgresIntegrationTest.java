@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.room.business.RoomInviteService;
+import org.son.haruharu.domain.room.business.RoomJoinService;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomComposition;
@@ -68,6 +69,8 @@ class RoomCohortCapacityPostgresIntegrationTest {
     }
 
     @Autowired RoomInviteService roomInviteService;
+
+    @Autowired RoomJoinService roomJoinService;
     @Autowired RoomWriter roomWriter;
     @Autowired RoomReader roomReader;
     @Autowired RoomMemberWriter roomMemberWriter;
@@ -202,7 +205,7 @@ class RoomCohortCapacityPostgresIntegrationTest {
                 ready.countDown();
                 try {
                     start.await();
-                    roomInviteService.join(user, "WEB234");
+                    roomJoinService.join(user, "WEB234");
                     success.incrementAndGet();
                 } catch (InviteCodeNotUsableException e) {
                     full.incrementAndGet();

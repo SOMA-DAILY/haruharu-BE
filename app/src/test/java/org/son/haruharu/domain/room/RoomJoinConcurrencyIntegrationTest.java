@@ -11,6 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.room.business.RoomInviteService;
+import org.son.haruharu.domain.room.business.RoomJoinService;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomWriter;
@@ -37,6 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RoomJoinConcurrencyIntegrationTest {
 
     @Autowired RoomInviteService roomInviteService;
+
+    @Autowired RoomJoinService roomJoinService;
     @Autowired RoomWriter roomWriter;
     @Autowired RoomMemberReader roomMemberReader;
     @Autowired UserJpaRepository userJpaRepository;
@@ -128,7 +131,7 @@ class RoomJoinConcurrencyIntegrationTest {
 
     private void attemptJoin(Long userId, String code, AtomicInteger success, AtomicInteger others) {
         try {
-            roomInviteService.join(userId, code);
+            roomJoinService.join(userId, code);
             success.incrementAndGet();
         } catch (RuntimeException e) {
             others.incrementAndGet();
