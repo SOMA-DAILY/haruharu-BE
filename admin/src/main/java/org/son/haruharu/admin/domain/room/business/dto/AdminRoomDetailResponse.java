@@ -44,6 +44,8 @@ public record AdminRoomDetailResponse(
             @Schema(description = "입장 경로(#513): INVITE=초대코드, APPLICATION=앱 신청 배정", example = "INVITE")
             RoomEntryPath entryPath,
             @Schema(description = "배정한 기수 신청 id(APPLICATION 만)", example = "55", nullable = true) Long applicationId,
-            @Schema(description = "본인 확인(PASS) 완료 여부(#513)", example = "true") boolean identityVerified
+            @Schema(description = "본인 확인(PASS) 완료 여부(#513)", example = "true") boolean identityVerified,
+            @Schema(description = "학교(프로필 affiliation, 없으면 null, #529)", example = "한국대학교", nullable = true) String school,
+            @Schema(description = "학과(없으면 null, #529)", example = "컴퓨터공학과", nullable = true) String department
     ) {}
 }

@@ -22,12 +22,12 @@ public class AdminRoomReader {
         this.adminRoomQueryRepository = adminRoomQueryRepository;
     }
 
-    public List<Room> findRooms(RoomStatus status, LocalDate scheduledDate, int offset, int limit) {
-        return adminRoomQueryRepository.findRooms(status, scheduledDate, offset, limit);
+    public List<Room> findRooms(RoomStatus status, LocalDate scheduledDate, Long cohortId, int offset, int limit) {
+        return adminRoomQueryRepository.findRooms(status, scheduledDate, cohortId, offset, limit);
     }
 
-    public long countRooms(RoomStatus status, LocalDate scheduledDate) {
-        return adminRoomQueryRepository.countRooms(status, scheduledDate);
+    public long countRooms(RoomStatus status, LocalDate scheduledDate, Long cohortId) {
+        return adminRoomQueryRepository.countRooms(status, scheduledDate, cohortId);
     }
 
     public Room getById(Long roomId) {

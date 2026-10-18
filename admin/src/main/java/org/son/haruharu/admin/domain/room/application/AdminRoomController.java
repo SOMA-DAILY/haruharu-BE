@@ -54,9 +54,10 @@ public class AdminRoomController {
             @Parameter(description = "방 상태 필터", example = "ACTIVE") @RequestParam(required = false) RoomStatus status,
             @Parameter(description = "예정일 필터", example = "2026-07-09")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate scheduledDate,
+            @Parameter(description = "기수 id(#529)", example = "3") @RequestParam(required = false) Long cohortId,
             @Parameter(description = "0-based 페이지", example = "0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기(최대 100)", example = "20") @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(adminRoomService.getRooms(status, scheduledDate, page, size));
+        return ApiResponse.ok(adminRoomService.getRooms(status, scheduledDate, cohortId, page, size));
     }
 
     @Operation(summary = "방 상세", description = "방 정보 + 참여자 목록. 없는 id는 404.")

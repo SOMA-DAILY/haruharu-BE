@@ -15,6 +15,10 @@ public record AdminRoomSummary(
         @Schema(description = "참여자 수", example = "6") int memberCount,
         @Schema(description = "여성 수", example = "3") int femaleCount,
         @Schema(description = "남성 수", example = "3") int maleCount,
-        @Schema(description = "시작 시각(미시작이면 null)", nullable = true) LocalDateTime startedAt
+        @Schema(description = "시작 시각(미시작이면 null)", nullable = true) LocalDateTime startedAt,
+        @Schema(description = "기수 id(웹 전용 방이면 null, #529)", example = "3", nullable = true) Long cohortId,
+        @Schema(description = "운영진용 방 이름", example = "서울 6기 1조", nullable = true) String name,
+        @Schema(description = "남성 정원(방 전체 기준)", example = "3", nullable = true) Integer maleCapacity,
+        @Schema(description = "여성 정원(방 전체 기준)", example = "3", nullable = true) Integer femaleCapacity
 ) {
 }
