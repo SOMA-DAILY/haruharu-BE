@@ -45,4 +45,10 @@ public interface CohortApplicationRepository {
 
     /** 운영진 메모를 바꾼다(#515). 바뀐 행 수를 돌려준다. */
     int updateMemo(Long id, String memo, LocalDateTime updatedAt);
+
+    /** 신청들을 id 순으로 행 잠금해 읽는다(#516). 없는 id 는 빠진다. */
+    List<CohortApplication> findAllByIdInForUpdate(Collection<Long> ids);
+
+    /** 조건부 배정: 지금 상태가 from 일 때만 방·배정 시각·배정자를 적고 ASSIGNED 로 바꾼다. 바뀐 행 수를 돌려준다. */
+    int assign(Long id, CohortApplicationStatus from, Long roomId, LocalDateTime assignedAt, String assignedBy);
 }

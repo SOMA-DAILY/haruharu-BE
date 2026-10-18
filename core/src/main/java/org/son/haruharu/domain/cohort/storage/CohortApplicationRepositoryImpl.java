@@ -81,4 +81,14 @@ public class CohortApplicationRepositoryImpl implements CohortApplicationReposit
     public int updateMemo(Long id, String memo, LocalDateTime updatedAt) {
         return jpaRepository.updateMemo(id, memo, updatedAt);
     }
+
+    @Override
+    public List<CohortApplication> findAllByIdInForUpdate(Collection<Long> ids) {
+        return jpaRepository.findAllByIdInForUpdate(ids).stream().map(CohortApplicationEntity::toDomain).toList();
+    }
+
+    @Override
+    public int assign(Long id, CohortApplicationStatus from, Long roomId, LocalDateTime assignedAt, String assignedBy) {
+        return jpaRepository.assign(id, from, CohortApplicationStatus.ASSIGNED, roomId, assignedAt, assignedBy);
+    }
 }

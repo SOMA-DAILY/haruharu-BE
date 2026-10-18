@@ -7,6 +7,7 @@ import org.son.haruharu.domain.chat.business.GroupChatCloseListener;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
+import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
 import org.son.haruharu.domain.chat.storage.ChatRoomRepositoryImpl;
 import org.son.haruharu.domain.chat.storage.ChatRoomMemberRepositoryImpl;
 import org.son.haruharu.domain.mission.chat.business.MissionAnnouncementService;
@@ -60,6 +61,8 @@ import org.springframework.context.annotation.Import;
         // #502: admin 취소도 원본 방과 같은 트랜잭션에서 chat_rooms.close_at을 기록한다.
         GroupChatCloseListener.class,
         ChatRoomReader.class, ChatRoomWriter.class, ChatRoomMemberReader.class,
+        // #516: 방에 넣은 신청자를 열린 그룹채팅에 등록(AdminGroupChatMemberListener).
+        ChatRoomMemberWriter.class,
         ChatRoomRepositoryImpl.class, ChatRoomMemberRepositoryImpl.class,
         // implement — 위 서비스가 쓰는 협력자만.
         RoomReader.class,

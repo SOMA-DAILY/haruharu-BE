@@ -41,4 +41,9 @@ public class CohortApplicationWriter {
     public boolean updateMemo(Long id, String memo, LocalDateTime now) {
         return applicationRepository.updateMemo(id, memo, now) == 1;
     }
+
+    /** 편성 대기 신청을 방에 배정한다(#516). 그 사이 다른 경로가 바꿨으면 false. */
+    public boolean assign(Long id, Long roomId, LocalDateTime now, String assignedBy) {
+        return applicationRepository.assign(id, CohortApplicationStatus.QUEUED, roomId, now, assignedBy) == 1;
+    }
 }
