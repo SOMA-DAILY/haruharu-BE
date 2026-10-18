@@ -32,4 +32,13 @@ public class CohortApplicationWriter {
     public boolean updateSurvey(Long id, Long userId, ApplicationSurvey survey, LocalDateTime now) {
         return applicationRepository.updateSurvey(id, userId, CohortApplicationStatus.IN_PROGRESS, survey, now) == 1;
     }
+
+    /** 확인 필요 신청을 편성 대기로 올린다(#515). 그 사이 다른 경로가 닫았으면 false. */
+    public boolean approve(CohortApplication approved, LocalDateTime now) {
+        return applicationRepository.approve(approved.id(), CohortApplicationStatus.NEEDS_REVIEW, approved, now) == 1;
+    }
+
+    public boolean updateMemo(Long id, String memo, LocalDateTime now) {
+        return applicationRepository.updateMemo(id, memo, now) == 1;
+    }
 }

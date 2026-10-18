@@ -117,6 +117,13 @@ public class AdminSecurityConfig {
                         .hasAnyRole("SUPER", "OPERATOR")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/recruit-tracks/*", "/api/v1/admin/cohorts/*")
                         .hasAnyRole("SUPER", "OPERATOR")
+                        // 기수 신청자 표(#515)는 번호가 들어 있어 조회도 SUPER·OPERATOR. 메모·승인도 같다.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/admin/cohorts/*/applications")
+                        .hasAnyRole("SUPER", "OPERATOR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/cohort-applications/*/memo")
+                        .hasAnyRole("SUPER", "OPERATOR")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/cohort-applications/*/approve")
+                        .hasAnyRole("SUPER", "OPERATOR")
                         // 초대코드는 "인증 없이 방에 들어갈 수 있는 자격증명"이라 조회도 쓰기와 같은 권한으로 막는다.
                         // 방 조회 권한(전체)에 코드 원문까지 딸려가면 CS 계정이 임의 방에 입장할 수 있다(#318 보안리뷰).
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/rooms/*/invites")

@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.cohort.implement;
 
+import org.son.haruharu.domain.cohort.implement.exception.CohortApplicationNotApprovableException;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -103,6 +105,21 @@ public record CohortApplication(
                 school, department, answers, referralSource, friendPreference, motivation, surveySubmittedAt,
                 priority, appliedAt, reason == null ? now : null, reason, roomId, assignedAt, assignedBy,
                 closedAt, closeReason, refundedAt, adminMemo, createdAt, updatedAt);
+    }
+
+    /**
+     * 운영진 승인(#515): 확인 필요 → 편성 대기. PASS 성별이 정본이라 신청 성별을 PASS 성별로 맞추고, 대기 시각은 지금이다.
+     * 확인 사유는 기록으로 남긴다. PASS 성별을 해석할 수 없으면 남녀 정원에 넣을 수 없어 승인하지 않는다.
+     */
+    public CohortApplication approved(LocalDateTime now) {
+        ApplicantGender verified = ApplicantGender.parse(passGender).orElse(null);
+        if (status != CohortApplicationStatus.NEEDS_REVIEW || verified == null) {
+            throw new CohortApplicationNotApprovableException();
+        }
+        return new CohortApplication(id, userId, cohortId, trackId, CohortApplicationStatus.QUEUED, verified, passGender,
+                birthday, school, department, answers, referralSource, friendPreference, motivation, surveySubmittedAt,
+                priority, appliedAt, now, reviewReason, roomId, assignedAt, assignedBy, closedAt, closeReason,
+                refundedAt, adminMemo, createdAt, updatedAt);
     }
 
     /** 본인이 앱에서 취소할 수 있는지. 배정 후 취소는 #517 에서 연다. */

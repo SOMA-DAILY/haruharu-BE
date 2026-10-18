@@ -69,4 +69,18 @@ public interface CohortApplicationJpaRepository extends JpaRepository<CohortAppl
                      @Param("referralSource") String referralSource,
                      @Param("friendPreference") FriendPreference friendPreference,
                      @Param("motivation") String motivation, @Param("submittedAt") LocalDateTime submittedAt);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update CohortApplicationEntity a
+            set a.status = :to, a.declaredGender = :declaredGender, a.queuedAt = :queuedAt, a.updatedAt = :updatedAt
+            where a.id = :id and a.status = :from
+            """)
+    int approve(@Param("id") Long id, @Param("from") CohortApplicationStatus from,
+                @Param("to") CohortApplicationStatus to, @Param("declaredGender") ApplicantGender declaredGender,
+                @Param("queuedAt") LocalDateTime queuedAt, @Param("updatedAt") LocalDateTime updatedAt);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CohortApplicationEntity a set a.adminMemo = :memo, a.updatedAt = :updatedAt where a.id = :id")
+    int updateMemo(@Param("id") Long id, @Param("memo") String memo, @Param("updatedAt") LocalDateTime updatedAt);
 }
