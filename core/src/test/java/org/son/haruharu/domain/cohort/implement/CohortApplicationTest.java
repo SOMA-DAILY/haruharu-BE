@@ -2,6 +2,7 @@ package org.son.haruharu.domain.cohort.implement;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.son.haruharu.domain.cohort.implement.exception.CohortApplicationNotApprovableException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -129,5 +130,31 @@ class CohortApplicationTest {
         assertThat(previous(CohortApplicationStatus.ASSIGNED).cancellableByApplicant()).isFalse();
         assertThat(previous(CohortApplicationStatus.CANCELLED).cancellableByApplicant()).isFalse();
         assertThat(previous(CohortApplicationStatus.NOT_ASSIGNED).cancellableByApplicant()).isFalse();
+    }
+
+    private CohortApplication needsReview(String passGender) {
+        return new CohortApplication(5L, 7L, 3L, 1L, CohortApplicationStatus.NEEDS_REVIEW, ApplicantGender.FEMALE,
+                passGender, LocalDate.of(2003, 1, 1), "한국대", "컴퓨터공학과", null, null, null, null, null, 0, NOW,
+                null, ApplicationReviewReason.GENDER_MISMATCH, null, null, null, null, null, null, null, NOW, NOW);
+    }
+
+    @Test
+    @DisplayName("운영진 승인은 확인 필요를 편성 대기로 올리고 성별을 PASS 성별로 맞춘다(사유는 남긴다)")
+    void givenNeedsReview_whenApproved_thenQueuedWithPassGender() {
+        CohortApplication approved = needsReview("MALE").approved(NOW);
+
+        assertThat(approved.status()).isEqualTo(CohortApplicationStatus.QUEUED);
+        assertThat(approved.declaredGender()).isEqualTo(ApplicantGender.MALE);
+        assertThat(approved.queuedAt()).isEqualTo(NOW);
+        assertThat(approved.reviewReason()).isEqualTo(ApplicationReviewReason.GENDER_MISMATCH);
+    }
+
+    @Test
+    @DisplayName("확인 필요가 아니거나 PASS 성별이 남녀가 아니면 승인하지 않는다")
+    void givenNotApprovable_whenApproved_thenThrows() {
+        assertThatThrownBy(() -> needsReview("OTHER").approved(NOW))
+                .isInstanceOf(CohortApplicationNotApprovableException.class);
+        assertThatThrownBy(() -> pending(ApplicantGender.MALE).approved(NOW))
+                .isInstanceOf(CohortApplicationNotApprovableException.class);
     }
 }
