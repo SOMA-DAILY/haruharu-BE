@@ -23,8 +23,6 @@ import org.son.haruharu.domain.mission.common.storage.RoomMissionRepositoryImpl;
 import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionHandler;
 import org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionHandler;
 import org.son.haruharu.domain.mission.types.recording.implement.RecordingMissionHandler;
-import org.son.haruharu.domain.profile.implement.UserProfileReader;
-import org.son.haruharu.domain.profile.storage.UserProfileRepositoryImpl;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomMemberJoiner;
 import org.son.haruharu.domain.room.business.RoomService;
@@ -54,6 +52,7 @@ import org.springframework.context.annotation.Import;
 @Configuration
 @Import({
         // business — 방·초대코드 생성 유스케이스에 필요한 서비스만 가져온다.
+        // 초대코드 입장(RoomJoinService)은 앱 전용이다 — PASS 확인(#514)에 identity 빈이 필요해 어드민에 두지 않는다.
         RoomService.class,
         RoomInviteService.class,
         // #513: 방 입장 공통 경로(가명·저장·입장 이벤트). RoomInviteService 가 의존하고 앱 신청자 배정(#516)도 쓴다.
@@ -70,9 +69,6 @@ import org.springframework.context.annotation.Import;
         RoomInviteReader.class,
         RoomInviteWriter.class,
         InviteCodeGenerator.class,
-        // #392: RoomInviteService.join 이 프로필 gender 를 방 멤버로 스냅샷하는 데 필요.
-        UserProfileReader.class,
-        UserProfileRepositoryImpl.class,
         // storage — 위 협력자가 의존하는 포트 구현체(JpaRepository 는 AdminApplication 의 EnableJpaRepositories).
         RoomRepositoryImpl.class,
         RoomMemberRepositoryImpl.class,

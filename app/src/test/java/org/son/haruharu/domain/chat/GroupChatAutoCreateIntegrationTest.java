@@ -16,6 +16,7 @@ import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.business.ChatService;
 import org.son.haruharu.domain.room.business.RoomInviteService;
+import org.son.haruharu.domain.room.business.RoomJoinService;
 import org.son.haruharu.domain.room.business.RoomStatusTransitionService;
 import org.son.haruharu.domain.room.business.RoomStatusReconciler;
 import org.son.haruharu.domain.room.implement.Room;
@@ -44,6 +45,7 @@ class GroupChatAutoCreateIntegrationTest {
     @Autowired ChatRoomReader chatRoomReader;
     @Autowired ChatRoomMemberReader chatRoomMemberReader;
     @Autowired RoomInviteService roomInviteService;
+    @Autowired RoomJoinService roomJoinService;
     @Autowired ChatService chatService;
     @Autowired ChatMessageWriter chatMessageWriter;
     @Autowired RoomStatusTransitionService transitionService;
@@ -58,8 +60,8 @@ class GroupChatAutoCreateIntegrationTest {
         ChatRoom group = chatRoomReader.findByRoomId(room.id()).orElseThrow();
         chatMessageWriter.save(ChatMessage.create(group.id(), 9415L, "입장 전 대화"));
 
-        roomInviteService.join(9416L, "LATE46");
-        roomInviteService.join(9416L, "LATE46");
+        roomJoinService.join(9416L, "LATE46");
+        roomJoinService.join(9416L, "LATE46");
 
         assertThat(chatRoomMemberReader.findByChatRoomId(group.id()))
                 .extracting(ChatRoomMember::userId).containsExactly(9416L);
@@ -80,7 +82,7 @@ class GroupChatAutoCreateIntegrationTest {
         LocalDateTime startsAt = LocalDateTime.now().plusHours(1).truncatedTo(ChronoUnit.SECONDS);
         Room room = persistActivatingRoom(startsAt);
         roomInviteService.issue(room.id(), "WAJT46", null, null, "test");
-        roomInviteService.join(9417L, "WAJT46");
+        roomJoinService.join(9417L, "WAJT46");
         assertThat(chatRoomReader.findByRoomId(room.id())).isEmpty();
 
         transitionService.transition(room, startsAt);
@@ -99,7 +101,7 @@ class GroupChatAutoCreateIntegrationTest {
         ChatRoom group = chatRoomReader.findByRoomId(room.id()).orElseThrow();
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            roomInviteService.join(9418L, "BACK46");
+            roomJoinService.join(9418L, "BACK46");
             assertThat(chatRoomMemberReader.findMembership(group.id(), 9418L)).isPresent();
             status.setRollbackOnly();
         });
