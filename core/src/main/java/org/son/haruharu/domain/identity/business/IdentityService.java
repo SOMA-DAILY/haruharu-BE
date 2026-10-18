@@ -2,6 +2,7 @@ package org.son.haruharu.domain.identity.business;
 
 import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
 import org.son.haruharu.domain.identity.business.dto.VerifiedIdentity;
+import org.son.haruharu.domain.identity.business.event.IdentityVerifiedEvent;
 import org.son.haruharu.domain.identity.business.exception.DuplicateCiException;
 import org.son.haruharu.domain.identity.business.exception.UnderageNotAllowedException;
 import org.son.haruharu.domain.identity.business.exception.UserAlreadyVerifiedException;
@@ -10,6 +11,7 @@ import org.son.haruharu.domain.identity.implement.UserIdentityReader;
 import org.son.haruharu.domain.identity.implement.UserIdentityWriter;
 import org.son.haruharu.infrastructure.pass.PassVerificationPort;
 import org.son.haruharu.infrastructure.pass.PassVerificationResult;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,17 +31,20 @@ public class IdentityService {
     private final UserIdentityReader userIdentityReader;
     private final UserIdentityWriter userIdentityWriter;
     private final PassVerificationPort passVerificationPort;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public IdentityService(
         UserIdentityReader userIdentityReader,
         UserIdentityWriter userIdentityWriter,
         PassVerificationPort passVerificationPort,
+        ApplicationEventPublisher eventPublisher,
         Clock clock
     ) {
         this.userIdentityReader = userIdentityReader;
         this.userIdentityWriter = userIdentityWriter;
         this.passVerificationPort = passVerificationPort;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -82,5 +87,7 @@ public class IdentityService {
             LocalDateTime.now(clock)
         );
         userIdentityWriter.save(identity);
+        // 커밋 후 PASS 대기 기수 신청을 판정한다(#512). 판정 실패가 PASS 결과를 롤백시키지 않게 리스너는 AFTER_COMMIT 이다.
+        eventPublisher.publishEvent(new IdentityVerifiedEvent(userId));
     }
 }

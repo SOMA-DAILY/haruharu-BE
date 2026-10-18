@@ -30,6 +30,12 @@ public interface CohortApplicationRepository {
     int close(Long id, Collection<CohortApplicationStatus> from, CohortApplicationStatus to,
               ApplicationCloseReason reason, LocalDateTime closedAt, LocalDateTime refundedAt);
 
+    /**
+     * 조건부 PASS 판정: 지금 상태가 from 일 때만 판정 결과(상태·신청 성별·PASS 성별·생년·대기 시각·확인 사유)를 적는다.
+     * 바뀐 행 수(0 또는 1)를 돌려준다.
+     */
+    int screen(Long id, CohortApplicationStatus from, CohortApplication screened, LocalDateTime updatedAt);
+
     /** 조건부 설문 저장: 본인 신청이고 지금 상태가 from 중 하나일 때만. 바뀐 행 수를 돌려준다. */
     int updateSurvey(Long id, Long userId, Collection<CohortApplicationStatus> from, ApplicationSurvey survey,
                      LocalDateTime submittedAt);

@@ -1,7 +1,9 @@
 package org.son.haruharu.domain.cohort.storage;
 
 import jakarta.persistence.LockModeType;
+import org.son.haruharu.domain.cohort.implement.ApplicantGender;
 import org.son.haruharu.domain.cohort.implement.ApplicationCloseReason;
+import org.son.haruharu.domain.cohort.implement.ApplicationReviewReason;
 import org.son.haruharu.domain.cohort.implement.CohortApplicationStatus;
 import org.son.haruharu.domain.cohort.implement.FriendPreference;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,6 +12,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -40,6 +43,19 @@ public interface CohortApplicationJpaRepository extends JpaRepository<CohortAppl
     int close(@Param("id") Long id, @Param("from") Collection<CohortApplicationStatus> from,
               @Param("to") CohortApplicationStatus to, @Param("reason") ApplicationCloseReason reason,
               @Param("closedAt") LocalDateTime closedAt, @Param("refundedAt") LocalDateTime refundedAt);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update CohortApplicationEntity a
+            set a.status = :to, a.declaredGender = :declaredGender, a.gender = :gender, a.birthday = :birthday,
+                a.queuedAt = :queuedAt, a.reviewReason = :reviewReason, a.updatedAt = :updatedAt
+            where a.id = :id and a.status = :from
+            """)
+    int screen(@Param("id") Long id, @Param("from") CohortApplicationStatus from,
+               @Param("to") CohortApplicationStatus to, @Param("declaredGender") ApplicantGender declaredGender,
+               @Param("gender") String gender, @Param("birthday") LocalDate birthday,
+               @Param("queuedAt") LocalDateTime queuedAt, @Param("reviewReason") ApplicationReviewReason reviewReason,
+               @Param("updatedAt") LocalDateTime updatedAt);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""

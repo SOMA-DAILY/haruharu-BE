@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.identity.business.command.VerifyIdentityCommand;
 import org.son.haruharu.domain.identity.business.exception.DuplicateCiException;
 import org.son.haruharu.domain.identity.business.exception.UnderageNotAllowedException;
+import org.son.haruharu.domain.identity.business.event.IdentityVerifiedEvent;
 import org.son.haruharu.domain.identity.business.exception.UserAlreadyVerifiedException;
 import org.son.haruharu.domain.identity.implement.UserIdentity;
 import org.son.haruharu.domain.identity.implement.UserIdentityReader;
@@ -16,6 +17,7 @@ import org.son.haruharu.domain.identity.implement.UserIdentityWriter;
 import org.mockito.ArgumentCaptor;
 import org.son.haruharu.infrastructure.pass.PassVerificationPort;
 import org.son.haruharu.infrastructure.pass.PassVerificationResult;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -28,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,6 +39,7 @@ class IdentityServiceTest {
     @Mock UserIdentityReader userIdentityReader;
     @Mock UserIdentityWriter userIdentityWriter;
     @Mock PassVerificationPort passVerificationPort;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final Clock clock = Clock.fixed(
@@ -46,7 +50,7 @@ class IdentityServiceTest {
     @BeforeEach
     void setUp() {
         identityService = new IdentityService(
-            userIdentityReader, userIdentityWriter, passVerificationPort, clock
+            userIdentityReader, userIdentityWriter, passVerificationPort, eventPublisher, clock
         );
     }
 
@@ -82,6 +86,24 @@ class IdentityServiceTest {
     }
 
     @Test
+    @DisplayName("본인인증을 저장하면 IdentityVerifiedEvent 를 발행한다(커밋 후 기수 신청 판정의 트리거, #512)")
+    void givenUnverifiedUser_whenVerifyIdentity_thenPublishesEventAfterSave() {
+        Long userId = 2L;
+        given(userIdentityReader.existsByUserId(userId)).willReturn(false);
+        given(passVerificationPort.verify("iv-token")).willReturn(new PassVerificationResult(
+            "ci-value", "di-value", "010-1234-5678",
+            LocalDate.of(1998, 5, 15), "MALE", "홍길동", "SKT", false
+        ));
+        given(userIdentityReader.existsByCi("ci-value")).willReturn(false);
+
+        identityService.verifyIdentity(userId, new VerifyIdentityCommand("iv-token"));
+
+        var order = inOrder(userIdentityWriter, eventPublisher);
+        order.verify(userIdentityWriter).save(any());
+        order.verify(eventPublisher).publishEvent(new IdentityVerifiedEvent(userId));
+    }
+
+    @Test
     @DisplayName("이미 다른 계정에 연결된 CI로 인증 요청 시 DuplicateCiException이 발생한다")
     void givenDuplicateCi_whenVerifyIdentity_thenThrowsDuplicateCiException() {
         Long userId = 3L;
@@ -98,6 +120,7 @@ class IdentityServiceTest {
         assertThatThrownBy(() -> identityService.verifyIdentity(userId, command))
             .isInstanceOf(DuplicateCiException.class);
         then(userIdentityWriter).shouldHaveNoInteractions();
+        then(eventPublisher).shouldHaveNoInteractions();
     }
 
     @Test
@@ -117,6 +140,7 @@ class IdentityServiceTest {
         assertThatThrownBy(() -> identityService.verifyIdentity(userId, command))
             .isInstanceOf(UnderageNotAllowedException.class);
         then(userIdentityWriter).shouldHaveNoInteractions();
+        then(eventPublisher).shouldHaveNoInteractions();
     }
 
     @Test

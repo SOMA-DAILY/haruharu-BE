@@ -59,6 +59,12 @@ public class CohortApplicationRepositoryImpl implements CohortApplicationReposit
     }
 
     @Override
+    public int screen(Long id, CohortApplicationStatus from, CohortApplication screened, LocalDateTime updatedAt) {
+        return jpaRepository.screen(id, from, screened.status(), screened.declaredGender(), screened.passGender(),
+                screened.birthday(), screened.queuedAt(), screened.reviewReason(), updatedAt);
+    }
+
+    @Override
     public int updateSurvey(Long id, Long userId, Collection<CohortApplicationStatus> from, ApplicationSurvey survey,
                             LocalDateTime submittedAt) {
         return jpaRepository.updateSurvey(id, userId, from, survey.referralSource(), survey.friendPreference(),

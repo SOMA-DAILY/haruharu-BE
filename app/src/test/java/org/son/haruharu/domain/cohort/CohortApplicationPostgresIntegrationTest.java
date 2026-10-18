@@ -4,6 +4,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.son.haruharu.domain.cohort.business.CohortApplicationScreeningService;
 import org.son.haruharu.domain.cohort.business.CohortApplicationService;
 import org.son.haruharu.domain.cohort.business.CohortService;
 import org.son.haruharu.domain.cohort.business.command.ApplyCohortCommand;
@@ -11,6 +12,7 @@ import org.son.haruharu.domain.cohort.business.dto.CohortApplicationResponse;
 import org.son.haruharu.domain.cohort.business.exception.CohortApplicationInProgressException;
 import org.son.haruharu.domain.cohort.business.exception.CohortApplicationNotCancellableException;
 import org.son.haruharu.domain.cohort.implement.Cohort;
+import org.son.haruharu.domain.cohort.implement.CohortApplicationStatus;
 import org.son.haruharu.domain.cohort.implement.CohortStatus;
 import org.son.haruharu.domain.cohort.implement.CohortWriter;
 import org.son.haruharu.domain.cohort.implement.RecruitAudience;
@@ -18,6 +20,8 @@ import org.son.haruharu.domain.cohort.implement.RecruitTrack;
 import org.son.haruharu.domain.cohort.implement.RecruitTrackWriter;
 import org.son.haruharu.domain.cohort.implement.TrackQuestion;
 import org.son.haruharu.domain.cohort.implement.TrackQuestionType;
+import org.son.haruharu.domain.identity.implement.UserIdentity;
+import org.son.haruharu.domain.identity.implement.UserIdentityWriter;
 import org.son.haruharu.domain.ticket.business.TicketService;
 import org.son.haruharu.domain.ticket.business.command.TicketCreditCommand;
 import org.son.haruharu.domain.ticket.implement.exception.InsufficientTicketException;
@@ -37,6 +41,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +51,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -77,6 +83,8 @@ class CohortApplicationPostgresIntegrationTest {
             Map.of("grade", "3학년"));
 
     @Autowired CohortApplicationService applicationService;
+    @Autowired CohortApplicationScreeningService screeningService;
+    @Autowired UserIdentityWriter userIdentityWriter;
     @Autowired CohortService cohortService;
     @Autowired TicketService ticketService;
     @Autowired RecruitTrackWriter trackWriter;
@@ -89,7 +97,7 @@ class CohortApplicationPostgresIntegrationTest {
     @BeforeEach
     void applyMigrationsOverHibernateSchema() throws Exception {
         jdbcTemplate.execute("TRUNCATE TABLE cohort_applications, cohorts, recruit_tracks, ticket_ledger, ticket_wallet,"
-                + " user_profiles RESTART IDENTITY CASCADE");
+                + " user_profiles, user_identities RESTART IDENTITY CASCADE");
         for (String script : List.of("510-recruit-cohort-up", "510-recruit-cohort-verify", "511-cohort-application-up",
                 "511-cohort-application-verify")) {
             jdbcTemplate.execute(sql(script));
@@ -297,6 +305,98 @@ class CohortApplicationPostgresIntegrationTest {
         applicationService.apply(940L, nextCohort, new ApplyCohortCommand("한국대", "컴퓨터공학과", "01012345678", null));
         assertThat(count("SELECT priority FROM cohort_applications WHERE user_id = 940 AND cohort_id = ?", nextCohort))
                 .isEqualTo(1);
+    }
+
+    /** 이벤트 없이 PASS 결과만 남긴다 — 커밋 후 리스너가 아직 안 돌았거나 실패한 상태. */
+    private void passWithoutEvent(Long userId, String gender) {
+        userIdentityWriter.save(new UserIdentity(null, userId, "ci-" + userId, "di-" + userId, "01099998888",
+                LocalDate.of(LocalDate.now().getYear() - 23, 1, 1), gender, "홍길동", "SKT", false,
+                LocalDateTime.now()));
+    }
+
+    @Test
+    @DisplayName("PASS 판정을 커밋 후 경로와 조회 경로(screenPending)가 동시에 여러 번 돌려도 전이는 정확히 한 번이다(#512)")
+    void givenPass_whenScreenConcurrently_thenTransitionsOnce() throws Exception {
+        wallet(950L, 1);
+        Long applicationId = applicationService.apply(950L, cohortId, FORM).applicationId();
+        passWithoutEvent(950L, "MALE");
+        AtomicInteger transitions = new AtomicInteger();
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+        try {
+            List<Future<?>> results = new ArrayList<>();
+            for (int i = 0; i < 4; i++) {
+                boolean viaListener = i % 2 == 0;
+                results.add(pool.submit(() -> {
+                    start.await();
+                    boolean changed = viaListener ? screeningService.screenAfterIdentityVerified(950L)
+                            : screeningService.screenPending(950L);
+                    if (changed) transitions.incrementAndGet();
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<?> result : results) result.get();
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // 프로필이 없어 신청 성별은 PASS 성별로 채워진다
+        assertThat(jdbcTemplate.queryForMap("SELECT status, declared_gender, gender FROM cohort_applications"
+                + " WHERE id = ?", applicationId)).containsEntry("status", "QUEUED")
+                .containsEntry("declared_gender", "MALE").containsEntry("gender", "MALE");
+        assertThat(transitions.get()).isEqualTo(1);
+        assertThat(screeningService.screenAfterIdentityVerified(950L)).isFalse();
+        assertThat(applicationService.getMine(950L).application().status()).isEqualTo(
+                CohortApplicationStatus.QUEUED);
+        assertThat(balance(950L)).isZero();
+    }
+
+    @Test
+    @DisplayName("PASS 성별을 해석할 수 없으면 확인 필요(UNKNOWN_GENDER)로 DB 제약을 통과해 남고 참가권은 그대로다(#512)")
+    void givenOtherGender_whenScreen_thenNeedsReviewPersisted() {
+        wallet(970L, 1);
+        Long applicationId = applicationService.apply(970L, cohortId, FORM).applicationId();
+        passWithoutEvent(970L, "OTHER");
+
+        assertThat(screeningService.screenAfterIdentityVerified(970L)).isTrue();
+
+        assertThat(jdbcTemplate.queryForMap("SELECT status, review_reason, gender, queued_at FROM cohort_applications"
+                + " WHERE id = ?", applicationId)).containsEntry("status", "NEEDS_REVIEW")
+                .containsEntry("review_reason", "UNKNOWN_GENDER").containsEntry("gender", "OTHER")
+                .containsEntry("queued_at", null);
+        assertThat(balance(970L)).isZero();
+    }
+
+    @Test
+    @DisplayName("PASS 판정과 본인 취소가 겹쳐도 신청은 취소로 끝나고 참가권은 한 번만 돌아온다(#512)")
+    void givenPass_whenScreenRacesCancel_thenCancelledAndRefundOnce() throws Exception {
+        wallet(960L, 1);
+        Long applicationId = applicationService.apply(960L, cohortId, FORM).applicationId();
+        passWithoutEvent(960L, "FEMALE");
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> screen = pool.submit(() -> {
+                start.await();
+                return screeningService.screenAfterIdentityVerified(960L);
+            });
+            Future<?> cancel = pool.submit(() -> {
+                start.await();
+                return applicationService.cancel(960L, applicationId);
+            });
+            start.countDown();
+            screen.get();
+            cancel.get();
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM cohort_applications WHERE id = ?", String.class,
+                applicationId)).isEqualTo("CANCELLED");
+        assertThat(count("SELECT count(*) FROM ticket_ledger WHERE reason = 'USE_REFUND' AND ref_id = ?",
+                applicationId.toString())).isEqualTo(1);
+        assertThat(balance(960L)).isEqualTo(1);
     }
 
     @Test

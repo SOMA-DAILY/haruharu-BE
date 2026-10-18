@@ -73,6 +73,7 @@ class CohortApplicationServiceTest {
     @Mock CohortApplicationReader applicationReader;
     @Mock CohortApplicationWriter applicationWriter;
     @Mock CohortApplicationClosingService closingService;
+    @Mock CohortApplicationScreeningService screeningService;
     @Mock TicketService ticketService;
     @Mock IdentityService identityService;
     @Mock UserProfileReader userProfileReader;
@@ -83,7 +84,8 @@ class CohortApplicationServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW.atZone(SEOUL).toInstant(), SEOUL);
         service = new CohortApplicationService(cohortReader, trackReader, applicationReader, applicationWriter,
-                closingService, ticketService, identityService, userProfileReader, profileService, clock);
+                closingService, screeningService, ticketService, identityService, userProfileReader, profileService,
+                clock);
     }
 
     private static RecruitTrack track() {
@@ -287,6 +289,50 @@ class CohortApplicationServiceTest {
         assertThat(mine.defaults().school()).isEqualTo("한국대");
         assertThat(mine.defaults().department()).isEqualTo("컴퓨터공학과");
         assertThat(mine.defaults().phone()).isEqualTo("01012345678");
+    }
+
+    @Test
+    @DisplayName("내 신청이 PASS 대기면 조회할 때 다시 판정하고 바뀐 상태를 돌려준다(커밋 후 판정이 실패했을 때의 복구, #512)")
+    void givenIdentityPending_whenGetMine_thenRescreensAndReturnsFreshStatus() {
+        CohortApplication pending = application(50L, CohortApplicationStatus.IDENTITY_PENDING);
+        given(applicationReader.findLatestByUserId(USER)).willReturn(Optional.of(pending));
+        given(applicationReader.getById(50L)).willReturn(application(50L, CohortApplicationStatus.QUEUED));
+        given(userProfileReader.findByUserId(USER)).willReturn(Optional.empty());
+        given(cohortReader.getById(3L)).willReturn(openCohort());
+        given(trackReader.getById(1L)).willReturn(track());
+
+        var mine = service.getMine(USER);
+
+        verify(screeningService).screenPending(USER);
+        assertThat(mine.application().status()).isEqualTo(CohortApplicationStatus.QUEUED);
+    }
+
+    @Test
+    @DisplayName("조회 중 재판정이 실패해도 조회는 지금 상태(PASS 대기)로 응답한다")
+    void givenRescreenFails_whenGetMine_thenStillResponds() {
+        CohortApplication pending = application(50L, CohortApplicationStatus.IDENTITY_PENDING);
+        given(applicationReader.findLatestByUserId(USER)).willReturn(Optional.of(pending));
+        willThrow(new IllegalStateException("db down")).given(screeningService).screenPending(USER);
+        given(applicationReader.getById(50L)).willReturn(pending);
+        given(userProfileReader.findByUserId(USER)).willReturn(Optional.empty());
+        given(cohortReader.getById(3L)).willReturn(openCohort());
+        given(trackReader.getById(1L)).willReturn(track());
+
+        assertThat(service.getMine(USER).application().status())
+                .isEqualTo(CohortApplicationStatus.IDENTITY_PENDING);
+    }
+
+    @Test
+    @DisplayName("PASS 대기가 아닌 신청은 조회할 때 판정하지 않는다")
+    void givenScreened_whenGetMine_thenNoRescreen() {
+        given(applicationReader.findLatestByUserId(USER))
+                .willReturn(Optional.of(application(50L, CohortApplicationStatus.NEEDS_REVIEW)));
+        given(userProfileReader.findByUserId(USER)).willReturn(Optional.empty());
+        given(cohortReader.getById(3L)).willReturn(openCohort());
+        given(trackReader.getById(1L)).willReturn(track());
+
+        assertThat(service.getMine(USER).application().status()).isEqualTo(CohortApplicationStatus.NEEDS_REVIEW);
+        verifyNoInteractions(screeningService);
     }
 
     @Test
