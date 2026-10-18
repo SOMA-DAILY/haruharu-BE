@@ -62,7 +62,9 @@ public class RecruitController {
     @Operation(summary = "내 기수 신청",
             description = "가장 최근 신청을 준다(닫힌 신청 포함). 신청한 적이 없으면 application 이 null. "
                     + "survey_submitted_at 이 null 이면 설문 전이다. defaults 는 신청서 입력칸 기본값으로, 학교·학과는 "
-                    + "직전 신청서 → 프로필 순, 번호는 프로필에서 가져온다(칸마다 null 가능, 본인에게만 내려간다).")
+                    + "직전 신청서 → 프로필 순, 번호는 프로필에서 가져온다(칸마다 null 가능, 본인에게만 내려간다). "
+                    + "PASS 를 마치면 PASS 대기(IDENTITY_PENDING) 신청이 편성 대기(QUEUED) 또는 확인 필요(NEEDS_REVIEW)로 "
+                    + "바뀐다. PASS 직후 아직 IDENTITY_PENDING 이면 이 조회가 다시 판정해 바뀐 상태를 준다.")
     @GetMapping("/applications/me")
     public ApiResponse<MyCohortApplicationResponse> getMine(Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();

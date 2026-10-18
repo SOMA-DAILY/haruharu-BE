@@ -30,6 +30,7 @@ import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.ticket.business.TicketService;
 import org.son.haruharu.domain.ticket.business.command.TicketSpendCommand;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -50,6 +51,7 @@ public class CohortApplicationService {
     private final CohortApplicationReader applicationReader;
     private final CohortApplicationWriter applicationWriter;
     private final CohortApplicationClosingService closingService;
+    private final CohortApplicationScreeningService screeningService;
     private final TicketService ticketService;
     private final IdentityService identityService;
     private final UserProfileReader userProfileReader;
@@ -59,7 +61,8 @@ public class CohortApplicationService {
     public CohortApplicationService(CohortReader cohortReader, RecruitTrackReader trackReader,
                                     CohortApplicationReader applicationReader,
                                     CohortApplicationWriter applicationWriter,
-                                    CohortApplicationClosingService closingService, TicketService ticketService,
+                                    CohortApplicationClosingService closingService,
+                                    CohortApplicationScreeningService screeningService, TicketService ticketService,
                                     IdentityService identityService, UserProfileReader userProfileReader,
                                     ProfileService profileService, Clock clock) {
         this.cohortReader = cohortReader;
@@ -67,6 +70,7 @@ public class CohortApplicationService {
         this.applicationReader = applicationReader;
         this.applicationWriter = applicationWriter;
         this.closingService = closingService;
+        this.screeningService = screeningService;
         this.ticketService = ticketService;
         this.identityService = identityService;
         this.userProfileReader = userProfileReader;
@@ -115,9 +119,19 @@ public class CohortApplicationService {
     /**
      * 가장 최근 신청(닫힌 것 포함)과 신청서 기본값. 앱은 상태로 화면을 고르고, 닫힌 신청이면 다시 신청할 수 있다.
      * 기본값으로 학교·학과·번호를 미리 채워 매 기수 다시 입력하지 않게 한다.
+     * PASS 대기 신청이면 여기서 PASS 판정을 다시 시도한다(#512) — 본인인증 커밋 후 판정이 실패했거나,
+     * 신청과 PASS 가 겹쳐 판정할 신청이 아직 안 보였을 때의 복구 경로다.
+     * 트랜잭션 밖에서 돈다: 재판정은 자기 트랜잭션에서 커밋·롤백하고, 실패해도 조회는 지금 상태로 응답한다
+     * (같은 트랜잭션에 묶으면 재판정 실패가 rollback-only 를 남겨 조회까지 500 이 된다).
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public MyCohortApplicationResponse getMine(Long userId) {
         CohortApplication latest = applicationReader.findLatestByUserId(userId).orElse(null);
+        if (latest != null && latest.status() == CohortApplicationStatus.IDENTITY_PENDING) {
+            rescreen(userId);
+            // 판정했든, 동시에 다른 경로가 먼저 바꿨든 지금 상태를 다시 읽는다
+            latest = applicationReader.getById(latest.id());
+        }
         UserProfile profile = userProfileReader.findByUserId(userId).orElse(null);
         return new MyCohortApplicationResponse(latest == null ? null : toResponse(latest),
                 ApplicationDefaultsResponse.of(latest, profile));
@@ -146,6 +160,14 @@ public class CohortApplicationService {
             throw new CohortApplicationNotCancellableException();
         }
         return toResponse(applicationReader.getById(applicationId));
+    }
+
+    private void rescreen(Long userId) {
+        try {
+            screeningService.screenPending(userId);
+        } catch (RuntimeException e) {
+            log.warn("cohort-application rescreen-on-read failed userId={}", userId, e);
+        }
     }
 
     private CohortApplicationResponse toResponse(CohortApplication application) {
