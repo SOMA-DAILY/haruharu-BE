@@ -10,6 +10,8 @@ import org.son.haruharu.domain.cohort.implement.ApplicantGender;
 import org.son.haruharu.domain.cohort.implement.CohortApplication;
 import org.son.haruharu.domain.cohort.implement.CohortApplicationStatus;
 import org.son.haruharu.domain.cohort.storage.CohortApplicationEntity;
+import org.son.haruharu.domain.profile.implement.UserProfile;
+import org.son.haruharu.domain.profile.storage.UserProfileEntity;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomComposition;
 import org.son.haruharu.domain.room.implement.RoomEntryPath;
@@ -36,6 +38,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -191,5 +194,30 @@ class AdminCohortAssignmentApiIntegrationTest {
                                 List.of(new SimpleGrantedAuthority("ROLE_OPERATOR")))))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"application_ids\":[]}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("방 목록은 기수로 거르고 방 이름·정원을 주며, 방 상세 참여자에 학교/학과가 나온다(#529)")
+    void givenCohortRooms_whenListAndDetail_thenCohortFieldsAndSchool() throws Exception {
+        long roomId = room(COHORT, 3, 3, false);
+        room(null, null, null, false);
+        em.persist(RoomMemberEntity.from(RoomMember.of(roomId, 901L, "FEMALE", null, NOW)));
+        em.persist(UserProfileEntity.from(new UserProfile(null, 901L, null, "한국대", null, null, "닉", null, null, null,
+                null, "컴퓨터공학과", null, null)));
+        em.flush();
+        var operator = authentication(new UsernamePasswordAuthenticationToken(7L, null,
+                List.of(new SimpleGrantedAuthority("ROLE_OPERATOR"))));
+
+        mockMvc.perform(get("/api/v1/admin/rooms?cohortId=" + COHORT).with(operator))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.page.total_elements").value(1))
+                .andExpect(jsonPath("$.data.content[0].room_id").value(roomId))
+                .andExpect(jsonPath("$.data.content[0].cohort_id").value(COHORT))
+                .andExpect(jsonPath("$.data.content[0].name").value("서울 6기 1조"))
+                .andExpect(jsonPath("$.data.content[0].female_capacity").value(3))
+                .andExpect(jsonPath("$.data.content[0].female_count").value(1));
+        mockMvc.perform(get("/api/v1/admin/rooms/" + roomId).with(operator))
+                .andExpect(jsonPath("$.data.members[0].school").value("한국대"))
+                .andExpect(jsonPath("$.data.members[0].department").value("컴퓨터공학과"));
     }
 }
