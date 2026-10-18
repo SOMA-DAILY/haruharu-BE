@@ -3,6 +3,7 @@ package org.son.haruharu.domain.room.storage;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
+import org.son.haruharu.domain.room.implement.RoomEntryPath;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberRepository;
 import org.springframework.stereotype.Repository;
@@ -66,6 +67,11 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     @Override
     public long countByRoomIdAndGender(Long roomId, String gender) {
         return jpaRepository.countByRoomIdAndGender(roomId, gender);
+    }
+
+    @Override
+    public long countByRoomIdAndEntryPath(Long roomId, RoomEntryPath entryPath) {
+        return jpaRepository.countByRoomIdAndEntryPath(roomId, entryPath);
     }
 
     @Override

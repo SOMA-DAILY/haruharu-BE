@@ -3,6 +3,7 @@ package org.son.haruharu.admin.domain.room.application.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,13 +30,22 @@ public record CreateAdminRoomRequest(
         @NotNull LocalDateTime endsAt,
         @Schema(description = "총 일수", example = "3")
         @Positive int totalDays,
-        @Schema(description = "관리자가 정하는 실제 방 정원(null이면 무제한)", example = "6", nullable = true)
+        @Schema(description = "초대코드로 들어오는 인원(웹 몫) 정원(null이면 무제한). 앱 신청자 배정 인원은 세지 않는다(#513)",
+                example = "6", nullable = true)
         @Positive Integer maxUses,
         @Schema(description = "초대코드 만료 시각(null이면 무기한)", nullable = true)
         LocalDateTime inviteExpiresAt,
         @Schema(description = "초기 미션 목록(선택). 서버 기본값 없음(비면 0개). "
                 + "각 미션의 opens_at 필수.", nullable = true)
         List<RoomMissionRequest> missions,
+        @Schema(description = "기수 id(#513). 웹 전용 방이면 null", example = "4", nullable = true)
+        Long cohortId,
+        @Schema(description = "운영진용 방 이름(#513, 50자 이하)", example = "서울 6기 1조", nullable = true)
+        @Size(max = 50) String name,
+        @Schema(description = "남성 정원(#513, 방 전체 기준). null이면 정하지 않음", example = "3", nullable = true)
+        @Positive Integer maleCapacity,
+        @Schema(description = "여성 정원(#513, 방 전체 기준). null이면 정하지 않음", example = "3", nullable = true)
+        @Positive Integer femaleCapacity,
         @Schema(hidden = true)
         @com.fasterxml.jackson.annotation.JsonProperty("chat_schedule")
         @jakarta.validation.constraints.Null(message = "chat_schedule은 폐기되었습니다. missions를 사용해 주세요")
@@ -44,7 +54,7 @@ public record CreateAdminRoomRequest(
     public CreateAdminRoomCommand toCommand() {
         return new CreateAdminRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
                 resultAt, endsAt, totalDays, maxUses, inviteExpiresAt,
-                missionCommands());
+                missionCommands(), cohortId, name, maleCapacity, femaleCapacity);
     }
 
     private List<RoomMissionCommand> missionCommands() {

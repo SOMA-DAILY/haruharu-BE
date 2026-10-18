@@ -15,6 +15,7 @@ import jakarta.persistence.Table;
 
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomComposition;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 
 import lombok.AccessLevel;
@@ -25,7 +26,8 @@ import lombok.NoArgsConstructor;
 // 방이 늘어도 풀스캔하지 않도록 복합 인덱스를 명시한다(#320).
 @Table(name = "rooms", indexes = {
         @Index(name = "idx_rooms_reconcile", columnList = "starts_at, status"),
-        @Index(name = "idx_rooms_status", columnList = "status")
+        @Index(name = "idx_rooms_status", columnList = "status"),
+        @Index(name = "idx_rooms_cohort", columnList = "cohort_id")
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RoomEntity extends BaseEntity {
@@ -66,6 +68,19 @@ public class RoomEntity extends BaseEntity {
     @Column
     private LocalDateTime endsAt;
 
+    // 편성 정보(#513). 기존 방·웹 전용 방은 모두 null. cohort_id 의 FK 는 513 SQL 이 건다.
+    @Column
+    private Long cohortId;
+
+    @Column(length = 50)
+    private String name;
+
+    @Column
+    private Integer maleCapacity;
+
+    @Column
+    private Integer femaleCapacity;
+
     public static RoomEntity from(Room room) {
         RoomEntity entity = new RoomEntity();
         entity.id = room.id();
@@ -79,11 +94,16 @@ public class RoomEntity extends BaseEntity {
         entity.finalSelectionClosesAt = room.finalSelectionClosesAt();
         entity.resultAt = room.resultAt();
         entity.endsAt = room.endsAt();
+        entity.cohortId = room.composition().cohortId();
+        entity.name = room.composition().name();
+        entity.maleCapacity = room.composition().maleCapacity();
+        entity.femaleCapacity = room.composition().femaleCapacity();
         return entity;
     }
 
     public Room toDomain() {
         return new Room(id, status, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt,
+                new RoomComposition(cohortId, name, maleCapacity, femaleCapacity));
     }
 }

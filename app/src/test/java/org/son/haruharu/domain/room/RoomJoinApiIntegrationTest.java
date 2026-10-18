@@ -16,6 +16,7 @@ import org.son.haruharu.domain.room.implement.exception.InvalidRoomInviteMaxUses
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomMember;
+import org.son.haruharu.domain.room.implement.RoomEntryPath;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.son.haruharu.domain.room.storage.RoomInviteJpaRepository;
@@ -167,6 +168,30 @@ class RoomJoinApiIntegrationTest {
 
         assertThat(roomMemberReader.getByRoomId(roomId)).hasSize(7);
         assertThat(roomInviteJpaRepository.findByCode(newCode).orElseThrow().toDomain().usedCount()).isOne();
+    }
+
+    @Test
+    @DisplayName("앱 신청자 3명이 먼저 배정된 방에도 초대코드 정원 3명이 모두 들어오고, 4번째 초대 입장은 거부된다(#513)")
+    void givenApplicationMembers_whenInviteJoins_thenOnlyInviteMembersCountTowardMaxUses() {
+        Long roomId = createJoinableRoom();
+        roomInviteService.issue(roomId, "MXK234", 3, null, "admin");
+        LocalDateTime joinedAt = LocalDateTime.now().minusMinutes(1);
+        for (long i = 0; i < 3; i++) {
+            roomMemberWriter.save(RoomMember.fromApplication(roomId, 400L + i, "MALE", null, 900L + i, joinedAt));
+        }
+
+        for (long userId = 500L; userId < 503L; userId++) {
+            roomInviteService.join(userId, "MXK234");
+        }
+
+        assertThatThrownBy(() -> roomInviteService.join(503L, "MXK234"))
+                .isInstanceOf(InviteCodeNotUsableException.class);
+        List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
+        assertThat(members).hasSize(6);
+        assertThat(members).filteredOn(member -> member.entryPath() == RoomEntryPath.INVITE)
+                .extracting(RoomMember::userId).containsExactlyInAnyOrder(500L, 501L, 502L);
+        assertThat(members).filteredOn(member -> member.entryPath() == RoomEntryPath.APPLICATION)
+                .extracting(RoomMember::applicationId).containsExactlyInAnyOrder(900L, 901L, 902L);
     }
 
     @Test

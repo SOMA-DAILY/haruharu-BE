@@ -16,12 +16,29 @@ public record Room(
         LocalDateTime finalSelectionOpensAt,
         LocalDateTime finalSelectionClosesAt,
         LocalDateTime resultAt,
-        LocalDateTime endsAt
+        LocalDateTime endsAt,
+        // #513: 기수·이름·성별 정원. 기존 방·웹 전용 방은 NONE.
+        RoomComposition composition
 ) {
+    public Room {
+        if (composition == null) {
+            composition = RoomComposition.NONE;
+        }
+    }
+
     /** 6-arg 하위호환. 신규 스케줄 시각은 null default — 기존 6-arg 호출부/픽스처를 그대로 살린다. */
     public Room(Long id, RoomStatus status, LocalDate scheduledDate, int totalDays,
                 LocalDateTime startedAt, LocalDateTime endedAt) {
         this(id, status, scheduledDate, totalDays, startedAt, endedAt, null, null, null, null, null);
+    }
+
+    /** 11-arg 하위호환(#513 이전 모양). 편성 정보는 NONE. */
+    public Room(Long id, RoomStatus status, LocalDate scheduledDate, int totalDays,
+                LocalDateTime startedAt, LocalDateTime endedAt, LocalDateTime startsAt,
+                LocalDateTime finalSelectionOpensAt, LocalDateTime finalSelectionClosesAt,
+                LocalDateTime resultAt, LocalDateTime endsAt) {
+        this(id, status, scheduledDate, totalDays, startedAt, endedAt, startsAt, finalSelectionOpensAt,
+                finalSelectionClosesAt, resultAt, endsAt, RoomComposition.NONE);
     }
     /** 스케줄이 없는 구 모델 방의 결과 발표(최종선택 마감) 시각. */
     public static final int RESULT_ANNOUNCE_HOUR = 22;
@@ -54,8 +71,16 @@ public record Room(
     public static Room createScheduled(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
                                        LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt,
                                        LocalDateTime endsAt, int totalDays) {
+        return createScheduled(startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt,
+                totalDays, RoomComposition.NONE);
+    }
+
+    /** 기수·이름·성별 정원까지 정해 만든다(#513). */
+    public static Room createScheduled(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
+                                       LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt,
+                                       LocalDateTime endsAt, int totalDays, RoomComposition composition) {
         return new Room(null, RoomStatus.PENDING, startsAt.toLocalDate(), totalDays, null, null,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition);
     }
 
     /**
@@ -97,25 +122,25 @@ public record Room(
         boolean needsAnchor = startsAt != null && startedAt == null && derived != RoomStatus.PENDING;
         LocalDateTime anchor = needsAnchor ? startsAt : startedAt;
         return new Room(id, derived, scheduledDate, totalDays, anchor, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition);
     }
 
     /** 운영진 수동 취소(#311): → CANCELLED. sticky(이후 statusAt 도 CANCELLED). */
     public Room cancelled() {
         return new Room(id, RoomStatus.CANCELLED, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition);
     }
 
     /** 방 시작: PENDING → ACTIVE, startedAt 앵커. currentDay는 startedAt에서 파생하므로 저장하지 않는다. */
     public Room started(LocalDateTime startedAt) {
         return new Room(id, RoomStatus.ACTIVE, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition);
     }
 
     /** 세션 종료: ACTIVE → ENDED, endedAt 앵커. 종료 후 getLegacyActive()·findCurrent 조회에서 제외된다. */
     public Room ended(LocalDateTime endedAt) {
         return new Room(id, RoomStatus.ENDED, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition);
     }
 
     /**

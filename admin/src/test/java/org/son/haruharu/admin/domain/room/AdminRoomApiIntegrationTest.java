@@ -4,6 +4,12 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.son.haruharu.domain.cohort.implement.Cohort;
+import org.son.haruharu.domain.cohort.implement.CohortStatus;
+import org.son.haruharu.domain.cohort.implement.CohortWriter;
+import org.son.haruharu.domain.cohort.implement.RecruitAudience;
+import org.son.haruharu.domain.cohort.implement.RecruitTrack;
+import org.son.haruharu.domain.cohort.implement.RecruitTrackWriter;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.storage.UserProfileEntity;
 import org.son.haruharu.domain.room.implement.Room;
@@ -165,6 +171,121 @@ class AdminRoomApiIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.room_id").isNumber())
                 .andExpect(jsonPath("$.data.code").isString());
+    }
+
+    // ── #513 기수·이름·성별 정원·입장 경로 ──────────────────────────────────
+
+    @Autowired RecruitTrackWriter recruitTrackWriter;
+    @Autowired CohortWriter cohortWriter;
+
+    private Long cohort(CohortStatus status) {
+        RecruitTrack track = recruitTrackWriter.save(RecruitTrack.create("seoul-" + System.nanoTime(), "서울 대학생", "서울",
+                RecruitAudience.STUDENT, 20, 29, List.of(), 1));
+        LocalDateTime now = LocalDateTime.now();
+        return cohortWriter.save(new Cohort(null, track.id(), 6, status, now.minusDays(1), now.plusDays(3),
+                now.plusDays(4), "10월 마지막 주", 6, 6, null, "admin:1", null, null)).id();
+    }
+
+    private static String composedRoomBody(LocalDateTime startsAt, String composition) {
+        String base = createRoomBody(startsAt).strip();
+        return base.substring(0, base.length() - 1) + ", " + composition + "}";
+    }
+
+    @Test
+    @DisplayName("기수·이름·성별 정원을 주고 방을 만들면 저장되고 방 상세에 함께 나온다(#513)")
+    void createRoom_withComposition_savedAndShownInDetail() throws Exception {
+        Long cohortId = cohort(CohortStatus.OPEN);
+        String response = mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(composedRoomBody(LocalDateTime.now().plusDays(1).withNano(0),
+                                "\"cohort_id\": " + cohortId + ", \"name\": \" 서울 6기 1조 \", "
+                                        + "\"male_capacity\": 3, \"female_capacity\": 2"))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long roomId = com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
+
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", roomId).with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cohort_id").value(cohortId))
+                .andExpect(jsonPath("$.data.name").value("서울 6기 1조"))
+                .andExpect(jsonPath("$.data.male_capacity").value(3))
+                .andExpect(jsonPath("$.data.female_capacity").value(2))
+                .andExpect(jsonPath("$.data.invite_member_count").value(0));
+    }
+
+    @Test
+    @DisplayName("기수·정원 없이 만든 방(웹 전용 방)은 상세에서 그 칸이 비어 있다")
+    void createRoom_withoutComposition_detailFieldsAreNull() throws Exception {
+        String response = mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createRoomBody(LocalDateTime.now().plusDays(1).withNano(0)))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long roomId = com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
+
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", roomId).with(authentication(adminAuth())))
+                .andExpect(jsonPath("$.data.cohort_id").doesNotExist())
+                .andExpect(jsonPath("$.data.male_capacity").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("취소된 기수·없는 기수·1 미만 정원·50자 넘는 이름이면 방을 만들지 않는다")
+    void createRoom_invalidComposition_rejected() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        Long cancelled = cohort(CohortStatus.CANCELLED);
+
+        mockMvc.perform(post("/api/v1/admin/rooms").contentType(MediaType.APPLICATION_JSON)
+                        .content(composedRoomBody(startsAt, "\"cohort_id\": " + cancelled))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.error.fields[0].field").value("cohort_id"));
+        mockMvc.perform(post("/api/v1/admin/rooms").contentType(MediaType.APPLICATION_JSON)
+                        .content(composedRoomBody(startsAt, "\"cohort_id\": 999999"))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("COHORT_NOT_FOUND"));
+        mockMvc.perform(post("/api/v1/admin/rooms").contentType(MediaType.APPLICATION_JSON)
+                        .content(composedRoomBody(startsAt, "\"male_capacity\": 0"))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/v1/admin/rooms").contentType(MediaType.APPLICATION_JSON)
+                        .content(composedRoomBody(startsAt, "\"name\": \"" + "가".repeat(51) + "\""))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isBadRequest());
+
+        assertThat(em.createQuery("select count(r) from RoomEntity r", Long.class).getSingleResult()).isZero();
+    }
+
+    @Test
+    @DisplayName("방 상세 참여자 표에 입장 경로·배정 신청 id·본인 확인 여부(탈퇴로 지운 인증은 미확인)가 나오고, 초대 인원은 INVITE 만 센다(#513)")
+    void roomDetail_showsEntryPathAndIdentityVerified() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        Long roomId = persistRoom(Room.create(LocalDate.now(), 3).started(now));
+        em.persist(RoomMemberEntity.from(RoomMember.of(roomId, 901L, "FEMALE", null, now)));
+        em.persist(RoomMemberEntity.from(RoomMember.fromApplication(roomId, 902L, "MALE", null, 55L, now)));
+        em.createNativeQuery("insert into user_identities (id, user_id, created_at, updated_at) values (1, 902, now(), now())")
+                .executeUpdate();
+        // 탈퇴로 지운(soft-delete) 본인인증 행은 확인 완료로 보지 않는다.
+        em.persist(RoomMemberEntity.from(RoomMember.of(roomId, 903L, "FEMALE", null, now)));
+        em.createNativeQuery("insert into user_identities (id, user_id, created_at, updated_at, deleted_at)"
+                + " values (2, 903, now(), now(), now())").executeUpdate();
+        em.flush();
+
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", roomId).with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.invite_member_count").value(2))
+                .andExpect(jsonPath("$.data.members[0].user_id").value(901))
+                .andExpect(jsonPath("$.data.members[0].entry_path").value("INVITE"))
+                .andExpect(jsonPath("$.data.members[0].application_id").doesNotExist())
+                .andExpect(jsonPath("$.data.members[0].identity_verified").value(false))
+                .andExpect(jsonPath("$.data.members[1].entry_path").value("APPLICATION"))
+                .andExpect(jsonPath("$.data.members[1].application_id").value(55))
+                .andExpect(jsonPath("$.data.members[1].identity_verified").value(true))
+                .andExpect(jsonPath("$.data.members[2].user_id").value(903))
+                .andExpect(jsonPath("$.data.members[2].identity_verified").value(false));
     }
 
     @Test

@@ -25,6 +25,7 @@ import org.son.haruharu.domain.room.business.exception.InviteCodeNotFoundExcepti
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException;
 import org.son.haruharu.domain.room.implement.InviteCodeGenerator;
 import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomEntryPath;
 import org.son.haruharu.domain.room.implement.RoomInvite;
 import org.son.haruharu.domain.room.implement.RoomInviteReader;
 import org.son.haruharu.domain.room.implement.RoomInviteStatus;
@@ -77,9 +78,10 @@ class RoomInviteServiceTest {
     }
 
     private RoomInviteService serviceWithClock(Clock serviceClock) {
+        // 입장 공통 컴포넌트(#513)는 실제 객체로 두고 그 아래 협력자만 목으로 둔다 — 초대코드 입장의 저장·이벤트 동작을 그대로 검증한다.
+        RoomMemberJoiner joiner = new RoomMemberJoiner(roomMemberReader, roomMemberWriter, eventPublisher);
         return new RoomInviteService(roomInviteReader, roomInviteWriter, roomReader,
-                roomMemberReader, roomMemberWriter, inviteCodeGenerator, userProfileReader,
-                eventPublisher, serviceClock);
+                roomMemberReader, joiner, inviteCodeGenerator, userProfileReader, serviceClock);
     }
 
     private RoomInvite activeInvite() {
@@ -105,7 +107,7 @@ class RoomInviteServiceTest {
     void givenNewMembership_whenJoin_thenNormalizesLocksAndWritesExactlyOnce() {
         givenJoinCandidate(roomWithStatus(RoomStatus.PENDING), activeInvite());
         given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
-        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(5L);
+        given(roomMemberReader.countByRoomIdAndEntryPath(ROOM_ID, RoomEntryPath.INVITE)).willReturn(5L);
 
         JoinRoomResponse response = service.join(USER_ID, "  abj234  ");
 
@@ -116,11 +118,11 @@ class RoomInviteServiceTest {
         order.verify(roomReader).findByIdForUpdate(ROOM_ID);
         order.verify(roomInviteReader).findByCodeForUpdate(CODE);
         order.verify(roomMemberReader).findByRoomIdAndUserId(ROOM_ID, USER_ID);
-        order.verify(roomMemberReader).countByRoomId(ROOM_ID);
+        order.verify(roomMemberReader).countByRoomIdAndEntryPath(ROOM_ID, RoomEntryPath.INVITE);
         order.verify(roomMemberWriter).save(argThat(member -> member.roomId().equals(ROOM_ID)
                 && member.userId().equals(USER_ID) && member.joinedAt().equals(NOW)));
-        order.verify(roomInviteWriter).save(argThat(invite -> invite.usedCount() == 1));
         order.verify(eventPublisher).publishEvent(new RoomMemberJoinedEvent(ROOM_ID, USER_ID, NOW));
+        order.verify(roomInviteWriter).save(argThat(invite -> invite.usedCount() == 1));
     }
 
     @Test
@@ -209,7 +211,7 @@ class RoomInviteServiceTest {
                 .isInstanceOf(InviteCodeNotUsableException.class);
 
         verify(roomMemberReader, never()).findByRoomIdAndUserId(any(), any());
-        verify(roomMemberReader, never()).countByRoomId(any());
+        verify(roomMemberReader, never()).countByRoomIdAndEntryPath(any(), any());
         verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
     }
 
@@ -224,7 +226,7 @@ class RoomInviteServiceTest {
 
         assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
 
-        verify(roomMemberReader, never()).countByRoomId(any());
+        verify(roomMemberReader, never()).countByRoomIdAndEntryPath(any(), any());
         verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
     }
 
@@ -233,7 +235,7 @@ class RoomInviteServiceTest {
     void givenMembershipInDifferentCurrentRoom_whenJoin_thenAddsSecondMembership() {
         givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), activeInvite());
         given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
-        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(1L);
+        given(roomMemberReader.countByRoomIdAndEntryPath(ROOM_ID, RoomEntryPath.INVITE)).willReturn(1L);
 
         assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
 
@@ -245,7 +247,7 @@ class RoomInviteServiceTest {
     void givenActiveMembersAtInviteMaxUses_whenJoin_thenThrowsWithoutWrites() {
         givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), activeInvite(2));
         given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
-        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(2L);
+        given(roomMemberReader.countByRoomIdAndEntryPath(ROOM_ID, RoomEntryPath.INVITE)).willReturn(2L);
 
         assertThatThrownBy(() -> service.join(USER_ID, CODE))
                 .isInstanceOf(InviteCodeNotUsableException.class);
@@ -253,11 +255,26 @@ class RoomInviteServiceTest {
     }
 
     @Test
+    @DisplayName("앱 신청자가 섞인 방에서 초대코드 정원은 초대코드로 들어온 인원만 센다(#513)")
+    void givenApplicationMembersInRoom_whenJoin_thenCapacityCountsInviteMembersOnly() {
+        // 방 전체 5명(앱 신청 3 + 초대 2), 초대코드 정원 3 → 웹 몫 1자리가 남아 있다.
+        givenJoinCandidate(roomWithStatus(RoomStatus.PENDING), activeInvite(3));
+        given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+        given(roomMemberReader.countByRoomIdAndEntryPath(ROOM_ID, RoomEntryPath.INVITE)).willReturn(2L);
+
+        assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
+
+        verify(roomMemberReader, never()).countByRoomId(any());
+        verify(roomMemberWriter).save(argThat(member -> member.entryPath() == RoomEntryPath.INVITE
+                && member.applicationId() == null));
+    }
+
+    @Test
     @DisplayName("maxUses=8인 재발급 코드는 기존 6명 active member가 있어도 즉시 새 멤버를 받는다")
     void givenReissuedInviteWithLargerCapacity_whenJoin_thenUsesNewInviteCapacity() {
         givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), activeInvite(8));
         given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
-        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(6L);
+        given(roomMemberReader.countByRoomIdAndEntryPath(ROOM_ID, RoomEntryPath.INVITE)).willReturn(6L);
 
         assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
 
@@ -271,7 +288,7 @@ class RoomInviteServiceTest {
         RoomInvite unlimited = new RoomInvite(5L, ROOM_ID, CODE, RoomInviteStatus.ACTIVE, null, 17, null, "admin");
         givenJoinCandidate(roomWithStatus(RoomStatus.ACTIVE), unlimited);
         given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
-        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(6L);
+        given(roomMemberReader.countByRoomIdAndEntryPath(ROOM_ID, RoomEntryPath.INVITE)).willReturn(6L);
 
         assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
 
@@ -285,7 +302,7 @@ class RoomInviteServiceTest {
     void givenJoinableRoomStatus_whenJoin_thenSucceeds(RoomStatus status) {
         givenJoinCandidate(roomWithStatus(status), activeInvite());
         given(roomMemberReader.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
-        given(roomMemberReader.countByRoomId(ROOM_ID)).willReturn(0L);
+        given(roomMemberReader.countByRoomIdAndEntryPath(ROOM_ID, RoomEntryPath.INVITE)).willReturn(0L);
 
         assertThat(service.join(USER_ID, CODE).roomId()).isEqualTo(ROOM_ID);
     }
@@ -312,7 +329,7 @@ class RoomInviteServiceTest {
         assertThatThrownBy(() -> service.join(USER_ID, CODE))
                 .isInstanceOf(InviteCodeNotUsableException.class);
         verify(roomMemberReader, never()).findByRoomIdAndUserId(any(), any());
-        verify(roomMemberReader, never()).countByRoomId(any());
+        verify(roomMemberReader, never()).countByRoomIdAndEntryPath(any(), any());
         verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
     }
 
@@ -336,7 +353,7 @@ class RoomInviteServiceTest {
         assertThatThrownBy(() -> boundaryService.join(USER_ID, CODE))
                 .isInstanceOf(InviteCodeNotUsableException.class);
         verify(roomMemberReader, never()).findByRoomIdAndUserId(any(), any());
-        verify(roomMemberReader, never()).countByRoomId(any());
+        verify(roomMemberReader, never()).countByRoomIdAndEntryPath(any(), any());
         verifyNoInteractions(roomMemberWriter, roomInviteWriter, eventPublisher);
     }
 
