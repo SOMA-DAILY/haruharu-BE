@@ -40,12 +40,13 @@ public class AdminRoomService {
         this.clock = clock;
     }
 
-    public PageResponse<AdminRoomSummary> getRooms(RoomStatus status, LocalDate scheduledDate, int page, int size) {
+    public PageResponse<AdminRoomSummary> getRooms(RoomStatus status, LocalDate scheduledDate, Long cohortId,
+                                              int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
 
-        List<Room> rooms = adminRoomReader.findRooms(status, scheduledDate, safePage * safeSize, safeSize);
-        long total = adminRoomReader.countRooms(status, scheduledDate);
+        List<Room> rooms = adminRoomReader.findRooms(status, scheduledDate, cohortId, safePage * safeSize, safeSize);
+        long total = adminRoomReader.countRooms(status, scheduledDate, cohortId);
 
         Map<Long, List<RoomMember>> membersByRoom = adminRoomReader
                 .membersOf(rooms.stream().map(Room::id).toList()).stream()
@@ -95,14 +96,16 @@ public class AdminRoomService {
         return new AdminRoomDetailResponse.MemberView(
                 member.id(), member.userId(), member.gender(), member.joinedAt(),
                 nickname, member.pseudonym(), age, region,
-                member.entryPath(), member.applicationId(), identityVerified);
+                member.entryPath(), member.applicationId(), identityVerified,
+                profile == null ? null : profile.affiliation(), profile == null ? null : profile.department());
     }
 
     private AdminRoomSummary toSummary(Room room, List<RoomMember> members, LocalDateTime now) {
         return new AdminRoomSummary(
                 room.id(), room.statusAt(now), room.scheduledDate(), room.currentDayAt(now),
                 members.size(), countGender(members, GENDER_FEMALE), countGender(members, GENDER_MALE),
-                startedAtOf(room));
+                startedAtOf(room), room.composition().cohortId(), room.composition().name(),
+                room.composition().maleCapacity(), room.composition().femaleCapacity());
     }
 
     /** 새 모델 방은 전이 전까지 startedAt 이 비어 있으므로 예정 시각(starts_at)을 노출한다(#320). */

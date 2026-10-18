@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 기수 신청(#511). 옛 matching_queue 를 대체한다. 신청과 동시에 참가권 1장을 쓰고, 배정 전 종료면 돌려준다.
@@ -120,6 +121,14 @@ public record CohortApplication(
                 birthday, school, department, answers, referralSource, friendPreference, motivation, surveySubmittedAt,
                 priority, appliedAt, now, reviewReason, roomId, assignedAt, assignedBy, closedAt, closeReason,
                 refundedAt, adminMemo, createdAt, updatedAt);
+    }
+
+    /**
+     * 방에 넣을 때 쓸 성별(#516). 편성 대기이고 PASS 성별이 신청 성별과 같을 때만 있다 — 방 멤버 성별은 PASS 값이다.
+     */
+    public Optional<ApplicantGender> assignableGender() {
+        if (status != CohortApplicationStatus.QUEUED) return Optional.empty();
+        return ApplicantGender.parse(passGender).filter(gender -> gender == declaredGender);
     }
 
     /** 본인이 앱에서 취소할 수 있는지. 배정 후 취소는 #517 에서 연다. */

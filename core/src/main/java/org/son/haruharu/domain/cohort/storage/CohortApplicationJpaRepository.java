@@ -83,4 +83,19 @@ public interface CohortApplicationJpaRepository extends JpaRepository<CohortAppl
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update CohortApplicationEntity a set a.adminMemo = :memo, a.updatedAt = :updatedAt where a.id = :id")
     int updateMemo(@Param("id") Long id, @Param("memo") String memo, @Param("updatedAt") LocalDateTime updatedAt);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from CohortApplicationEntity a where a.id in :ids order by a.id")
+    List<CohortApplicationEntity> findAllByIdInForUpdate(@Param("ids") Collection<Long> ids);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update CohortApplicationEntity a
+            set a.status = :to, a.roomId = :roomId, a.assignedAt = :assignedAt, a.assignedBy = :assignedBy,
+                a.updatedAt = :assignedAt
+            where a.id = :id and a.status = :from
+            """)
+    int assign(@Param("id") Long id, @Param("from") CohortApplicationStatus from,
+               @Param("to") CohortApplicationStatus to, @Param("roomId") Long roomId,
+               @Param("assignedAt") LocalDateTime assignedAt, @Param("assignedBy") String assignedBy);
 }

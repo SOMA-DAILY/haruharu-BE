@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.son.haruharu.domain.cohort.storage.exception.CohortApplicationNotFoundException;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,5 +41,10 @@ public class CohortApplicationReader {
     public List<CohortApplication> lockBeforeAssignment(Long cohortId) {
         return applicationRepository.findAllByCohortIdAndStatusInForUpdate(cohortId,
                 CohortApplicationStatus.BEFORE_ASSIGNMENT);
+    }
+
+    /** 배정할 신청을 id 순으로 잠근다(#516). 잠금 순서: 방 → 신청(id 순). */
+    public List<CohortApplication> lockAll(Collection<Long> ids) {
+        return applicationRepository.findAllByIdInForUpdate(ids);
     }
 }

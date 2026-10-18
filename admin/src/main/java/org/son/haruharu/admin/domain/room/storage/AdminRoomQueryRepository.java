@@ -18,7 +18,7 @@ import java.util.Optional;
 
 /**
  * 어드민 세션(방) 조회. admin 전용 JPQL over core RoomEntity/RoomMemberEntity.
- * status/scheduledDate는 선택 필터라 조건을 동적으로 조립한다. 소프트삭제는 Hibernate가 자동 필터.
+ * status/scheduledDate/cohortId(#529)는 선택 필터라 조건을 동적으로 조립한다. 소프트삭제는 Hibernate가 자동 필터.
  */
 @Repository
 @RequiredArgsConstructor
@@ -26,21 +26,21 @@ public class AdminRoomQueryRepository {
 
     private final EntityManager entityManager;
 
-    public List<Room> findRooms(RoomStatus status, LocalDate scheduledDate, int offset, int limit) {
+    public List<Room> findRooms(RoomStatus status, LocalDate scheduledDate, Long cohortId, int offset, int limit) {
         StringBuilder jpql = new StringBuilder("select r from RoomEntity r where 1 = 1");
-        appendFilters(jpql, status, scheduledDate);
+        appendFilters(jpql, status, scheduledDate, cohortId);
         jpql.append(" order by r.id desc");
         TypedQuery<RoomEntity> query = entityManager.createQuery(jpql.toString(), RoomEntity.class);
-        bindFilters(query, status, scheduledDate);
+        bindFilters(query, status, scheduledDate, cohortId);
         return query.setFirstResult(offset).setMaxResults(limit)
                 .getResultList().stream().map(RoomEntity::toDomain).toList();
     }
 
-    public long countRooms(RoomStatus status, LocalDate scheduledDate) {
+    public long countRooms(RoomStatus status, LocalDate scheduledDate, Long cohortId) {
         StringBuilder jpql = new StringBuilder("select count(r) from RoomEntity r where 1 = 1");
-        appendFilters(jpql, status, scheduledDate);
+        appendFilters(jpql, status, scheduledDate, cohortId);
         TypedQuery<Long> query = entityManager.createQuery(jpql.toString(), Long.class);
-        bindFilters(query, status, scheduledDate);
+        bindFilters(query, status, scheduledDate, cohortId);
         return query.getSingleResult();
     }
 
@@ -98,7 +98,10 @@ public class AdminRoomQueryRepository {
                 .getResultList();
     }
 
-    private void appendFilters(StringBuilder jpql, RoomStatus status, LocalDate scheduledDate) {
+    private void appendFilters(StringBuilder jpql, RoomStatus status, LocalDate scheduledDate, Long cohortId) {
+        if (cohortId != null) {
+            jpql.append(" and r.cohortId = :cohortId");
+        }
         if (status != null) {
             jpql.append(" and r.status = :status");
         }
@@ -107,7 +110,10 @@ public class AdminRoomQueryRepository {
         }
     }
 
-    private void bindFilters(TypedQuery<?> query, RoomStatus status, LocalDate scheduledDate) {
+    private void bindFilters(TypedQuery<?> query, RoomStatus status, LocalDate scheduledDate, Long cohortId) {
+        if (cohortId != null) {
+            query.setParameter("cohortId", cohortId);
+        }
         if (status != null) {
             query.setParameter("status", status);
         }
