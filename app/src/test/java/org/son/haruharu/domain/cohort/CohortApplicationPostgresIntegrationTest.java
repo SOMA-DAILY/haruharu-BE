@@ -353,7 +353,7 @@ class CohortApplicationPostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("PASS 성별을 해석할 수 없으면 확인 필요(UNKNOWN_GENDER)로 DB 제약을 통과해 남고 참가권은 그대로다(#512)")
+    @DisplayName("PASS 성별을 해석할 수 없으면 확인 필요(UNKNOWN_GENDER)로 DB 제약을 통과해 남고, PASS 성별·생년 스냅샷이 남으며 참가권은 그대로다(#512)")
     void givenOtherGender_whenScreen_thenNeedsReviewPersisted() {
         wallet(970L, 1);
         Long applicationId = applicationService.apply(970L, cohortId, FORM).applicationId();
@@ -365,6 +365,8 @@ class CohortApplicationPostgresIntegrationTest {
                 + " WHERE id = ?", applicationId)).containsEntry("status", "NEEDS_REVIEW")
                 .containsEntry("review_reason", "UNKNOWN_GENDER").containsEntry("gender", "OTHER")
                 .containsEntry("queued_at", null);
+        assertThat(jdbcTemplate.queryForObject("SELECT birthday::text FROM cohort_applications WHERE id = ?",
+                String.class, applicationId)).isEqualTo(LocalDate.of(LocalDate.now().getYear() - 23, 1, 1).toString());
         assertThat(balance(970L)).isZero();
     }
 
