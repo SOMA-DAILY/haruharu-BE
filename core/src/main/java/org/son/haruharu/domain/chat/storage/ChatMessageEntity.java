@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.chat.storage;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.CheckConstraint;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -15,14 +16,26 @@ import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageType;
-import org.son.haruharu.domain.chat.implement.ChatMission;
+import org.son.haruharu.domain.chat.implement.ChatSenderType;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "chat_messages", uniqueConstraints = @UniqueConstraint(name="uq_chat_messages_reply_request", columnNames={"chat_room_id", "sender_id", "client_request_id"}), indexes = {
+@Table(name = "chat_messages", uniqueConstraints = {
+        @UniqueConstraint(name="uq_chat_messages_reply_request", columnNames={"chat_room_id", "sender_id", "client_request_id"}),
+        @UniqueConstraint(name="uq_chat_messages_schedule_item", columnNames="schedule_item_id"),
+        @UniqueConstraint(name="uq_chat_messages_mission_announcement", columnNames="mission_announcement_id")
+}, indexes = {
         @Index(name = "idx_chat_messages_room_id", columnList = "chat_room_id, id"),
-        @Index(name = "idx_chat_messages_reply_to", columnList = "reply_to_message_id")
+        @Index(name = "idx_chat_messages_reply_to", columnList = "reply_to_message_id"),
+        @Index(name = "idx_chat_messages_room_mission", columnList = "room_mission_id")
+}, check = {
+        @CheckConstraint(name = "ck_chat_messages_sender",
+                constraint = "(sender_type = 'USER' AND sender_id IS NOT NULL) OR (sender_type = 'SYSTEM' AND sender_id IS NULL)"),
+        @CheckConstraint(name = "ck_chat_messages_mission_reference",
+                constraint = "(message_type = 'TEXT' AND room_mission_id IS NULL AND mission_announcement_id IS NULL) "
+                        + "OR (message_type = 'MISSION' AND sender_type = 'SYSTEM' AND room_mission_id IS NOT NULL "
+                        + "AND room_mission_id > 0 AND mission_announcement_id IS NOT NULL AND mission_announcement_id > 0)")
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatMessageEntity extends BaseEntity {
@@ -34,8 +47,12 @@ public class ChatMessageEntity extends BaseEntity {
     @Column(name = "chat_room_id", nullable = false)
     private Long chatRoomId;
 
-    @Column(name = "sender_id", nullable = false)
+    @Column(name = "sender_id")
     private Long senderId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sender_type", nullable = false, length = 20)
+    private ChatSenderType senderType;
 
     @Column(nullable = false, columnDefinition = "text")
     private String content;
@@ -63,6 +80,12 @@ public class ChatMessageEntity extends BaseEntity {
     @Column(name = "schedule_item_id")
     private Long scheduleItemId;
 
+    @Column(name = "room_mission_id")
+    private Long roomMissionId;
+
+    @Column(name = "mission_announcement_id")
+    private Long missionAnnouncementId;
+
     // 운영자 삭제. 전역 @SoftDelete(deleted_at)는 행을 숨겨 '삭제된 메시지'를 못 내리므로 별도 컬럼.
     @Column(name = "admin_deleted_at")
     private LocalDateTime adminDeletedAt;
@@ -70,27 +93,12 @@ public class ChatMessageEntity extends BaseEntity {
     @Column(name = "delete_broadcast_at")
     private LocalDateTime deleteBroadcastAt;
 
-    // 운영자 미션 카드(#474). 미션 1건당 카드 1개(unique). 삭제 표시는 위 admin_deleted_at 을 같이 쓴다.
-    @Column(name = "operator_mission_id", unique = true)
-    private Long operatorMissionId;
-
-    @Column(name = "mission_image_id")
-    private Long missionImageId;
-
-    @Column(name = "mission_room_id")
-    private Long missionRoomId;
-
-    @Column(name = "mission_template_id", length = 20)
-    private String missionTemplateId;
-
-    @Column(name = "mission_title", length = 40)
-    private String missionTitle;
-
     public static ChatMessageEntity from(ChatMessage message) {
         ChatMessageEntity entity = new ChatMessageEntity();
         entity.id = message.id();
         entity.chatRoomId = message.chatRoomId();
         entity.senderId = message.senderId();
+        entity.senderType = message.senderType();
         entity.content = message.content();
         entity.videoPostId = message.videoPostId();
         entity.clientRequestId = message.clientRequestId();
@@ -99,24 +107,17 @@ public class ChatMessageEntity extends BaseEntity {
         entity.replyPreviewContent = message.replyPreviewContent();
         entity.messageType = message.messageType();
         entity.scheduleItemId = message.scheduleItemId();
+        entity.roomMissionId = message.roomMissionId();
+        entity.missionAnnouncementId = message.missionAnnouncementId();
         entity.adminDeletedAt = message.adminDeletedAt();
         entity.deleteBroadcastAt = message.deleteBroadcastAt();
         entity.createdAt = message.createdAt();
-        if (message.mission() != null) {
-            entity.operatorMissionId = message.mission().missionId();
-            entity.missionRoomId = message.mission().roomId();
-            entity.missionImageId = message.mission().imageId();
-            entity.missionTemplateId = message.mission().templateId();
-            entity.missionTitle = message.mission().title();
-        }
         return entity;
     }
 
     public ChatMessage toDomain() {
-        ChatMission mission = operatorMissionId == null ? null
-                : new ChatMission(operatorMissionId, missionRoomId, missionTemplateId, missionTitle, missionImageId, null);
         return new ChatMessage(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId,
                 replyToMessageId, replyPreviewSender, replyPreviewContent, messageType, scheduleItemId,
-                adminDeletedAt, deleteBroadcastAt, mission);
+                adminDeletedAt, deleteBroadcastAt, senderType, roomMissionId, missionAnnouncementId);
     }
 }

@@ -48,6 +48,15 @@ public class RedisStompDeliveryAdapter implements StompDeliveryPort {
     }
 
     @Override
+    public void closeRoom(Long chatRoomId, Object payload) {
+        try {
+            localDelivery.closeRoom(chatRoomId, payload);
+        } finally {
+            publishAsync(StompFanoutEnvelope.Kind.ROOM_CLOSED, null, chatRoomId.toString(), null, payload);
+        }
+    }
+
+    @Override
     public void sendToTopic(String topic, Object payload) {
         localDelivery.sendToTopic(topic, payload);
         publishAsync(StompFanoutEnvelope.Kind.TOPIC, null, topic, null, payload);

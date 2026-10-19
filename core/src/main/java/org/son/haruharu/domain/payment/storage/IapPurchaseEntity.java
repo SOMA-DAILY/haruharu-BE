@@ -13,6 +13,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 import org.son.haruharu.domain.payment.implement.IapPurchase;
 import org.son.haruharu.domain.payment.implement.IapPurchaseStatus;
 import org.son.haruharu.domain.payment.implement.IapStore;
@@ -47,7 +48,12 @@ public class IapPurchaseEntity extends BaseEntity {
     private IapStore store;
 
     @Column(nullable = false)
-    private long coinAmount;
+    private long ticketAmount;
+
+    /** 환불됐지만 이미 사용해 회수하지 못한 티켓 수량. 환불 전이거나 전부 회수했으면 0. */
+    @Column(nullable = false)
+    @ColumnDefault("0")
+    private long unrevokedTicketAmount;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -67,7 +73,8 @@ public class IapPurchaseEntity extends BaseEntity {
         entity.storeProductId = purchase.storeProductId();
         entity.storeTransactionId = purchase.storeTransactionId();
         entity.store = purchase.store();
-        entity.coinAmount = purchase.coinAmount();
+        entity.ticketAmount = purchase.ticketAmount();
+        entity.unrevokedTicketAmount = purchase.unrevokedTicketAmount();
         entity.status = purchase.status();
         entity.purchasedAt = purchase.purchasedAt();
         entity.refundedAt = purchase.refundedAt();
@@ -76,6 +83,6 @@ public class IapPurchaseEntity extends BaseEntity {
 
     public IapPurchase toDomain() {
         return new IapPurchase(id, userId, productId, storeProductId, storeTransactionId,
-                store, coinAmount, status, purchasedAt, refundedAt);
+                store, ticketAmount, unrevokedTicketAmount, status, purchasedAt, refundedAt);
     }
 }

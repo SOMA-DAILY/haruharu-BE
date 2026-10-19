@@ -43,6 +43,7 @@ class RoomServiceTest {
 
     @Mock RoomReader roomReader;
     @Mock RoomWriter roomWriter;
+    @Mock org.springframework.context.ApplicationEventPublisher events;
     @Mock RoomMemberReader roomMemberReader;
 
     RoomService roomService;
@@ -53,7 +54,7 @@ class RoomServiceTest {
 
     @BeforeEach
     void setUp() {
-        roomService = new RoomService(roomReader, roomWriter, roomMemberReader, clock);
+        roomService = new RoomService(roomReader, roomWriter, roomMemberReader, clock, events);
     }
 
     @Test

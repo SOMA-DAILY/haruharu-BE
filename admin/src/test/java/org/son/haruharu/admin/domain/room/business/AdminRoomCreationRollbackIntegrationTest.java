@@ -1,16 +1,12 @@
 package org.son.haruharu.admin.domain.room.business;
 
-import java.time.LocalDateTime;
-import java.util.List;
-
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-
+import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.admin.domain.room.business.command.CreateAdminRoomCommand;
-import org.son.haruharu.domain.mission.business.command.CreateRoomMissionSlotCommand;
-import org.son.haruharu.domain.mission.implement.MissionPeriod;
 import org.son.haruharu.domain.room.implement.RoomInviteWriter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -41,48 +37,38 @@ class AdminRoomCreationRollbackIntegrationTest {
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    @DisplayName("초대코드 저장 실패 시 먼저 저장한 방과 미션 설정·슬롯도 모두 롤백된다")
-    void givenInviteSaveFailure_whenCreateRoom_thenRollsBackRoomAndMissionSlots() {
+    @DisplayName("초대코드 저장 실패 시 먼저 저장한 방도 롤백된다")
+    void givenInviteSaveFailure_whenCreateRoom_thenRollsBackRoom() {
         long roomCount = roomCount();
-        long slotCount = roomMissionSlotCount();
-        long settingCount = roomMissionSettingCount();
         given(roomInviteWriter.save(any())).willThrow(new IllegalStateException("invite save failed"));
 
         assertThatThrownBy(() -> service.createRoomWithInvite(command(), 1L))
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(roomCount()).isEqualTo(roomCount);
-        assertThat(roomMissionSlotCount()).isEqualTo(slotCount);
-        assertThat(roomMissionSettingCount()).isEqualTo(settingCount);
     }
 
-    private long roomMissionSettingCount() {
-        return entityManager.createQuery("select count(s) from RoomMissionSettingEntity s", Long.class)
-                .getSingleResult();
-    }
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    @DisplayName("채팅 편성 줄 검증에 실패하면 방, 미션 슬롯, 초대코드, 편성 모두 롤백된다(#457)")
+    @DisplayName("채팅 편성 줄 검증에 실패하면 방과 편성 모두 롤백된다(#457)")
     void givenInvalidChatSchedule_whenCreateRoom_thenRollsBackEverything() {
         long roomCount = roomCount();
-        long slotCount = roomMissionSlotCount();
         given(roomInviteWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
         CreateAdminRoomCommand base = command();
         CreateAdminRoomCommand withSchedule = new CreateAdminRoomCommand(base.startsAt(), base.finalSelectionOpensAt(),
                 base.finalSelectionClosesAt(), base.resultAt(), base.endsAt(), base.totalDays(), base.maxUses(),
-                base.inviteExpiresAt(), base.missionEnabled(), base.missionSlots(),
-                List.of(new org.son.haruharu.domain.roomschedule.business.command.ScheduleItemCommand(
-                        STARTS_AT, List.of(), "ok", false, null, null),
-                        new org.son.haruharu.domain.roomschedule.business.command.ScheduleItemCommand(
-                                STARTS_AT, List.of(), null, false, null, null)));
+                base.inviteExpiresAt(),
+                List.of(new org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand(
+                        org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT, new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition("ok"), STARTS_AT, null, null),
+                        new org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand(
+                                org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT, new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition(null), STARTS_AT, null, null)));
 
         assertThatThrownBy(() -> service.createRoomWithInvite(withSchedule, 1L))
-                .isInstanceOf(org.son.haruharu.domain.roomschedule.implement.exception.InvalidScheduleItemException.class);
+                .isInstanceOf(org.son.haruharu.domain.mission.common.implement.exception.InvalidMissionException.class);
 
         assertThat(roomCount()).isEqualTo(roomCount);
-        assertThat(roomMissionSlotCount()).isEqualTo(slotCount);
-        assertThat(entityManager.createQuery("select count(i) from RoomScheduleItemEntity i", Long.class)
+        assertThat(entityManager.createQuery("select count(i) from RoomMissionEntity i", Long.class)
                 .getSingleResult()).isZero();
     }
 
@@ -96,30 +82,13 @@ class AdminRoomCreationRollbackIntegrationTest {
                 3,
                 6,
                 null,
-                true,
-                List.of(
-                        slot(1, MissionPeriod.MORNING, 1, 6),
-                        slot(1, MissionPeriod.AFTERNOON, 9, 14),
-                        slot(2, MissionPeriod.MORNING, 25, 30),
-                        slot(2, MissionPeriod.AFTERNOON, 33, 38),
-                        slot(3, MissionPeriod.MORNING, 49, 54),
-                        slot(3, MissionPeriod.AFTERNOON, 55, 58)),
                 List.of());
     }
 
-    private CreateRoomMissionSlotCommand slot(int dayNumber, MissionPeriod period,
-                                               int opensOffset, int closesOffset) {
-        return new CreateRoomMissionSlotCommand(dayNumber, period,
-                STARTS_AT.plusHours(opensOffset), STARTS_AT.plusHours(closesOffset));
-    }
 
     private long roomCount() {
         return entityManager.createQuery("select count(r) from RoomEntity r", Long.class)
                 .getSingleResult();
     }
 
-    private long roomMissionSlotCount() {
-        return entityManager.createQuery("select count(s) from RoomMissionSlotEntity s", Long.class)
-                .getSingleResult();
-    }
 }

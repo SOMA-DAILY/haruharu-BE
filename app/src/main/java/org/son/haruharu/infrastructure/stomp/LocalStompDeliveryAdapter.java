@@ -15,9 +15,16 @@ import org.springframework.stereotype.Component;
 public class LocalStompDeliveryAdapter implements StompDeliveryPort {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final ChatSubscriptionCloser closer;
 
-    public LocalStompDeliveryAdapter(SimpMessagingTemplate messagingTemplate) {
+    public LocalStompDeliveryAdapter(SimpMessagingTemplate messagingTemplate, ChatSubscriptionCloser closer) {
         this.messagingTemplate = messagingTemplate;
+        this.closer = closer;
+    }
+
+    @Override
+    public void closeRoom(Long chatRoomId, Object payload) {
+        closer.close(chatRoomId, payload);
     }
 
     @Override

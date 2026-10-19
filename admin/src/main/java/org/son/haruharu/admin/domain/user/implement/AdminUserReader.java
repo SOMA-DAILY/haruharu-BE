@@ -2,7 +2,7 @@ package org.son.haruharu.admin.domain.user.implement;
 
 import org.son.haruharu.admin.domain.user.storage.AdminUserQueryRepository;
 import org.son.haruharu.admin.domain.user.storage.exception.AdminUserNotFoundException;
-import org.son.haruharu.domain.coin.implement.CoinWallet;
+import org.son.haruharu.domain.ticket.implement.TicketWallet;
 import org.son.haruharu.domain.payment.implement.IapPurchase;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.user.implement.User;
@@ -38,7 +38,7 @@ public class AdminUserReader {
         return adminUserQueryRepository.findProfile(userId).orElse(null);
     }
 
-    public CoinWallet walletOf(Long userId) {
+    public TicketWallet walletOf(Long userId) {
         return adminUserQueryRepository.findWallet(userId).orElse(null);
     }
 

@@ -8,6 +8,7 @@ import org.son.haruharu.domain.notification.implement.NotificationSettingReader;
 import org.son.haruharu.domain.notification.implement.NotificationType;
 import org.son.haruharu.infrastructure.fcm.PushMessage;
 import org.son.haruharu.infrastructure.fcm.PushPort;
+import org.son.haruharu.infrastructure.fcm.PushStyle;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -23,6 +24,8 @@ import java.util.Map;
  * 야간(QuietHoursProperties, 기본 00~08시 KST)에는 푸시만 건너뛰고 알림함 저장은 유지한다(#429).
  * 단 NotificationType.quietHoursExempt 타입(유저 간 실시간 상호작용)은 야간에도 푸시를 보낸다(#446).
  * 시각은 주입 Clock(ClockConfig, Asia/Seoul) 기준이다.
+ * 묶음 알림(#505)은 수신자마다 문구·표시 방식이 달라 알림함 저장(saveInbox)과 푸시(push)를 나눠 호출한다.
+ * data 에 pushLevel(ALERT/QUIET)·groupKey 를 실어 앱이 포그라운드 표시를 같은 기준으로 고르게 한다.
  */
 @Slf4j
 @Service
@@ -60,7 +63,24 @@ public class PushSendService {
         String title = format(type.title(), bodyArgs);
         String body = format(type.body(), bodyArgs);
         saveToInbox(userIds, type, title, body, data);
-        dispatchPush(userIds, type, title, body, data);
+        dispatchPush(userIds, type, title, body, data, PushStyle.NORMAL);
+    }
+
+    /** 알림함에는 타입 기본 문구로 저장한다(묶음 푸시와 무관하게 메시지마다 한 줄). */
+    public void saveInbox(List<Long> userIds, NotificationType type, Map<String, String> data, Object... bodyArgs) {
+        if (userIds.isEmpty()) {
+            return;
+        }
+        saveToInbox(userIds, type, format(type.title(), bodyArgs), format(type.body(), bodyArgs), data);
+    }
+
+    /** 알림함 저장 없이 푸시만 보낸다. 수신 설정·야간 차단은 sendToUsers 와 같다. */
+    public void push(List<Long> userIds, NotificationType type, Map<String, String> data,
+                     String title, String body, PushStyle style) {
+        if (userIds.isEmpty()) {
+            return;
+        }
+        dispatchPush(userIds, type, title, body, data, style);
     }
 
     private void saveToInbox(List<Long> userIds, NotificationType type,
@@ -76,7 +96,7 @@ public class PushSendService {
     }
 
     private void dispatchPush(List<Long> userIds, NotificationType type,
-                              String title, String body, Map<String, String> data) {
+                              String title, String body, Map<String, String> data, PushStyle style) {
         if (!type.quietHoursExempt() && quietHours.isQuiet(LocalTime.now(clock))) {
             log.info("야간 푸시 차단: type={} users={}", type, userIds.size());
             return;
@@ -94,7 +114,11 @@ public class PushSendService {
             }
             Map<String, String> payload = new HashMap<>(data);
             payload.put("type", type.name());
-            List<String> invalidTokens = pushPort.send(new PushMessage(tokens, title, body, payload));
+            payload.put("pushLevel", style.quiet() ? "QUIET" : "ALERT");
+            if (style.groupKey() != null) {
+                payload.put("groupKey", style.groupKey());
+            }
+            List<String> invalidTokens = pushPort.send(new PushMessage(tokens, title, body, payload, style));
             if (!invalidTokens.isEmpty()) {
                 deviceTokenWriter.deleteAllByTokens(invalidTokens);
             }

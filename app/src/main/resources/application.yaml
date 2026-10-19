@@ -87,7 +87,7 @@ haruharu:
       start: ${NOTIFICATION_QUIET_HOURS_START:00:00}
       end: ${NOTIFICATION_QUIET_HOURS_END:08:00}
     # 슬롯 시작 푸시 배치 런처(#440). enabled=false 면 스케줄 launch 만 끈다(Job 빈은 남음).
-    # cron: 미션 배정(매분 0초)·outcome(매분 30초)과 같은 초에 두지 말 것 — JobRepository SERIALIZABLE 충돌로 한쪽이 실행되지 못한다.
+    # cron: 다른 배치와 같은 초에 두지 말 것 — JobRepository SERIALIZABLE 충돌로 한쪽이 실행되지 못한다.
     slot-start:
       enabled: ${SLOT_START_NOTIFICATION_ENABLED:true}
       cron: ${SLOT_START_NOTIFICATION_CRON:15 0 * * * *}
@@ -95,30 +95,15 @@ haruharu:
     reconcile:
       enabled: ${ROOM_RECONCILE_ENABLED:true}
       cron: ${ROOM_RECONCILE_CRON:45 */5 * * * *}
-  mission:
-    assignment:
-      enabled: ${MISSION_ASSIGNMENT_ENABLED:true}
-      lead-minutes: ${MISSION_ASSIGNMENT_LEAD_MINUTES:60}
-      batch-size: ${MISSION_ASSIGNMENT_BATCH_SIZE:100}
-      cron: ${MISSION_ASSIGNMENT_CRON:0 * * * * *}
-      # 활성 배정 정책. RANDOM_V1 은 Rule V1 효과 비교용 대조군으로 남겨둔다.
-      policy: ${MISSION_ASSIGNMENT_POLICY:RULE_V1}
-    # settle-minutes: 시간창 종료 후 집계까지 두는 여유. 활동 이벤트가 AFTER_COMMIT이라 지연 도착분을 놓치지 않는다.
-    # cron: assignment(매분 0초)와 같은 초에 두지 말 것. Spring Batch JobRepository 는 SERIALIZABLE 로
-    #       메타데이터를 쓰므로 두 잡이 동시에 launch 하면 직렬화 충돌로 한쪽이 아예 실행되지 못한다.
-    outcome:
-      enabled: ${MISSION_OUTCOME_ENABLED:true}
-      settle-minutes: ${MISSION_OUTCOME_SETTLE_MINUTES:5}
-      batch-size: ${MISSION_OUTCOME_BATCH_SIZE:100}
-      cron: ${MISSION_OUTCOME_CRON:30 * * * * *}
-  # 첫 가입 1회 보너스 구름(#232). 정책값은 코드 @DefaultValue가 아닌 이 yaml 리터럴로 관리.
-  coin:
-    signup-bonus: 20
-    enabled: false  # 코인 경제 비활성(#309 피벗). 가입 보너스·코인 API off. 되살릴 때만 true
+  # 티켓·결제(#492). 티켓 사용처가 붙기 전까지 기본 OFF 로 둔다.
+  ticket:
+    enabled: false  # 티켓 잔액·내역 API off
   payment:
-    enabled: false  # 결제(IAP) 비활성(#309 피벗). webhook·상품 API off. 되살릴 때만 true
+    enabled: false  # 결제(IAP) webhook·상품 API off
   # 채팅 P0(#455). 플래그는 기본 OFF 로 배포하고 앱 배포 뒤 켠다(지금 앱은 새 푸시 타입과 운영 말풍선을 모른다).
   chat:
+    # 각 app 인스턴스의 실제 구독을 확인한다. 방 상태 Batch 런처 토글과 독립적이다(#502).
+    subscription-reconcile-delay-ms: ${CHAT_SUBSCRIPTION_RECONCILE_DELAY_MS:10000}
     fanout:
       # STOMP 브로드캐스트를 Redis Pub/Sub 로 모든 인스턴스에 퍼뜨린다(#453). 앱이 2대 이상이면 true 필수.
       # false(기본)면 인스턴스 로컬 simpleBroker 로만 전달 — 단일 인스턴스·로컬·테스트는 Redis 없이 동작.
@@ -128,7 +113,7 @@ haruharu:
     admin-message:
       # 방 편성 발송 잡 — 운영 글, ADMIN_MESSAGE / PROFILE_REVEAL 푸시
       enabled: ${CHAT_ADMIN_MESSAGE_ENABLED:false}
-      # cron: 미션 배정(0초)·슬롯 알림(15초)·outcome(30초)과 같은 초에 두지 말 것
+      # cron: 슬롯 알림(15초)·방 상태 갱신(45초)과 같은 초에 두지 말 것
       cron: ${CHAT_ADMIN_MESSAGE_CRON:20 * * * * *}
       batch-size: ${CHAT_ADMIN_MESSAGE_BATCH_SIZE:1000}
       # run_at·방 시작·행 수정 중 늦은 시각에서 이만큼 지나면 FAILED(EXPIRED)
@@ -138,8 +123,6 @@ haruharu:
     reply-push:
       # 답장 받은 사람에게 CHAT 대신 CHAT_REPLY
       enabled: ${CHAT_REPLY_PUSH_ENABLED:false}
-    # 운영 글 발신자(닉네임 '하루'). scripts/sql/455-chat-p0-base-verify.sql 로 확인한 id
-    system-user-id: ${CHAT_SYSTEM_USER_ID:}
 
 oauth:
   providers:

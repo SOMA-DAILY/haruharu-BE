@@ -14,9 +14,6 @@ import org.son.haruharu.domain.room.business.MemberProfileService;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.son.haruharu.domain.mission.business.RoomMissionService;
-import org.son.haruharu.domain.mission.business.MissionMemberStateService;
-import org.son.haruharu.domain.mission.business.dto.RoomMissionResponse;
 import org.son.haruharu.domain.room.business.RoomFeedService;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomListService;
@@ -57,16 +54,12 @@ public class RoomController {
     private final FinalSelectionService finalSelectionService;
     private final MatchResultService matchResultService;
     private final RoomFeedService roomFeedService;
-    private final RoomMissionService roomMissionService;
-    private final MissionMemberStateService missionMemberStateService;
 
     public RoomController(RoomService roomService, RoomListService roomListService, RoomInviteService roomInviteService,
                           RoomTodayService roomTodayService,
                           RoomMembersService roomMembersService, MemberProfileService memberProfileService,
                           FinalSelectionService finalSelectionService,
-                          MatchResultService matchResultService, RoomFeedService roomFeedService,
-                          RoomMissionService roomMissionService,
-                          MissionMemberStateService missionMemberStateService) {
+                          MatchResultService matchResultService, RoomFeedService roomFeedService) {
         this.roomService = roomService;
         this.roomListService = roomListService;
         this.roomInviteService = roomInviteService;
@@ -76,8 +69,6 @@ public class RoomController {
         this.finalSelectionService = finalSelectionService;
         this.matchResultService = matchResultService;
         this.roomFeedService = roomFeedService;
-        this.roomMissionService = roomMissionService;
-        this.missionMemberStateService = missionMemberStateService;
     }
 
     @Operation(summary = "참여 중인 소개팅방 목록 조회",
@@ -225,27 +216,4 @@ public class RoomController {
                 ? roomFeedService.getFeed(roomId, userId)
                 : roomFeedService.getFeedBefore(roomId, userId, before, size));
     }
-
-    @Operation(summary = "현재 열린 미션 카드 조회",
-            description = "지금 열려 있는(opens_at ≤ now < closes_at) 방 미션 카드 목록을 sequence 오름차순으로 반환한다. "
-                    + "미션은 방 시작 시 자동 배정되며, 아직 열리지 않았거나 마감된 미션은 제외된다. 영상 업로드와 독립 카드다. "
-                    + "참여자가 아니면 403(ROOM_403_NOT_MEMBER).")
-    @GetMapping("/{roomId}/missions")
-    public ApiResponse<List<RoomMissionResponse>> getMissions(
-            @Parameter(description = "소개팅방 id", example = "1") @PathVariable Long roomId,
-            Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
-        return ApiResponse.ok(roomMissionService.getOpenMissions(roomId, userId));
-    }
-
-    @Operation(summary = "미션 카드 노출 기록", description = "열린 미션 대상 멤버의 최초·최근 노출 시각을 멱등 기록한다.")
-    @PostMapping("/{roomId}/missions/{roomMissionId}/impression")
-    public ApiResponse<Void> impressMission(
-            @PathVariable Long roomId,
-            @PathVariable Long roomMissionId,
-            Authentication authentication) {
-        missionMemberStateService.impress(roomId, roomMissionId, (Long) authentication.getPrincipal());
-        return ApiResponse.ok(null);
-    }
-
 }

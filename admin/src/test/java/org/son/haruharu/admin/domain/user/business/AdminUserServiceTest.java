@@ -13,7 +13,7 @@ import org.son.haruharu.admin.domain.user.implement.AdminUserReader;
 import org.son.haruharu.admin.domain.user.implement.UserParticipation;
 import org.son.haruharu.admin.domain.user.implement.UserWithProfile;
 import org.son.haruharu.admin.domain.user.storage.exception.AdminUserNotFoundException;
-import org.son.haruharu.domain.coin.implement.CoinWallet;
+import org.son.haruharu.domain.ticket.implement.TicketWallet;
 import org.son.haruharu.domain.payment.implement.IapPurchase;
 import org.son.haruharu.domain.payment.implement.IapStore;
 import org.son.haruharu.domain.profile.implement.UserProfile;
@@ -70,13 +70,13 @@ class AdminUserServiceTest {
     }
 
     @Test
-    @DisplayName("유저 상세는 프로필·코인잔액·결제이력·참여이력을 조합해 반환한다")
+    @DisplayName("유저 상세는 프로필·티켓잔액·결제이력·참여이력을 조합해 반환한다")
     void getUser_assemblesDetail() {
         given(adminUserReader.getById(901L)).willReturn(user(901L, UserStatus.ACTIVE));
         given(adminUserReader.profileOf(901L)).willReturn(profile(901L, "여울"));
-        given(adminUserReader.walletOf(901L)).willReturn(new CoinWallet(1L, 901L, 100L, 50L, joined));
+        given(adminUserReader.walletOf(901L)).willReturn(new TicketWallet(1L, 901L, 3L, joined));
         given(adminUserReader.purchasesOf(901L)).willReturn(List.of(
-                IapPurchase.owned(901L, 1L, "coin_100", "tx1", IapStore.APP_STORE, 100, joined)));
+                IapPurchase.owned(901L, 1L, "ticket_1", "tx1", IapStore.APP_STORE, 100, joined)));
         given(adminUserReader.participationsOf(901L)).willReturn(List.of(
                 new UserParticipation(new Room(5L, RoomStatus.ENDED, LocalDate.of(2026, 6, 24), 3, null, null), joined)));
 
@@ -84,16 +84,15 @@ class AdminUserServiceTest {
 
         assertThat(result.userId()).isEqualTo(901L);
         assertThat(result.profile().nickname()).isEqualTo("여울");
-        assertThat(result.coin().paid()).isEqualTo(100L);
-        assertThat(result.coin().total()).isEqualTo(150L);
+        assertThat(result.ticket().balance()).isEqualTo(3L);
         assertThat(result.payments()).hasSize(1);
-        assertThat(result.payments().get(0).storeProductId()).isEqualTo("coin_100");
+        assertThat(result.payments().get(0).storeProductId()).isEqualTo("ticket_1");
         assertThat(result.participations()).hasSize(1);
         assertThat(result.participations().get(0).roomId()).isEqualTo(5L);
     }
 
     @Test
-    @DisplayName("코인 지갑·프로필이 없으면 잔액 0·프로필 null로 반환한다")
+    @DisplayName("티켓 지갑·프로필이 없으면 잔액 0·프로필 null로 반환한다")
     void getUser_whenNoWalletOrProfile_returnsZeroAndNull() {
         given(adminUserReader.getById(901L)).willReturn(user(901L, UserStatus.ONBOARDING));
         given(adminUserReader.profileOf(901L)).willReturn(null);
@@ -104,7 +103,7 @@ class AdminUserServiceTest {
         AdminUserDetailResponse result = service.getUser(901L);
 
         assertThat(result.profile()).isNull();
-        assertThat(result.coin().total()).isZero();
+        assertThat(result.ticket().balance()).isZero();
         assertThat(result.payments()).isEmpty();
     }
 

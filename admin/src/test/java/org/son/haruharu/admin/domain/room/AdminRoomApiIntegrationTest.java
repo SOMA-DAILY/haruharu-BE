@@ -4,8 +4,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.storage.UserProfileEntity;
 import org.son.haruharu.domain.room.implement.Room;
@@ -21,7 +19,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.annotation.Propagation;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -130,38 +127,44 @@ class AdminRoomApiIntegrationTest {
                   "result_at": "%s",
                   "ends_at": "%s",
                   "total_days": 3,
-                  "max_uses": 6,
-                  "mission_enabled": true,
-                  "mission_slots": %s
+                  "max_uses": 6
                 }
                 """.formatted(startsAt, startsAt.plusHours(60), startsAt.plusHours(63),
-                startsAt.plusHours(64), startsAt.plusHours(72), missionSlots(startsAt));
+                startsAt.plusHours(64), startsAt.plusHours(72));
     }
 
-    /** 미션 꺼짐 요청. mission_slots 는 생략하거나(null) 빈 배열로 보낸다. */
-    private static String missionDisabledBody(LocalDateTime startsAt, boolean omitSlots) {
-        return createRoomBody(startsAt).replace(
-                "\"mission_enabled\": true,\n  \"mission_slots\": " + missionSlots(startsAt).stripTrailing(),
-                omitSlots ? "\"mission_enabled\": false" : "\"mission_enabled\": false,\n  \"mission_slots\": []");
+    @Test
+    @DisplayName("폐기된 미션 카탈로그 API는 인증된 SUPER에게도 404를 반환한다")
+    void givenSuperAdmin_whenAccessRetiredMissions_thenNotFound() throws Exception {
+        var superAuth = new UsernamePasswordAuthenticationToken(1L, null,
+                List.of(new SimpleGrantedAuthority("ROLE_SUPER")));
+        mockMvc.perform(get("/api/v1/admin/missions").with(authentication(superAuth)))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/v1/admin/missions").with(authentication(superAuth))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isNotFound());
     }
 
-    private static String missionSlots(LocalDateTime startsAt) {
-        return """
-                [
-                  {"day_number":1,"period":"MORNING","opens_at":"%s","closes_at":"%s"},
-                  {"day_number":1,"period":"AFTERNOON","opens_at":"%s","closes_at":"%s"},
-                  {"day_number":2,"period":"MORNING","opens_at":"%s","closes_at":"%s"},
-                  {"day_number":2,"period":"AFTERNOON","opens_at":"%s","closes_at":"%s"},
-                  {"day_number":3,"period":"MORNING","opens_at":"%s","closes_at":"%s"},
-                  {"day_number":3,"period":"AFTERNOON","opens_at":"%s","closes_at":"%s"}
-                ]
-                """.formatted(
-                startsAt.plusHours(1), startsAt.plusHours(6),
-                startsAt.plusHours(9), startsAt.plusHours(14),
-                startsAt.plusHours(25), startsAt.plusHours(30),
-                startsAt.plusHours(33), startsAt.plusHours(38),
-                startsAt.plusHours(49), startsAt.plusHours(54),
-                startsAt.plusHours(55), startsAt.plusHours(58));
+    @Test
+    @DisplayName("자동 미션 입력 없이 방과 초대코드를 생성할 수 있다")
+    void givenNoMissionFields_whenCreateRoom_thenCreatesRoomAndInvite() throws Exception {
+        String body = """
+                {
+                  "starts_at": "2030-01-01T19:00:00",
+                  "final_selection_opens_at": "2030-01-03T18:00:00",
+                  "final_selection_closes_at": "2030-01-03T21:00:00",
+                  "result_at": "2030-01-03T22:00:00",
+                  "ends_at": "2030-01-04T19:00:00",
+                  "total_days": 3,
+                  "max_uses": 6
+                }
+                """;
+        mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON).content(body)
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.room_id").isNumber())
+                .andExpect(jsonPath("$.data.code").isString());
     }
 
     @Test
@@ -178,90 +181,7 @@ class AdminRoomApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         Long roomId = com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
-        // 새 방은 mission_slots 를 보내도 자동 미션 슬롯을 만들지 않는다(#474).
-        assertThat(slotCountOf(roomId)).isZero();
-        assertThat(missionSettingRowsOf(roomId)).isZero();
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    @DisplayName("mission_enabled=false 로 슬롯을 생략하거나 빈 배열로 보내도 방이 생성된다(이전 클라이언트 호환)")
-    void givenMissionDisabled_whenCreateRoom_thenCreatesRoomWithoutSlots(boolean omitSlots) throws Exception {
-        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
-        String body = missionDisabledBody(startsAt, omitSlots);
-        assertThat(body).contains("\"mission_enabled\": false").doesNotContain("day_number");
-
-        String response = mockMvc.perform(post("/api/v1/admin/rooms")
-                        .contentType(MediaType.APPLICATION_JSON).content(body)
-                        .with(authentication(adminAuth())))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
-
-        Long roomId = com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
-        assertThat(slotCountOf(roomId)).isZero();
-        assertThat(missionSettingRowsOf(roomId)).isZero();
-    }
-
-    @Test
-    @DisplayName("mission_enabled 를 빠뜨려도 방이 생성된다(#474 이후 선택 항목)")
-    void givenMissingMissionEnabled_whenCreateRoom_thenCreated() throws Exception {
-        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
-        String body = createRoomBody(startsAt).replace("\"mission_enabled\": true,\n", "");
-        assertThat(body).doesNotContain("mission_enabled");
-
-        mockMvc.perform(post("/api/v1/admin/rooms")
-                        .contentType(MediaType.APPLICATION_JSON).content(body)
-                        .with(authentication(adminAuth())))
-                .andExpect(status().isCreated());
-    }
-
-    private long slotCountOf(Long roomId) {
-        return em.createQuery(
-                        "select count(s) from RoomMissionSlotEntity s where s.roomId = :roomId", Long.class)
-                .setParameter("roomId", roomId)
-                .getSingleResult();
-    }
-
-    /** 새 방은 자동 미션을 쓰지 않으므로(#474) 미션 설정 행도 만들지 않는다. 설정 행이 없으면 미션 꺼진 방으로 본다. */
-    private long missionSettingRowsOf(Long roomId) {
-        return em.createQuery(
-                        "select count(s) from RoomMissionSettingEntity s where s.roomId = :roomId", Long.class)
-                .setParameter("roomId", roomId)
-                .getSingleResult();
-    }
-
-    @Test
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    @DisplayName("새 방 생성은 구 자동 미션 슬롯 입력을 무시하고 채팅 제공을 준비한다")
-    void givenLegacyMissionSlots_whenCreateRoom_thenIgnoresSlots() throws Exception {
-        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
-        String duplicateSlots = missionSlots(startsAt)
-                .replaceFirst("\\\"AFTERNOON\\\"", "\\\"MORNING\\\"");
-        String body = createRoomBody(startsAt).replace(missionSlots(startsAt), duplicateSlots);
-        long roomCount = roomCount();
-        long slotCount = roomMissionSlotCount();
-        long inviteCount = roomInviteCount();
-
-        mockMvc.perform(post("/api/v1/admin/rooms")
-                        .contentType(MediaType.APPLICATION_JSON).content(body)
-                        .with(authentication(adminAuth())))
-                .andExpect(status().isCreated());
-
-        assertThat(roomCount()).isEqualTo(roomCount + 1);
-        assertThat(roomMissionSlotCount()).isEqualTo(slotCount);
-        assertThat(roomInviteCount()).isEqualTo(inviteCount + 1);
-    }
-
-    private long roomCount() {
-        return em.createQuery("select count(r) from RoomEntity r", Long.class).getSingleResult();
-    }
-
-    private long roomMissionSlotCount() {
-        return em.createQuery("select count(s) from RoomMissionSlotEntity s", Long.class).getSingleResult();
-    }
-
-    private long roomInviteCount() {
-        return em.createQuery("select count(i) from RoomInviteEntity i", Long.class).getSingleResult();
+        assertThat(em.find(RoomEntity.class, roomId).toDomain().status().name()).isEqualTo("PENDING");
     }
 
     @Test
@@ -276,12 +196,10 @@ class AdminRoomApiIntegrationTest {
                   "result_at": "%s",
                   "ends_at": "%s",
                   "total_days": 3,
-                  "max_uses": 6,
-                  "mission_enabled": true,
-                  "mission_slots": %s
+                  "max_uses": 6
                 }
                 """.formatted(startsAt, startsAt.minusHours(1), startsAt.plusDays(2),
-                startsAt.plusDays(2).plusHours(1), startsAt.plusDays(3), missionSlots(startsAt));
+                startsAt.plusDays(2).plusHours(1), startsAt.plusDays(3));
 
         mockMvc.perform(post("/api/v1/admin/rooms")
                         .contentType(MediaType.APPLICATION_JSON).content(body)

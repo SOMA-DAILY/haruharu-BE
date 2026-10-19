@@ -16,6 +16,7 @@ public record IapWebhookCommand(
         IapStore store,
         String storeTransactionId,
         LocalDateTime purchasedAt,
+        String environment,
         String rawPayload
 ) {
 }

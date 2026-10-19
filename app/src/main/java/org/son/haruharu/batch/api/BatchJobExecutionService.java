@@ -42,7 +42,7 @@ import org.springframework.stereotype.Service;
  * <b>실행은 동기다</b> — {@code JobOperator} 기본 TaskExecutor 가 요청 스레드에서 잡을 끝까지 돌린 뒤 응답한다. 따라서 응답의
  * status 는 이미 종료 상태(COMPLETED/FAILED)이고, 요청 스레드 점유 시간 = 잡 실행 시간이다. 알림 정리는 삭제 건수에 비례하는
  * 단일 DELETE 라 현재 규모에선 짧지만 상한이 있는 건 아니다. 이 API 는 등록된 모든 Job 을 이름으로 노출하므로, 오래 걸리는 잡
- * (미션 배정·향후 매칭 등)은 비동기 TaskExecutor 로 전환하기 전까지 여기로 트리거하지 않는다 — 전환해도 응답 계약(202 + 폴링)은
+ * 은 비동기 TaskExecutor 로 전환하기 전까지 여기로 트리거하지 않는다 — 전환해도 응답 계약(202 + 폴링)은
  * 그대로다.
  */
 @Service

@@ -1,6 +1,11 @@
 package org.son.haruharu.config;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.SmartInitializingSingleton;
+import org.springframework.messaging.simp.broker.SimpleBrokerMessageHandler;
+import org.son.haruharu.infrastructure.stomp.ChatSubscriptionRegistry;
+import org.son.haruharu.infrastructure.stomp.ChatOutboundChannelInterceptor;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -19,9 +24,11 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final StompAuthChannelInterceptor stompAuthChannelInterceptor;
+    private final ChatOutboundChannelInterceptor outbound;
 
-    public WebSocketConfig(StompAuthChannelInterceptor stompAuthChannelInterceptor) {
+    public WebSocketConfig(StompAuthChannelInterceptor stompAuthChannelInterceptor, ChatOutboundChannelInterceptor outbound) {
         this.stompAuthChannelInterceptor = stompAuthChannelInterceptor;
+        this.outbound = outbound;
     }
 
     @Override
@@ -40,5 +47,17 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(stompAuthChannelInterceptor);
+    }
+
+    @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
+        registration.interceptors(outbound);
+    }
+
+    @Bean
+    SmartInitializingSingleton installChatSubscriptionRegistry(SimpleBrokerMessageHandler broker,
+                                                               ChatSubscriptionRegistry registry) {
+        // SimpleBrokerRegistration에는 registry 설정 API가 없다. 세션 수락 전 실제 broker에 설치한다.
+        return () -> broker.setSubscriptionRegistry(registry);
     }
 }

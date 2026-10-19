@@ -7,6 +7,9 @@ public interface S3StoragePort {
 
     PresignedUpload createPresignedPutUrl(String key, String contentType);
 
+    /** 서버가 검증한 사진을 서버가 지은 키로 직접 올린다(클라이언트에 PUT 주소를 주지 않는 경로). */
+    void putImage(String key, String contentType, byte[] bytes);
+
     /**
      * 비공개 객체(영상 등)를 재생·조회할 수 있는 단기 presigned GET URL로 변환한다.
      * objectUrl이 null이면 null을, 우리 버킷(publicBaseUrl) 객체가 아니면 원본을 그대로 반환한다.
@@ -31,8 +34,6 @@ public interface S3StoragePort {
     ObjectMetadata head(String key);
 
     /** 객체별 삭제 실패는 무시한다(best-effort 정리). */
-    void putImage(String key, String contentType, byte[] bytes);
-
     void deleteObjects(Collection<String> keys);
 
     /** 객체별 삭제 실패가 하나라도 있으면 예외를 던진다. 정리 실패를 알아야 하는 호출부 전용. */

@@ -2,10 +2,8 @@ package org.son.haruharu.admin.domain.room.business.command;
 
 import java.time.LocalDateTime;
 import java.util.List;
-
-import org.son.haruharu.domain.mission.business.command.CreateRoomMissionSlotCommand;
+import org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand;
 import org.son.haruharu.domain.room.business.command.CreateRoomCommand;
-import org.son.haruharu.domain.roomschedule.business.command.ScheduleItemCommand;
 
 /**
  * 어드민 방 생성 입력(#318). 스케줄 시각 5개 + totalDays 는 core 방 생성으로,
@@ -21,20 +19,16 @@ public record CreateAdminRoomCommand(
         int totalDays,
         Integer maxUses,
         LocalDateTime inviteExpiresAt,
-        boolean missionEnabled,
-        List<CreateRoomMissionSlotCommand> missionSlots,
-        // 채팅 편성(#457). 비면 0줄.
-        List<ScheduleItemCommand> chatSchedule,
+        // 초기 미션(#486). 비면 0개.
+        List<RoomMissionCommand> missions,
         boolean isTest
 ) {
     public CreateAdminRoomCommand(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
                                   LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt,
                                   LocalDateTime endsAt, int totalDays, Integer maxUses,
-                                  LocalDateTime inviteExpiresAt, boolean missionEnabled,
-                                  List<CreateRoomMissionSlotCommand> missionSlots,
-                                  List<ScheduleItemCommand> chatSchedule) {
+                                  LocalDateTime inviteExpiresAt, List<RoomMissionCommand> missions) {
         this(startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt,
-                totalDays, maxUses, inviteExpiresAt, missionEnabled, missionSlots, chatSchedule, false);
+                totalDays, maxUses, inviteExpiresAt, missions, false);
     }
 
     public CreateRoomCommand toRoomCommand() {

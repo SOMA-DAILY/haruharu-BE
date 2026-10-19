@@ -44,11 +44,12 @@ public class ChatMessageReactionService {
     private final ChatParticipantPolicy participants;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+    private final ChatRoomLifecyclePolicy lifecycle;
 
     public ChatMessageReactionService(ChatRoomReader chatRoomReader, ChatRoomMemberReader chatRoomMemberReader,
                                       ChatMessageReader chatMessageReader, ChatMessageReactionReader reactionReader,
                                       ChatMessageReactionWriter reactionWriter, ChatParticipantPolicy participants,
-                                      ApplicationEventPublisher eventPublisher, Clock clock) {
+                                      ApplicationEventPublisher eventPublisher, Clock clock, ChatRoomLifecyclePolicy lifecycle) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomMemberReader = chatRoomMemberReader;
         this.chatMessageReader = chatMessageReader;
@@ -57,18 +58,21 @@ public class ChatMessageReactionService {
         this.participants = participants;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
+        this.lifecycle = lifecycle;
     }
 
     @Transactional
     public MessageReactionResponse toggle(Long userId, Long chatRoomId, Long messageId, ReactionType type) {
-        requireActiveMember(chatRoomId, userId);
+        chatRoomReader.lockForShare(chatRoomId);
+        ChatRoom room = requireActiveMember(chatRoomId, userId);
         ChatMessage message = requireMessage(chatRoomId, messageId);
-        if (message.senderId().equals(userId)) {
+        if (message.isOwnedBy(userId)) {
             throw new CannotReactToOwnMessageException();
         }
         if (message.isAdminDeleted()) {
             throw new CannotReactToDeletedMessageException();
         }
+        lifecycle.requireActive(room);
         String myReaction = apply(userId, messageId, type.name());
         List<ReactionCountItem> counts = ReactionCountItem.sorted(reactionReader.countByMessageIds(List.of(messageId)));
         eventPublisher.publishEvent(new ReactionUpdatedEvent(chatRoomId, messageId, counts));
@@ -105,7 +109,7 @@ public class ChatMessageReactionService {
     public List<MessageReactorResponse> getReactors(Long userId, Long chatRoomId, Long messageId) {
         ChatRoom chatRoom = requireActiveMember(chatRoomId, userId);
         ChatMessage message = requireMessage(chatRoomId, messageId);
-        if (!message.senderId().equals(userId)) {
+        if (!message.isOwnedBy(userId)) {
             throw new ChatReactionOwnerOnlyException();
         }
         return reactionReader.findByMessageId(messageId).stream()

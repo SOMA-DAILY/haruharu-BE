@@ -11,6 +11,8 @@ import org.son.haruharu.domain.chat.business.ChatDeliveryService;
 import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.notification.implement.NotificationType;
+import org.son.haruharu.domain.notification.business.PushBundleService.ChatDecision;
+import org.son.haruharu.infrastructure.fcm.PushStyle;
 
 import java.util.List;
 
@@ -27,13 +29,22 @@ class ChatMessageSentEventListenerTest {
     @Mock PushSendService pushSendService;
     @Mock BlockReader blockReader;
     @Mock ChatDeliveryService chatDeliveryService;
+    @Mock PushBundleService pushBundleService;
+
+    static final Map<String, String> DATA = Map.of("chatRoomId", "10");
+    static final PushStyle ALERT = PushStyle.alert("chat:10");
+    static final PushStyle QUIET = PushStyle.quiet("chat:10");
 
     ChatMessageSentEventListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService,
-                new ChatFeatureProperties(null, null, null));
+        listener = listener(new ChatFeatureProperties(null, null));
+    }
+
+    private ChatMessageSentEventListener listener(ChatFeatureProperties properties) {
+        return new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService, properties,
+                pushBundleService);
     }
 
     @Test
@@ -53,13 +64,15 @@ class ChatMessageSentEventListenerTest {
     void givenBlockerRecipient_whenHandle_thenExcludedFromPush() {
         allowDelivery();
         given(blockReader.getBlockerUserIds(1L)).willReturn(Set.of(2L));
+        given(pushBundleService.decideGroupChat(10L, 20L, List.of(3L))).willReturn(List.of(new ChatDecision(3L, true, 1)));
 
         listener.handle(new ChatMessageSentEvent(
                 20L, 10L, ChatRoomType.GROUP, 5L, 1L,
                 List.of(2L, 3L), "지예", LocalDateTime.of(2026, 9, 9, 15, 0)));
 
-        then(pushSendService).should().sendToUsers(
-                List.of(3L), NotificationType.CHAT, Map.of("chatRoomId", "10"), "지예");
+        then(pushSendService).should().saveInbox(List.of(3L), NotificationType.CHAT, DATA, "지예");
+        then(pushSendService).should().push(List.of(3L), NotificationType.CHAT, DATA,
+                "💬 새 메시지", "지예님이 메시지를 보냈어요", ALERT);
     }
 
     @Test
@@ -97,7 +110,7 @@ class ChatMessageSentEventListenerTest {
     }
 
     private static ChatFeatureProperties replyPush(boolean enabled) {
-        return new ChatFeatureProperties(null, new ChatFeatureProperties.ReplyPush(enabled), 999L);
+        return new ChatFeatureProperties(null, new ChatFeatureProperties.ReplyPush(enabled));
     }
 
     private static ChatMessageSentEvent replyEvent(Long replyToSender) {
@@ -108,42 +121,97 @@ class ChatMessageSentEventListenerTest {
     @Test
     @DisplayName("답장 푸시 ON: 원문 주인은 CHAT_REPLY 1건만, 나머지는 CHAT (같은 사람에게 두 번 안 감, #456)")
     void givenReplyPushOn_whenReply_thenOwnerGetsReplyOthersGetChat() {
-        listener = new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService, replyPush(true));
+        listener = listener(replyPush(true));
         allowDelivery();
+        stubAllAlert(List.of(2L, 4L));
 
         listener.handle(replyEvent(3L));
 
         then(pushSendService).should().sendToUsers(
-                List.of(3L), NotificationType.CHAT_REPLY, Map.of("chatRoomId", "10"), "윤슬");
-        then(pushSendService).should().sendToUsers(
-                List.of(2L, 4L), NotificationType.CHAT, Map.of("chatRoomId", "10"), "윤슬");
+                List.of(3L), NotificationType.CHAT_REPLY, DATA, "윤슬");
+        thenGroupChatSentTo(List.of(2L, 4L));
         then(pushSendService).shouldHaveNoMoreInteractions();
     }
 
     @Test
     @DisplayName("답장 푸시 OFF: 원문 주인 포함 전부 기존 CHAT (#456)")
     void givenReplyPushOff_whenReply_thenAllGetChat() {
-        listener = new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService, replyPush(false));
+        listener = listener(replyPush(false));
         allowDelivery();
+        stubAllAlert(List.of(2L, 3L, 4L));
 
         listener.handle(replyEvent(3L));
 
-        then(pushSendService).should().sendToUsers(
-                List.of(2L, 3L, 4L), NotificationType.CHAT, Map.of("chatRoomId", "10"), "윤슬");
+        thenGroupChatSentTo(List.of(2L, 3L, 4L));
         then(pushSendService).shouldHaveNoMoreInteractions();
     }
 
     @Test
     @DisplayName("원문 주인이 수신자가 아니면(운영 글 시스템 유저, 본인, 차단) 답장 푸시 없이 CHAT 만 (#456)")
     void givenReplyToNonRecipient_whenReply_thenNoReplyPush() {
-        listener = new ChatMessageSentEventListener(pushSendService, blockReader, chatDeliveryService, replyPush(true));
+        listener = listener(replyPush(true));
         allowDelivery();
+        stubAllAlert(List.of(2L, 3L, 4L));
 
         listener.handle(replyEvent(999L));
 
-        then(pushSendService).should().sendToUsers(
-                List.of(2L, 3L, 4L), NotificationType.CHAT, Map.of("chatRoomId", "10"), "윤슬");
+        thenGroupChatSentTo(List.of(2L, 3L, 4L));
         then(pushSendService).shouldHaveNoMoreInteractions();
+    }
+
+    @Test
+    @DisplayName("단체 채팅: 울릴 사람은 보통으로, 묶일 사람은 같은 칸에 안 읽은 수를 담아 조용히 보낸다(#505)")
+    void givenMixedDecisions_whenGroupChat_thenAlertsAndQuietReplacesByRoom() {
+        allowDelivery();
+        given(pushBundleService.decideGroupChat(10L, 20L, List.of(2L, 3L, 4L))).willReturn(List.of(
+                new ChatDecision(2L, true, 1), new ChatDecision(3L, false, 7), new ChatDecision(4L, false, 7)));
+
+        listener.handle(new ChatMessageSentEvent(20L, 10L, ChatRoomType.GROUP, 5L, 1L,
+                List.of(2L, 3L, 4L), "윤슬", LocalDateTime.of(2026, 10, 14, 20, 0)));
+
+        then(pushSendService).should().saveInbox(List.of(2L, 3L, 4L), NotificationType.CHAT, DATA, "윤슬");
+        then(pushSendService).should().push(List.of(2L), NotificationType.CHAT, DATA,
+                "💬 새 메시지", "윤슬님이 메시지를 보냈어요", ALERT);
+        then(pushSendService).should().push(List.of(3L, 4L), NotificationType.CHAT, DATA,
+                "💬 새 메시지 7개", "윤슬님이 메시지를 보냈어요", QUIET);
+        then(pushSendService).shouldHaveNoMoreInteractions();
+    }
+
+    @Test
+    @DisplayName("단체 채팅 묶음 판단이 실패하면 모두에게 보통 알림으로 보낸다(#505)")
+    void givenBundleFailure_whenGroupChat_thenAlertsEveryone() {
+        allowDelivery();
+        given(pushBundleService.decideGroupChat(10L, 20L, List.of(2L, 3L))).willThrow(new IllegalStateException("db"));
+
+        listener.handle(new ChatMessageSentEvent(20L, 10L, ChatRoomType.GROUP, 5L, 1L,
+                List.of(2L, 3L), "윤슬", LocalDateTime.of(2026, 10, 14, 20, 0)));
+
+        then(pushSendService).should().saveInbox(List.of(2L, 3L), NotificationType.CHAT, DATA, "윤슬");
+        then(pushSendService).should().push(List.of(2L, 3L), NotificationType.CHAT, DATA,
+                "💬 새 메시지", "윤슬님이 메시지를 보냈어요", ALERT);
+    }
+
+    @Test
+    @DisplayName("1:1 채팅은 묶지 않고 지금처럼 보낸다(#505)")
+    void givenDirectChat_whenHandle_thenNoBundling() {
+        allowDelivery();
+
+        listener.handle(new ChatMessageSentEvent(20L, 10L, ChatRoomType.DIRECT, null, 1L,
+                List.of(2L), "윤슬", LocalDateTime.of(2026, 10, 14, 20, 0)));
+
+        then(pushSendService).should().sendToUsers(List.of(2L), NotificationType.CHAT, DATA, "윤슬");
+        then(pushBundleService).shouldHaveNoInteractions();
+    }
+
+    private void stubAllAlert(List<Long> userIds) {
+        given(pushBundleService.decideGroupChat(10L, 20L, userIds))
+                .willReturn(userIds.stream().map(id -> new ChatDecision(id, true, 1)).toList());
+    }
+
+    private void thenGroupChatSentTo(List<Long> userIds) {
+        then(pushSendService).should().saveInbox(userIds, NotificationType.CHAT, DATA, "윤슬");
+        then(pushSendService).should().push(userIds, NotificationType.CHAT, DATA,
+                "💬 새 메시지", "윤슬님이 메시지를 보냈어요", ALERT);
     }
 
     private void allowDelivery() {

@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.chat.storage;
 
+import java.time.LocalDateTime;
+
 import lombok.RequiredArgsConstructor;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomRepository;
@@ -26,6 +28,11 @@ public class ChatRoomRepositoryImpl implements ChatRoomRepository {
     @Override
     public Optional<Long> lockByIdIncludingDeleted(Long id) {
         return chatRoomJpaRepository.lockByIdIncludingDeleted(id);
+    }
+
+    @Override
+    public Optional<Long> lockByIdForShare(Long id) {
+        return chatRoomJpaRepository.findByIdForShare(id).map(entity -> entity.toDomain().id());
     }
 
     @Override
@@ -56,5 +63,15 @@ public class ChatRoomRepositoryImpl implements ChatRoomRepository {
     @Override
     public Optional<ChatRoom> findByRoomId(Long roomId) {
         return chatRoomJpaRepository.findByRoomId(roomId).map(ChatRoomEntity::toDomain);
+    }
+
+    @Override
+    public Optional<Long> findIdByRoomId(Long roomId) {
+        return chatRoomJpaRepository.findIdByRoomId(roomId);
+    }
+
+    @Override
+    public boolean closeGroupByRoomId(Long roomId, LocalDateTime closeAt) {
+        return chatRoomJpaRepository.closeGroupByRoomId(roomId, closeAt) > 0;
     }
 }

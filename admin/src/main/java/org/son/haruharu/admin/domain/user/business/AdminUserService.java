@@ -5,7 +5,7 @@ import org.son.haruharu.admin.domain.user.business.dto.AdminUserDetailResponse;
 import org.son.haruharu.admin.domain.user.business.dto.AdminUserSummary;
 import org.son.haruharu.admin.domain.user.implement.AdminUserReader;
 import org.son.haruharu.admin.domain.user.implement.UserWithProfile;
-import org.son.haruharu.domain.coin.implement.CoinWallet;
+import org.son.haruharu.domain.ticket.implement.TicketWallet;
 import org.son.haruharu.domain.payment.implement.IapPurchase;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.user.implement.User;
@@ -42,11 +42,11 @@ public class AdminUserService {
     public AdminUserDetailResponse getUser(Long userId) {
         User user = adminUserReader.getById(userId);
         UserProfile profile = adminUserReader.profileOf(userId);
-        CoinWallet wallet = adminUserReader.walletOf(userId);
+        TicketWallet wallet = adminUserReader.walletOf(userId);
 
         return new AdminUserDetailResponse(
                 user.id(), user.status(), user.createdAt(),
-                toProfileInfo(profile), toCoinInfo(wallet),
+                toProfileInfo(profile), toTicketInfo(wallet),
                 adminUserReader.purchasesOf(userId).stream().map(this::toPaymentInfo).toList(),
                 adminUserReader.participationsOf(userId).stream()
                         .map(p -> new AdminUserDetailResponse.ParticipationInfo(
@@ -72,17 +72,13 @@ public class AdminUserService {
                 profile.nickname(), profile.location(), profile.mbti(), profile.affiliation(), profile.height());
     }
 
-    private AdminUserDetailResponse.CoinInfo toCoinInfo(CoinWallet wallet) {
-        if (wallet == null) {
-            return new AdminUserDetailResponse.CoinInfo(0, 0, 0);
-        }
-        return new AdminUserDetailResponse.CoinInfo(
-                wallet.paidBalance(), wallet.rewardBalance(), wallet.totalBalance());
+    private AdminUserDetailResponse.TicketInfo toTicketInfo(TicketWallet wallet) {
+        return new AdminUserDetailResponse.TicketInfo(wallet == null ? 0 : wallet.balance());
     }
 
     private AdminUserDetailResponse.PaymentInfo toPaymentInfo(IapPurchase purchase) {
         return new AdminUserDetailResponse.PaymentInfo(
-                purchase.id(), purchase.storeProductId(), purchase.coinAmount(), purchase.store(),
+                purchase.id(), purchase.storeProductId(), purchase.ticketAmount(), purchase.store(),
                 purchase.status(), purchase.purchasedAt(), purchase.refundedAt());
     }
 }

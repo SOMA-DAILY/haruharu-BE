@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class VideoCaptionApiIntegrationTest {
     private static final Long OWNER = 9100001L;
-    private static final LocalDateTime SLOT = LocalDateTime.of(2026, 10, 4, 14, 0);
+    private static final LocalDateTime SLOT = LocalDateTime.of(2026, 10, 10, 14, 0);
 
     private final MockMvc mockMvc;
     private final VideoPostJpaRepository posts;
@@ -59,9 +59,9 @@ class VideoCaptionApiIntegrationTest {
     @BeforeEach
     void setUp() {
         Long memberId = members.save(RoomMemberEntity.from(
-                RoomMember.of(475L, OWNER, "MALE", null, SLOT))).toDomain().id();
+                RoomMember.of(498L, OWNER, "MALE", null, SLOT))).toDomain().id();
         original = posts.saveAndFlush(VideoPostEntity.from(VideoPost.create(
-                memberId, SLOT, 475L, "원래 캡션", "https://example.test/video.mp4",
+                memberId, SLOT, null, "원래 캡션", "https://example.test/video.mp4",
                 "https://example.test/thumb.jpg", SLOT.plusMinutes(1)))).toDomain();
     }
 

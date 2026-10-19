@@ -5,7 +5,7 @@
 ## 제품과 구조
 
 - 현재 MVP: 운영진이 구성한 참가자가 초대코드로 3일 방에 입장 → 영상·그룹채팅·미션 → 최종 선택 → 상호 성사 시 1:1 채팅.
-- 자동 매칭·코인/IAP·필수 PASS는 폐기 또는 보류다. 활성화는 해당 이슈의 명시적 범위일 때만 한다. 세부 맥락은 [product.md](docs/engineering/product.md).
+- 자동 매칭·필수 PASS는 폐기 또는 보류다. 결제 재화는 티켓 한 종류이며(#492) 기본 OFF다. 활성화는 해당 이슈의 명시적 범위일 때만 한다. 세부 맥락은 [product.md](docs/engineering/product.md).
 - Java 21, Spring Boot, Gradle 멀티모듈. `app/admin → core`; app과 admin 간 의존은 금지한다.
 - 유저 Controller·Request는 app, 공유 business·implement·storage는 core, 어드민 전용 도메인은 admin에 둔다. 도메인 Repository 포트로 DIP를 유지한다.
 

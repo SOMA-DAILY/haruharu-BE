@@ -5,7 +5,8 @@ import java.util.List;
 
 public record AdminRoomActivityResponse(
         String type, long id, LocalDateTime occurredAt, Integer day, Participant actor, Participant target,
-        String content, Video video, String reactionType, String answer, LocalDateTime answeredAt) {
+        String content, Video video, String reactionType, String answer, LocalDateTime answeredAt,
+        String replyType) {
     public record Participant(long userId, String name) {}
     public record Video(long id, String videoUrl, String thumbnailUrl, String caption, boolean hidden, Long missionId, LocalDateTime slotStart) {}
     public record Counts(long videos, long chats, long reactions, long questions) {}

@@ -8,6 +8,14 @@ public record PushMessage(
         List<String> tokens,
         String title,
         String body,
-        Map<String, String> data
+        Map<String, String> data,
+        PushStyle style
 ) {
+    public PushMessage {
+        style = style == null ? PushStyle.NORMAL : style;
+    }
+
+    public PushMessage(List<String> tokens, String title, String body, Map<String, String> data) {
+        this(tokens, title, body, data, PushStyle.NORMAL);
+    }
 }

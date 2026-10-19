@@ -31,6 +31,11 @@ public class ChatRoomReader {
         chatRoomRepository.lockByIdIncludingDeleted(id).orElseThrow(ChatRoomNotFoundException::new);
     }
 
+    /** 반응끼리는 동시 처리하되 종료 UPDATE와는 충돌하는 공유 잠금. 상태 조회 전에 호출한다. */
+    public void lockForShare(Long id) {
+        chatRoomRepository.lockByIdForShare(id).orElseThrow(ChatRoomNotFoundException::new);
+    }
+
     public boolean lockIfPresent(Long id) {
         return chatRoomRepository.lockByIdIncludingDeleted(id).isPresent();
     }
@@ -53,6 +58,11 @@ public class ChatRoomReader {
     public ChatRoom getByRoomId(Long roomId) {
         return chatRoomRepository.findByRoomId(roomId)
                 .orElseThrow(ChatRoomNotFoundException::new);
+    }
+
+    /** 잠금 전에 엔티티를 1차 캐시에 올리지 않도록 ID만 조회한다. */
+    public Long getIdByRoomId(Long roomId) {
+        return chatRoomRepository.findIdByRoomId(roomId).orElseThrow(ChatRoomNotFoundException::new);
     }
 
     /** 매칭 결과로 자동 생성된 채팅방 id(없으면 empty). 매칭 결과 화면의 "채팅 시작하기" 직행용. */

@@ -90,13 +90,13 @@ class RoomStatusTransitionServiceTest {
         assertThat(captor.getValue().status()).isEqualTo(RoomStatus.SELECTING);
         // startedAt 이 비면 MatchResultService 가 "미시작"으로 보고 결과 발표를 숨긴다.
         assertThat(captor.getValue().startedAt()).isEqualTo(STARTS_AT);
-        // ACTIVE 를 건너뛰어도 "방 시작"은 한 번 발행돼야 GROUP 채팅·미션이 생성된다.
+        // ACTIVE 를 건너뛰어도 "방 시작"은 한 번 발행돼야 GROUP 채팅이 생성된다.
         then(eventPublisher).should().publishEvent(new RoomStartedEvent(1L));
         then(eventPublisher).should().publishEvent(new FinalSelectionOpenedEvent(1L));
     }
 
     @Test
-    @DisplayName("PENDING → ENDED 직행에도 startedAt 앵커·ROOM_STARTED가 발행된다(채팅·미션 누락 방지)")
+    @DisplayName("PENDING → ENDED 직행에도 startedAt 앵커·ROOM_STARTED가 발행된다(채팅 누락 방지)")
     void givenPendingSkippingToEnded_whenTransition_thenStartedAtAnchoredAndRoomStarted() {
         transition(roomWith(RoomStatus.PENDING), ENDS_AT.plusHours(1));
 
@@ -108,12 +108,12 @@ class RoomStatusTransitionServiceTest {
     }
 
     @Test
-    @DisplayName("ENDED 전이에는 알림이 없다")
-    void givenPastEndsAt_whenTransition_thenEndedWithoutEvent() {
+    @DisplayName("ENDED 전이에는 GROUP 실시간 종료 이벤트를 발행한다")
+    void givenPastEndsAt_whenTransition_thenPublishesRoomEnded() {
         boolean changed = transition(roomWith(RoomStatus.SELECTING), ENDS_AT.plusMinutes(1));
 
         assertThat(changed).isTrue();
-        then(eventPublisher).should(never()).publishEvent(any());
+        then(eventPublisher).should().publishEvent(new org.son.haruharu.domain.room.business.event.RoomEndedEvent(1L));
     }
 
     @Test

@@ -51,6 +51,7 @@ public class VideoReplyService {
     private final S3StoragePort storage;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final ChatRoomLifecyclePolicy lifecycle;
 
     /**
      * 방의 단체 채팅에 영상 답장을 보내고, 영상 작성자에게만 알림을 보낸다
@@ -69,8 +70,9 @@ public class VideoReplyService {
         VideoReply reply = VideoReply.of(videoId, content, requestId);
 
         // 방에 속한 단체 채팅방을 찾고 잠근다
-        ChatRoom chat = rooms.getByRoomId(roomId);
-        rooms.lockForUpdate(chat.id());
+        Long chatId = rooms.getIdByRoomId(roomId);
+        rooms.lockForUpdate(chatId);
+        ChatRoom chat = rooms.getById(chatId);
         requireMember(chat.id(), senderId);
 
         // 재시도 확인
@@ -81,7 +83,8 @@ public class VideoReplyService {
             return ChatMessageBroadcast.from(previous.get());
         }
 
-        // 방 상태 검증 : 진행 중이거나 최종 선택 중일때만 답장 가능
+        lifecycle.requireActive(chat);
+        // 영상 답장 고유 규칙: 진행 중이거나 최종 선택 중일 때만 가능하다.
         Room room = sourceRooms.findById(roomId).orElseThrow(RoomNotFoundException::new);
         VideoReply.validateRoomOpen(room.statusAt(LocalDateTime.now(clock)));
 

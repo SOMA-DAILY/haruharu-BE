@@ -10,37 +10,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ChatDeliveryService {
     private final ChatRoomReader chatRoomReader;
-    private final org.son.haruharu.domain.chat.implement.ChatMessageReader messageReader;
+    private final ChatRoomLifecyclePolicy lifecycle;
 
-    private final org.son.haruharu.domain.chat.implement.ChatMissionPresenter missionPresenter;
-
-    public ChatDeliveryService(ChatRoomReader chatRoomReader, org.son.haruharu.domain.chat.implement.ChatMessageReader messageReader, org.son.haruharu.domain.chat.implement.ChatMissionPresenter missionPresenter) {
+    public ChatDeliveryService(ChatRoomReader chatRoomReader, ChatRoomLifecyclePolicy lifecycle) {
         this.chatRoomReader = chatRoomReader;
-        this.messageReader = messageReader;
-        this.missionPresenter = missionPresenter;
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void deliverMessage(org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast original,
-            java.util.function.Consumer<org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast> delivery) {
-        if (chatRoomReader.lockIfPresent(original.chatRoomId()) && chatRoomReader.findById(original.chatRoomId()).isPresent()) {
-            messageReader.findById(original.messageId()).ifPresent(message ->
-                    delivery.accept(org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast.from(message, missionPresenter.present(message.visibleMission()))));
-        }
+        this.lifecycle = lifecycle;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deliverIfActive(Long chatRoomId, Runnable delivery) {
-        if (chatRoomReader.lockIfPresent(chatRoomId) && chatRoomReader.findById(chatRoomId).isPresent()) {
+        if (chatRoomReader.lockIfPresent(chatRoomId) && isActive(chatRoomId)) {
             delivery.run();
         }
     }
 
     /**
-     * 방이 아직 활성인지(물리·소프트 삭제 아님). 다른 인스턴스가 발행한 메시지를 로컬 전달하기 직전 재확인용(#453) —
+     * 방이 아직 활성인지(삭제되지 않았고 GROUP의 close_at이 비어 있는지). 다른 인스턴스의 메시지를 로컬 전달하기 직전 재확인용(#453) —
      * 발행 인스턴스의 {@link #deliverIfActive} 이후 방이 닫혔으면 버린다. 잠금 없이 조회만 한다.
      */
     public boolean isActive(Long chatRoomId) {
-        return chatRoomReader.findById(chatRoomId).isPresent();
+        return chatRoomReader.findById(chatRoomId).filter(lifecycle::isActive).isPresent();
     }
 }

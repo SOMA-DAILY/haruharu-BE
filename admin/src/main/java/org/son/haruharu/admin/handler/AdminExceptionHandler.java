@@ -16,6 +16,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.util.DisconnectedClientHelper;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
@@ -71,6 +72,14 @@ public class AdminExceptionHandler {
                 .body(ApiResponse.error(new ApiErrorDetail("INVALID_INPUT", message)));
     }
 
+    /** multipart 상한(미션 사진 10MB) 초과. 기본 처리로 두면 500 으로 떨어진다. */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUploadTooLarge(
+            org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
+                .body(ApiResponse.error(new ApiErrorDetail("UPLOAD_TOO_LARGE", "10MB 이하 파일을 선택해 주세요.")));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest()
@@ -91,12 +100,13 @@ public class AdminExceptionHandler {
                 .body(ApiResponse.error(new ApiErrorDetail("DATA_INTEGRITY_VIOLATION", "중복되거나 제약을 위반한 데이터입니다.")));
     }
 
-    /** 유저 서버와 동일 방침(#259) — 클라 연결 종료는 서버 버그가 아니므로 ERROR·스택으로 남기지 않는다. */
-    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
-    public ResponseEntity<ApiResponse<Void>> handleUploadTooLarge(org.springframework.web.multipart.MaxUploadSizeExceededException exception) {
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(ApiResponse.error(new ApiErrorDetail("MISSION_IMAGE_TOO_LARGE", "10MB 이하의 사진을 선택해 주세요.")));
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(new ApiErrorDetail("NOT_FOUND", "요청한 경로를 찾을 수 없습니다.")));
     }
 
+    /** 유저 서버와 동일 방침(#259) — 클라 연결 종료는 서버 버그가 아니므로 ERROR·스택으로 남기지 않는다. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
         if (DisconnectedClientHelper.isClientDisconnectedException(e)) {

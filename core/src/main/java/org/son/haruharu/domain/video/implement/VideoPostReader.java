@@ -18,9 +18,12 @@ public class VideoPostReader {
                 .orElseThrow(VideoPostNotFoundException::new);
     }
 
+    /** 삭제·숨김 영상은 수정 대상이 아니므로 없는 것으로 취급한다. */
     public VideoPost getEditableById(Long id) {
         VideoPost post = getById(id);
-        if (post.deletedAt() != null || post.isHidden()) throw new VideoPostNotFoundException();
+        if (post.deletedAt() != null || post.isHidden()) {
+            throw new VideoPostNotFoundException();
+        }
         return post;
     }
 

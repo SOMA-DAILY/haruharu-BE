@@ -36,7 +36,7 @@ public class AdminUserController {
         return ApiResponse.ok(adminUserService.getUsers(status, keyword, page, size));
     }
 
-    @Operation(summary = "유저 상세", description = "프로필·코인 잔액·결제이력·참여이력. 없는 id는 404.")
+    @Operation(summary = "유저 상세", description = "프로필·티켓 잔액·결제이력·참여이력. 없는 id는 404.")
     @GetMapping("/users/{userId}")
     public ApiResponse<AdminUserDetailResponse> user(
             @Parameter(description = "유저 id", example = "901") @PathVariable Long userId) {

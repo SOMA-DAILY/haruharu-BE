@@ -34,6 +34,7 @@ import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class ChatMessageReactionServiceTest {
+    @Mock ChatRoomLifecyclePolicy lifecycle;
 
     private static final Long CHAT = 10L;
     private static final Long MSG = 100L;
@@ -55,7 +56,7 @@ class ChatMessageReactionServiceTest {
     @BeforeEach
     void setUp() {
         service = new ChatMessageReactionService(chatRoomReader, chatRoomMemberReader, chatMessageReader,
-                reactionReader, reactionWriter, participants, eventPublisher, clock);
+                reactionReader, reactionWriter, participants, eventPublisher, clock, lifecycle);
     }
 
     private void memberAndMessage(Long userId) {
@@ -112,6 +113,18 @@ class ChatMessageReactionServiceTest {
     }
 
     @Test
+    @DisplayName("시스템 안내에는 반응할 수 있지만 일반 유저는 반응자 명단을 조회할 수 없다")
+    void givenSystemMessage_whenReactAndGetReactors_thenReactAllowedButOwnerOnly() {
+        memberAndMessage(ME);
+        given(chatMessageReader.findById(MSG)).willReturn(Optional.of(ChatMessage.system(CHAT, "공지", 5L)));
+        given(reactionWriter.insertIfAbsent(any())).willReturn(true);
+
+        assertThat(service.toggle(ME, CHAT, MSG, ReactionType.LIKE).myReaction()).isEqualTo("LIKE");
+        assertThatThrownBy(() -> service.getReactors(ME, CHAT, MSG)).isInstanceOf(ChatReactionOwnerOnlyException.class);
+        then(reactionReader).should(never()).findByMessageId(any());
+    }
+
+    @Test
     @DisplayName("내 메시지에는 반응할 수 없다(403)")
     void givenOwnMessage_whenToggle_thenForbidden() {
         memberAndMessage(OWNER);
@@ -143,9 +156,9 @@ class ChatMessageReactionServiceTest {
         given(chatRoomReader.getById(CHAT)).willReturn(group);
         given(chatRoomMemberReader.findActiveMembership(CHAT, ME))
                 .willReturn(Optional.of(new ChatRoomMember(1L, CHAT, ME, LocalDateTime.now(clock), null, null)));
-        given(chatMessageReader.findById(MSG)).willReturn(Optional.of(new ChatMessage(MSG, CHAT, 900L, "공지",
-                LocalDateTime.now(clock), null, null, null, null, null, ChatMessageType.ADMIN, 5L,
-                LocalDateTime.now(clock), null)));
+        given(chatMessageReader.findById(MSG)).willReturn(Optional.of(new ChatMessage(MSG, CHAT, null, "공지",
+                LocalDateTime.now(clock), null, null, null, null, null, ChatMessageType.TEXT, 5L,
+                LocalDateTime.now(clock), null, ChatSenderType.SYSTEM)));
 
         assertThatThrownBy(() -> service.toggle(ME, CHAT, MSG, ReactionType.LIKE))
                 .isInstanceOf(org.son.haruharu.domain.chat.business.exception.CannotReactToDeletedMessageException.class);

@@ -31,7 +31,7 @@ public class AdminPurchaseController {
     public ApiResponse<PageResponse<AdminPurchaseSummary>> list(
             @Parameter(description = "상태 필터", example = "OWNED") @RequestParam(required = false) IapPurchaseStatus status,
             @Parameter(description = "구매 유저 id 필터", example = "42") @RequestParam(required = false) Long userId,
-            @Parameter(description = "스토어 상품 id 필터", example = "groom_60") @RequestParam(required = false) String storeProductId,
+            @Parameter(description = "스토어 상품 id 필터", example = "ticket_1") @RequestParam(required = false) String storeProductId,
             @Parameter(description = "0-based 페이지", example = "0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기(최대 100)", example = "20") @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.ok(adminPurchaseService.getPurchases(status, userId, storeProductId, page, size));

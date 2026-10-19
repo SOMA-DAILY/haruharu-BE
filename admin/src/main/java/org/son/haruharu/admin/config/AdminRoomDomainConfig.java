@@ -3,11 +3,26 @@ package org.son.haruharu.admin.config;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.storage.ChatMessageRepositoryImpl;
-import org.son.haruharu.domain.mission.business.RoomMissionSlotService;
-import org.son.haruharu.domain.mission.implement.RoomMissionSettingWriter;
-import org.son.haruharu.domain.mission.implement.RoomMissionSlotWriter;
-import org.son.haruharu.domain.mission.storage.RoomMissionSettingRepositoryImpl;
-import org.son.haruharu.domain.mission.storage.RoomMissionSlotRepositoryImpl;
+import org.son.haruharu.domain.chat.business.GroupChatCloseListener;
+import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
+import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
+import org.son.haruharu.domain.chat.storage.ChatRoomRepositoryImpl;
+import org.son.haruharu.domain.chat.storage.ChatRoomMemberRepositoryImpl;
+import org.son.haruharu.domain.mission.chat.business.MissionAnnouncementService;
+import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementReader;
+import org.son.haruharu.domain.mission.chat.implement.MissionAnnouncementWriter;
+import org.son.haruharu.domain.mission.chat.storage.MissionAnnouncementRepositoryImpl;
+import org.son.haruharu.domain.mission.common.business.MissionImageService;
+import org.son.haruharu.domain.mission.common.business.RoomMissionService;
+import org.son.haruharu.domain.mission.common.implement.MissionImageStore;
+import org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry;
+import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
+import org.son.haruharu.domain.mission.common.implement.RoomMissionWriter;
+import org.son.haruharu.domain.mission.common.storage.RoomMissionRepositoryImpl;
+import org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionHandler;
+import org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionHandler;
+import org.son.haruharu.domain.mission.types.recording.implement.RecordingMissionHandler;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.profile.storage.UserProfileRepositoryImpl;
 import org.son.haruharu.domain.room.business.RoomInviteService;
@@ -22,10 +37,6 @@ import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.son.haruharu.domain.room.storage.RoomInviteRepositoryImpl;
 import org.son.haruharu.domain.room.storage.RoomMemberRepositoryImpl;
 import org.son.haruharu.domain.room.storage.RoomRepositoryImpl;
-import org.son.haruharu.domain.roomschedule.business.RoomScheduleService;
-import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemReader;
-import org.son.haruharu.domain.roomschedule.implement.RoomScheduleItemWriter;
-import org.son.haruharu.domain.roomschedule.storage.RoomScheduleItemRepositoryImpl;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
@@ -41,17 +52,13 @@ import org.springframework.context.annotation.Import;
  */
 @Configuration
 @Import({
-        // business — 방·미션 슬롯·초대코드 생성 유스케이스에 필요한 서비스만 가져온다.
-        org.son.haruharu.config.S3Config.class,
-        org.son.haruharu.infrastructure.s3.S3StorageAdapter.class,
-        org.son.haruharu.domain.mission.business.MissionImageService.class,
-        org.son.haruharu.domain.mission.implement.MissionImageReader.class,
-        org.son.haruharu.domain.mission.implement.MissionImageUploader.class,
-        org.son.haruharu.domain.mission.implement.MissionImageWriter.class,
-        org.son.haruharu.domain.mission.storage.MissionImageRepositoryImpl.class,
+        // business — 방·초대코드 생성 유스케이스에 필요한 서비스만 가져온다.
         RoomService.class,
         RoomInviteService.class,
-        RoomMissionSlotService.class,
+        // #502: admin 취소도 원본 방과 같은 트랜잭션에서 chat_rooms.close_at을 기록한다.
+        GroupChatCloseListener.class,
+        ChatRoomReader.class, ChatRoomWriter.class, ChatRoomMemberReader.class,
+        ChatRoomRepositoryImpl.class, ChatRoomMemberRepositoryImpl.class,
         // implement — 위 서비스가 쓰는 협력자만.
         RoomReader.class,
         RoomWriter.class,
@@ -60,8 +67,6 @@ import org.springframework.context.annotation.Import;
         RoomInviteReader.class,
         RoomInviteWriter.class,
         InviteCodeGenerator.class,
-        RoomMissionSlotWriter.class,
-        RoomMissionSettingWriter.class,
         // #392: RoomInviteService.join 이 프로필 gender 를 방 멤버로 스냅샷하는 데 필요.
         UserProfileReader.class,
         UserProfileRepositoryImpl.class,
@@ -69,21 +74,18 @@ import org.springframework.context.annotation.Import;
         RoomRepositoryImpl.class,
         RoomMemberRepositoryImpl.class,
         RoomInviteRepositoryImpl.class,
-        RoomMissionSlotRepositoryImpl.class,
-        RoomMissionSettingRepositoryImpl.class,
-        // #457: 방 편성 저장(발송은 app 서버 잡) + 보낸 운영 글 삭제(chat_messages.admin_deleted_at).
-        RoomScheduleService.class,
-        RoomScheduleItemReader.class,
-        RoomScheduleItemWriter.class,
-        RoomScheduleItemRepositoryImpl.class,
+        // #486: 미션·안내 계획 저장(발송은 app 서버 잡) + 보낸 운영 글 삭제(chat_messages.admin_deleted_at).
+        RoomMissionService.class, MissionAnnouncementService.class,
+        // 미션 사진 업로드·확인. S3 어댑터는 AdminActivityMediaConfig 가 등록한다.
+        MissionImageService.class, MissionImageStore.class,
+        RoomMissionReader.class, RoomMissionWriter.class,
+        MissionAnnouncementReader.class, MissionAnnouncementWriter.class,
+        MissionTypeRegistry.class, AnnouncementMissionHandler.class, ProfileRevealMissionHandler.class,
+        RecordingMissionHandler.class,
+        RoomMissionRepositoryImpl.class, MissionAnnouncementRepositoryImpl.class,
         ChatMessageReader.class,
         ChatMessageWriter.class,
-        ChatMessageRepositoryImpl.class,
-        // #474: 운영자 미션 즉시·예약 발송 저장(발송은 app 서버 잡).
-        org.son.haruharu.domain.mission.business.OperatorMissionService.class,
-        org.son.haruharu.domain.mission.implement.OperatorMissionReader.class,
-        org.son.haruharu.domain.mission.implement.OperatorMissionWriter.class,
-        org.son.haruharu.domain.mission.storage.OperatorMissionRepositoryImpl.class
+        ChatMessageRepositoryImpl.class
 })
 public class AdminRoomDomainConfig {
 }

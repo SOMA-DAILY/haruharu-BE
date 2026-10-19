@@ -6,20 +6,20 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.son.haruharu.common.ApiResponse;
 import org.son.haruharu.domain.video.application.dto.ReactionRequest;
+import org.son.haruharu.domain.video.application.dto.VideoCaptionUpdateRequest;
 import org.son.haruharu.domain.video.application.dto.VideoPresignRequest;
 import org.son.haruharu.domain.video.application.dto.VideoUploadRequest;
-import org.son.haruharu.domain.video.application.dto.VideoCaptionUpdateRequest;
 import org.son.haruharu.domain.video.business.VideoReactionService;
 import org.son.haruharu.domain.video.business.VideoService;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
-import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
 import org.son.haruharu.domain.video.business.dto.VideoCaptionResponse;
+import org.son.haruharu.domain.video.business.dto.VideoPostResponse;
 import org.son.haruharu.domain.video.business.dto.VideoUploadUrlResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -89,11 +89,13 @@ public class VideoController {
     }
 
     @Operation(summary = "본인 영상 캡션 수정",
-            description = "캡션만 최대 100자로 수정한다. 빈 문구는 캡션을 제거한다. "
-                    + "영상·썸네일·슬롯·게시 시각·반응은 유지한다. 본인이 아니면 403, 삭제·숨김 영상이면 404.")
+            description = "본인이 올린 영상의 캡션만 수정한다(최대 100자). 빈 문구는 캡션을 제거한다. "
+                    + "영상·썸네일·슬롯·게시 시각·반응은 유지한다. "
+                    + "에러: 존재하지 않거나 삭제·숨김 처리된 영상이면 VIDEO_404_NOT_FOUND(404), "
+                    + "본인 영상이 아니면 VIDEO_403_NOT_OWNER(403).")
     @PatchMapping("/video-posts/{videoPostId}/caption")
     public ApiResponse<VideoCaptionResponse> updateCaption(
-            @PathVariable Long videoPostId,
+            @Parameter(description = "캡션을 수정할 영상 id", example = "10") @PathVariable Long videoPostId,
             @Valid @RequestBody VideoCaptionUpdateRequest request,
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();

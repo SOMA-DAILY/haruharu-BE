@@ -61,10 +61,37 @@ class AdminRoomCancelPostgresConcurrencyIntegrationTest {
     @Autowired RoomJpaRepository roomJpaRepository;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired JdbcTemplate jdbcTemplate;
+    @Autowired org.son.haruharu.domain.chat.storage.ChatRoomJpaRepository chatRooms;
 
     @BeforeEach
     void clean() {
         jdbcTemplate.execute("TRUNCATE TABLE rooms RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute("TRUNCATE TABLE chat_rooms RESTART IDENTITY CASCADE");
+    }
+
+    @Test
+    void adminCancellationClosesChatInTheSameTransaction() {
+        var now = LocalDateTime.now();
+        Long roomId = roomWriter.save(Room.createScheduled(now.minusHours(1), now.plusHours(1),
+                now.plusHours(2), now.plusHours(3), now.plusDays(1), 3)
+                .materialized(RoomStatus.ACTIVE)).id();
+        Long chatId = chatRooms.save(org.son.haruharu.domain.chat.storage.ChatRoomEntity.from(
+                org.son.haruharu.domain.chat.implement.ChatRoom.createGroup(roomId))).toDomain().id();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            adminRoomCommandService.cancelRoom(roomId);
+            assertThat(chatRooms.findById(chatId).orElseThrow().toDomain().closeAt()).isNotNull();
+            status.setRollbackOnly();
+        });
+        assertThat(roomReader.findById(roomId).orElseThrow().status()).isEqualTo(RoomStatus.ACTIVE);
+        assertThat(chatRooms.findById(chatId).orElseThrow().toDomain().closeAt()).isNull();
+
+        adminRoomCommandService.cancelRoom(roomId);
+        assertThat(roomReader.findById(roomId).orElseThrow().status()).isEqualTo(RoomStatus.CANCELLED);
+        var closeAt = chatRooms.findById(chatId).orElseThrow().toDomain().closeAt();
+        assertThat(closeAt).isNotNull();
+        adminRoomCommandService.cancelRoom(roomId);
+        assertThat(chatRooms.findById(chatId).orElseThrow().toDomain().closeAt()).isEqualTo(closeAt);
     }
 
     @Test

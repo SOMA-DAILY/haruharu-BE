@@ -1,0 +1,30 @@
+name: haruharu-chat-perf
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: haruharu-chat-perf
+    labels:
+      org.haruharu.purpose: chat-perf-502
+    ports:
+      - "127.0.0.1:15432:5432"
+    environment:
+      POSTGRES_DB: haruharu_chat_perf
+      POSTGRES_USER: chat_perf
+      POSTGRES_PASSWORD: ${CHAT_PERF_DB_PASSWORD:?Run fixture.py init first}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - timezone=Asia/Seoul
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat_perf -d haruharu_chat_perf"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - data:/var/lib/postgresql/data
+
+volumes:
+  data:

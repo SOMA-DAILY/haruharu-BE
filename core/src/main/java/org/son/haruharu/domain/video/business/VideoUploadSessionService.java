@@ -2,7 +2,6 @@ package org.son.haruharu.domain.video.business;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,16 +36,11 @@ import org.son.haruharu.domain.video.implement.exception.VideoUploadUnavailableE
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 기기 변환 영상 업로드 세션(접수 → 파일별 presign → 게시 → 취소). 한 멤버의 세션 작업과 레거시 업로드는
- * 멤버 행 락으로 직렬화해 슬롯당 게시물 1개를 지킨다.
+ * 멤버 행 락으로 직렬화해 슬롯당 게시물 1개를 지킨다. 목록 조회만 락 없이 읽는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -65,16 +59,18 @@ public class VideoUploadSessionService {
     private final S3StoragePort storage;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
-    private final PlatformTransactionManager transactionManager;
 
-    /** 같은 jobId 재요청은 기존 세션을 그대로 돌려준다(캡션이 다르면 409). 슬롯은 접수 시점에 고정한다. */
+    /**
+     * 같은 jobId 재요청은 기존 세션을 그대로 돌려준다(캡션이 다르면 409). 슬롯은 접수 시점에 고정한다.
+     * 그 슬롯에 게시 전인 내 세션만 남아 있으면 취소하고 새 세션이 대체한다. job_id를 잃은 앱도 다시 올릴 수 있다.
+     */
     @Transactional
     public VideoUploadSessionResponse reserve(Long userId, Long roomId, UUID jobId, String caption) {
         RoomMember member = lockMember(roomId, userId);
         LocalDateTime now = LocalDateTime.now(clock);
         Optional<VideoUploadSession> previous = sessionReader.findById(jobId);
         if (previous.isPresent()) {
-            VideoUploadSession session = requireOwned(previous.orElseThrow(VideoUploadUnavailableException::new), userId, roomId);
+            VideoUploadSession session = requireOwned(previous.get(), userId, roomId);
             if (!Objects.equals(session.caption(), caption)) {
                 throw new VideoUploadUnavailableException();
             }
@@ -86,10 +82,18 @@ public class VideoUploadSessionService {
             throw new RoomNotActiveException();
         }
         LocalDateTime slotStart = SlotClock.currentSlotStart(room.startsAt(), now);
-        if (videoPostReader.hasActiveUpload(member.id(), slotStart)
-                || sessionReader.hasPending(member.id(), slotStart, now)) {
+        if (videoPostReader.hasActiveUpload(member.id(), slotStart)) {
             throw new DuplicateSlotUploadException();
         }
+        // 슬롯당 게시물 1개는 complete의 검사가 지킨다. 대체된 세션의 presign·complete는 취소로 거절된다.
+        sessionReader.findPending(member.id(), slotStart, now).forEach(stalled -> {
+            sessionWriter.save(stalled.cancelled());
+            log.atInfo()
+                    .addKeyValue("event", "VIDEO_UPLOAD_SESSION_REPLACED")
+                    .addKeyValue("uploadSessionId", stalled.id())
+                    .addKeyValue("replacedBy", jobId)
+                    .log("게시 전 업로드 세션을 새 접수로 대체");
+        });
         VideoUploadSession session = sessionWriter.insert(
                 VideoUploadSession.create(jobId, userId, roomId, member.id(), slotStart, now, caption));
         return VideoUploadSessionResponse.of(session, now);
@@ -98,6 +102,15 @@ public class VideoUploadSessionService {
     @Transactional
     public VideoUploadSessionResponse get(Long userId, Long roomId, UUID id) {
         return VideoUploadSessionResponse.of(loadOwned(userId, roomId, id), LocalDateTime.now(clock));
+    }
+
+    /** 이 방에서 내가 접수하고 아직 게시하지 않은 세션(슬롯 순). job_id를 잃은 앱이 남은 접수를 찾는 용도다. */
+    public List<VideoUploadSessionResponse> listPending(Long userId, Long roomId) {
+        RoomMember member = roomMemberReader.getByRoomIdAndUserId(roomId, userId);
+        LocalDateTime now = LocalDateTime.now(clock);
+        return sessionReader.findPendingByMember(member.id(), now).stream()
+                .map(session -> VideoUploadSessionResponse.of(session, now))
+                .toList();
     }
 
     /** 이미 검증을 통과한 파일이면 URL 없이 uploaded=true를 돌려준다. */
@@ -127,7 +140,6 @@ public class VideoUploadSessionService {
         if (videoPostReader.hasActiveUpload(session.memberId(), session.slotStart())) {
             throw new DuplicateSlotUploadException();
         }
-        deletePublishedAssetsOnRollback(session);
         VideoPost post = publisher.publish(session, now);
         eventPublisher.publishEvent(new VideoUploadedEvent(post.id(), roomId, session.memberId(), post.createdAt()));
         return toResponse(post);
@@ -165,41 +177,5 @@ public class VideoUploadSessionService {
         return VideoPostResponse.of(post,
                 storage.createPresignedGetUrl(post.videoUrl()),
                 storage.createPresignedGetUrl(post.thumbnailUrl()));
-    }
-
-    private void deletePublishedAssetsOnRollback(VideoUploadSession session) {
-        List<String> publishedKeys = Arrays.stream(VideoUploadVariant.values())
-                .map(session::publishedKey)
-                .toList();
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                // UNKNOWN이면 DB가 커밋됐을 수 있다. 보일 수도 있는 게시물의 파일은 지우지 않는다.
-                if (status != STATUS_ROLLED_BACK) {
-                    return;
-                }
-                try {
-                    TransactionTemplate cleanup = new TransactionTemplate(transactionManager);
-                    cleanup.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-                    cleanup.executeWithoutResult(ignored -> {
-                        // 재시도는 같은 멤버 락과 같은 게시 경로를 쓴다. 삭제가 끝날 때까지 락을 잡아
-                        // 정리 도중 재시도가 먼저 게시하지 못하게 한다.
-                        roomMemberReader.lockById(session.memberId());
-                        boolean publishedByRetry = sessionReader.findById(session.id())
-                                .map(VideoUploadSession::isCompleted)
-                                .orElse(false);
-                        if (!publishedByRetry) {
-                            storage.deleteObjectsOrThrow(publishedKeys);
-                        }
-                    });
-                } catch (RuntimeException failure) {
-                    log.atError()
-                            .setCause(failure)
-                            .addKeyValue("event", "VIDEO_UPLOAD_ROLLBACK_CLEANUP_FAILED")
-                            .addKeyValue("uploadSessionId", session.id())
-                            .log("업로드 트랜잭션 롤백 후 게시 경로 정리 실패");
-                }
-            }
-        });
     }
 }

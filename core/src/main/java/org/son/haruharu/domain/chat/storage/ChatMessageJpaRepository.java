@@ -23,11 +23,17 @@ public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageEntit
     Optional<ChatMessageEntity> findFirstByChatRoomIdOrderByIdDesc(Long chatRoomId);
 
     // 차단한 발신자 제외 미리보기(#408). excludeSenderIds가 비어 있으면 위 메서드를 쓴다(NOT IN 빈 목록 방지).
-    Optional<ChatMessageEntity> findFirstByChatRoomIdAndSenderIdNotInOrderByIdDesc(
-            Long chatRoomId, Collection<Long> excludeSenderIds);
+    @Query("select m from ChatMessageEntity m where m.chatRoomId = :chatRoomId "
+            + "and (m.senderId is null or m.senderId not in :excludeSenderIds) order by m.id desc")
+    List<ChatMessageEntity> findLastExcludingSenders(@Param("chatRoomId") Long chatRoomId,
+            @Param("excludeSenderIds") Collection<Long> excludeSenderIds, Pageable pageable);
 
-    long countByChatRoomIdAndIdGreaterThanAndSenderIdNotIn(
-            Long chatRoomId, Long lastReadMessageId, Collection<Long> excludeSenderIds);
+    @Query("select count(m) from ChatMessageEntity m where m.chatRoomId = :chatRoomId and m.id > :cursor "
+            + "and (m.senderId is null or m.senderId not in :excludeSenderIds)")
+    long countUnreadExcludingSenders(@Param("chatRoomId") Long chatRoomId, @Param("cursor") Long cursor,
+            @Param("excludeSenderIds") Collection<Long> excludeSenderIds);
+
+    long countByChatRoomIdAndIdGreaterThan(Long chatRoomId, Long cursor);
 
     @Modifying(clearAutomatically = true)
     @Query("update ChatMessageEntity m set m.adminDeletedAt = :now where m.id = :id and m.adminDeletedAt is null")

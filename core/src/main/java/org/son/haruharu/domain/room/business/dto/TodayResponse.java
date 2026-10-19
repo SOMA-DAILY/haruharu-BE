@@ -11,7 +11,7 @@ import org.son.haruharu.domain.room.implement.Room;
  * 원본 노출 창(slot_start 기준 현재 1시간)의 빈 비현재 슬롯은 제외한다.
  * 슬롯이 없는 상태(시작 전·종료 등)면 slots는 빈 목록.
  * JSON 직렬화는 전역 SNAKE_CASE 설정을 따른다.
- * MVP: 미션 비활성화로 미션 후보(missionCandidates)는 응답에서 제외.
+ * 자동 미션은 폐기되었으며, 영상 촬영 슬롯은 유지한다.
  *
  * 헤더 타이머는 '남은 시간'을 서버가 계산하지 않고, 다음 전환 절대시각(timerTargetAt)만 내려
  * 클라가 자체 시계로 카운트다운한다(홈의 applyDeadlineAt/confirmAt과 동일 철학).

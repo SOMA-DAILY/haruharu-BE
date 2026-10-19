@@ -82,14 +82,13 @@ class ChatServiceTest {
 
     @BeforeEach
     void setUp() {
-        var presenter=org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatMissionPresenter.class);
-        org.mockito.Mockito.lenient().when(presenter.prepare(org.mockito.ArgumentMatchers.anyList())).thenReturn(mission -> mission);
         chatService = new ChatService(chatRoomReader, chatRoomWriter, chatRoomMemberReader,
                 chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, userService,
                 roomMemberReader, roomReader, blockReader,
-                new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader, presenter),
+                new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader,
+                        org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatMissionLookup.class)),
                 new ChatParticipantPolicy(chatRoomReader, chatRoomMemberReader, roomMemberReader, profileService, userService, blockReader),
-                eventPublisher, clock, presenter);
+                eventPublisher, clock, new ChatRoomLifecyclePolicy());
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -114,6 +113,21 @@ class ChatServiceTest {
 
     private ChatRoom groupRoom(Long chatRoomId, Long roomId) {
         return new ChatRoom(chatRoomId, ChatRoomType.GROUP, roomId, null, LocalDateTime.now(clock));
+    }
+
+    @Test
+    @DisplayName("close_at이 있으면 GROUP 메시지를 저장하지 않는다")
+    void givenClosedGroup_whenSend_thenForbidden() {
+        var now = LocalDateTime.now(clock);
+        given(chatRoomReader.getById(ROOM)).willReturn(groupRoom(ROOM, 77L).close(now));
+        given(chatRoomMemberReader.findMembership(ROOM, ME))
+                .willReturn(Optional.of(membership(ROOM, ME, null)));
+
+
+        assertThatThrownBy(() -> chatService.sendMessage(ROOM, ME, "늦은 메시지"))
+                .isInstanceOf(org.son.haruharu.common.exception.ForbiddenException.class);
+        then(chatMessageWriter).shouldHaveNoInteractions();
+        then(eventPublisher).shouldHaveNoInteractions();
     }
 
     @Test
@@ -425,6 +439,7 @@ class ChatServiceTest {
                 List.of(2L), "민준", LocalDateTime.now(clock)));
         // GROUP은 가명을 쓰므로 실명 조회(getNickname)를 하지 않는다
         then(profileService).should(never()).getNickname(any());
+        then(roomReader).shouldHaveNoInteractions();
     }
 
     @Test
@@ -929,24 +944,6 @@ class ChatServiceTest {
         given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(membership(ROOM, ME, null)));
         given(chatRoomReader.findById(ROOM)).willReturn(Optional.empty());
         assertThat(chatService.getMyRooms(ME).chatRooms()).isEmpty();
-    }
-
-    @Test @DisplayName("참고 사진이 없는 메시지 또는 삭제 카드의 사진 조회는 404이다")
-    void givenMissingOrDeletedPhoto_whenGetImage_thenNotFound() {
-        given(chatRoomMemberReader.findMembership(ROOM,ME)).willReturn(Optional.of(membership(ROOM,ME,null)));
-        given(chatRoomReader.getById(ROOM)).willReturn(groupRoom(ROOM,99L));
-        given(chatMessageReader.findById(42L)).willReturn(Optional.empty());
-        assertThatThrownBy(() -> chatService.getMissionImage(ROOM,ME,42L)).isInstanceOf(org.son.haruharu.domain.chat.storage.exception.ChatMissionImageNotFoundException.class);
-        var card=new org.son.haruharu.domain.chat.implement.ChatMission(8L,99L,"DAY2_3","미션",1L,null);
-        given(chatMessageReader.findById(42L)).willReturn(Optional.of(new ChatMessage(42L,ROOM,7L,"내용",LocalDateTime.now(clock),null,null,null,null,null,
-                org.son.haruharu.domain.chat.implement.ChatMessageType.ADMIN,null,LocalDateTime.now(clock),null,card)));
-        assertThatThrownBy(() -> chatService.getMissionImage(ROOM,ME,42L)).isInstanceOf(org.son.haruharu.domain.chat.storage.exception.ChatMissionImageNotFoundException.class);
-    }
-    @Test @DisplayName("회원이 아니면 참고 사진 메시지를 읽기 전에 접근을 거부한다")
-    void givenNonMember_whenGetImage_thenForbiddenBeforeLookup() {
-        given(chatRoomMemberReader.findMembership(ROOM,ME)).willReturn(Optional.empty());
-        assertThatThrownBy(() -> chatService.getMissionImage(ROOM,ME,42L)).isInstanceOf(org.son.haruharu.domain.chat.business.exception.ChatNotMemberException.class);
-        then(chatMessageReader).shouldHaveNoInteractions();
     }
 
 }

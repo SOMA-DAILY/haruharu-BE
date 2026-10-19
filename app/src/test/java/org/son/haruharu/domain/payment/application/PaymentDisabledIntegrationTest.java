@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * 결제(IAP) 비활성(#309) 검증. haruharu.payment.enabled 기본 false라 IapWebhookController·IapProductController 빈 미등록.
- * webhook은 permitAll이라 인증 없이 접근해도 핸들러가 없어 404, 코인 상품 조회도 ACTIVE 유저에게 404.
+ * webhook은 permitAll이라 인증 없이 접근해도 핸들러가 없어 404, 티켓 상품 조회도 ACTIVE 유저에게 404.
  */
 @SpringBootTest(properties = "haruharu.payment.enabled=false")
 @AutoConfigureMockMvc
@@ -50,12 +50,12 @@ class PaymentDisabledIntegrationTest {
     }
 
     @Test
-    @DisplayName("결제 비활성 시 코인 상품 조회 엔드포인트가 없어 ACTIVE 유저도 404를 받는다")
+    @DisplayName("결제 비활성 시 티켓 상품 조회 엔드포인트가 없어 ACTIVE 유저도 404를 받는다")
     void givenPaymentDisabled_whenActiveUserCallsProducts_thenNotFound() throws Exception {
         Long userId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null))).toDomain().id();
         String token = jwtProvider.generateAccessToken(userId);
 
-        mockMvc.perform(get("/api/v1/coin/products")
+        mockMvc.perform(get("/api/v1/ticket/products")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }

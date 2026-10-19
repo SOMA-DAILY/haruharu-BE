@@ -57,17 +57,20 @@ class StompFanoutPayloadIntegrationTest {
         }).doesNotThrowAnyException();
     }
 
-    @Test
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
     @DisplayName("Redis 를 거친 payload 는 클라이언트에게 직접 보낸 것과 같은 snake_case JSON 으로 나간다")
-    void givenChatBroadcast_whenRelayedThroughFanout_thenSameJsonAsDirectSend() {
+    void givenChatBroadcast_whenRelayedThroughFanout_thenSameJsonAsDirectSend(boolean mission) {
         // given
-        // 중첩 객체(reply_to·reactions·mission)와 #456·#457·#474 필드까지 기본값이 아닌 값으로 채워 팬아웃 왕복을 확인한다
-        ChatMessageBroadcast broadcast = new ChatMessageBroadcast(1024L, 12L, 102L, "안녕",
+        // 중첩 객체(reply_to·reactions)와 #456·#457 필드까지 기본값이 아닌 값으로 채워 팬아웃 왕복을 확인한다
+        ChatMessageBroadcast broadcast = new ChatMessageBroadcast(1024L, 12L, null, "안녕",
                 LocalDateTime.of(2026, 9, 26, 21, 0, 5), 7L,
                 List.of(new ReactionCountItem("LAUGH", 3)), null,
-                ReplyToView.of(880L, "선우", "원문", true), "ADMIN", "하루", false,
-                new org.son.haruharu.domain.chat.implement.ChatMission(31L, 9L, "DAY2_3", "오늘의 미션", 5L,
-                        new org.son.haruharu.domain.mission.business.dto.MissionImageResponse(5L, "https://img.test/signed", 20, 30)));
+                ReplyToView.of(880L, "선우", "원문", true), mission ? "MISSION" : "TEXT", "하루", false, "SYSTEM",
+                mission ? new org.son.haruharu.domain.chat.implement.ChatMissionReference(10L, 101L, "START", "ANNOUNCEMENT",
+                        new org.son.haruharu.domain.chat.implement.ChatMissionImage(
+                                "mission-images/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b-1080x720.jpg",
+                                "https://bucket.example/signed?X-Amz-Signature=abc&X-Amz-Expires=3600", 1080, 720)) : null);
 
         // 발행 인스턴스 A: 실제 Boot 매퍼로 envelope 를 만든다(Redis 는 발행 문자열만 캡처)
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
@@ -94,7 +97,15 @@ class StompFanoutPayloadIntegrationTest {
         assertThat(viaFanout).isEqualTo(direct);
         assertThat(direct).contains("\"message_id\":1024").contains("\"video_post_id\":7")
                 .contains("\"reply_to\":{\"message_id\":880").contains("\"reactions\":[{\"type\":\"LAUGH\",\"count\":3}]")
-                .contains("\"message_type\":\"ADMIN\"").contains("\"sender_name\":\"하루\"");
+                .contains("\"message_type\":\"" + (mission ? "MISSION" : "TEXT") + "\"").contains("\"sender_name\":\"하루\"")
+                .contains("\"sender_type\":\"SYSTEM\"").contains("\"sender_id\":null");
+        if (mission) assertThat(direct).contains("\"mission_id\":10", "\"announcement_id\":101",
+                "\"announcement_type\":\"START\"", "\"interaction_type\":\"ANNOUNCEMENT\"",
+                "\"image\":{\"key\":\"mission-images/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b-1080x720.jpg\"",
+                "\"url\":\"https://bucket.example/signed?X-Amz-Signature=abc&X-Amz-Expires=3600\"",
+                "\"width\":1080", "\"height\":720")
+                .doesNotContain("my_response", "results");
+        else assertThat(direct).contains("\"mission\":null");
     }
 
     private StompFanoutRuntime runtime(String instanceId) {

@@ -89,6 +89,19 @@ class InternalBatchApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("폐기된 미션 배정·집계 잡은 내부 API로도 실행할 수 없다")
+    void givenRetiredMissionJobs_whenStart_then404WithoutExecution() throws Exception {
+        for (String job : java.util.List.of("missionAssignmentJob", "missionOutcomeJob")) {
+            String bucket = uniqueBucket();
+            mockMvc.perform(post("/internal/batch/jobs/{job}/executions", job)
+                            .header("X-Internal-Token", token)
+                            .contentType(MediaType.APPLICATION_JSON).content(body(bucket)))
+                    .andExpect(status().isNotFound());
+            assertThat(instanceCount(bucket)).isZero();
+        }
+    }
+
+    @Test
     @DisplayName("시나리오 1: 새 버킷으로 시작하면 202·STARTED 와 executionId 를 받고 BATCH_JOB_INSTANCE 행이 생긴다")
     void givenNewBucket_whenStart_then202AndInstancePersisted() throws Exception {
         String bucket = uniqueBucket();

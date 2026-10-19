@@ -32,7 +32,7 @@ class AdminRoomActivityServiceTest {
         var video = "https://test-only-activity-bucket.s3.ap-northeast-2.amazonaws.com/video.mp4";
         var thumbnail = "https://test-only-activity-bucket.s3.ap-northeast-2.amazonaws.com/thumbnail.jpg";
         given(repository.find(filter, 0, 24, false)).willReturn(List.of(new RoomActivity("VIDEO", 1L, now, 101L,
-                null, null, 1L, video, thumbnail, null, null, null, null, false, null, now)));
+                null, null, 1L, video, thumbnail, null, null, null, null, false, null, now, null)));
         given(repository.count(filter)).willReturn(1L);
         given(media.createPresignedGetUrl(video)).willReturn("https://signed.example.test/video");
         given(media.createPresignedImageGetUrl(thumbnail)).willReturn("https://signed.example.test/thumbnail");

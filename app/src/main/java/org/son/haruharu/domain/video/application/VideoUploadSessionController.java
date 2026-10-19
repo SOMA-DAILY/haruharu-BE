@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "영상 업로드 세션", description = "기기에서 변환한 몰아보기·피드 영상과 썸네일을 한 세션으로 접수·업로드·게시하는 API")
@@ -36,7 +37,8 @@ public class VideoUploadSessionController {
     @Operation(summary = "업로드 접수",
             description = "현재 슬롯으로 업로드 세션을 접수한다. 슬롯은 접수 시점에 고정되고 세션은 2시간 뒤 만료된다. "
                     + "같은 job_id 재요청은 기존 세션을 그대로 돌려준다. "
-                    + "에러: 진행 중이 아닌 방 VIDEO_ROOM_NOT_ACTIVE(409), 이미 올렸거나 대기 중인 세션이 있으면 "
+                    + "같은 슬롯에 게시 전인 본인 세션이 있으면 그 세션을 취소하고 새 세션을 접수한다. "
+                    + "에러: 진행 중이 아닌 방 VIDEO_ROOM_NOT_ACTIVE(409), 그 슬롯에 이미 게시물이 있으면 "
                     + "VIDEO_SLOT_ALREADY_UPLOADED(409), 같은 job_id에 다른 캡션이면 VIDEO_UPLOAD_UNAVAILABLE(409).")
     @PostMapping
     public ApiResponse<VideoUploadSessionResponse> reserve(
@@ -45,6 +47,18 @@ public class VideoUploadSessionController {
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(videoUploadSessionService.reserve(userId, roomId, request.jobId(), request.caption()));
+    }
+
+    @Operation(summary = "내 미완료 업로드 세션 목록",
+            description = "이 방에서 본인이 접수하고 아직 게시하지 않은(pending) 세션을 슬롯 순으로 돌려준다. "
+                    + "게시·취소·만료된 세션은 포함하지 않는다. job_id를 잃은 앱이 남은 접수를 찾아 게시를 마무리하는 용도다. "
+                    + "에러: 방 멤버가 아니면 ROOM_403_NOT_MEMBER(403).")
+    @GetMapping
+    public ApiResponse<List<VideoUploadSessionResponse>> listPending(
+            @Parameter(description = "방 id", example = "1") @PathVariable Long roomId,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.ok(videoUploadSessionService.listPending(userId, roomId));
     }
 
     @Operation(summary = "업로드 세션 조회",
@@ -69,7 +83,7 @@ public class VideoUploadSessionController {
             @Parameter(description = "방 id", example = "1") @PathVariable Long roomId,
             @Parameter(description = "업로드 세션 id(job_id)") @PathVariable UUID sessionId,
             @Parameter(description = "파일 종류: viewer·feed·thumbnail", example = "feed") @PathVariable String variant,
-            @Valid @RequestBody(required = false) VideoUploadAssetPresignRequest request,
+            @RequestBody(required = false) VideoUploadAssetPresignRequest request,
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         String contentType = request == null ? null : request.contentType();
@@ -91,7 +105,7 @@ public class VideoUploadSessionController {
     }
 
     @Operation(summary = "업로드 취소",
-            description = "게시 전 세션을 취소해 같은 슬롯에 다시 접수할 수 있게 한다. "
+            description = "게시 전 세션을 취소한다. "
                     + "에러: 이미 게시된 세션이면 VIDEO_UPLOAD_UNAVAILABLE(409).")
     @DeleteMapping("/{sessionId}")
     public ApiResponse<Void> cancel(

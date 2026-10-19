@@ -9,7 +9,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-/** 어드민 코인 상품 포트의 JPA 어댑터. Entity↔Domain 변환을 전담한다. */
+/** 어드민 티켓 상품 포트의 JPA 어댑터. Entity↔Domain 변환을 전담한다. */
 @Repository
 @RequiredArgsConstructor
 public class AdminIapProductRepositoryImpl implements AdminIapProductRepository {

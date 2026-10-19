@@ -10,8 +10,9 @@ public class NoopPushAdapter implements PushPort {
 
     @Override
     public List<String> send(PushMessage message) {
-        log.info("[no-op push] tokens={} title={} data={}",
-                message.tokens().size(), message.title(), message.data());
+        log.info("[no-op push] tokens={} title={} quiet={} groupKey={} data={}",
+                message.tokens().size(), message.title(), message.style().quiet(), message.style().groupKey(),
+                message.data());
         return List.of();
     }
 }

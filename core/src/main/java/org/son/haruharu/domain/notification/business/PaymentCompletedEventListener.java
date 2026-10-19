@@ -21,6 +21,6 @@ public class PaymentCompletedEventListener {
     // 커밋 후 발송 — FCM 장애가 결제 충전 처리를 롤백시키지 않도록
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(PaymentCompletedEvent event) {
-        pushSendService.sendToUsers(List.of(event.userId()), NotificationType.PAYMENT_COMPLETED, Map.of(), event.coinAmount());
+        pushSendService.sendToUsers(List.of(event.userId()), NotificationType.PAYMENT_COMPLETED, Map.of(), event.ticketAmount());
     }
 }

@@ -16,8 +16,6 @@ import org.son.haruharu.domain.chat.business.exception.ChatReplyInvalidException
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
-import org.son.haruharu.domain.chat.implement.ChatMission;
-import org.son.haruharu.domain.chat.implement.ChatMissionPresenter;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
@@ -25,14 +23,13 @@ import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
-import org.son.haruharu.domain.chat.storage.exception.ChatMissionImageNotFoundException;
 import org.son.haruharu.domain.chat.storage.exception.ChatRoomNotFoundException;
-import org.son.haruharu.domain.mission.business.dto.MissionImageResponse;
 import org.son.haruharu.domain.profile.business.ProfileService;
 import org.son.haruharu.domain.profile.business.dto.ProfileResponse;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.user.business.UserService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -75,7 +72,7 @@ public class ChatService {
     private final ChatParticipantPolicy participants;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
-    private final ChatMissionPresenter missionPresenter;
+    private final ChatRoomLifecyclePolicy lifecycle;
 
     public ChatService(ChatRoomReader chatRoomReader,
                        ChatRoomWriter chatRoomWriter,
@@ -91,8 +88,7 @@ public class ChatService {
                        ChatMessageViews chatMessageViews,
                        ChatParticipantPolicy participants,
                        ApplicationEventPublisher eventPublisher,
-                       Clock clock,
-                       ChatMissionPresenter missionPresenter) {
+                       Clock clock, ChatRoomLifecyclePolicy lifecycle) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomWriter = chatRoomWriter;
         this.chatRoomMemberReader = chatRoomMemberReader;
@@ -108,7 +104,7 @@ public class ChatService {
         this.participants = participants;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
-        this.missionPresenter = missionPresenter;
+        this.lifecycle = lifecycle;
     }
 
     /**
@@ -138,20 +134,21 @@ public class ChatService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createGroupRoom(Long roomId) {
-        ensureGroupRoom(roomId);
-    }
-
-    /** 예약 시각이 시작 전이 배치보다 먼저 도달해도 같은 방 잠금 안에서 그룹채팅을 준비한다. */
-    @Transactional
-    public void ensureGroupRoom(Long roomId) {
-        if (roomReader.findByIdForUpdate(roomId).isEmpty()) {
+        var source = roomReader.findByIdForUpdate(roomId).orElse(null);
+        if (source == null) {
             return;
         }
         if (chatRoomReader.existsByRoomId(roomId)) {
             return;
         }
-        ChatRoom room = chatRoomWriter.save(ChatRoom.createGroup(roomId));
         LocalDateTime now = LocalDateTime.now(clock);
+        ChatRoom group = ChatRoom.createGroup(roomId);
+        // 지연된 시작 이벤트가 종료·취소 뒤 도착해도 채팅을 다시 열지 않는다.
+        if (source.status() == RoomStatus.ENDED
+                || source.status() == RoomStatus.CANCELLED) {
+            group = group.close(now);
+        }
+        ChatRoom room = chatRoomWriter.save(group);
         roomMemberReader.getByRoomId(roomId).forEach(member ->
                 chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), member.userId(), now)));
     }
@@ -192,6 +189,7 @@ public class ChatService {
         ChatMessage toSave = original == null
                 ? ChatMessage.create(chatRoomId, senderId, content)
                 : ChatMessage.reply(chatRoomId, senderId, content, original, replySenderName(chatRoom, original));
+        lifecycle.requireActive(chatRoom);
         ChatMessage saved = chatMessageWriter.save(toSave);
         // 발신자 표시 이름(#393): GROUP은 방 세션 가명, DIRECT는 매칭쌍이라 실명. 푸시 본문("OO님이…")에 그대로 실린다.
         String senderNickname = participants.displayName(chatRoom, senderId);
@@ -203,9 +201,9 @@ public class ChatService {
         return broadcast;
     }
 
-    /** 운영 글 원문은 '하루'(시스템 유저는 방 멤버가 아니라 가명이 없다, #457). */
+    /** 시스템 안내의 인용 이름은 유저 프로필 조회 없이 '하루'로 표시한다. */
     private String replySenderName(ChatRoom chatRoom, ChatMessage original) {
-        return original.isAdmin() ? original.senderName() : participants.displayName(chatRoom, original.senderId());
+        return original.isSystem() ? original.senderName() : participants.displayName(chatRoom, original.senderId());
     }
 
     /** 답장 원문: 같은 채팅방의 (삭제되지 않은, 운영자가 지우지 않은) 메시지여야 한다. */
@@ -254,17 +252,6 @@ public class ChatService {
         int limit = Math.min(Math.max(size, 1), MAX_MESSAGE_PAGE_SIZE);
         List<ChatMessage> messages = chatMessageReader.findPage(chatRoomId, cursor, limit);
         return MessagePageResponse.of(messages, limit, chatMessageViews.toItems(messages, userId));
-    }
-
-    /** 운영자 미션 카드의 참고 사진(#474). 서명 URL 은 요청 때마다 새로 발급한다. 카드가 없거나 지워졌으면 404. */
-    public MissionImageResponse getMissionImage(Long chatRoomId, Long userId, Long messageId) {
-        requireMember(chatRoomId, userId);
-        participants.requireActiveIfDirect(chatRoomId, userId);
-        return chatMessageReader.findById(messageId)
-                .filter(item -> item.chatRoomId().equals(chatRoomId))
-                .map(item -> missionPresenter.present(item.visibleMission()))
-                .map(ChatMission::image)
-                .orElseThrow(ChatMissionImageNotFoundException::new);
     }
 
     /** 읽음 커서 갱신. 커서는 뒤로만 이동한다(역행 방지). */
