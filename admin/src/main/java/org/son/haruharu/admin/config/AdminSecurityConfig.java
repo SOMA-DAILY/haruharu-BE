@@ -124,6 +124,7 @@ public class AdminSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/rooms/*/selections", "/api/v1/admin/rooms/*/activities",
                                 "/api/v1/admin/rooms/*/activity/summary")
                         .hasAnyRole("SUPER", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/admin/app-update-policy").hasRole("SUPER")
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         // 401·403 모두 ApiResponse 표준 포맷으로 응답(컨테이너 기본 에러 우회 방지).
