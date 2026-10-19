@@ -15,7 +15,7 @@ public interface QuestionRepository {
 
     long countSent(Long roomId, Long userId);
 
-    boolean hasSentTo(Long roomId, Long userId, Long targetUserId);
+    boolean hasSentTo(Long roomId, Long userId, Long targetUserId, int day);
 
     List<Question> findReceived(
             Long roomId, Long userId, java.util.Set<Long> blockedUserIds, Long cursor, int limit);
@@ -26,7 +26,7 @@ public interface QuestionRepository {
 
     List<Long> historyRoomIds(Long userId, Long cursor, int limit, LocalDateTime now);
 
-    Optional<QuestionGrant> findGrant(Long roomId, Long userId);
+    Optional<QuestionGrant> findGrant(Long roomId, Long userId, int day);
 
     QuestionGrant saveGrant(QuestionGrant grant);
 

@@ -22,6 +22,10 @@ import org.son.haruharu.domain.user.storage.UserEntity;
 import org.son.haruharu.domain.user.storage.UserJpaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -38,7 +42,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -53,7 +59,48 @@ import java.util.concurrent.TimeUnit;
 @ActiveProfiles("test")
 @Testcontainers
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@Import(QuestionApiIntegrationTest.ClockOverride.class)
 class QuestionApiIntegrationTest {
+    /** 질문 시간대는 달력 시각(08:00·자정·18:00)이라 실제 시계로는 새벽 실행이 실패한다. 2일차 14:00으로 고정한다. */
+    static final LocalDateTime DAY_TWO_AFTERNOON = LocalDateTime.of(2026, 10, 20, 14, 0);
+
+    @TestConfiguration
+    static class ClockOverride {
+        @Bean
+        @Primary
+        MutableClock testClock() {
+            return new MutableClock(DAY_TWO_AFTERNOON);
+        }
+    }
+
+    static final class MutableClock extends Clock {
+        private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+        private volatile Instant instant;
+
+        MutableClock(LocalDateTime at) {
+            set(at);
+        }
+
+        void set(LocalDateTime at) {
+            instant = at.atZone(SEOUL).toInstant();
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return SEOUL;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
+        }
+    }
+
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
@@ -83,6 +130,7 @@ class QuestionApiIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        ((MutableClock) clock).set(DAY_TWO_AFTERNOON);
         LocalDateTime now = LocalDateTime.now(clock);
         roomId =
                 rooms.save(
@@ -334,6 +382,44 @@ class QuestionApiIntegrationTest {
         mvc.perform(get(history).with(authentication(auth(recipients.getFirst()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.rooms").isEmpty());
+    }
+
+    @Test
+    @DisplayName("같은 상대에게 2일차와 3일차에 한 번씩 저장되고 3일차 동시 요청은 하나만 남는다")
+    void givenDayTwoQuestion_whenDayThreeConcurrentRequests_thenOnePerDay() throws Exception {
+        create(0, UUID.randomUUID())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.day").value(2));
+        create(0, UUID.randomUUID()).andExpect(status().isConflict());
+
+        ((MutableClock) clock).set(LocalDateTime.of(2026, 10, 21, 0, 30));
+        create(0, UUID.randomUUID()).andExpect(status().is4xxClientError());
+        mvc.perform(get(base()).with(authentication(auth(sender))))
+                .andExpect(jsonPath("$.data.phase").value("CLOSED"))
+                .andExpect(jsonPath("$.data.current_day").value(3))
+                .andExpect(jsonPath("$.data.days[1].state").value("LOCKED"));
+
+        ((MutableClock) clock).set(LocalDateTime.of(2026, 10, 21, 9, 0));
+        List<Integer> statuses =
+                concurrently(4, i -> create(0, UUID.randomUUID()).andReturn().getResponse().getStatus());
+        assertThat(statuses).containsExactlyInAnyOrder(200, 409, 409, 409);
+        assertThat(
+                        jdbc.queryForList(
+                                "select question_day from anonymous_questions where room_id = ? order by id",
+                                Integer.class,
+                                roomId))
+                .containsExactly(2, 3);
+        mvc.perform(get(base()).with(authentication(auth(sender))))
+                .andExpect(jsonPath("$.data.current_day").value(3))
+                .andExpect(jsonPath("$.data.days[0].state").value("CLOSED"))
+                .andExpect(jsonPath("$.data.days[1].state").value("OPEN"))
+                .andExpect(jsonPath("$.data.days[1].closes_at").value("2026-10-21T13:00:00"))
+                .andExpect(jsonPath("$.data.days[1].remaining_count").value(2))
+                .andExpect(jsonPath("$.data.remaining_count").value(2));
+        mvc.perform(get(base()).with(authentication(auth(recipients.getFirst()))))
+                .andExpect(jsonPath("$.data.received.length()").value(2))
+                .andExpect(jsonPath("$.data.received[0].day").value(3))
+                .andExpect(jsonPath("$.data.received[1].day").value(2));
     }
 
     private Long user() {

@@ -209,7 +209,7 @@ class AdminRoomActivityApiIntegrationTest {
         em.persist(direct);
         em.flush();
         em.persist(ChatMessageEntity.from(new ChatMessage(null, direct.toDomain().id(), 102L, "직접 대화 제외", START.plusHours(2))));
-        var question = QuestionEntity.from(Question.create(room, a, b, 101L, 102L, "참여자102", "좋아하는 음식은?", UUID.randomUUID(), START.plusHours(3))
+        var question = QuestionEntity.from(Question.create(room, a, b, 101L, 102L, "참여자102", "좋아하는 음식은?", UUID.randomUUID(), 2, START.plusHours(3))
                 .answer("파스타요", START.plusDays(1)));
         em.persist(question);
         em.flush();

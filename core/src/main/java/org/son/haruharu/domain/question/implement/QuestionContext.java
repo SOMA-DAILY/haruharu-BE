@@ -3,8 +3,8 @@ package org.son.haruharu.domain.question.implement;
 import org.son.haruharu.domain.question.implement.exception.QuestionAccessDeniedException;
 import org.son.haruharu.domain.question.implement.exception.QuestionUnavailableException;
 
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public record QuestionContext(
@@ -12,9 +12,7 @@ public record QuestionContext(
         Long userId,
         Long memberId,
         String gender,
-        String phase,
-        LocalDateTime opensAt,
-        LocalDateTime closesAt,
+        QuestionWindow window,
         List<Participant> participants,
         Set<Long> blockedUserIds,
         Set<Long> relatedUserIds) {
@@ -44,16 +42,23 @@ public record QuestionContext(
                 userId,
                 me.memberId(),
                 me.gender(),
-                window.phase(),
-                window.opensAt(),
-                window.closesAt(),
+                window,
                 participants,
                 blocked,
                 related);
     }
 
+    public String phase() {
+        return window.phase();
+    }
+
+    /** 지금 질문을 보낼 수 있는 날. 밤사이·열리기 전·마감 뒤에는 비어 있다. */
+    public Optional<QuestionWindow.Day> openDay() {
+        return window.openDay();
+    }
+
     public boolean open() {
-        return phase.equals("OPEN");
+        return openDay().isPresent();
     }
 
     public boolean eligibleGender() {
@@ -71,8 +76,9 @@ public record QuestionContext(
         return participants.stream().anyMatch(p -> p.userId().equals(userId));
     }
 
+    /** 답변·답변 알림은 보내기 시간대와 별개로 2일차 08:00부터 최종 선택 전까지 열린다. */
     public boolean canInteract(Question q) {
-        return open()
+        return window.answerOpen()
                 && present(q.otherUserId(userId))
                 && !relatedUserIds.contains(q.otherUserId(userId))
                 && !q.senderReported()

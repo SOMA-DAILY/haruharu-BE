@@ -19,7 +19,7 @@ import java.util.*;
 
 class QuestionServiceTest {
     final LocalDateTime now = LocalDateTime.of(2026, 9, 13, 12, 0);
-    final Clock clock = Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+    Clock clock = Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
     QuestionRepository repository;
     RoomReader rooms;
     RoomMemberReader members;
@@ -32,7 +32,7 @@ class QuestionServiceTest {
     Room room;
     List<RoomMember> participants;
     Map<Long, Question> questions;
-    Map<Long, QuestionGrant> grants;
+    Map<String, QuestionGrant> grants;
 
     @BeforeEach
     void setup() {
@@ -92,7 +92,7 @@ class QuestionServiceTest {
                                 questions.values().stream()
                                         .filter(q -> q.senderUserId().equals(i.getArgument(1)))
                                         .count());
-        given(repository.hasSentTo(eq(1L), anyLong(), anyLong()))
+        given(repository.hasSentTo(eq(1L), anyLong(), anyLong(), anyInt()))
                 .willAnswer(
                         i ->
                                 questions.values().stream()
@@ -100,7 +100,9 @@ class QuestionServiceTest {
                                                 q ->
                                                         q.senderUserId().equals(i.getArgument(1))
                                                                 && q.recipientUserId()
-                                                                        .equals(i.getArgument(2))));
+                                                                        .equals(i.getArgument(2))
+                                                                && q.day()
+                                                                        == (int) i.getArgument(3)));
         given(repository.findReceived(eq(1L), anyLong(), anySet(), anyLong(), anyInt()))
                 .willAnswer(
                         i ->
@@ -162,19 +164,29 @@ class QuestionServiceTest {
                                                 q.recipientRead(),
                                                 q.senderRead(),
                                                 q.senderReported(),
-                                                q.recipientReported());
+                                                q.recipientReported(),
+                                                q.day());
                             questions.put(q.id(), q);
                             return q;
                         });
-        given(repository.findGrant(eq(1L), anyLong()))
-                .willAnswer(i -> Optional.ofNullable(grants.get(i.getArgument(1))));
+        given(repository.findGrant(eq(1L), anyLong(), anyInt()))
+                .willAnswer(
+                        i ->
+                                Optional.ofNullable(
+                                        grants.get(i.getArgument(1) + ":" + i.getArgument(2))));
         given(repository.saveGrant(any()))
                 .willAnswer(
                         i -> {
                             QuestionGrant g = i.getArgument(0);
-                            grants.put(g.userId(), g);
+                            grants.put(g.userId() + ":" + g.day(), g);
                             return g;
                         });
+        at(now);
+    }
+
+    /** 서비스가 읽는 현재 시각을 옮긴다. 방은 now-24h(9/12) 시작, 최종 선택은 9/14 12:00이다. */
+    void at(LocalDateTime time) {
+        clock = Clock.fixed(time.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         service =
                 new QuestionService(
                         new QuestionReader(repository),
@@ -264,8 +276,8 @@ class QuestionServiceTest {
                         3,
                         null,
                         null,
-                        now.minusHours(24).plusNanos(1),
-                        now.plusHours(2),
+                        now,
+                        now.plusHours(50),
                         now.plusHours(3),
                         now.plusHours(4),
                         now.plusHours(5));
@@ -516,72 +528,94 @@ class QuestionServiceTest {
     }
 
     @Test
-    @DisplayName("마감 임박 대상은 답할 질문이 남은 사람을 우선하고 질문권을 다 쓴 사람은 제외한다")
-    void givenOpenRoom_whenDeadlineTargets_thenAnswerFirstAndSkipFinished() {
-        var sent =
+    @DisplayName("같은 상대에게도 2일차와 3일차에 한 번씩 질문하고 날마다 다시 한 번만 허용한다")
+    void givenSameTarget_whenDayTwoAndThree_thenOncePerDay() {
+        var dayTwo =
                 service.create(1L, 100L, new CreateQuestionCommand(11L, "안녕", UUID.randomUUID()));
+        assertThat(dayTwo.day()).isEqualTo(2);
+        assertThatThrownBy(
+                        () ->
+                                service.create(
+                                        1L,
+                                        100L,
+                                        new CreateQuestionCommand(11L, "또", UUID.randomUUID())))
+                .hasMessageContaining("이미 질문");
 
-        var pending = service.deadlineTargets(1L);
-        assertThat(pending.unansweredUserIds()).containsExactly(101L);
-        assertThat(pending.unusedGrantUserIds())
-                .doesNotContain(101L)
-                .containsExactlyInAnyOrder(100L, 102L, 103L);
+        at(now.plusHours(22));
+        var list = service.list(1L, 100L);
+        assertThat(list.currentDay()).isEqualTo(3);
+        assertThat(list.days()).extracting(d -> d.state()).containsExactly("CLOSED", "OPEN");
+        assertThat(list.days().getFirst().targets())
+                .extracting(t -> t.roomMemberId(), t -> t.status())
+                .containsExactlyInAnyOrder(
+                        tuple(11L, "WAITING"), tuple(12L, "CLOSED"), tuple(13L, "CLOSED"));
+        assertThat(list.days().get(1).targets())
+                .extracting(t -> t.status())
+                .containsOnly("AVAILABLE");
+        assertThat(list.days().get(1).remainingCount()).isEqualTo(3);
 
-        service.answer(1L, 101L, sent.id(), new AnswerQuestionCommand("반가워"));
-        service.create(1L, 100L, new CreateQuestionCommand(12L, "안녕", UUID.randomUUID()));
-
-        var answered = service.deadlineTargets(1L);
-        assertThat(answered.unansweredUserIds()).containsExactly(102L);
-        assertThat(answered.unusedGrantUserIds()).containsExactlyInAnyOrder(100L, 101L, 103L);
-
-        service.create(1L, 100L, new CreateQuestionCommand(13L, "안녕", UUID.randomUUID()));
-        var finished = service.deadlineTargets(1L);
-        assertThat(finished.unansweredUserIds()).containsExactlyInAnyOrder(102L, 103L);
-        assertThat(finished.unusedGrantUserIds()).containsExactly(101L);
+        var dayThree =
+                service.create(
+                        1L, 100L, new CreateQuestionCommand(11L, "다시 안녕", UUID.randomUUID()));
+        assertThat(dayThree.day()).isEqualTo(3);
+        assertThatThrownBy(
+                        () ->
+                                service.create(
+                                        1L,
+                                        100L,
+                                        new CreateQuestionCommand(11L, "세 번째", UUID.randomUUID())))
+                .hasMessageContaining("이미 질문");
+        assertThat(service.list(1L, 100L).days().get(1).remainingCount()).isEqualTo(2);
+        assertThat(service.list(1L, 100L).remainingCount()).isEqualTo(2);
+        assertThat(service.list(1L, 101L).received())
+                .extracting(r -> r.day())
+                .containsExactlyInAnyOrder(2, 3);
+        assertThat(service.detail(1L, 101L, dayTwo.id()).canAnswer()).isTrue();
     }
 
     @Test
-    @DisplayName("차단·이탈·성별 미지정과 마감된 방은 마감 안내 대상에서 빠진다")
-    void givenClosedOrUnanswerable_whenDeadlineTargets_thenExcluded() {
-        service.create(1L, 100L, new CreateQuestionCommand(11L, "안녕", UUID.randomUUID()));
+    @DisplayName("자정부터 08:00까지는 질문을 보낼 수 없지만 받은 질문에는 답할 수 있다")
+    void givenNight_whenSendAndAnswer_thenSendClosedAnswerOpen() {
+        var sent =
+                service.create(1L, 100L, new CreateQuestionCommand(11L, "안녕", UUID.randomUUID()));
+        at(now.plusHours(12).plusMinutes(30));
+        assertThatThrownBy(
+                        () ->
+                                service.create(
+                                        1L,
+                                        100L,
+                                        new CreateQuestionCommand(12L, "안녕", UUID.randomUUID())))
+                .hasMessageContaining("보낼 수");
+        var list = service.list(1L, 100L);
+        assertThat(list.phase()).isEqualTo("CLOSED");
+        assertThat(list.currentDay()).isEqualTo(3);
+        assertThat(list.days().get(1).state()).isEqualTo("LOCKED");
+        assertThat(list.days().get(1).targets()).extracting(t -> t.status()).containsOnly("LOCKED");
+        assertThat(list.targets()).extracting(t -> t.status()).doesNotContain("LOCKED");
+        assertThat(list.remainingCount()).isZero();
+        assertThat(service.answer(1L, 101L, sent.id(), new AnswerQuestionCommand("반가워")).answer())
+                .isEqualTo("반가워");
+    }
 
-        // 101이 유일한 이성인 100을 차단하면 답할 질문도, 쓸 수 있는 질문권도 남지 않는다.
-        given(blocks.getBlockedUserIds(101L)).willReturn(Set.of(100L));
-        var blocked = service.deadlineTargets(1L);
-        assertThat(blocked.unansweredUserIds()).doesNotContain(101L);
-        assertThat(blocked.unusedGrantUserIds()).doesNotContain(101L);
+    @Test
+    @DisplayName("질문 열림은 날마다 한 번씩 지급하고 밤사이에는 지급하지 않는다")
+    void givenDays_whenReconcileGrants_thenOncePerOpenDay() {
+        service.reconcileGrants(1L);
+        service.readGrant(1L, 100L);
+        assertThat(grants).hasSize(4);
+        assertThat(service.list(1L, 100L).grantUnread()).isFalse();
 
-        // 성별이 없는 참가자는 질문을 주고받을 수 없어 재촉하지 않는다.
-        given(blocks.getBlockedUserIds(101L)).willReturn(Set.of());
-        participants =
-                List.of(
-                        participants.get(0),
-                        new RoomMember(11L, 1L, 101L, null, null, null, now),
-                        participants.get(2),
-                        participants.get(3));
-        assertThat(service.deadlineTargets(1L).unansweredUserIds()).doesNotContain(101L);
+        at(now.plusHours(12).plusMinutes(30));
+        service.reconcileGrants(1L);
+        assertThat(grants).hasSize(4);
+        assertThat(service.list(1L, 100L).grantUnread()).isFalse();
 
-        // 이탈·비활성 참가자는 대상이 아니다.
-        willReturn(Set.of(100L, 102L, 103L)).given(users).findActiveIds(any());
-        var departed = service.deadlineTargets(1L);
-        assertThat(departed.unansweredUserIds()).isEmpty();
-        assertThat(departed.unusedGrantUserIds()).doesNotContain(101L);
-
-        room =
-                new Room(
-                        1L,
-                        RoomStatus.PENDING,
-                        now.toLocalDate(),
-                        3,
-                        null,
-                        null,
-                        now.minusHours(24),
-                        now.minusMinutes(1),
-                        now.plusHours(1),
-                        now.plusHours(2),
-                        now.plusHours(3));
-        var closed = service.deadlineTargets(1L);
-        assertThat(closed.unansweredUserIds()).isEmpty();
-        assertThat(closed.unusedGrantUserIds()).isEmpty();
+        at(now.plusHours(21));
+        assertThat(service.list(1L, 100L).grantUnread()).isTrue();
+        assertThat(service.list(1L, 100L).latestEvent().key()).isEqualTo("grant:1:3");
+        service.reconcileGrants(1L);
+        service.reconcileGrants(1L);
+        assertThat(grants).hasSize(8);
+        then(events).should(times(8)).publishEvent(any(QuestionGrantAvailableEvent.class));
     }
 }

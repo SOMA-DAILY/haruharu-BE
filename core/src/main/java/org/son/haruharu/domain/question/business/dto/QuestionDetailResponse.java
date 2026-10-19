@@ -14,7 +14,8 @@ public record QuestionDetailResponse(
         String direction,
         Recipient recipient,
         LocalDateTime createdAt,
-        LocalDateTime answeredAt) {
+        LocalDateTime answeredAt,
+        int day) {
     public record Recipient(Long roomMemberId, String nickname, String avatarUrl) {}
 
     public static QuestionDetailResponse from(Question q, QuestionContext context) {
@@ -29,6 +30,7 @@ public record QuestionDetailResponse(
                 sent ? "SENT" : "RECEIVED",
                 sent ? new Recipient(q.recipientMemberId(), q.recipientNickname(), null) : null,
                 q.createdAt(),
-                q.answeredAt());
+                q.answeredAt(),
+                q.day());
     }
 }

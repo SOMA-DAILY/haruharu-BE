@@ -30,9 +30,11 @@ public class QuestionWriter {
             if (!context.visible(previous)) throw new QuestionAccessDeniedException();
             return previous;
         }
+        QuestionWindow.Day day =
+                context.openDay().orElseThrow(QuestionUnavailableException::new);
         QuestionContext.Participant target = context.target(targetId);
         context.validateTarget(target);
-        if (repository.hasSentTo(context.roomId(), context.userId(), target.userId()))
+        if (repository.hasSentTo(context.roomId(), context.userId(), target.userId(), day.day()))
             throw new QuestionAlreadySentException();
         return repository.save(
                 Question.create(
@@ -44,6 +46,7 @@ public class QuestionWriter {
                         target.nickname(),
                         normalized,
                         requestId,
+                        day.day(),
                         now));
     }
 
@@ -65,17 +68,17 @@ public class QuestionWriter {
         repository.save(question.reportedBy(userId));
     }
 
-    public boolean grant(Long roomId, Long userId, LocalDateTime now) {
-        if (repository.findGrant(roomId, userId).isPresent()) return false;
-        repository.saveGrant(new QuestionGrant(null, roomId, userId, false, now));
+    public boolean grant(Long roomId, Long userId, int day, LocalDateTime now) {
+        if (repository.findGrant(roomId, userId, day).isPresent()) return false;
+        repository.saveGrant(new QuestionGrant(null, roomId, userId, day, false, now));
         return true;
     }
 
-    public void readGrant(Long roomId, Long userId, LocalDateTime now) {
+    public void readGrant(Long roomId, Long userId, int day, LocalDateTime now) {
         QuestionGrant grant =
                 repository
-                        .findGrant(roomId, userId)
-                        .orElse(new QuestionGrant(null, roomId, userId, false, now));
+                        .findGrant(roomId, userId, day)
+                        .orElse(new QuestionGrant(null, roomId, userId, day, false, now));
         repository.saveGrant(grant.markRead());
     }
 }

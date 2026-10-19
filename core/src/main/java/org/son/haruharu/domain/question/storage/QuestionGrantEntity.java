@@ -13,8 +13,8 @@ import org.son.haruharu.domain.question.implement.QuestionGrant;
         name = "question_grants",
         uniqueConstraints =
                 @UniqueConstraint(
-                        name = "uq_question_grant",
-                        columnNames = {"room_id", "user_id"}))
+                        name = "uq_question_grant_day",
+                        columnNames = {"room_id", "user_id", "question_day"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class QuestionGrantEntity extends BaseEntity {
     @Id
@@ -27,6 +27,9 @@ public class QuestionGrantEntity extends BaseEntity {
     @Column(nullable = false)
     private Long userId;
 
+    @Column(name = "question_day", nullable = false)
+    private int day;
+
     @Column(name = "is_read", nullable = false)
     private boolean read;
 
@@ -35,12 +38,13 @@ public class QuestionGrantEntity extends BaseEntity {
         entity.id = grant.id();
         entity.roomId = grant.roomId();
         entity.userId = grant.userId();
+        entity.day = grant.day();
         entity.read = grant.read();
         entity.createdAt = grant.createdAt();
         return entity;
     }
 
     public QuestionGrant toDomain() {
-        return new QuestionGrant(id, roomId, userId, read, createdAt);
+        return new QuestionGrant(id, roomId, userId, day, read, createdAt);
     }
 }

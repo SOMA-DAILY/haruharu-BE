@@ -42,9 +42,14 @@ public class QuestionService {
     public QuestionListResponse list(Long roomId, Long userId, Long cursor, int size) {
         QuestionContext c = context(roomId, userId, false);
         boolean grantUnread =
-                c.open()
-                        && c.eligibleGender()
-                        && reader.grant(roomId, userId).map(g -> !g.read()).orElse(true);
+                c.eligibleGender()
+                        && c.openDay()
+                                .map(
+                                        day ->
+                                                reader.grant(roomId, userId, day.day())
+                                                        .map(g -> !g.read())
+                                                        .orElse(true))
+                                .orElse(false);
         return QuestionListResponse.from(c, reader.page(c, cursor, size), grantUnread);
     }
 
@@ -92,8 +97,12 @@ public class QuestionService {
     @Transactional
     public void readGrant(Long roomId, Long userId) {
         QuestionContext c = context(roomId, userId, true);
-        if (c.open() && c.eligibleGender())
-            writer.readGrant(roomId, userId, LocalDateTime.now(clock));
+        if (c.eligibleGender())
+            c.openDay()
+                    .ifPresent(
+                            day ->
+                                    writer.readGrant(
+                                            roomId, userId, day.day(), LocalDateTime.now(clock)));
     }
 
     @Transactional
@@ -145,71 +154,25 @@ public class QuestionService {
                 afterId, Math.min(100, Math.max(1, limit)), LocalDateTime.now(clock));
     }
 
+    /** 그날 질문이 열려 있으면(2·3일차 08:00부터) 참가자마다 그날 열림을 한 번씩 지급하고 알린다. */
     @Transactional
     public void reconcileGrants(Long roomId) {
-        Room room = rooms.findByIdForUpdate(roomId).orElseThrow(QuestionAccessDeniedException::new);
         LocalDateTime now = LocalDateTime.now(clock);
-        if (!window(room, now).phase().equals("OPEN")) return;
+        // 매 10초 스캔이라 열린 날이 없으면 방 잠금 없이 끝낸다.
+        Room unlocked = rooms.findById(roomId).orElse(null);
+        if (unlocked == null || window(unlocked, now).openDay().isEmpty()) return;
+        Room room = rooms.findByIdForUpdate(roomId).orElseThrow(QuestionAccessDeniedException::new);
+        Optional<QuestionWindow.Day> open = window(room, now).openDay();
+        if (open.isEmpty()) return;
+        int day = open.get().day();
         List<RoomMember> roomMembers = members.getByRoomId(roomId);
         Set<Long> active =
                 users.findActiveIds(roomMembers.stream().map(RoomMember::userId).toList());
         for (RoomMember member : roomMembers) {
             if (participant(member).eligibleForGrant(active)
-                    && writer.grant(roomId, member.userId(), now))
+                    && writer.grant(roomId, member.userId(), day, now))
                 events.publishEvent(new QuestionGrantAvailableEvent(roomId, member.userId()));
         }
-    }
-
-    /**
-     * 마감 임박 안내 대상. 답할 질문이 남은 사람과 질문권을 쓰지 않은 사람을 나눠 돌려주고, 둘 다인
-     * 사람은 답변 재촉에만 넣는다 — 한 사람에게 두 건을 보내지 않는다. 차단·신고·이탈·성별 규칙은
-     * 목록 조회와 같은 QuestionContext 가 판정하므로 여기서 다시 정의하지 않는다.
-     */
-    public QuestionDeadlineTargets deadlineTargets(Long roomId) {
-        QuestionDeadlineTargets none = new QuestionDeadlineTargets(List.of(), List.of());
-        Room room = rooms.findById(roomId).orElse(null);
-        if (room == null) return none;
-        QuestionWindow window = window(room, LocalDateTime.now(clock));
-        if (!window.phase().equals("OPEN")) return none;
-        // 방·멤버·활성 여부는 멤버마다 달라지지 않는다. reconcileGrants 처럼 루프 밖에서 한 번만 읽는다.
-        List<RoomMember> roomMembers = members.getByRoomId(roomId);
-        Set<Long> active =
-                users.findActiveIds(roomMembers.stream().map(RoomMember::userId).toList());
-        List<QuestionContext.Participant> participants =
-                roomMembers.stream().map(this::participant).toList();
-        List<Long> unanswered = new ArrayList<>();
-        List<Long> unusedGrant = new ArrayList<>();
-        for (RoomMember member : roomMembers) {
-            // 이탈·비활성 참가자는 안내 대상이 아니다.
-            if (!active.contains(member.userId())) continue;
-            QuestionContext context =
-                    QuestionContext.forUser(
-                            roomId,
-                            member.userId(),
-                            window,
-                            participants,
-                            active,
-                            blocks.getBlockedUserIds(member.userId()),
-                            blocks.getRelatedUserIds(member.userId()));
-            if (!context.eligibleGender()) continue;
-            if (reader.hasUnanswered(context)) unanswered.add(member.userId());
-            else if (hasUnusedGrant(context)) unusedGrant.add(member.userId());
-        }
-        return new QuestionDeadlineTargets(List.copyOf(unanswered), List.copyOf(unusedGrant));
-    }
-
-    /** 남은 질문권을 실제로 쓸 수 있는지 — 보낼 수 있는 상대가 없으면 재촉하지 않는다. */
-    private boolean hasUnusedGrant(QuestionContext context) {
-        List<Question> sent = reader.sent(context.roomId(), context.userId());
-        List<Long> asked = sent.stream().map(Question::recipientUserId).toList();
-        return context.participants().stream()
-                .anyMatch(
-                        participant ->
-                                context.opposite(participant)
-                                        && !asked.contains(participant.userId())
-                                        && !context.blockedUserIds().contains(participant.userId())
-                                        && !context.relatedUserIds()
-                                                .contains(participant.userId()));
     }
 
     private QuestionContext context(Long roomId, Long userId, boolean lock) {

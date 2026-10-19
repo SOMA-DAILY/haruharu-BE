@@ -12,7 +12,7 @@ class QuestionTest {
     private final LocalDateTime now = LocalDateTime.of(2026, 9, 13, 12, 0);
 
     private Question question(String content) {
-        return Question.create(1L, 10L, 11L, 100L, 101L, "달님", content, UUID.randomUUID(), now);
+        return Question.create(1L, 10L, 11L, 100L, 101L, "달님", content, UUID.randomUUID(), 2, now);
     }
 
     @Test
