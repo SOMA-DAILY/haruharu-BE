@@ -63,7 +63,7 @@ class RoomProfileServiceTest {
         ArgumentCaptor<UserProfile> saved = ArgumentCaptor.forClass(UserProfile.class);
         then(userProfileWriter).should().save(saved.capture());
         assertThat(saved.getValue()).isEqualTo(new UserProfile(1L, USER, "서울", "직장인", 175, "ENFP", "테스터",
-                DrinkingStatus.SOMETIMES, SmokingStatus.NONE, Gender.FEMALE, 2003, "전자공학과", "러닝"));
+                DrinkingStatus.SOMETIMES, SmokingStatus.NONE, Gender.FEMALE, 2003, "전자공학과", "러닝", null));
         assertThat(result).isEqualTo(new RoomProfileResponse(2003, 23, "ENFP", "전자공학과", "러닝", true));
     }
 

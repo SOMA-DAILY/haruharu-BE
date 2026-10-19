@@ -1,33 +1,19 @@
 package org.son.haruharu.domain.room.business;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.son.haruharu.domain.room.business.dto.JoinRoomResponse;
-import org.son.haruharu.domain.room.business.event.RoomMemberJoinedEvent;
-import org.son.haruharu.domain.room.business.exception.InviteCodeNotFoundException;
-import org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.implement.InviteCodeGenerator;
-import org.son.haruharu.domain.room.implement.PseudonymPool;
-import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomInvite;
 import org.son.haruharu.domain.room.implement.RoomInviteReader;
 import org.son.haruharu.domain.room.implement.RoomInviteStatus;
 import org.son.haruharu.domain.room.implement.RoomInviteWriter;
-import org.son.haruharu.domain.room.implement.RoomMember;
-import org.son.haruharu.domain.room.implement.RoomMemberReader;
-import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomReader;
-import org.son.haruharu.domain.room.implement.RoomStatus;
-import org.son.haruharu.domain.profile.implement.Gender;
-import org.son.haruharu.domain.profile.implement.UserProfile;
-import org.son.haruharu.domain.profile.implement.UserProfileReader;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/** 초대코드 발급·재발급·이력 조회(#312·#318). 코드로 방에 들어가는 입장은 {@link RoomJoinService}(앱 전용)가 맡는다. */
 @Service
 @Transactional(readOnly = true)
 public class RoomInviteService {
@@ -35,77 +21,14 @@ public class RoomInviteService {
     private final RoomInviteReader roomInviteReader;
     private final RoomInviteWriter roomInviteWriter;
     private final RoomReader roomReader;
-    private final RoomMemberReader roomMemberReader;
-    private final RoomMemberWriter roomMemberWriter;
     private final InviteCodeGenerator inviteCodeGenerator;
-    private final UserProfileReader userProfileReader;
-    private final ApplicationEventPublisher eventPublisher;
-    private final Clock clock;
 
     public RoomInviteService(RoomInviteReader roomInviteReader, RoomInviteWriter roomInviteWriter,
-                             RoomReader roomReader, RoomMemberReader roomMemberReader,
-                             RoomMemberWriter roomMemberWriter, InviteCodeGenerator inviteCodeGenerator,
-                             UserProfileReader userProfileReader,
-                             ApplicationEventPublisher eventPublisher, Clock clock) {
+                             RoomReader roomReader, InviteCodeGenerator inviteCodeGenerator) {
         this.roomInviteReader = roomInviteReader;
         this.roomInviteWriter = roomInviteWriter;
         this.roomReader = roomReader;
-        this.roomMemberReader = roomMemberReader;
-        this.roomMemberWriter = roomMemberWriter;
         this.inviteCodeGenerator = inviteCodeGenerator;
-        this.userProfileReader = userProfileReader;
-        this.eventPublisher = eventPublisher;
-        this.clock = clock;
-    }
-
-    /**
-     * 초대코드로 방 입장. room-first 잠금 아래 같은 방 재입장은 멱등 처리하고 active membership을
-     * 잠긴 초대코드의 maxUses(또는 null 무제한)와 비교한다.
-     */
-    @Transactional
-    public JoinRoomResponse join(Long userId, String code) {
-        String normalizedCode = InviteCodeGenerator.normalize(code)
-                .orElseThrow(InviteCodeNotUsableException::new);
-
-        // 비잠금 조회는 roomId 발견만 담당한다. 모든 배타 락은 room → invite 순서를 지킨다.
-        Long discoveredRoomId = roomInviteReader.findRoomIdByCode(normalizedCode)
-                .orElseThrow(InviteCodeNotFoundException::new);
-        Room room = roomReader.findByIdForUpdate(discoveredRoomId)
-                .orElseThrow(RoomNotFoundException::new);
-        RoomInvite invite = roomInviteReader.findByCodeForUpdate(normalizedCode)
-                .filter(locked -> locked.roomId().equals(room.id()))
-                .orElseThrow(InviteCodeNotUsableException::new);
-        LocalDateTime now = LocalDateTime.now(clock);
-
-        RoomStatus status = room.statusAt(now);
-        if (status == RoomStatus.ENDED || status == RoomStatus.CANCELLED) {
-            throw new InviteCodeNotUsableException();
-        }
-
-        if (!invite.isUsable(now)) {
-            throw new InviteCodeNotUsableException();
-        }
-
-        if (roomMemberReader.findByRoomIdAndUserId(room.id(), userId).isPresent()) {
-            return new JoinRoomResponse(room.id());
-        }
-
-        if (!invite.hasCapacity(roomMemberReader.countByRoomId(room.id()))) {
-            throw new InviteCodeNotUsableException();
-        }
-
-        // 성별 스냅샷(#392): 프로필 gender 를 방 멤버로 고정한다. 프로필·gender 미설정이면 null(운영진이 추후 부여).
-        String gender = userProfileReader.findByUserId(userId)
-                .map(UserProfile::gender)
-                .map(Gender::name)
-                .orElse(null);
-        // 가명 배정(#393): 같은 성별 기존 멤버 수를 입장 순번(0-based)으로 써서 배정한다. gender 미상이면 배정 스킵(null).
-        String pseudonym = gender == null ? null
-                : PseudonymPool.assign(gender, (int) roomMemberReader.countByRoomIdAndGender(room.id(), gender));
-        roomMemberWriter.save(RoomMember.of(room.id(), userId, gender, null, now).withPseudonym(pseudonym));
-        roomInviteWriter.save(invite.incrementUsed());
-        eventPublisher.publishEvent(new RoomMemberJoinedEvent(room.id(), userId, now));
-        return new JoinRoomResponse(room.id());
     }
 
     /** 코드 발급(#312). HTTP 진입점은 admin 세션 — 여기선 core 도메인 로직(admin·테스트가 재사용). */

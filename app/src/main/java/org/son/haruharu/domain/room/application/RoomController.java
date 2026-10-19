@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.son.haruharu.domain.room.business.RoomFeedService;
-import org.son.haruharu.domain.room.business.RoomInviteService;
+import org.son.haruharu.domain.room.business.RoomJoinService;
 import org.son.haruharu.domain.room.business.RoomListService;
 import org.son.haruharu.domain.room.business.RoomMembersService;
 import org.son.haruharu.domain.room.business.RoomService;
@@ -47,7 +47,7 @@ public class RoomController {
 
     private final RoomService roomService;
     private final RoomListService roomListService;
-    private final RoomInviteService roomInviteService;
+    private final RoomJoinService roomJoinService;
     private final RoomTodayService roomTodayService;
     private final RoomMembersService roomMembersService;
     private final MemberProfileService memberProfileService;
@@ -55,14 +55,14 @@ public class RoomController {
     private final MatchResultService matchResultService;
     private final RoomFeedService roomFeedService;
 
-    public RoomController(RoomService roomService, RoomListService roomListService, RoomInviteService roomInviteService,
+    public RoomController(RoomService roomService, RoomListService roomListService, RoomJoinService roomJoinService,
                           RoomTodayService roomTodayService,
                           RoomMembersService roomMembersService, MemberProfileService memberProfileService,
                           FinalSelectionService finalSelectionService,
                           MatchResultService matchResultService, RoomFeedService roomFeedService) {
         this.roomService = roomService;
         this.roomListService = roomListService;
-        this.roomInviteService = roomInviteService;
+        this.roomJoinService = roomJoinService;
         this.roomTodayService = roomTodayService;
         this.roomMembersService = roomMembersService;
         this.memberProfileService = memberProfileService;
@@ -89,12 +89,15 @@ public class RoomController {
     @Operation(summary = "초대코드로 방 입장",
             description = "운영진이 발급한 초대코드로 소개팅방에 입장한다. room_member가 생성되고 입장한 room_id를 반환한다. "
                     + "코드가 없으면 404(INVITE_CODE_NOT_FOUND), 만료·비활성·정원 초과이거나 종료·취소된 방이면 400(INVITE_CODE_NOT_USABLE), "
-                    + "같은 방 재입장은 기존 room_id를 멱등 반환한다.")
+                    + "같은 방 재입장은 기존 room_id를 멱등 반환한다. "
+                    + "본인확인 필수 설정이 켜져 있으면 PASS 본인확인을 하지 않은 계정의 새 입장은 403(IDENTITY_REQUIRED)이며, "
+                    + "앱은 본인확인 화면으로 보낸 뒤 다시 입장을 요청한다. 이미 멤버인 방의 재입장에는 적용하지 않는다. "
+                    + "방 멤버의 성별·생년은 PASS 값을 쓰고, PASS 가 없을 때만 프로필 성별을 쓴다.")
     @PostMapping("/join")
     public ApiResponse<JoinRoomResponse> join(@Valid @RequestBody JoinRoomRequest request,
                                               Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
-        return ApiResponse.ok(roomInviteService.join(userId, request.code()));
+        return ApiResponse.ok(roomJoinService.join(userId, request.code()));
     }
 
     @Operation(summary = "내 소개팅방 조회",

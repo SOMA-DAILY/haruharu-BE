@@ -95,6 +95,17 @@ public class AdminRoomQueryRepository {
                 .getResultList().stream().map(UserProfileEntity::toDomain).toList();
     }
 
+    /** 참여자 중 본인인증 행이 있는 유저 id(#513). user_id 칸만 읽는다(CI/DI 는 매핑하지 않는다). */
+    public List<Long> findIdentityVerifiedUserIds(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery(
+                        "select i.userId from AdminUserIdentityView i where i.userId in :userIds", Long.class)
+                .setParameter("userIds", userIds)
+                .getResultList();
+    }
+
     private void appendFilters(StringBuilder jpql, RoomStatus status, LocalDate scheduledDate, Boolean isTest) {
         if (isTest != null) {
             jpql.append(" and r.isTest = :isTest");

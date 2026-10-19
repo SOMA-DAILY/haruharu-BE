@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.room.business.RoomInviteService;
+import org.son.haruharu.domain.room.business.RoomJoinService;
 import org.son.haruharu.domain.room.business.RoomService;
 import org.son.haruharu.domain.room.business.RoomStatusTransitionService;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException;
@@ -58,6 +59,8 @@ class RoomInvitePostgresConcurrencyIntegrationTest {
     }
 
     @Autowired RoomInviteService roomInviteService;
+
+    @Autowired RoomJoinService roomJoinService;
     @Autowired RoomService roomService;
     @Autowired RoomStatusTransitionService roomStatusTransitionService;
     @Autowired RoomReader roomReader;
@@ -81,7 +84,7 @@ class RoomInvitePostgresConcurrencyIntegrationTest {
         tasks.add(() -> runAndCapture(() -> roomStatusTransitionService.transition(room, LocalDateTime.now()), failures));
         for (long userId = 416L; userId < 422L; userId++) {
             long id = userId;
-            tasks.add(() -> runAndCapture(() -> roomInviteService.join(id, "CHAT46"), failures));
+            tasks.add(() -> runAndCapture(() -> roomJoinService.join(id, "CHAT46"), failures));
         }
 
         runTogether(tasks);
@@ -98,7 +101,7 @@ class RoomInvitePostgresConcurrencyIntegrationTest {
     void givenGroupRoom_whenCreationAndMembershipRetriedConcurrently_thenOneMembership() throws Exception {
         Long roomId = newJoinableRoom();
         roomInviteService.issue(roomId, "DUPE46", null, null, "test");
-        roomInviteService.join(416L, "DUPE46");
+        roomJoinService.join(416L, "DUPE46");
         chatService.createGroupRoom(roomId);
         Queue<Throwable> failures = new ConcurrentLinkedQueue<>();
 
@@ -132,7 +135,7 @@ class RoomInvitePostgresConcurrencyIntegrationTest {
             long id = userId;
             tasks.add(() -> {
                 try {
-                    roomInviteService.join(id, "RACE24");
+                    roomJoinService.join(id, "RACE24");
                     success.incrementAndGet();
                 } catch (InviteCodeNotUsableException e) {
                     full.incrementAndGet();
@@ -164,7 +167,7 @@ class RoomInvitePostgresConcurrencyIntegrationTest {
             long id = userId;
             tasks.add(() -> {
                 try {
-                    roomInviteService.join(id, "E8GHT8");
+                    roomJoinService.join(id, "E8GHT8");
                     success.incrementAndGet();
                 } catch (InviteCodeNotUsableException e) {
                     full.incrementAndGet();
@@ -236,7 +239,7 @@ class RoomInvitePostgresConcurrencyIntegrationTest {
             long id = userId;
             tasks.add(() -> {
                 try {
-                    roomInviteService.join(id, "MIX234");
+                    roomJoinService.join(id, "MIX234");
                 } catch (InviteCodeNotUsableException ignored) {
                     // reissue 또는 cancel이 먼저 room lock을 얻은 합법적인 결과
                 } catch (Throwable t) {
@@ -306,7 +309,7 @@ class RoomInvitePostgresConcurrencyIntegrationTest {
     private Runnable joinTask(Long userId, String code, AtomicInteger success, Queue<Throwable> failures) {
         return () -> {
             try {
-                roomInviteService.join(userId, code);
+                roomJoinService.join(userId, code);
                 success.incrementAndGet();
             } catch (Throwable t) {
                 failures.add(t);

@@ -11,6 +11,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -27,6 +29,13 @@ import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
+
+import org.son.haruharu.domain.cohort.implement.Cohort;
+import org.son.haruharu.domain.cohort.implement.CohortReader;
+import org.son.haruharu.domain.cohort.implement.CohortStatus;
+import org.son.haruharu.domain.cohort.storage.exception.CohortNotFoundException;
+import org.son.haruharu.domain.room.implement.RoomComposition;
+import org.son.haruharu.domain.room.implement.exception.InvalidRoomCompositionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -45,6 +54,7 @@ class RoomServiceTest {
     @Mock RoomWriter roomWriter;
     @Mock org.springframework.context.ApplicationEventPublisher events;
     @Mock RoomMemberReader roomMemberReader;
+    @Mock CohortReader cohortReader;
 
     RoomService roomService;
 
@@ -54,7 +64,7 @@ class RoomServiceTest {
 
     @BeforeEach
     void setUp() {
-        roomService = new RoomService(roomReader, roomWriter, roomMemberReader, clock, events);
+        roomService = new RoomService(roomReader, roomWriter, roomMemberReader, cohortReader, clock, events);
     }
 
     @Test
@@ -83,6 +93,80 @@ class RoomServiceTest {
 
         assertThatThrownBy(() -> roomService.createRoom(bad))
                 .isInstanceOf(RoomInvalidScheduleException.class);
+    }
+
+    // ── #513 기수·이름·성별 정원 ──
+
+    private CreateRoomCommand composedCommand(Long cohortId, String name, Integer male, Integer female) {
+        LocalDateTime starts = LocalDateTime.of(2026, 6, 26, 14, 0);
+        return new CreateRoomCommand(starts, starts.plusDays(2).withHour(20), starts.plusDays(2).withHour(22),
+                starts.plusDays(2).withHour(23), starts.plusDays(2).withHour(23).withMinute(30), 3,
+                cohortId, name, male, female);
+    }
+
+    private Cohort cohort(Long id, CohortStatus status) {
+        return new Cohort(id, 1L, 6, status, LocalDateTime.of(2026, 6, 20, 0, 0), LocalDateTime.of(2026, 6, 25, 0, 0),
+                LocalDateTime.of(2026, 6, 26, 0, 0), null, null, null, null, "admin:1", null, null);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CohortStatus.class, names = {"DRAFT", "OPEN"})
+    @DisplayName("편성 중(DRAFT·OPEN)인 기수·이름·성별 정원을 주면 기수를 공유 잠금으로 확인하고 방에 함께 저장한다")
+    void givenComposition_whenCreateRoom_thenValidatesCohortAndSavesComposition(CohortStatus status) {
+        given(cohortReader.getByIdForShare(4L)).willReturn(cohort(4L, status));
+        given(roomWriter.save(any())).willAnswer(inv -> {
+            Room room = inv.getArgument(0);
+            return new Room(99L, room.status(), room.scheduledDate(), room.totalDays(), null, null, room.startsAt(),
+                    room.finalSelectionOpensAt(), room.finalSelectionClosesAt(), room.resultAt(), room.endsAt(),
+                    room.composition());
+        });
+
+        assertThat(roomService.createRoom(composedCommand(4L, " 서울 6기 1조 ", 3, 3))).isEqualTo(99L);
+
+        verify(roomWriter).save(argThat(room -> room.composition().equals(RoomComposition.of(4L, "서울 6기 1조", 3, 3))));
+    }
+
+    @Test
+    @DisplayName("기수 없이 이름·정원만 주는 방(웹 전용 방)은 기수를 조회하지 않는다")
+    void givenNoCohort_whenCreateRoom_thenSkipsCohortLookup() {
+        given(roomWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        roomService.createRoom(composedCommand(null, "웹 3:3", 3, 3));
+
+        verify(cohortReader, never()).getByIdForShare(any());
+        verify(roomWriter).save(argThat(room -> room.composition().cohortId() == null
+                && "웹 3:3".equals(room.composition().name())));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CohortStatus.class, names = {"SETTLED", "CANCELLED"})
+    @DisplayName("정산·취소된 기수에는 방을 만들지 않는다")
+    void givenClosedCohort_whenCreateRoom_thenRejects(CohortStatus status) {
+        given(cohortReader.getByIdForShare(4L)).willReturn(cohort(4L, status));
+
+        assertThatThrownBy(() -> roomService.createRoom(composedCommand(4L, null, 3, 3)))
+                .isInstanceOfSatisfying(InvalidRoomCompositionException.class, e ->
+                        assertThat(e.getFieldErrors()).extracting(error -> error.field()).containsExactly("cohort_id"));
+        verify(roomWriter, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("없는 기수면 COHORT_NOT_FOUND 로 거부하고 방을 저장하지 않는다")
+    void givenMissingCohort_whenCreateRoom_thenNotFound() {
+        given(cohortReader.getByIdForShare(404L)).willThrow(new CohortNotFoundException());
+
+        assertThatThrownBy(() -> roomService.createRoom(composedCommand(404L, null, null, null)))
+                .isInstanceOf(CohortNotFoundException.class);
+        verify(roomWriter, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("성별 정원이 1 미만이면 기수를 조회하기 전에 거부한다")
+    void givenNonPositiveCapacity_whenCreateRoom_thenRejectsBeforeCohortLookup() {
+        assertThatThrownBy(() -> roomService.createRoom(composedCommand(4L, null, 0, 3)))
+                .isInstanceOf(InvalidRoomCompositionException.class);
+        verify(cohortReader, never()).getByIdForShare(any());
+        verify(roomWriter, never()).save(any());
     }
 
     // ── #320 ⑥ starts_at 과거 시각 거부 (고정 시계 = 2026-06-26 12:00) ──

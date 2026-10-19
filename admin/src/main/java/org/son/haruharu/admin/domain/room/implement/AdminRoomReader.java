@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 /** 어드민 세션(방) 조회 협력자. 트랜잭션 경계는 Service가 갖는다. */
 @Component
@@ -58,5 +59,10 @@ public class AdminRoomReader {
 
     public List<UserProfile> profilesOf(List<Long> userIds) {
         return adminRoomQueryRepository.findProfilesByUserIds(userIds);
+    }
+
+    /** 본인인증(PASS)을 마친 유저 id(#513). 탈퇴로 지운 본인인증 행은 soft-delete 필터로 빠진다. */
+    public Set<Long> identityVerifiedUserIdsOf(List<Long> userIds) {
+        return Set.copyOf(adminRoomQueryRepository.findIdentityVerifiedUserIds(userIds));
     }
 }

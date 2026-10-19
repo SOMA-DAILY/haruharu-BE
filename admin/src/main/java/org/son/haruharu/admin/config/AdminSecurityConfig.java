@@ -111,6 +111,12 @@ public class AdminSecurityConfig {
                         .hasAnyRole("SUPER", "OPERATOR")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/admin/rooms/*/missions/**")
                         .hasAnyRole("SUPER", "OPERATOR")
+                        // 모집 트랙·기수 쓰기(생성·수정·공개·취소, #510)는 SUPER·OPERATOR. 목록 조회(GET)는 로그인만.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/recruit-tracks", "/api/v1/admin/cohorts",
+                                "/api/v1/admin/cohorts/*/publish", "/api/v1/admin/cohorts/*/cancel")
+                        .hasAnyRole("SUPER", "OPERATOR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/recruit-tracks/*", "/api/v1/admin/cohorts/*")
+                        .hasAnyRole("SUPER", "OPERATOR")
                         // 초대코드는 "인증 없이 방에 들어갈 수 있는 자격증명"이라 조회도 쓰기와 같은 권한으로 막는다.
                         // 방 조회 권한(전체)에 코드 원문까지 딸려가면 CS 계정이 임의 방에 입장할 수 있다(#318 보안리뷰).
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/rooms/*/invites")

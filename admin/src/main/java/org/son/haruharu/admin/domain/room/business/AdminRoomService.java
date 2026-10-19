@@ -6,6 +6,8 @@ import org.son.haruharu.admin.domain.room.business.dto.AdminRoomSummary;
 import org.son.haruharu.admin.domain.room.implement.AdminRoomReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomComposition;
+import org.son.haruharu.domain.room.implement.RoomEntryPath;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,7 @@ import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -70,25 +73,34 @@ public class AdminRoomService {
                 .profilesOf(members.stream().map(RoomMember::userId).toList()).stream()
                 .collect(Collectors.toMap(UserProfile::userId, Function.identity(), (a, b) -> a));
         LocalDate today = LocalDate.now(clock);
+        // 본인 확인 여부(#513): 본인인증 행이 있으면 확인 완료(UserService 와 같은 기준). 한 번에 조회한다.
+        Set<Long> verifiedUserIds = adminRoomReader.identityVerifiedUserIdsOf(
+                members.stream().map(RoomMember::userId).toList());
 
         List<AdminRoomDetailResponse.MemberView> memberViews = members.stream()
-                .map(m -> toMemberView(m, profilesByUserId.get(m.userId()), today))
+                .map(m -> toMemberView(m, profilesByUserId.get(m.userId()), today,
+                        verifiedUserIds.contains(m.userId())))
                 .toList();
+        RoomComposition composition = room.composition();
         return new AdminRoomDetailResponse(
                 // 표시 status 는 파생값 — 저장 컬럼은 reconciler 가 맞추는 materialized 값이라 배치 지연에 노출된다(#320).
                 room.id(), room.statusAt(LocalDateTime.now(clock)), room.scheduledDate(), room.totalDays(), currentDay,
                 startedAtOf(room), room.endedAt(), members.size(),
                 countGender(members, GENDER_FEMALE), countGender(members, GENDER_MALE), memberViews,
-                room.startsAt(), room.finalSelectionOpensAt(), room.endsAt(), room.isTest());
+                room.startsAt(), room.finalSelectionOpensAt(), room.endsAt(),
+                composition.cohortId(), composition.name(), composition.maleCapacity(), composition.femaleCapacity(),
+                (int) members.stream().filter(m -> m.entryPath() == RoomEntryPath.INVITE).count(), room.isTest());
     }
 
-    private AdminRoomDetailResponse.MemberView toMemberView(RoomMember member, UserProfile profile, LocalDate today) {
+    private AdminRoomDetailResponse.MemberView toMemberView(RoomMember member, UserProfile profile, LocalDate today,
+                                                            boolean identityVerified) {
         Integer age = member.birthday() == null ? null : Period.between(member.birthday(), today).getYears();
         String nickname = profile == null ? null : profile.nickname();
         String region = profile == null ? null : profile.location();
         return new AdminRoomDetailResponse.MemberView(
                 member.id(), member.userId(), member.gender(), member.joinedAt(),
-                nickname, member.pseudonym(), age, region);
+                nickname, member.pseudonym(), age, region,
+                member.entryPath(), member.applicationId(), identityVerified);
     }
 
     private AdminRoomSummary toSummary(Room room, List<RoomMember> members, LocalDateTime now) {

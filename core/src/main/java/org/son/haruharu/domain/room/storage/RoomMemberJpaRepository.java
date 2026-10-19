@@ -1,5 +1,6 @@
 package org.son.haruharu.domain.room.storage;
 
+import org.son.haruharu.domain.room.implement.RoomEntryPath;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;
@@ -19,4 +20,6 @@ public interface RoomMemberJpaRepository extends JpaRepository<RoomMemberEntity,
     long countByRoomId(Long roomId);
 
     long countByRoomIdAndGender(Long roomId, String gender);
+
+    long countByRoomIdAndEntryPath(Long roomId, RoomEntryPath entryPath);
 }

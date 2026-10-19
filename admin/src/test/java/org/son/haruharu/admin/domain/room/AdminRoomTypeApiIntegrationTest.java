@@ -102,6 +102,33 @@ class AdminRoomTypeApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("방 구분 생성·변경은 develop의 방 이름·성별 정원을 함께 보존한다")
+    void givenRoomComposition_whenCreatingAndChangingType_thenPreservesComposition() throws Exception {
+        String request = body(LocalDateTime.now().plusDays(30).withNano(0), true)
+                .replace("\"max_uses\": 6", "\"max_uses\": 6, \"name\": \"운영 구분 검증\", \"male_capacity\": 3, \"female_capacity\": 2");
+        String response = mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON).content(request)
+                        .with(authentication(auth("OPERATOR"))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long id = JsonPath.parse(response).read("$.data.room_id", Long.class);
+        for (boolean isTest : new boolean[]{true, false}) {
+            if (!isTest) {
+                mockMvc.perform(patch("/api/v1/admin/rooms/{id}/type", id)
+                                .contentType(MediaType.APPLICATION_JSON).content("{\"is_test\":false}")
+                                .with(authentication(auth("OPERATOR"))))
+                        .andExpect(status().isOk());
+            }
+            mockMvc.perform(get("/api/v1/admin/rooms/{id}", id).with(authentication(auth("CS"))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.is_test").value(isTest))
+                    .andExpect(jsonPath("$.data.name").value("운영 구분 검증"))
+                    .andExpect(jsonPath("$.data.male_capacity").value(3))
+                    .andExpect(jsonPath("$.data.female_capacity").value(2));
+        }
+    }
+
+    @Test
     @DisplayName("구분을 생략한 기존 클라이언트는 운영방을 생성한다")
     void givenMissingType_whenCreatingRoom_thenDefaultsToOperational() throws Exception {
         Long id = create(LocalDateTime.now().plusDays(30).withNano(0), null);

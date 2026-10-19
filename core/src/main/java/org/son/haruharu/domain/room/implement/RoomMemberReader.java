@@ -57,6 +57,11 @@ public class RoomMemberReader {
         return roomMemberRepository.countByRoomId(roomId);
     }
 
+    /** 같은 방에 이 경로로 들어온 멤버 수. 초대코드 정원은 INVITE 인원만 센다(#513). */
+    public long countByRoomIdAndEntryPath(Long roomId, RoomEntryPath entryPath) {
+        return roomMemberRepository.countByRoomIdAndEntryPath(roomId, entryPath);
+    }
+
     /** 같은 방·성별의 기존 멤버 수. 가명 배정의 입장 순번(0-based)으로 쓴다(#393). */
     public long countByRoomIdAndGender(Long roomId, String gender) {
         return roomMemberRepository.countByRoomIdAndGender(roomId, gender);

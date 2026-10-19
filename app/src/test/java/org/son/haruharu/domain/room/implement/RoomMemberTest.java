@@ -79,4 +79,64 @@ class RoomMemberTest {
         assertThat(withName.displayPseudonym()).isEqualTo("현우");
         assertThat(withoutName.displayPseudonym()).isEqualTo(RoomMember.ANONYMOUS_NAME);
     }
+
+    // ── #513 입장 경로 ──
+
+    @Test
+    @DisplayName("초대코드 입장 멤버는 입장 경로 INVITE 이고 신청 id 가 없다")
+    void givenInviteJoin_whenOf_thenEntryPathInviteWithoutApplication() {
+        RoomMember member = RoomMember.of(7L, 901L, "MALE", null, JOINED_AT);
+
+        assertThat(member.entryPath()).isEqualTo(RoomEntryPath.INVITE);
+        assertThat(member.applicationId()).isNull();
+    }
+
+    @Test
+    @DisplayName("기존 7칸 생성자는 초대코드 입장으로 본다(기존 행 백필과 같은 기본값)")
+    void givenLegacyConstructor_whenCreate_thenEntryPathInvite() {
+        RoomMember member = new RoomMember(3L, 7L, 901L, null, null, null, JOINED_AT);
+
+        assertThat(member.entryPath()).isEqualTo(RoomEntryPath.INVITE);
+        assertThat(member.applicationId()).isNull();
+    }
+
+    @Test
+    @DisplayName("앱 신청으로 들어온 멤버는 입장 경로 APPLICATION 과 신청 id 를 갖는다")
+    void givenApplication_whenFromApplication_thenEntryPathApplicationWithId() {
+        RoomMember member = RoomMember.fromApplication(7L, 901L, "FEMALE", LocalDate.of(2001, 3, 4), 55L, JOINED_AT);
+
+        assertThat(member.entryPath()).isEqualTo(RoomEntryPath.APPLICATION);
+        assertThat(member.applicationId()).isEqualTo(55L);
+        assertThat(member.gender()).isEqualTo("FEMALE");
+        assertThat(member.birthday()).isEqualTo(LocalDate.of(2001, 3, 4));
+    }
+
+    @Test
+    @DisplayName("앱 신청 배정은 신청 id 가 없으면 거부한다(쓰는 쪽 검증)")
+    void givenNoApplicationId_whenFromApplication_thenThrows() {
+        assertThatThrownBy(() -> RoomMember.fromApplication(7L, 901L, "MALE", null, null, JOINED_AT))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("DB 에서 복원하는 생성자는 짝이 어긋난 행도 예외 없이 읽는다 — 행 하나 때문에 방 조회 전체가 깨지지 않게")
+    void givenMismatchedStoredRow_whenRestore_thenReadsWithoutThrowing() {
+        RoomMember applicationWithoutId = new RoomMember(1L, 7L, 901L, null, null, null, JOINED_AT,
+                RoomEntryPath.APPLICATION, null);
+        RoomMember inviteWithId = new RoomMember(2L, 7L, 902L, null, null, null, JOINED_AT, RoomEntryPath.INVITE, 55L);
+
+        assertThat(applicationWithoutId.entryPath()).isEqualTo(RoomEntryPath.APPLICATION);
+        assertThat(inviteWithId.applicationId()).isEqualTo(55L);
+    }
+
+    @Test
+    @DisplayName("성별·가명을 부여해도 입장 경로와 신청 id 는 그대로다")
+    void givenApplicationMember_whenWithGenderAndPseudonym_thenEntryPathKept() {
+        RoomMember member = RoomMember.fromApplication(7L, 901L, null, null, 55L, JOINED_AT);
+
+        RoomMember updated = member.withGender("MALE").withPseudonym("민준");
+
+        assertThat(updated.entryPath()).isEqualTo(RoomEntryPath.APPLICATION);
+        assertThat(updated.applicationId()).isEqualTo(55L);
+    }
 }

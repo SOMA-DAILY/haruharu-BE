@@ -80,6 +80,50 @@ class EntityAuditColumnRoundTripTest {
     }
 
     @Test
+    @DisplayName("모집 트랙·기수 Entity는 문항과 감사 시각을 포함해 모든 칸을 왕복 보존한다")
+    void givenRecruitTrackAndCohort_whenRoundTrip_thenPreserveAllFields() {
+        var track = new org.son.haruharu.domain.cohort.implement.RecruitTrack(1L, "seoul-student", "서울 대학생", "서울",
+                org.son.haruharu.domain.cohort.implement.RecruitAudience.STUDENT, 20, 29, java.util.List.of(
+                        new org.son.haruharu.domain.cohort.implement.TrackQuestion("grade", "학년",
+                                org.son.haruharu.domain.cohort.implement.TrackQuestionType.CHOICE, true,
+                                java.util.List.of("1학년", "2학년"))),
+                1, true, CREATED_AT, CREATED_AT.plusMinutes(1));
+        assertThat(org.son.haruharu.domain.cohort.storage.RecruitTrackEntity.from(track).toDomain()).isEqualTo(track);
+        var cohort = new org.son.haruharu.domain.cohort.implement.Cohort(2L, 1L, 6,
+                org.son.haruharu.domain.cohort.implement.CohortStatus.SETTLED, CREATED_AT, CREATED_AT.plusDays(5),
+                CREATED_AT.plusDays(6), "10월 마지막 주", 6, null, CREATED_AT.plusDays(7), "admin:1",
+                CREATED_AT, CREATED_AT.plusDays(7));
+        assertThat(org.son.haruharu.domain.cohort.storage.CohortEntity.from(cohort).toDomain()).isEqualTo(cohort);
+    }
+
+    @Test
+    @DisplayName("기수 신청 Entity는 답·설문·종료 기록과 감사 시각을 포함해 모든 칸을 왕복 보존한다")
+    void givenCohortApplication_whenRoundTrip_thenPreserveAllFields() {
+        var application = new org.son.haruharu.domain.cohort.implement.CohortApplication(1L, 7L, 3L, 2L,
+                org.son.haruharu.domain.cohort.implement.CohortApplicationStatus.NOT_ASSIGNED,
+                org.son.haruharu.domain.cohort.implement.ApplicantGender.FEMALE, "FEMALE",
+                java.time.LocalDate.of(2003, 5, 1), "한국대", "컴퓨터공학과", Map.of("grade", "3학년"), "인스타그램",
+                org.son.haruharu.domain.cohort.implement.FriendPreference.SAME_ROOM, "설레요", CREATED_AT.plusHours(1),
+                1, CREATED_AT, CREATED_AT.plusHours(2),
+                org.son.haruharu.domain.cohort.implement.ApplicationReviewReason.GENDER_MISMATCH, 9L,
+                CREATED_AT.plusDays(1), "admin:1", CREATED_AT.plusDays(2),
+                org.son.haruharu.domain.cohort.implement.ApplicationCloseReason.COHORT_CANCELLED,
+                CREATED_AT.plusDays(2), "메모", CREATED_AT, CREATED_AT.plusDays(2));
+        assertThat(org.son.haruharu.domain.cohort.storage.CohortApplicationEntity.from(application).toDomain())
+                .isEqualTo(application);
+    }
+
+    @Test
+    @DisplayName("프로필 Entity는 기수 신청 번호(phone)까지 왕복 보존한다")
+    void givenProfileWithPhone_whenRoundTrip_thenPreservePhone() {
+        var profile = new org.son.haruharu.domain.profile.implement.UserProfile(1L, 7L, "서울", "한국대", 175, "INFP",
+                "닉", null, null, org.son.haruharu.domain.profile.implement.Gender.MALE, 2003, "컴퓨터공학과", "러닝",
+                "01012345678");
+        assertThat(org.son.haruharu.domain.profile.storage.UserProfileEntity.from(profile).toDomain())
+                .isEqualTo(profile);
+    }
+
+    @Test
     @DisplayName("BlockEntity.from()은 createdAt을 복원한다")
     void givenBlockWithCreatedAt_whenFromThenToDomain_thenCreatedAtSurvives() {
         Block block = new Block(1L, 10L, 20L, CREATED_AT);

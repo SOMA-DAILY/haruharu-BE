@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.room.business.RoomInviteService;
+import org.son.haruharu.domain.room.business.RoomJoinService;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException;
 import org.son.haruharu.domain.room.implement.RoomInviteStatus;
 import org.son.haruharu.domain.room.implement.Room;
@@ -16,6 +17,7 @@ import org.son.haruharu.domain.room.implement.exception.InvalidRoomInviteMaxUses
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomMember;
+import org.son.haruharu.domain.room.implement.RoomEntryPath;
 import org.son.haruharu.domain.room.implement.RoomStatus;
 import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.son.haruharu.domain.room.storage.RoomInviteJpaRepository;
@@ -52,6 +54,7 @@ class RoomJoinApiIntegrationTest {
     @Autowired UserJpaRepository userJpaRepository;
     @Autowired RoomWriter roomWriter;
     @Autowired RoomInviteService roomInviteService;
+    @Autowired RoomJoinService roomJoinService;
     @Autowired RoomMemberReader roomMemberReader;
     @Autowired RoomMemberWriter roomMemberWriter;
     @Autowired RoomInviteJpaRepository roomInviteJpaRepository;
@@ -170,13 +173,37 @@ class RoomJoinApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("앱 신청자 3명이 먼저 배정된 방에도 초대코드 정원 3명이 모두 들어오고, 4번째 초대 입장은 거부된다(#513)")
+    void givenApplicationMembers_whenInviteJoins_thenOnlyInviteMembersCountTowardMaxUses() {
+        Long roomId = createJoinableRoom();
+        roomInviteService.issue(roomId, "MXK234", 3, null, "admin");
+        LocalDateTime joinedAt = LocalDateTime.now().minusMinutes(1);
+        for (long i = 0; i < 3; i++) {
+            roomMemberWriter.save(RoomMember.fromApplication(roomId, 400L + i, "MALE", null, 900L + i, joinedAt));
+        }
+
+        for (long userId = 500L; userId < 503L; userId++) {
+            roomJoinService.join(userId, "MXK234");
+        }
+
+        assertThatThrownBy(() -> roomJoinService.join(503L, "MXK234"))
+                .isInstanceOf(InviteCodeNotUsableException.class);
+        List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
+        assertThat(members).hasSize(6);
+        assertThat(members).filteredOn(member -> member.entryPath() == RoomEntryPath.INVITE)
+                .extracting(RoomMember::userId).containsExactlyInAnyOrder(500L, 501L, 502L);
+        assertThat(members).filteredOn(member -> member.entryPath() == RoomEntryPath.APPLICATION)
+                .extracting(RoomMember::applicationId).containsExactlyInAnyOrder(900L, 901L, 902L);
+    }
+
+    @Test
     @DisplayName("maxUses가 null이면 active member가 여섯 명을 넘어도 무제한으로 입장한다")
     void givenUnlimitedInvite_whenSevenUsersJoin_thenAllMembershipsAreCreated() {
         Long roomId = createJoinableRoom();
         roomInviteService.issue(roomId, "UNL234", null, null, "admin");
 
         for (long userId = 200L; userId < 207L; userId++) {
-            roomInviteService.join(userId, "UNL234");
+            roomJoinService.join(userId, "UNL234");
         }
 
         assertThat(roomMemberReader.getByRoomId(roomId)).hasSize(7);
@@ -188,11 +215,11 @@ class RoomJoinApiIntegrationTest {
     void givenReissuedSmallerCapacity_whenNewUserJoins_thenRejectsWithoutChangingPerCodeUsage() {
         Long roomId = createJoinableRoom();
         roomInviteService.issue(roomId, "SHRNK2", 2, null, "admin");
-        roomInviteService.join(300L, "SHRNK2");
+        roomJoinService.join(300L, "SHRNK2");
         roomInviteService.reissueFor(roomId, 1, null, "admin");
         String newCode = roomInviteJpaRepository.findByRoomIdOrderByIdDesc(roomId).getFirst().toDomain().code();
 
-        assertThatThrownBy(() -> roomInviteService.join(301L, newCode))
+        assertThatThrownBy(() -> roomJoinService.join(301L, newCode))
                 .isInstanceOf(InviteCodeNotUsableException.class);
 
         List<RoomInvite> invites = roomInviteJpaRepository
@@ -208,7 +235,7 @@ class RoomJoinApiIntegrationTest {
     void givenInvalidDirectReissue_whenFactoryRejects_thenTransactionPreservesExistingActiveInvite() {
         Long roomId = createJoinableRoom();
         roomInviteService.issue(roomId, "RQLL24", 2, null, "admin");
-        roomInviteService.join(400L, "RQLL24");
+        roomJoinService.join(400L, "RQLL24");
 
         assertThatThrownBy(() -> roomInviteService.reissueFor(roomId, 0, null, "admin"))
                 .isInstanceOf(InvalidRoomInviteMaxUsesException.class);

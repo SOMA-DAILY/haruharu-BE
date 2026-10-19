@@ -20,6 +20,14 @@ public record TicketCreditCommand(
         return new TicketCreditCommand(userId, amount, TicketLedgerReason.PURCHASE, refType, refId, null);
     }
 
+    /**
+     * 사용 반환(#511). 쓴 참가권을 같은 출처(ref)로 돌려준다. 원장의 부분 유니크(ref_type, ref_id, reason)가
+     * 같은 출처의 반환을 한 번으로 막는다.
+     */
+    public static TicketCreditCommand useRefund(Long userId, long amount, String refType, String refId) {
+        return new TicketCreditCommand(userId, amount, TicketLedgerReason.USE_REFUND, refType, refId, null);
+    }
+
     /** 운영진 지급. 누가 줬는지(refId=어드민 id)와 사유 메모를 원장에 남긴다. */
     public static TicketCreditCommand adminGrant(Long userId, long amount, Long adminId, String memo) {
         return new TicketCreditCommand(userId, amount, TicketLedgerReason.ADMIN_GRANT,

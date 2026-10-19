@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.son.haruharu.domain.cohort.implement.Cohort;
+import org.son.haruharu.domain.cohort.implement.CohortReader;
+import org.son.haruharu.domain.cohort.implement.CohortStatus;
 import org.son.haruharu.domain.room.business.command.CreateRoomCommand;
 import org.son.haruharu.domain.room.business.dto.RoomResponse;
 import org.son.haruharu.domain.room.business.exception.RoomAlreadyEndedException;
@@ -12,6 +15,8 @@ import org.son.haruharu.domain.room.business.exception.RoomInvalidScheduleExcept
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.son.haruharu.domain.room.business.exception.RoomStartsAtInPastException;
 import org.son.haruharu.domain.room.implement.Room;
+import org.son.haruharu.domain.room.implement.RoomComposition;
+import org.son.haruharu.domain.room.implement.exception.InvalidRoomCompositionException;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
@@ -29,15 +34,17 @@ public class RoomService {
     private final RoomReader roomReader;
     private final RoomWriter roomWriter;
     private final RoomMemberReader roomMemberReader;
+    private final CohortReader cohortReader;
     private final Clock clock;
     private final ApplicationEventPublisher events;
 
     public RoomService(RoomReader roomReader, RoomWriter roomWriter,
-                       RoomMemberReader roomMemberReader, Clock clock,
+                       RoomMemberReader roomMemberReader, CohortReader cohortReader, Clock clock,
                        ApplicationEventPublisher events) {
         this.roomReader = roomReader;
         this.roomWriter = roomWriter;
         this.roomMemberReader = roomMemberReader;
+        this.cohortReader = cohortReader;
         this.clock = clock;
         this.events = events;
     }
@@ -51,10 +58,27 @@ public class RoomService {
     public Long createRoom(CreateRoomCommand command) {
         validateSchedule(command);
         validateNotInPast(command, LocalDateTime.now(clock));
+        RoomComposition composition = RoomComposition.of(command.cohortId(), command.name(),
+                command.maleCapacity(), command.femaleCapacity());
+        validateCohort(composition.cohortId());
         Room saved = roomWriter.save(Room.createScheduled(
                 command.startsAt(), command.finalSelectionOpensAt(), command.finalSelectionClosesAt(),
-                command.resultAt(), command.endsAt(), command.totalDays()).withTestType(command.isTest()));
+                command.resultAt(), command.endsAt(), command.totalDays(), composition).withTestType(command.isTest()));
         return saved.id();
+    }
+
+    /**
+     * 기수 방이면 기수가 있고 아직 편성 중(DRAFT·OPEN)인지 본다(#513). 정산(SETTLED)·취소된 기수는 더 배정할 신청자가 없으므로
+     * 방을 만들지 않는다. 공유 잠금으로 같은 기수의 취소·정산(배타 잠금)과 한 줄로 세운다. 잠금 순서 기수 → 방을 지킨다(방은 아직 없다).
+     */
+    private void validateCohort(Long cohortId) {
+        if (cohortId == null) {
+            return;
+        }
+        Cohort cohort = cohortReader.getByIdForShare(cohortId);
+        if (cohort.status() != CohortStatus.DRAFT && cohort.status() != CohortStatus.OPEN) {
+            throw new InvalidRoomCompositionException("cohort_id", "정산·취소된 기수에는 방을 만들 수 없습니다.");
+        }
     }
 
     private void validateSchedule(CreateRoomCommand c) {
