@@ -38,11 +38,16 @@ public class AdminRoomService {
     }
 
     public PageResponse<AdminRoomSummary> getRooms(RoomStatus status, LocalDate scheduledDate, int page, int size) {
+        return getRooms(status, scheduledDate, null, page, size);
+    }
+
+    public PageResponse<AdminRoomSummary> getRooms(RoomStatus status, LocalDate scheduledDate, Boolean isTest,
+                                                 int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
 
-        List<Room> rooms = adminRoomReader.findRooms(status, scheduledDate, safePage * safeSize, safeSize);
-        long total = adminRoomReader.countRooms(status, scheduledDate);
+        List<Room> rooms = adminRoomReader.findRooms(status, scheduledDate, isTest, safePage * safeSize, safeSize);
+        long total = adminRoomReader.countRooms(status, scheduledDate, isTest);
 
         Map<Long, List<RoomMember>> membersByRoom = adminRoomReader
                 .membersOf(rooms.stream().map(Room::id).toList()).stream()
@@ -74,7 +79,7 @@ public class AdminRoomService {
                 room.id(), room.statusAt(LocalDateTime.now(clock)), room.scheduledDate(), room.totalDays(), currentDay,
                 startedAtOf(room), room.endedAt(), members.size(),
                 countGender(members, GENDER_FEMALE), countGender(members, GENDER_MALE), memberViews,
-                room.startsAt(), room.finalSelectionOpensAt(), room.endsAt());
+                room.startsAt(), room.finalSelectionOpensAt(), room.endsAt(), room.isTest());
     }
 
     private AdminRoomDetailResponse.MemberView toMemberView(RoomMember member, UserProfile profile, LocalDate today) {
@@ -90,7 +95,7 @@ public class AdminRoomService {
         return new AdminRoomSummary(
                 room.id(), room.statusAt(now), room.scheduledDate(), room.currentDayAt(now),
                 members.size(), countGender(members, GENDER_FEMALE), countGender(members, GENDER_MALE),
-                startedAtOf(room));
+                startedAtOf(room), room.isTest());
     }
 
     /** 새 모델 방은 전이 전까지 startedAt 이 비어 있으므로 예정 시각(starts_at)을 노출한다(#320). */

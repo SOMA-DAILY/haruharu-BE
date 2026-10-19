@@ -12,6 +12,12 @@ public record CreateRoomCommand(
         LocalDateTime finalSelectionClosesAt,
         LocalDateTime resultAt,
         LocalDateTime endsAt,
-        int totalDays
+        int totalDays,
+        boolean isTest
 ) {
+    public CreateRoomCommand(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
+                             LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt,
+                             LocalDateTime endsAt, int totalDays) {
+        this(startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, totalDays, false);
+    }
 }

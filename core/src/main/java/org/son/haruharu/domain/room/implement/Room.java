@@ -16,8 +16,16 @@ public record Room(
         LocalDateTime finalSelectionOpensAt,
         LocalDateTime finalSelectionClosesAt,
         LocalDateTime resultAt,
-        LocalDateTime endsAt
+        LocalDateTime endsAt,
+        boolean isTest
 ) {
+    public Room(Long id, RoomStatus status, LocalDate scheduledDate, int totalDays,
+                LocalDateTime startedAt, LocalDateTime endedAt, LocalDateTime startsAt,
+                LocalDateTime finalSelectionOpensAt, LocalDateTime finalSelectionClosesAt,
+                LocalDateTime resultAt, LocalDateTime endsAt) {
+        this(id, status, scheduledDate, totalDays, startedAt, endedAt, startsAt,
+                finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, false);
+    }
     /** 6-arg 하위호환. 신규 스케줄 시각은 null default — 기존 6-arg 호출부/픽스처를 그대로 살린다. */
     public Room(Long id, RoomStatus status, LocalDate scheduledDate, int totalDays,
                 LocalDateTime startedAt, LocalDateTime endedAt) {
@@ -97,25 +105,30 @@ public record Room(
         boolean needsAnchor = startsAt != null && startedAt == null && derived != RoomStatus.PENDING;
         LocalDateTime anchor = needsAnchor ? startsAt : startedAt;
         return new Room(id, derived, scheduledDate, totalDays, anchor, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, isTest);
     }
 
     /** 운영진 수동 취소(#311): → CANCELLED. sticky(이후 statusAt 도 CANCELLED). */
     public Room cancelled() {
         return new Room(id, RoomStatus.CANCELLED, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, isTest);
     }
 
     /** 방 시작: PENDING → ACTIVE, startedAt 앵커. currentDay는 startedAt에서 파생하므로 저장하지 않는다. */
     public Room started(LocalDateTime startedAt) {
         return new Room(id, RoomStatus.ACTIVE, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, isTest);
     }
 
     /** 세션 종료: ACTIVE → ENDED, endedAt 앵커. 종료 후 getLegacyActive()·findCurrent 조회에서 제외된다. */
     public Room ended(LocalDateTime endedAt) {
         return new Room(id, RoomStatus.ENDED, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, isTest);
+    }
+
+    public Room withTestType(boolean isTest) {
+        return new Room(id, status, scheduledDate, totalDays, startedAt, endedAt,
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, isTest);
     }
 
     /**

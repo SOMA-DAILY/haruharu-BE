@@ -24,10 +24,21 @@ public record CreateAdminRoomCommand(
         boolean missionEnabled,
         List<CreateRoomMissionSlotCommand> missionSlots,
         // 채팅 편성(#457). 비면 0줄.
-        List<ScheduleItemCommand> chatSchedule
+        List<ScheduleItemCommand> chatSchedule,
+        boolean isTest
 ) {
+    public CreateAdminRoomCommand(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
+                                  LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt,
+                                  LocalDateTime endsAt, int totalDays, Integer maxUses,
+                                  LocalDateTime inviteExpiresAt, boolean missionEnabled,
+                                  List<CreateRoomMissionSlotCommand> missionSlots,
+                                  List<ScheduleItemCommand> chatSchedule) {
+        this(startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt,
+                totalDays, maxUses, inviteExpiresAt, missionEnabled, missionSlots, chatSchedule, false);
+    }
+
     public CreateRoomCommand toRoomCommand() {
         return new CreateRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
-                resultAt, endsAt, totalDays);
+                resultAt, endsAt, totalDays, isTest);
     }
 }

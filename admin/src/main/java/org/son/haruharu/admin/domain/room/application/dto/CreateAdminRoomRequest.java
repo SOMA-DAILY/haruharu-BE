@@ -40,7 +40,9 @@ public record CreateAdminRoomRequest(
         List<MissionSlotRequest> missionSlots,
         @Schema(description = "채팅 편성(#457, 선택). 어드민 화면 기본 5줄을 고친 그대로 저장된다. 서버 기본값 없음(비면 0줄). "
                 + "줄마다 run_at 필수, 시각 제한 없음.", nullable = true)
-        List<ScheduleItemRequest> chatSchedule
+        List<ScheduleItemRequest> chatSchedule,
+        @Schema(description = "테스트방 여부. 생략하면 운영방(false).", defaultValue = "false")
+        Boolean isTest
 ) {
     public CreateAdminRoomCommand toCommand() {
         return new CreateAdminRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
@@ -48,7 +50,8 @@ public record CreateAdminRoomRequest(
                 missionSlots == null ? null : missionSlots.stream().filter(java.util.Objects::nonNull)
                         .map(MissionSlotRequest::toCommand).toList(),
                 chatSchedule == null ? List.of()
-                        : chatSchedule.stream().filter(java.util.Objects::nonNull).map(ScheduleItemRequest::toCommand).toList());
+                        : chatSchedule.stream().filter(java.util.Objects::nonNull).map(ScheduleItemRequest::toCommand).toList(),
+                Boolean.TRUE.equals(isTest));
     }
 
     public record MissionSlotRequest(

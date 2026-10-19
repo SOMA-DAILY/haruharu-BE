@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.admin.domain.room.business.AdminRoomCommandService;
+import org.son.haruharu.admin.domain.room.business.command.UpdateAdminRoomTypeCommand;
 import org.son.haruharu.domain.room.business.exception.RoomAlreadyEndedException;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomReader;
@@ -114,6 +115,41 @@ class AdminRoomCancelPostgresConcurrencyIntegrationTest {
                     .isEqualTo(RoomStatus.ENDED);
         } finally {
             allowEndCommit.countDown();
+            pool.shutdownNow();
+            assertThat(pool.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("방 구분 변경이 상태 전이의 락을 기다리면 최신 종료 상태를 보존한다")
+    void givenConcurrentEnd_whenUpdatingRoomType_thenPreservesEndedState() throws Exception {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 9, 1, 9, 0);
+        Long roomId = roomWriter.save(new Room(null, RoomStatus.ACTIVE, startedAt.toLocalDate(),
+                3, startedAt, null)).id();
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        try {
+            Future<?> end = pool.submit(() -> transaction.executeWithoutResult(status -> {
+                Room room = roomReader.findByIdForUpdate(roomId).orElseThrow();
+                locked.countDown();
+                await(release);
+                roomWriter.save(room.ended(startedAt.plusDays(3)));
+            }));
+            assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+            Future<?> update = pool.submit(() -> adminRoomCommandService.updateType(roomId,
+                    new UpdateAdminRoomTypeCommand(true)));
+            assertThat(awaitDatabaseLockWait()).isTrue();
+            release.countDown();
+            end.get(10, TimeUnit.SECONDS);
+            update.get(10, TimeUnit.SECONDS);
+            Room saved = roomJpaRepository.findById(roomId).orElseThrow().toDomain();
+            assertThat(saved.status()).isEqualTo(RoomStatus.ENDED);
+            assertThat(saved.endedAt()).isEqualTo(startedAt.plusDays(3));
+            assertThat(saved.isTest()).isTrue();
+        } finally {
+            release.countDown();
             pool.shutdownNow();
             assertThat(pool.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
         }

@@ -27,20 +27,28 @@ public class AdminRoomQueryRepository {
     private final EntityManager entityManager;
 
     public List<Room> findRooms(RoomStatus status, LocalDate scheduledDate, int offset, int limit) {
+        return findRooms(status, scheduledDate, null, offset, limit);
+    }
+
+    public List<Room> findRooms(RoomStatus status, LocalDate scheduledDate, Boolean isTest, int offset, int limit) {
         StringBuilder jpql = new StringBuilder("select r from RoomEntity r where 1 = 1");
-        appendFilters(jpql, status, scheduledDate);
+        appendFilters(jpql, status, scheduledDate, isTest);
         jpql.append(" order by r.id desc");
         TypedQuery<RoomEntity> query = entityManager.createQuery(jpql.toString(), RoomEntity.class);
-        bindFilters(query, status, scheduledDate);
+        bindFilters(query, status, scheduledDate, isTest);
         return query.setFirstResult(offset).setMaxResults(limit)
                 .getResultList().stream().map(RoomEntity::toDomain).toList();
     }
 
     public long countRooms(RoomStatus status, LocalDate scheduledDate) {
+        return countRooms(status, scheduledDate, null);
+    }
+
+    public long countRooms(RoomStatus status, LocalDate scheduledDate, Boolean isTest) {
         StringBuilder jpql = new StringBuilder("select count(r) from RoomEntity r where 1 = 1");
-        appendFilters(jpql, status, scheduledDate);
+        appendFilters(jpql, status, scheduledDate, isTest);
         TypedQuery<Long> query = entityManager.createQuery(jpql.toString(), Long.class);
-        bindFilters(query, status, scheduledDate);
+        bindFilters(query, status, scheduledDate, isTest);
         return query.getSingleResult();
     }
 
@@ -87,7 +95,10 @@ public class AdminRoomQueryRepository {
                 .getResultList().stream().map(UserProfileEntity::toDomain).toList();
     }
 
-    private void appendFilters(StringBuilder jpql, RoomStatus status, LocalDate scheduledDate) {
+    private void appendFilters(StringBuilder jpql, RoomStatus status, LocalDate scheduledDate, Boolean isTest) {
+        if (isTest != null) {
+            jpql.append(" and r.isTest = :isTest");
+        }
         if (status != null) {
             jpql.append(" and r.status = :status");
         }
@@ -96,7 +107,10 @@ public class AdminRoomQueryRepository {
         }
     }
 
-    private void bindFilters(TypedQuery<?> query, RoomStatus status, LocalDate scheduledDate) {
+    private void bindFilters(TypedQuery<?> query, RoomStatus status, LocalDate scheduledDate, Boolean isTest) {
+        if (isTest != null) {
+            query.setParameter("isTest", isTest);
+        }
         if (status != null) {
             query.setParameter("status", status);
         }

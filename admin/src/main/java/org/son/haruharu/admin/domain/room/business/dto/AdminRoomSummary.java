@@ -15,6 +15,7 @@ public record AdminRoomSummary(
         @Schema(description = "참여자 수", example = "6") int memberCount,
         @Schema(description = "여성 수", example = "3") int femaleCount,
         @Schema(description = "남성 수", example = "3") int maleCount,
-        @Schema(description = "시작 시각(미시작이면 null)", nullable = true) LocalDateTime startedAt
+        @Schema(description = "시작 시각(미시작이면 null)", nullable = true) LocalDateTime startedAt,
+        @Schema(description = "테스트방 여부", example = "false") boolean isTest
 ) {
 }

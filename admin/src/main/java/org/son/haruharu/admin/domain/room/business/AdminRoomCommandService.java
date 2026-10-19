@@ -5,6 +5,9 @@ import java.util.List;
 
 import org.son.haruharu.admin.domain.room.business.command.AssignGenderCommand;
 import org.son.haruharu.admin.domain.room.business.command.CreateAdminRoomCommand;
+import org.son.haruharu.admin.domain.room.business.command.UpdateAdminRoomTypeCommand;
+import org.son.haruharu.admin.domain.room.business.dto.AdminRoomTypeResponse;
+import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomCreatedResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomInviteResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomMemberResponse;
@@ -62,7 +65,14 @@ public class AdminRoomCommandService {
         RoomInvite invite = roomInviteService.issueFor(
                 roomId, command.maxUses(), command.inviteExpiresAt(), createdBy(adminId));
         roomScheduleService.createAll(roomId, command.chatSchedule(), createdBy(adminId));
-        return new AdminRoomCreatedResponse(roomId, invite.code());
+        return new AdminRoomCreatedResponse(roomId, invite.code(), command.isTest());
+    }
+
+    @Transactional
+    public AdminRoomTypeResponse updateType(Long roomId, UpdateAdminRoomTypeCommand command) {
+        adminRoomReader.requireExists(roomId);
+        Room room = roomService.updateTestType(roomId, command.isTest());
+        return new AdminRoomTypeResponse(room.id(), room.isTest());
     }
 
     /** 코드 재발급. 기존 ACTIVE 코드는 EXPIRED 로 닫힌다(core reissueFor). 없는 방이면 404. */

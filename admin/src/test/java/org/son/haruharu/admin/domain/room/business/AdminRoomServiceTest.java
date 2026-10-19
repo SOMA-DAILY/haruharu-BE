@@ -54,8 +54,8 @@ class AdminRoomServiceTest {
     void getRooms_returnsSummariesWithGenderAndPageMeta() {
         Room active = room(1L, RoomStatus.ACTIVE, LocalDateTime.now(clock));
         Room pending = room(2L, RoomStatus.PENDING, null);
-        given(adminRoomReader.findRooms(null, null, 0, 20)).willReturn(List.of(active, pending));
-        given(adminRoomReader.countRooms(null, null)).willReturn(2L);
+        given(adminRoomReader.findRooms(null, null, null, 0, 20)).willReturn(List.of(active, pending));
+        given(adminRoomReader.countRooms(null, null, null)).willReturn(2L);
         given(adminRoomReader.membersOf(List.of(1L, 2L))).willReturn(List.of(
                 member(10L, 1L, "FEMALE"), member(11L, 1L, "MALE"), member(12L, 2L, "FEMALE")));
 
@@ -77,8 +77,8 @@ class AdminRoomServiceTest {
     @Test
     @DisplayName("페이지 크기는 최대 100으로 제한된다")
     void getRooms_clampsPageSize() {
-        given(adminRoomReader.findRooms(null, null, 0, 100)).willReturn(List.of());
-        given(adminRoomReader.countRooms(null, null)).willReturn(0L);
+        given(adminRoomReader.findRooms(null, null, null, 0, 100)).willReturn(List.of());
+        given(adminRoomReader.countRooms(null, null, null)).willReturn(0L);
         given(adminRoomReader.membersOf(List.<Long>of())).willReturn(List.of());
 
         PageResponse<AdminRoomSummary> result = service.getRooms(null, null, 0, 999);

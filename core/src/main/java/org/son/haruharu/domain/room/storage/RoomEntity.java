@@ -16,6 +16,7 @@ import jakarta.persistence.Table;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomStatus;
+import org.hibernate.annotations.ColumnDefault;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -25,7 +26,8 @@ import lombok.NoArgsConstructor;
 // 방이 늘어도 풀스캔하지 않도록 복합 인덱스를 명시한다(#320).
 @Table(name = "rooms", indexes = {
         @Index(name = "idx_rooms_reconcile", columnList = "starts_at, status"),
-        @Index(name = "idx_rooms_status", columnList = "status")
+        @Index(name = "idx_rooms_status", columnList = "status"),
+        @Index(name = "idx_rooms_is_test_id", columnList = "is_test, id")
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RoomEntity extends BaseEntity {
@@ -37,6 +39,10 @@ public class RoomEntity extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private RoomStatus status;
+
+    @Column(name = "is_test", nullable = false)
+    @ColumnDefault("false")
+    private boolean isTest;
 
     @Column(nullable = false)
     private LocalDate scheduledDate;
@@ -70,6 +76,7 @@ public class RoomEntity extends BaseEntity {
         RoomEntity entity = new RoomEntity();
         entity.id = room.id();
         entity.status = room.status();
+        entity.isTest = room.isTest();
         entity.scheduledDate = room.scheduledDate();
         entity.totalDays = room.totalDays();
         entity.startedAt = room.startedAt();
@@ -84,6 +91,6 @@ public class RoomEntity extends BaseEntity {
 
     public Room toDomain() {
         return new Room(id, status, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, isTest);
     }
 }

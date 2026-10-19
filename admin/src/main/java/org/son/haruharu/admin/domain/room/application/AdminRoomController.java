@@ -8,6 +8,8 @@ import org.son.haruharu.admin.common.PageResponse;
 import org.son.haruharu.admin.domain.room.application.dto.AssignGenderRequest;
 import org.son.haruharu.admin.domain.room.application.dto.CreateAdminRoomRequest;
 import org.son.haruharu.admin.domain.room.application.dto.ReissueInviteRequest;
+import org.son.haruharu.admin.domain.room.application.dto.UpdateAdminRoomTypeRequest;
+import org.son.haruharu.admin.domain.room.business.dto.AdminRoomTypeResponse;
 import org.son.haruharu.admin.domain.room.business.AdminRoomCommandService;
 import org.son.haruharu.admin.domain.room.business.AdminRoomService;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomCreatedResponse;
@@ -54,9 +56,18 @@ public class AdminRoomController {
             @Parameter(description = "방 상태 필터", example = "ACTIVE") @RequestParam(required = false) RoomStatus status,
             @Parameter(description = "예정일 필터", example = "2026-07-09")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate scheduledDate,
+            @Parameter(description = "테스트방 여부. false=운영, true=테스트, 생략=전체")
+            @RequestParam(required = false) Boolean isTest,
             @Parameter(description = "0-based 페이지", example = "0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기(최대 100)", example = "20") @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(adminRoomService.getRooms(status, scheduledDate, page, size));
+        return ApiResponse.ok(adminRoomService.getRooms(status, scheduledDate, isTest, page, size));
+    }
+
+    @Operation(summary = "방 운영·테스트 구분 변경", description = "SUPER·OPERATOR 전용. 없는 방은 404.")
+    @PatchMapping("/rooms/{roomId}/type")
+    public ApiResponse<AdminRoomTypeResponse> updateType(@PathVariable Long roomId,
+                                                       @RequestBody @Valid UpdateAdminRoomTypeRequest request) {
+        return ApiResponse.ok(adminRoomCommandService.updateType(roomId, request.toCommand()));
     }
 
     @Operation(summary = "방 상세", description = "방 정보 + 참여자 목록. 없는 id는 404.")

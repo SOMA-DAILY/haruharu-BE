@@ -17,6 +17,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.util.DisconnectedClientHelper;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /** 어드민 서버 공통 예외 처리. 유저 서버 GlobalExceptionHandler와 동일한 ApiResponse 계약. */
 @Slf4j
@@ -74,6 +75,13 @@ public class AdminExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(new ApiErrorDetail("INVALID_REQUEST_BODY", "잘못된 요청 바디입니다.")));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        log.warn("Invalid admin query parameter: {}, code=INVALID_INPUT", e.getName());
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(new ApiErrorDetail("INVALID_INPUT", "잘못된 조회 조건입니다.")));
     }
 
     // 유니크 제약 위반(예: 상품 storeProductId 동시 생성 레이스)을 500이 아닌 409로 매핑.

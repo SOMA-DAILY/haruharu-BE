@@ -1,0 +1,4 @@
+BEGIN;
+DROP INDEX IF EXISTS idx_rooms_is_test_id;
+ALTER TABLE rooms DROP COLUMN IF EXISTS is_test;
+COMMIT;

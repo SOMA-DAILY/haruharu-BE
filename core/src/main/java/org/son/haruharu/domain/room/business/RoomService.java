@@ -48,7 +48,7 @@ public class RoomService {
         validateNotInPast(command, LocalDateTime.now(clock));
         Room saved = roomWriter.save(Room.createScheduled(
                 command.startsAt(), command.finalSelectionOpensAt(), command.finalSelectionClosesAt(),
-                command.resultAt(), command.endsAt(), command.totalDays()));
+                command.resultAt(), command.endsAt(), command.totalDays()).withTestType(command.isTest()));
         return saved.id();
     }
 
@@ -90,6 +90,12 @@ public class RoomService {
             throw new RoomAlreadyEndedException();
         }
         roomWriter.save(room.cancelled());
+    }
+
+    @Transactional
+    public Room updateTestType(Long roomId, boolean isTest) {
+        Room room = roomReader.findByIdForUpdate(roomId).orElseThrow(RoomNotFoundException::new);
+        return roomWriter.save(room.withTestType(isTest));
     }
 
     public RoomResponse getMyRoom(Long userId) {

@@ -23,7 +23,8 @@ public record AdminRoomDetailResponse(
         // #457: 방 편성 카드의 DAY 표기와 "최종 선택 이후 공개" 경고 계산용(추가만). 구 모델 방은 null.
         @Schema(description = "방 시작 예정 시각", nullable = true) LocalDateTime startsAt,
         @Schema(description = "최종선택 오픈 시각", nullable = true) LocalDateTime finalSelectionOpensAt,
-        @Schema(description = "방 종료 시각", nullable = true) LocalDateTime endsAt
+        @Schema(description = "방 종료 시각", nullable = true) LocalDateTime endsAt,
+        @Schema(description = "테스트방 여부", example = "false") boolean isTest
 ) {
     public record MemberView(
             @Schema(description = "방 멤버 id", example = "10") Long memberId,
