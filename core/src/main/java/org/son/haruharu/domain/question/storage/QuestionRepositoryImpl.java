@@ -43,9 +43,9 @@ public class QuestionRepositoryImpl implements QuestionRepository {
         return jpaRepository.countByRoomIdAndSenderUserId(roomId, userId);
     }
 
-    public boolean hasSentTo(Long roomId, Long userId, Long targetUserId) {
-        return jpaRepository.existsByRoomIdAndSenderUserIdAndRecipientUserId(
-                roomId, userId, targetUserId);
+    public boolean hasSentTo(Long roomId, Long userId, Long targetUserId, int day) {
+        return jpaRepository.existsByRoomIdAndSenderUserIdAndRecipientUserIdAndDay(
+                roomId, userId, targetUserId, day);
     }
 
     private java.util.Set<Long> blocked(java.util.Set<Long> blocked) {
@@ -77,9 +77,9 @@ public class QuestionRepositoryImpl implements QuestionRepository {
         return jpaRepository.historyRoomIds(userId, cursor, now, PageRequest.of(0, limit));
     }
 
-    public Optional<QuestionGrant> findGrant(Long roomId, Long userId) {
+    public Optional<QuestionGrant> findGrant(Long roomId, Long userId, int day) {
         return grantJpaRepository
-                .findByRoomIdAndUserId(roomId, userId)
+                .findByRoomIdAndUserIdAndDay(roomId, userId, day)
                 .map(QuestionGrantEntity::toDomain);
     }
 
@@ -88,7 +88,7 @@ public class QuestionRepositoryImpl implements QuestionRepository {
     }
 
     public List<Long> findGrantCandidateRoomIds(Long afterId, int limit, LocalDateTime now) {
-        return jpaRepository.findGrantCandidateRoomIds(
-                afterId, now.minusHours(24), now, PageRequest.of(0, limit));
+        // 일차는 달력 날짜라 시작 후 몇 시간 만에 2일차가 열릴 수 있다. 열린 날인지는 reconcile 이 판정한다.
+        return jpaRepository.findGrantCandidateRoomIds(afterId, now, PageRequest.of(0, limit));
     }
 }

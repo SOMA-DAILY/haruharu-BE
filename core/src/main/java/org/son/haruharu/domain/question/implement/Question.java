@@ -22,7 +22,8 @@ public record Question(
         boolean recipientRead,
         boolean senderRead,
         boolean senderReported,
-        boolean recipientReported) {
+        boolean recipientReported,
+        int day) {
     public static Question create(
             Long roomId,
             Long senderMemberId,
@@ -32,6 +33,7 @@ public record Question(
             String recipientNickname,
             String content,
             UUID requestId,
+            int day,
             LocalDateTime now) {
         if (requestId == null) throw new InvalidQuestionContentException();
         return new Question(
@@ -50,7 +52,8 @@ public record Question(
                 false,
                 true,
                 false,
-                false);
+                false,
+                day);
     }
 
     public static String validate(String value, int maximum) {
@@ -148,6 +151,7 @@ public record Question(
                 recipientRead,
                 senderRead,
                 senderReported,
-                recipientReported);
+                recipientReported,
+                day);
     }
 }

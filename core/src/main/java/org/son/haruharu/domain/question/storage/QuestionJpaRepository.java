@@ -17,8 +17,8 @@ public interface QuestionJpaRepository extends JpaRepository<QuestionEntity, Lon
 
     long countByRoomIdAndSenderUserId(Long roomId, Long userId);
 
-    boolean existsByRoomIdAndSenderUserIdAndRecipientUserId(
-            Long roomId, Long userId, Long recipientUserId);
+    boolean existsByRoomIdAndSenderUserIdAndRecipientUserIdAndDay(
+            Long roomId, Long userId, Long recipientUserId, int day);
 
     @Query(
             "select q from QuestionEntity q where q.roomId=:roomId and q.recipientUserId=:userId"
@@ -78,13 +78,12 @@ order by r.id desc
             value =
                     """
                     select id from rooms where id > :afterId and deleted_at is null
-                    and status <> 'CANCELLED' and starts_at <= :latestStart
+                    and status <> 'CANCELLED' and starts_at <= :now
                     and final_selection_opens_at > :now and ends_at > :now order by id
                     """,
             nativeQuery = true)
     List<Long> findGrantCandidateRoomIds(
             @Param("afterId") Long afterId,
-            @Param("latestStart") LocalDateTime latestStart,
             @Param("now") LocalDateTime now,
             Pageable pageable);
 }

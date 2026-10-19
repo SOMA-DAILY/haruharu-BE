@@ -16,8 +16,13 @@ import java.util.UUID;
         name = "anonymous_questions",
         uniqueConstraints = {
             @UniqueConstraint(
-                    name = "uq_question_sender_target",
-                    columnNames = {"room_id", "sender_user_id", "recipient_user_id"}),
+                    name = "uq_question_sender_target_day",
+                    columnNames = {
+                        "room_id",
+                        "sender_user_id",
+                        "recipient_user_id",
+                        "question_day"
+                    }),
             @UniqueConstraint(
                     name = "uq_question_request",
                     columnNames = {"room_id", "sender_user_id", "request_id"})
@@ -73,6 +78,10 @@ public class QuestionEntity extends BaseEntity {
     @Column(nullable = false)
     private boolean recipientReported;
 
+    /** 몇 일차 질문인지(2 또는 3). 상대마다 날마다 1번 규칙의 기준이다. */
+    @Column(name = "question_day", nullable = false)
+    private int day;
+
     public static QuestionEntity from(Question q) {
         QuestionEntity e = new QuestionEntity();
         e.id = q.id();
@@ -91,6 +100,7 @@ public class QuestionEntity extends BaseEntity {
         e.senderRead = q.senderRead();
         e.senderReported = q.senderReported();
         e.recipientReported = q.recipientReported();
+        e.day = q.day();
         return e;
     }
 
@@ -111,6 +121,7 @@ public class QuestionEntity extends BaseEntity {
                 recipientRead,
                 senderRead,
                 senderReported,
-                recipientReported);
+                recipientReported,
+                day);
     }
 }
