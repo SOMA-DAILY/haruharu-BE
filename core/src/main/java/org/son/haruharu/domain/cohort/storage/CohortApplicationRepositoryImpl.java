@@ -70,4 +70,15 @@ public class CohortApplicationRepositoryImpl implements CohortApplicationReposit
         return jpaRepository.updateSurvey(id, userId, from, survey.referralSource(), survey.friendPreference(),
                 survey.motivation(), submittedAt);
     }
+
+    @Override
+    public int approve(Long id, CohortApplicationStatus from, CohortApplication approved, LocalDateTime updatedAt) {
+        return jpaRepository.approve(id, from, approved.status(), approved.declaredGender(), approved.queuedAt(),
+                updatedAt);
+    }
+
+    @Override
+    public int updateMemo(Long id, String memo, LocalDateTime updatedAt) {
+        return jpaRepository.updateMemo(id, memo, updatedAt);
+    }
 }

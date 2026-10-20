@@ -39,4 +39,10 @@ public interface CohortApplicationRepository {
     /** 조건부 설문 저장: 본인 신청이고 지금 상태가 from 중 하나일 때만. 바뀐 행 수를 돌려준다. */
     int updateSurvey(Long id, Long userId, Collection<CohortApplicationStatus> from, ApplicationSurvey survey,
                      LocalDateTime submittedAt);
+
+    /** 조건부 승인: 지금 상태가 from 일 때만 상태·신청 성별·대기 시각을 적는다(#515). 바뀐 행 수를 돌려준다. */
+    int approve(Long id, CohortApplicationStatus from, CohortApplication approved, LocalDateTime updatedAt);
+
+    /** 운영진 메모를 바꾼다(#515). 바뀐 행 수를 돌려준다. */
+    int updateMemo(Long id, String memo, LocalDateTime updatedAt);
 }
