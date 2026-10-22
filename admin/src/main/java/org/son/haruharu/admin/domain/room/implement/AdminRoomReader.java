@@ -30,8 +30,26 @@ public class AdminRoomReader {
         return adminRoomQueryRepository.countRooms(status, scheduledDate);
     }
 
+    public List<Room> findRooms(
+            RoomStatus status,
+            LocalDate date,
+            int offset,
+            int limit,
+            Long groupId,
+            boolean ungrouped,
+            Boolean isTest) {
+        return adminRoomQueryRepository.findRooms(
+                status, date, offset, limit, groupId, ungrouped, isTest);
+    }
+
+    public long countRooms(
+            RoomStatus status, LocalDate date, Long groupId, boolean ungrouped, Boolean isTest) {
+        return adminRoomQueryRepository.countRooms(status, date, groupId, ungrouped, isTest);
+    }
+
     public Room getById(Long roomId) {
-        return adminRoomQueryRepository.findRoomById(roomId)
+        return adminRoomQueryRepository
+                .findRoomById(roomId)
                 .orElseThrow(AdminRoomNotFoundException::new);
     }
 

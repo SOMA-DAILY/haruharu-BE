@@ -1,8 +1,16 @@
 package org.son.haruharu.admin.domain.room.business;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,16 +36,9 @@ import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.exception.InvalidRoomMemberGenderException;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 
 @ExtendWith(MockitoExtension.class)
 class AdminRoomCommandServiceTest {
@@ -58,8 +59,17 @@ class AdminRoomCommandServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AdminRoomCommandService(roomService, roomInviteService,
-                roomMemberReader, roomMemberWriter, adminRoomReader, roomMissionService);
+        service =
+                new AdminRoomCommandService(
+                        roomService,
+                        roomInviteService,
+                        roomMemberReader,
+                        roomMemberWriter,
+                        adminRoomReader,
+                        roomMissionService,
+                        org.mockito.Mockito.mock(
+                                org.son.haruharu.admin.domain.room.implement
+                                        .AdminRoomOrganizationManager.class));
     }
 
     private CreateAdminRoomCommand createCommand() {
@@ -69,7 +79,10 @@ class AdminRoomCommandServiceTest {
                 STARTS_AT.plusHours(63),
                 STARTS_AT.plusHours(64),
                 STARTS_AT.plusHours(72),
-                3, 6, null, List.of());
+                3,
+                6,
+                null,
+                List.of());
     }
 
     private RoomInvite issuedInvite(String code) {
@@ -77,7 +90,8 @@ class AdminRoomCommandServiceTest {
     }
 
     private RoomMember memberOfRoom(Long roomId) {
-        return new RoomMember(MEMBER_ID, roomId, 901L, null, null, LocalDate.of(2000, 1, 1), STARTS_AT);
+        return new RoomMember(
+                MEMBER_ID, roomId, 901L, null, null, LocalDate.of(2000, 1, 1), STARTS_AT);
     }
 
     @Test
@@ -91,8 +105,8 @@ class AdminRoomCommandServiceTest {
 
         assertThat(res.roomId()).isEqualTo(ROOM_ID);
         assertThat(res.code()).isEqualTo("K7M2QX");
-        verify(roomService).createRoom(argThat(c ->
-                c.startsAt().equals(STARTS_AT) && c.totalDays() == 3));
+        verify(roomService)
+                .createRoom(argThat(c -> c.startsAt().equals(STARTS_AT) && c.totalDays() == 3));
         verify(roomMissionService).createAll(ROOM_ID, List.of(), "admin:1");
     }
 
@@ -132,17 +146,24 @@ class AdminRoomCommandServiceTest {
 
     @Test
     @DisplayName("성별 부여 시 gender가 갱신되고 가명 미배정이면 입장 순번대로 가명이 백필된다(#393)")
-    void givenMemberWithoutGenderAndPseudonym_whenAssignGender_thenGenderSavedAndPseudonymBackfilled() {
+    void
+            givenMemberWithoutGenderAndPseudonym_whenAssignGender_thenGenderSavedAndPseudonymBackfilled() {
         given(roomMemberReader.getById(MEMBER_ID)).willReturn(memberOfRoom(ROOM_ID));
         // 이미 여성 1명 존재 → 이 멤버는 2번째(index 1) → 여성 풀 "지우"
         given(roomMemberReader.countByRoomIdAndGender(ROOM_ID, "FEMALE")).willReturn(1L);
         given(roomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
-        AdminRoomMemberResponse res = service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand("FEMALE"));
+        AdminRoomMemberResponse res =
+                service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand("FEMALE"));
 
-        verify(roomMemberWriter).save(argThat(m ->
-                "FEMALE".equals(m.gender()) && "지우".equals(m.pseudonym())
-                        && m.id().equals(MEMBER_ID) && m.userId().equals(901L)));
+        verify(roomMemberWriter)
+                .save(
+                        argThat(
+                                m ->
+                                        "FEMALE".equals(m.gender())
+                                                && "지우".equals(m.pseudonym())
+                                                && m.id().equals(MEMBER_ID)
+                                                && m.userId().equals(901L)));
         // 응답에도 부여된 성별·백필된 가명이 함께 내려간다(#400)
         assertThat(res.gender()).isEqualTo("FEMALE");
         assertThat(res.pseudonym()).isEqualTo("지우");
@@ -151,13 +172,14 @@ class AdminRoomCommandServiceTest {
     @Test
     @DisplayName("이미 가명이 배정된 멤버는 성별 부여 시 가명이 유지되고 순번을 다시 계산하지 않는다(#393)")
     void givenMemberWithPseudonym_whenAssignGender_thenKeepsPseudonym() {
-        given(roomMemberReader.getById(MEMBER_ID)).willReturn(
-                new RoomMember(MEMBER_ID, ROOM_ID, 901L, null, "현우", null, STARTS_AT));
+        given(roomMemberReader.getById(MEMBER_ID))
+                .willReturn(new RoomMember(MEMBER_ID, ROOM_ID, 901L, null, "현우", null, STARTS_AT));
         given(roomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand("MALE"));
 
-        verify(roomMemberWriter).save(argThat(m -> "현우".equals(m.pseudonym()) && "MALE".equals(m.gender())));
+        verify(roomMemberWriter)
+                .save(argThat(m -> "현우".equals(m.pseudonym()) && "MALE".equals(m.gender())));
         verify(roomMemberReader, never()).countByRoomIdAndGender(any(), any());
     }
 
@@ -166,7 +188,10 @@ class AdminRoomCommandServiceTest {
     void givenInvalidGender_whenAssignGender_thenBadRequest() {
         given(roomMemberReader.getById(MEMBER_ID)).willReturn(memberOfRoom(ROOM_ID));
 
-        assertThatThrownBy(() -> service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand("OTHER")))
+        assertThatThrownBy(
+                        () ->
+                                service.assignGender(
+                                        ROOM_ID, MEMBER_ID, new AssignGenderCommand("OTHER")))
                 .isInstanceOf(InvalidRoomMemberGenderException.class);
         verify(roomMemberWriter, never()).save(any());
     }
@@ -176,7 +201,10 @@ class AdminRoomCommandServiceTest {
     void givenNullGender_whenAssignGender_thenBadRequest() {
         given(roomMemberReader.getById(MEMBER_ID)).willReturn(memberOfRoom(ROOM_ID));
 
-        assertThatThrownBy(() -> service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand(null)))
+        assertThatThrownBy(
+                        () ->
+                                service.assignGender(
+                                        ROOM_ID, MEMBER_ID, new AssignGenderCommand(null)))
                 .isInstanceOf(InvalidRoomMemberGenderException.class);
         verify(roomMemberWriter, never()).save(any());
     }
@@ -186,7 +214,10 @@ class AdminRoomCommandServiceTest {
     void givenMemberOfAnotherRoom_whenAssignGender_thenNotFound() {
         given(roomMemberReader.getById(MEMBER_ID)).willReturn(memberOfRoom(999L));
 
-        assertThatThrownBy(() -> service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand("MALE")))
+        assertThatThrownBy(
+                        () ->
+                                service.assignGender(
+                                        ROOM_ID, MEMBER_ID, new AssignGenderCommand("MALE")))
                 .isInstanceOf(RoomMemberNotFoundException.class);
         verify(roomMemberWriter, never()).save(any());
     }
@@ -225,8 +256,12 @@ class AdminRoomCommandServiceTest {
     }
 
     private Room room() {
-        return Room.createScheduled(STARTS_AT, STARTS_AT.plusDays(2).withHour(18),
-                STARTS_AT.plusDays(2).withHour(21), STARTS_AT.plusDays(2).withHour(22),
-                STARTS_AT.plusDays(3).withHour(9), 3);
+        return Room.createScheduled(
+                STARTS_AT,
+                STARTS_AT.plusDays(2).withHour(18),
+                STARTS_AT.plusDays(2).withHour(21),
+                STARTS_AT.plusDays(2).withHour(22),
+                STARTS_AT.plusDays(3).withHour(9),
+                3);
     }
 }
