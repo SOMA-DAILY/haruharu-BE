@@ -10,12 +10,18 @@ on:
         required: true
         type: choice
         options: [dev, prod]
+      target:
+        description: '배포 대상 (admin은 관리자 서버만 배포)'
+        required: true
+        type: choice
+        options: [all, admin]
+        default: all
       image_tag:
         description: '배포할 이미지 태그 (SHA 권장, 비우면 develop 무빙 태그)'
         required: false
         default: ''
 
-run-name: deploy-ecs ${{ inputs.environment }} @ ${{ inputs.image_tag || 'develop' }}
+run-name: deploy-ecs ${{ inputs.environment }} ${{ inputs.target || 'all' }} @ ${{ inputs.image_tag || 'develop' }}
 
 concurrency:
   group: deploy-ecs-${{ inputs.environment }}
@@ -44,10 +50,16 @@ jobs:
 
       - name: Resolve env → task def family / service
         id: map
+        env:
+          DEPLOY_TARGET: ${{ inputs.target || 'all' }}
         run: |
           TAG="${{ inputs.image_tag }}"
           [ -z "$TAG" ] && TAG="develop"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ "$DEPLOY_TARGET" != "all" ] && [ "$DEPLOY_TARGET" != "admin" ]; then
+            echo "Unsupported deploy target" >&2
+            exit 1
+          fi
           if [ "${{ inputs.environment }}" = "prod" ]; then
             echo "app_family=haruharu-app"            >> "$GITHUB_OUTPUT"
             echo "admin_family=haruharu-admin"         >> "$GITHUB_OUTPUT"
@@ -66,6 +78,7 @@ jobs:
           fi
 
       - name: Deploy app
+        if: inputs.target != 'admin'
         run: |
           bash .github/scripts/deploy-ecs-service.sh \
             "${{ steps.map.outputs.app_family }}" "app" \
@@ -81,7 +94,7 @@ jobs:
 
       # Airflow(#405): 컨테이너 5개(init·api-server·scheduler·dag-processor·triggerer)가 같은 이미지라 ALL 로 전부 교체.
       - name: Deploy airflow
-        if: steps.map.outputs.airflow_service != ''
+        if: inputs.target != 'admin' && steps.map.outputs.airflow_service != ''
         run: |
           bash .github/scripts/deploy-ecs-service.sh \
             "${{ steps.map.outputs.airflow_family }}" "ALL" \
@@ -90,6 +103,10 @@ jobs:
 
       - name: Wait for services stable
         run: |
-          SERVICES="${{ steps.map.outputs.app_service }} ${{ steps.map.outputs.admin_service }} ${{ steps.map.outputs.airflow_service }}"
+          if [ "${{ inputs.target }}" = "admin" ]; then
+            SERVICES="${{ steps.map.outputs.admin_service }}"
+          else
+            SERVICES="${{ steps.map.outputs.app_service }} ${{ steps.map.outputs.admin_service }} ${{ steps.map.outputs.airflow_service }}"
+          fi
           aws ecs wait services-stable --cluster "${{ env.CLUSTER }}" --services $SERVICES
           echo "✅ ${{ inputs.environment }} 배포 완료 (tag=${{ steps.map.outputs.tag }})"

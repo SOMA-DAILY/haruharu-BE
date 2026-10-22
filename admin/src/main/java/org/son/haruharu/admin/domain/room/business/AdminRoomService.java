@@ -5,6 +5,8 @@ import org.son.haruharu.admin.domain.room.business.dto.AdminRoomDetailResponse;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomSummary;
 import org.son.haruharu.admin.domain.room.implement.AdminRoomReader;
 import org.son.haruharu.domain.profile.implement.UserProfile;
+import org.son.haruharu.domain.profile.implement.UserImageReader;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomComposition;
 import org.son.haruharu.domain.room.implement.RoomEntryPath;
@@ -34,10 +36,15 @@ public class AdminRoomService {
 
     private final AdminRoomReader adminRoomReader;
     private final Clock clock;
+    private final UserImageReader userImageReader;
+    private final S3StoragePort media;
 
-    public AdminRoomService(AdminRoomReader adminRoomReader, Clock clock) {
+    public AdminRoomService(AdminRoomReader adminRoomReader, Clock clock,
+                            UserImageReader userImageReader, S3StoragePort media) {
         this.adminRoomReader = adminRoomReader;
         this.clock = clock;
+        this.userImageReader = userImageReader;
+        this.media = media;
     }
 
     public PageResponse<AdminRoomSummary> getRooms(RoomStatus status, LocalDate scheduledDate, int page, int size) {
@@ -67,6 +74,8 @@ public class AdminRoomService {
         Map<Long, UserProfile> profilesByUserId = adminRoomReader
                 .profilesOf(members.stream().map(RoomMember::userId).toList()).stream()
                 .collect(Collectors.toMap(UserProfile::userId, Function.identity(), (a, b) -> a));
+        Map<Long, String> imagesByUserId = userImageReader.getRepresentativeImageUrls(
+                members.stream().map(RoomMember::userId).toList());
         LocalDate today = LocalDate.now(clock);
         // 본인 확인 여부(#513): 본인인증 행이 있으면 확인 완료(UserService 와 같은 기준). 한 번에 조회한다.
         Set<Long> verifiedUserIds = adminRoomReader.identityVerifiedUserIdsOf(
@@ -74,7 +83,7 @@ public class AdminRoomService {
 
         List<AdminRoomDetailResponse.MemberView> memberViews = members.stream()
                 .map(m -> toMemberView(m, profilesByUserId.get(m.userId()), today,
-                        verifiedUserIds.contains(m.userId())))
+                        verifiedUserIds.contains(m.userId()), imagesByUserId.get(m.userId())))
                 .toList();
         RoomComposition composition = room.composition();
         return new AdminRoomDetailResponse(
@@ -88,14 +97,15 @@ public class AdminRoomService {
     }
 
     private AdminRoomDetailResponse.MemberView toMemberView(RoomMember member, UserProfile profile, LocalDate today,
-                                                            boolean identityVerified) {
+                                                            boolean identityVerified, String profileImageUrl) {
         Integer age = member.birthday() == null ? null : Period.between(member.birthday(), today).getYears();
         String nickname = profile == null ? null : profile.nickname();
         String region = profile == null ? null : profile.location();
         return new AdminRoomDetailResponse.MemberView(
                 member.id(), member.userId(), member.gender(), member.joinedAt(),
                 nickname, member.pseudonym(), age, region,
-                member.entryPath(), member.applicationId(), identityVerified);
+                member.entryPath(), member.applicationId(), identityVerified,
+                profileImageUrl == null ? null : media.createPresignedImageGetUrl(profileImageUrl));
     }
 
     private AdminRoomSummary toSummary(Room room, List<RoomMember> members, LocalDateTime now) {

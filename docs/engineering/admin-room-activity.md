@@ -49,3 +49,9 @@ admin에도 app과 같은 `AWS_S3_BUCKET`, `AWS_REGION` 및 S3 읽기 가능한 
 - 저장소 Java 리뷰 기준의 별도 읽기 전용 리뷰 통과. 비밀값 파일 변경 없음.
 
 운영 DB·S3·배포 설정은 변경하지 않았으며, 실제 운영 S3 권한 검증은 배포 환경에서 필요하다.
+
+## 관리자 참여자 대표사진 (#534)
+
+`GET /api/v1/admin/rooms/{roomId}`의 `members[].profile_image_url`은 해당 참여자의 대표사진 원본 접근 URL이며 사진이 없으면 null이다. 기존 필드는 유지한다. 대표사진 선택은 공유 `UserImageReader.getRepresentativeImageUrls`의 일괄 조회/정렬을 사용하고, URL은 기존 `S3StoragePort.createPresignedImageGetUrl`로 발급한다. 관리자 인증이 필요하며 일반 앱의 방 참여 인가·사진 공개/블러 규칙은 변경하지 않는다. DB 스키마 변경은 없다.
+
+사진 응답 추가는 ECS 배포의 `target=admin`으로 관리자 서버만 개발→운영 순서로 배포한다. 기존 전체 배포 기본값은 `target=all`이며, 관리자만 선택하면 일반 앱·Airflow 배포와 대기 단계를 건너뛴다. 배포 이미지는 검증된 고정 커밋 SHA 태그를 사용한다.

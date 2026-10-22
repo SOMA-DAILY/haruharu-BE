@@ -11,6 +11,8 @@ import org.son.haruharu.domain.cohort.implement.RecruitAudience;
 import org.son.haruharu.domain.cohort.implement.RecruitTrack;
 import org.son.haruharu.domain.cohort.implement.RecruitTrackWriter;
 import org.son.haruharu.domain.profile.implement.UserProfile;
+import org.son.haruharu.domain.profile.implement.UserImage;
+import org.son.haruharu.domain.profile.storage.UserImageEntity;
 import org.son.haruharu.domain.profile.storage.UserProfileEntity;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
@@ -101,6 +103,42 @@ class AdminRoomApiIntegrationTest {
                 .andExpect(jsonPath("$.data.members[0].pseudonym").value("유진"))  // 가명
                 .andExpect(jsonPath("$.data.members[0].region").value("서울"))
                 .andExpect(jsonPath("$.data.members[0].age").isNumber());
+    }
+
+    @Test
+    @DisplayName("관리자 방 상세에 해당 참여자의 정렬된 대표사진 원본이 포함되고 사진 없는 참여자는 null이다")
+    void givenMemberPhotos_whenAdminReadsRoom_thenReturnsRepresentativeOriginalOnly() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        Long roomId = persistRoom(Room.create(LocalDate.now(), 3).started(now));
+        em.persist(RoomMemberEntity.from(RoomMember.of(roomId, 901L, "FEMALE", null, now)));
+        em.persist(RoomMemberEntity.from(RoomMember.of(roomId, 902L, "MALE", null, now)));
+        em.persist(UserImageEntity.from(new UserImage(null, 901L, "https://example.invalid/second.jpg", 1)));
+        em.persist(UserImageEntity.from(new UserImage(null, 901L, "https://example.invalid/original.jpg", 0)));
+        em.persist(UserImageEntity.from(new UserImage(null, 903L, "https://example.invalid/outsider.jpg", 0)));
+        em.flush();
+
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", roomId).with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.members.length()").value(2))
+                .andExpect(jsonPath("$.data.members[0].profile_image_url").value("https://example.invalid/original.jpg"))
+                .andExpect(jsonPath("$.data.members[1].profile_image_url").hasJsonPath())
+                .andExpect(jsonPath("$.data.members[1].profile_image_url").isEmpty());
+    }
+
+    @Test
+    @DisplayName("참여자가 없는 방의 관리자 사진 조회도 빈 참여자 목록을 반환한다")
+    void givenEmptyRoom_whenAdminReadsRoom_thenReturnsEmptyMembers() throws Exception {
+        Long roomId = persistRoom(Room.create(LocalDate.now(), 3));
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", roomId).with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.members").isEmpty());
+    }
+
+    @Test
+    @DisplayName("미인증 요청은 사진이 포함된 방 상세를 조회할 수 없다")
+    void givenNoAuthentication_whenReadsRoomWithPhotos_thenReturns401() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/rooms/1"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

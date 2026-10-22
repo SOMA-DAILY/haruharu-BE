@@ -44,6 +44,8 @@ public record AdminRoomDetailResponse(
             @Schema(description = "입장 경로(#513): INVITE=초대코드, APPLICATION=앱 신청 배정", example = "INVITE")
             RoomEntryPath entryPath,
             @Schema(description = "배정한 기수 신청 id(APPLICATION 만)", example = "55", nullable = true) Long applicationId,
-            @Schema(description = "본인 확인(PASS) 완료 여부(#513)", example = "true") boolean identityVerified
+            @Schema(description = "본인 확인(PASS) 완료 여부(#513)", example = "true") boolean identityVerified,
+            @Schema(description = "대표 프로필 사진 원본 접근 URL(단기 만료, 사진 없으면 null)", nullable = true)
+            String profileImageUrl
     ) {}
 }
