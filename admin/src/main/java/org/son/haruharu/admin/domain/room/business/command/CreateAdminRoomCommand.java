@@ -1,14 +1,14 @@
 package org.son.haruharu.admin.domain.room.business.command;
 
-import java.time.LocalDateTime;
-import java.util.List;
 import org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand;
 import org.son.haruharu.domain.room.business.command.CreateRoomCommand;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 /**
- * 어드민 방 생성 입력(#318). 스케줄 시각 5개 + totalDays 는 core 방 생성으로,
- * maxUses(초대코드 입장 정원, null이면 무제한)·expiresAt 은 코드 발급으로 간다.
- * 시각 순서 검증은 core RoomService 가 소유한다(어드민이 중복 검증하지 않는다).
+ * 어드민 방 생성 입력(#318). 스케줄 시각 5개 + totalDays 는 core 방 생성으로, maxUses(초대코드 입장 정원, null이면 무제한)·expiresAt
+ * 은 코드 발급으로 간다. 시각 순서 검증은 core RoomService 가 소유한다(어드민이 중복 검증하지 않는다).
  */
 public record CreateAdminRoomCommand(
         LocalDateTime startsAt,
@@ -25,19 +25,64 @@ public record CreateAdminRoomCommand(
         Long cohortId,
         String name,
         Integer maleCapacity,
-        Integer femaleCapacity
-) {
+        Integer femaleCapacity,
+        Long groupId,
+        Boolean isTest) {
+    public CreateAdminRoomCommand(
+            LocalDateTime a,
+            LocalDateTime b,
+            LocalDateTime c,
+            LocalDateTime d,
+            LocalDateTime e,
+            int days,
+            Integer max,
+            LocalDateTime expiry,
+            List<RoomMissionCommand> missions,
+            Long cohort,
+            String name,
+            Integer male,
+            Integer female) {
+        this(a, b, c, d, e, days, max, expiry, missions, cohort, name, male, female, null, null);
+    }
+
     /** 편성 정보 없이 만드는 방(#513 이전 모양). */
-    public CreateAdminRoomCommand(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
-                                  LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt,
-                                  LocalDateTime endsAt, int totalDays, Integer maxUses,
-                                  LocalDateTime inviteExpiresAt, List<RoomMissionCommand> missions) {
-        this(startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, totalDays, maxUses,
-                inviteExpiresAt, missions, null, null, null, null);
+    public CreateAdminRoomCommand(
+            LocalDateTime startsAt,
+            LocalDateTime finalSelectionOpensAt,
+            LocalDateTime finalSelectionClosesAt,
+            LocalDateTime resultAt,
+            LocalDateTime endsAt,
+            int totalDays,
+            Integer maxUses,
+            LocalDateTime inviteExpiresAt,
+            List<RoomMissionCommand> missions) {
+        this(
+                startsAt,
+                finalSelectionOpensAt,
+                finalSelectionClosesAt,
+                resultAt,
+                endsAt,
+                totalDays,
+                maxUses,
+                inviteExpiresAt,
+                missions,
+                null,
+                null,
+                null,
+                null);
     }
 
     public CreateRoomCommand toRoomCommand() {
-        return new CreateRoomCommand(startsAt, finalSelectionOpensAt, finalSelectionClosesAt,
-                resultAt, endsAt, totalDays, cohortId, name, maleCapacity, femaleCapacity);
+        return new CreateRoomCommand(
+                startsAt,
+                finalSelectionOpensAt,
+                finalSelectionClosesAt,
+                resultAt,
+                endsAt,
+                totalDays,
+                cohortId,
+                name,
+                maleCapacity,
+                femaleCapacity);
     }
 }

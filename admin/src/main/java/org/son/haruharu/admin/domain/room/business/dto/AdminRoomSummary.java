@@ -1,6 +1,7 @@
 package org.son.haruharu.admin.domain.room.business.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+
 import org.son.haruharu.domain.room.implement.RoomStatus;
 
 import java.time.LocalDate;
@@ -15,6 +16,6 @@ public record AdminRoomSummary(
         @Schema(description = "참여자 수", example = "6") int memberCount,
         @Schema(description = "여성 수", example = "3") int femaleCount,
         @Schema(description = "남성 수", example = "3") int maleCount,
-        @Schema(description = "시작 시각(미시작이면 null)", nullable = true) LocalDateTime startedAt
-) {
-}
+        @Schema(description = "시작 시각(미시작이면 null)", nullable = true) LocalDateTime startedAt,
+        Long groupId,
+        Boolean isTest) {}
