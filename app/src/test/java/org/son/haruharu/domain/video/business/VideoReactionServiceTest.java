@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
+import org.son.haruharu.domain.room.implement.InteractionGuidanceWriter;
 import org.son.haruharu.domain.room.implement.exception.NotRoomMemberException;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
 import org.son.haruharu.domain.video.business.event.VideoReactedEvent;
@@ -40,12 +41,13 @@ class VideoReactionServiceTest {
     @Mock VideoReactionReader videoReactionReader;
     @Mock VideoReactionWriter videoReactionWriter;
     @Mock ApplicationEventPublisher eventPublisher;
+    @Mock InteractionGuidanceWriter guidanceWriter;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-26T03:00:00Z"), ZoneId.of("Asia/Seoul"));
 
     private VideoReactionService service() {
         return new VideoReactionService(videoPostReader, roomMemberReader, videoReactionReader,
-                videoReactionWriter, eventPublisher, clock);
+                videoReactionWriter, eventPublisher, clock, guidanceWriter);
     }
 
     private void stubPostAndMembership(Long postId, Long userId) {
@@ -75,6 +77,7 @@ class VideoReactionServiceTest {
         assertThat(result.reactionType()).isEqualTo(ReactionType.LIKE);
         then(videoReactionWriter).should().save(any());
         then(videoReactionWriter).should(never()).delete(any());
+        then(guidanceWriter).should().recordFirstReaction(any());
     }
 
     @Test
@@ -92,6 +95,7 @@ class VideoReactionServiceTest {
         assertThat(result.reacted()).isFalse();
         then(videoReactionWriter).should().delete(reactionId);
         then(videoReactionWriter).should(never()).save(any());
+        then(guidanceWriter).shouldHaveNoInteractions();
     }
 
     @Test

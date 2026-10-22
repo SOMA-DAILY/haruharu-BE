@@ -69,6 +69,12 @@ fcm:
   service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
 
 haruharu:
+  # #541: 운영 활성화는 별도 승인. enrollment-starts-at은 활성화 시 필수이며 신규 방만 등록한다.
+  interaction-guidance:
+    enabled: ${HARUHARU_INTERACTION_GUIDANCE_ENABLED:false}
+    enrollment-starts-at: ${HARUHARU_INTERACTION_GUIDANCE_ENROLLMENT_STARTS_AT:}
+    tooltip-percent: ${HARUHARU_INTERACTION_GUIDANCE_TOOLTIP_PERCENT:50}
+    experiment-key: ${HARUHARU_INTERACTION_GUIDANCE_EXPERIMENT_KEY:first-video-interaction-v1}
   application:
     commit-sha: ${APPLICATION_COMMIT_SHA:unknown}
   batch:

@@ -27,6 +27,7 @@ import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
+import org.son.haruharu.domain.room.implement.InteractionGuidanceWriter;
 import org.son.haruharu.domain.video.storage.exception.VideoPostNotFoundException;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.context.ApplicationEventPublisher;
@@ -52,6 +53,7 @@ public class VideoReplyService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final ChatRoomLifecyclePolicy lifecycle;
+    private final InteractionGuidanceWriter guidanceWriter;
 
     /**
      * 방의 단체 채팅에 영상 답장을 보내고, 영상 작성자에게만 알림을 보낸다
@@ -94,6 +96,7 @@ public class VideoReplyService {
 
         RoomMember sender = roomMembers.getByRoomIdAndUserId(roomId, senderId);
         ChatMessage saved = writer.save(reply.toMessage(chat.id(), senderId));
+        guidanceWriter.recordFirstVideoReply(sender);
 
         ChatMessageBroadcast broadcast = ChatMessageBroadcast.from(saved);
         events.publishEvent(new ChatMessageBroadcastEvent(broadcast));

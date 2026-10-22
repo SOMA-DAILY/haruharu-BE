@@ -2,6 +2,7 @@ package org.son.haruharu.domain.video.business;
 
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
+import org.son.haruharu.domain.room.implement.InteractionGuidanceWriter;
 import org.son.haruharu.domain.video.business.dto.ReactionResponse;
 import org.son.haruharu.domain.video.business.exception.CannotReactToOwnVideoException;
 import org.son.haruharu.domain.video.implement.ReactionType;
@@ -31,17 +32,20 @@ public class VideoReactionService {
     private final VideoReactionWriter videoReactionWriter;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+    private final InteractionGuidanceWriter guidanceWriter;
 
     public VideoReactionService(VideoPostReader videoPostReader, RoomMemberReader roomMemberReader,
                                 VideoReactionReader videoReactionReader,
                                 VideoReactionWriter videoReactionWriter,
-                                ApplicationEventPublisher eventPublisher, Clock clock) {
+                                ApplicationEventPublisher eventPublisher, Clock clock,
+                                InteractionGuidanceWriter guidanceWriter) {
         this.videoPostReader = videoPostReader;
         this.roomMemberReader = roomMemberReader;
         this.videoReactionReader = videoReactionReader;
         this.videoReactionWriter = videoReactionWriter;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
+        this.guidanceWriter = guidanceWriter;
     }
 
     public ReactionResponse toggle(Long userId, Long videoPostId, ReactionType reactionType) {
@@ -60,6 +64,7 @@ public class VideoReactionService {
         Optional<VideoReaction> existing = videoReactionReader.findMine(videoPostId, userId);
         if (existing.isEmpty()) {
             videoReactionWriter.save(VideoReaction.create(videoPostId, userId, reactionType.name(), LocalDateTime.now(clock)));
+            guidanceWriter.recordFirstReaction(reactor);
             if (!author.userId().equals(userId)) {
                 // 반응 알림도 매칭 전에는 실명이 아니라 방 세션 가명(없으면 익명)으로 표기한다(#393 — 그룹채팅과 동일 정책).
                 eventPublisher.publishEvent(new VideoReactedEvent(
@@ -73,6 +78,7 @@ public class VideoReactionService {
             return new ReactionResponse(false, null);
         }
         videoReactionWriter.save(current.withType(reactionType.name())); // 다른 타입 → 교체
+        guidanceWriter.recordFirstReaction(reactor);
         return new ReactionResponse(true, reactionType);
     }
 }

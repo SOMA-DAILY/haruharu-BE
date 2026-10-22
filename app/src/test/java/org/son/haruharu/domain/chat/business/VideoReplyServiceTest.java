@@ -41,6 +41,7 @@ class VideoReplyServiceTest {
     @Mock S3StoragePort storage;
     @Mock ApplicationEventPublisher events;
     @Mock Clock clock;
+    @Mock InteractionGuidanceWriter guidanceWriter;
     VideoReplyService service;
     final LocalDateTime now = LocalDateTime.of(2026, 9, 19, 12, 0);
     final String key = "a377e82b-40f3-40aa-af4e-83cf5b32060a";
@@ -76,7 +77,7 @@ class VideoReplyServiceTest {
                         targets,
                         storage,
                         events,
-                        clock, new ChatRoomLifecyclePolicy());
+                        clock, new ChatRoomLifecyclePolicy(), guidanceWriter);
     }
 
     void setupRoom() {
