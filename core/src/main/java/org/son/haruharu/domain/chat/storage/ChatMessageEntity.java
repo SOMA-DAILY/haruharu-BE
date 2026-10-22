@@ -15,6 +15,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.son.haruharu.common.entity.BaseEntity;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
+import org.son.haruharu.domain.chat.implement.ChatPhoto;
 import org.son.haruharu.domain.chat.implement.ChatMessageType;
 import org.son.haruharu.domain.chat.implement.ChatSenderType;
 
@@ -30,10 +31,15 @@ import java.time.LocalDateTime;
         @Index(name = "idx_chat_messages_reply_to", columnList = "reply_to_message_id"),
         @Index(name = "idx_chat_messages_room_mission", columnList = "room_mission_id")
 }, check = {
+        @CheckConstraint(name = "ck_chat_messages_photo", constraint =
+                "(message_type='IMAGE' AND sender_type='USER' AND client_request_id IS NOT NULL "
+                + "AND photo_key IS NOT NULL AND photo_width IS NOT NULL AND photo_width>0 "
+                + "AND photo_height IS NOT NULL AND photo_height>0 AND photo_digest IS NOT NULL) "
+                + "OR (message_type<>'IMAGE' AND photo_key IS NULL AND photo_width IS NULL AND photo_height IS NULL AND photo_digest IS NULL)"),
         @CheckConstraint(name = "ck_chat_messages_sender",
                 constraint = "(sender_type = 'USER' AND sender_id IS NOT NULL) OR (sender_type = 'SYSTEM' AND sender_id IS NULL)"),
         @CheckConstraint(name = "ck_chat_messages_mission_reference",
-                constraint = "(message_type = 'TEXT' AND room_mission_id IS NULL AND mission_announcement_id IS NULL) "
+                constraint = "(message_type IN ('TEXT', 'IMAGE') AND room_mission_id IS NULL AND mission_announcement_id IS NULL) "
                         + "OR (message_type = 'MISSION' AND sender_type = 'SYSTEM' AND room_mission_id IS NOT NULL "
                         + "AND room_mission_id > 0 AND mission_announcement_id IS NOT NULL AND mission_announcement_id > 0)")
 })
@@ -93,6 +99,15 @@ public class ChatMessageEntity extends BaseEntity {
     @Column(name = "delete_broadcast_at")
     private LocalDateTime deleteBroadcastAt;
 
+    @Column(name = "photo_key", length = 200)
+    private String photoKey;
+    @Column(name = "photo_width")
+    private Integer photoWidth;
+    @Column(name = "photo_height")
+    private Integer photoHeight;
+    @Column(name = "photo_digest", length = 64)
+    private String photoDigest;
+
     public static ChatMessageEntity from(ChatMessage message) {
         ChatMessageEntity entity = new ChatMessageEntity();
         entity.id = message.id();
@@ -112,12 +127,19 @@ public class ChatMessageEntity extends BaseEntity {
         entity.adminDeletedAt = message.adminDeletedAt();
         entity.deleteBroadcastAt = message.deleteBroadcastAt();
         entity.createdAt = message.createdAt();
+        if (message.photo() != null) {
+            entity.photoKey = message.photo().key();
+            entity.photoWidth = message.photo().width();
+            entity.photoHeight = message.photo().height();
+            entity.photoDigest = message.photo().digest();
+        }
         return entity;
     }
 
     public ChatMessage toDomain() {
         return new ChatMessage(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId,
                 replyToMessageId, replyPreviewSender, replyPreviewContent, messageType, scheduleItemId,
-                adminDeletedAt, deleteBroadcastAt, senderType, roomMissionId, missionAnnouncementId);
+                adminDeletedAt, deleteBroadcastAt, senderType, roomMissionId, missionAnnouncementId,
+                photoKey == null ? null : new ChatPhoto(photoKey, photoWidth, photoHeight, photoDigest));
     }
 }

@@ -86,7 +86,8 @@ class ChatServiceTest {
                 chatRoomMemberWriter, chatMessageReader, chatMessageWriter, profileService, userService,
                 roomMemberReader, roomReader, blockReader,
                 new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader,
-                        org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatMissionLookup.class)),
+                        org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatMissionLookup.class),
+                        org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatPhotoStore.class)),
                 new ChatParticipantPolicy(chatRoomReader, chatRoomMemberReader, roomMemberReader, profileService, userService, blockReader),
                 eventPublisher, clock, new ChatRoomLifecyclePolicy());
     }

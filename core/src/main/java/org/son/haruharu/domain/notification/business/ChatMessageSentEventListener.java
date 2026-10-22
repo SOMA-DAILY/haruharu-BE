@@ -72,6 +72,10 @@ public class ChatMessageSentEventListener {
             }
             if (event.chatRoomType() == ChatRoomType.GROUP) {
                 pushGroupChat(event, chatRecipients, data);
+            } else if (event.photo()) {
+                pushSendService.saveInbox(chatRecipients, NotificationType.CHAT, data, event.senderNickname());
+                pushSendService.push(chatRecipients, NotificationType.CHAT, data, NotificationType.CHAT.title(),
+                        event.senderNickname() + "님이 사진을 보냈어요", PushStyle.NORMAL);
             } else {
                 pushSendService.sendToUsers(chatRecipients, NotificationType.CHAT, data, event.senderNickname());
             }
@@ -84,7 +88,8 @@ public class ChatMessageSentEventListener {
      */
     private void pushGroupChat(ChatMessageSentEvent event, List<Long> recipients, Map<String, String> data) {
         pushSendService.saveInbox(recipients, NotificationType.CHAT, data, event.senderNickname());
-        String body = String.format(NotificationType.CHAT.body(), event.senderNickname());
+        String body = event.photo() ? event.senderNickname() + "님이 사진을 보냈어요"
+                : String.format(NotificationType.CHAT.body(), event.senderNickname());
         String key = PushBundle.chatKey(event.chatRoomId());
         List<PushBundleService.ChatDecision> decisions;
         try {
