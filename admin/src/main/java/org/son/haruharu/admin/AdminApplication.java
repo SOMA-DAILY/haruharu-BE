@@ -43,6 +43,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.appupdate.storage", "org.son.haruharu.domain.room.storage",
         // #321: RoomInviteService.join 의 유저 행 비관적 락(UserRepositoryImpl→UserJpaRepository) 배선.
         "org.son.haruharu.domain.user.storage",
+        // 관리자 참여자 대표사진: 기존 UserImageJpaRepository 재사용.
+        "org.son.haruharu.domain.profile.storage",
         // #486: 미션·게시 계획 저장과 보낸 운영 글 삭제
         "org.son.haruharu.domain.chat.storage",
         "org.son.haruharu.domain.mission.common.storage",

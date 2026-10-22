@@ -12,6 +12,8 @@ import org.son.haruharu.admin.domain.room.business.dto.AdminRoomSummary;
 import org.son.haruharu.admin.domain.room.implement.AdminRoomReader;
 import org.son.haruharu.admin.domain.room.storage.exception.AdminRoomNotFoundException;
 import org.son.haruharu.domain.profile.implement.UserProfile;
+import org.son.haruharu.domain.profile.implement.UserImageReader;
+import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomStatus;
@@ -22,15 +24,20 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class AdminRoomServiceTest {
 
     @Mock AdminRoomReader adminRoomReader;
+    @Mock UserImageReader userImageReader;
+    @Mock S3StoragePort media;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-10T03:00:00Z"), ZoneOffset.UTC);
 
@@ -38,7 +45,7 @@ class AdminRoomServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AdminRoomService(adminRoomReader, clock);
+        service = new AdminRoomService(adminRoomReader, clock, userImageReader, media);
     }
 
     private Room room(Long id, RoomStatus status, LocalDateTime startedAt) {
@@ -112,6 +119,25 @@ class AdminRoomServiceTest {
         assertThat(m1.nickname()).isNull();
         assertThat(m1.pseudonym()).isNull();  // 가명 미배정
         assertThat(m1.region()).isNull();
+    }
+
+    @Test
+    @DisplayName("대표사진을 일괄 조회하고 사진이 있는 참여자에게만 기존 원본 URL 발급을 적용한다")
+    void givenMemberImages_whenGetRoom_thenResolvesExistingImagesOnly() {
+        given(adminRoomReader.getById(1L)).willReturn(room(1L, RoomStatus.ACTIVE, LocalDateTime.now(clock)));
+        given(adminRoomReader.membersOf(1L)).willReturn(List.of(member(10L, 1L, "FEMALE"), member(11L, 1L, "MALE")));
+        given(userImageReader.getRepresentativeImageUrls(List.of(910L, 911L)))
+                .willReturn(Map.of(910L, "https://example.invalid/original.jpg"));
+        given(media.createPresignedImageGetUrl("https://example.invalid/original.jpg"))
+                .willReturn("https://example.invalid/original.jpg?signed=test-only");
+
+        AdminRoomDetailResponse result = service.getRoom(1L);
+
+        assertThat(result.members().get(0).profileImageUrl()).isEqualTo("https://example.invalid/original.jpg?signed=test-only");
+        assertThat(result.members().get(1).profileImageUrl()).isNull();
+        verify(userImageReader).getRepresentativeImageUrls(List.of(910L, 911L));
+        verify(media).createPresignedImageGetUrl("https://example.invalid/original.jpg");
+        verifyNoMoreInteractions(userImageReader, media);
     }
 
     @Test
