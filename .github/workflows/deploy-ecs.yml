@@ -77,6 +77,19 @@ jobs:
             echo "airflow_service=haruharu-airflow-svc-dev" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Record before service versions
+        run: |
+          aws ecs describe-services --cluster "${{ env.CLUSTER }}" \
+            --services "${{ steps.map.outputs.app_service }}" "${{ steps.map.outputs.admin_service }}" \
+            --query 'services[].{service:serviceName,task:taskDefinition,running:runningCount,desired:desiredCount}' \
+            --output json > ecs-before.json
+          cat ecs-before.json
+          for TASK in $(jq -r '.[].task' ecs-before.json); do
+            aws ecs describe-task-definition --task-definition "$TASK" \
+              --query 'taskDefinition.{task:taskDefinitionArn,containers:containerDefinitions[].{name:name,image:image}}' \
+              --output json
+          done
+
       - name: Deploy app
         if: inputs.target != 'admin'
         run: |
@@ -110,3 +123,24 @@ jobs:
           fi
           aws ecs wait services-stable --cluster "${{ env.CLUSTER }}" --services $SERVICES
           echo "✅ ${{ inputs.environment }} 배포 완료 (tag=${{ steps.map.outputs.tag }})"
+
+      - name: Record after service versions
+        run: |
+          aws ecs describe-services --cluster "${{ env.CLUSTER }}" \
+            --services "${{ steps.map.outputs.app_service }}" "${{ steps.map.outputs.admin_service }}" \
+            --query 'services[].{service:serviceName,task:taskDefinition,running:runningCount,desired:desiredCount}' \
+            --output json > ecs-after.json
+          cat ecs-after.json
+          for TASK in $(jq -r '.[].task' ecs-after.json); do
+            aws ecs describe-task-definition --task-definition "$TASK" \
+              --query 'taskDefinition.{task:taskDefinitionArn,containers:containerDefinitions[].{name:name,image:image}}' \
+              --output json
+          done
+
+      - name: Save deployment service versions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecs-service-versions-${{ inputs.environment }}-${{ github.run_id }}
+          path: ecs-*.json
+          retention-days: 7
