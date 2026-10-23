@@ -17,7 +17,13 @@ import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
+import org.son.haruharu.domain.chat.implement.ChatRoomPair;
+import org.son.haruharu.domain.chat.implement.ChatRoomPairReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
+import org.son.haruharu.domain.chat.implement.PairChatSchedule;
+import org.son.haruharu.domain.chat.implement.PairChatWindow;
+import org.son.haruharu.domain.chat.business.exception.PairChatClosedException;
+import org.son.haruharu.domain.chat.business.exception.PairChatLeaveNotAllowedException;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
@@ -73,6 +79,8 @@ public class ChatService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
     private final ChatRoomLifecyclePolicy lifecycle;
+    private final ChatRoomPairReader chatRoomPairReader;
+    private final PairChatSchedule pairChatSchedule;
 
     public ChatService(ChatRoomReader chatRoomReader,
                        ChatRoomWriter chatRoomWriter,
@@ -88,7 +96,8 @@ public class ChatService {
                        ChatMessageViews chatMessageViews,
                        ChatParticipantPolicy participants,
                        ApplicationEventPublisher eventPublisher,
-                       Clock clock, ChatRoomLifecyclePolicy lifecycle) {
+                       Clock clock, ChatRoomLifecyclePolicy lifecycle,
+                       ChatRoomPairReader chatRoomPairReader, PairChatSchedule pairChatSchedule) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomWriter = chatRoomWriter;
         this.chatRoomMemberReader = chatRoomMemberReader;
@@ -105,6 +114,8 @@ public class ChatService {
         this.eventPublisher = eventPublisher;
         this.clock = clock;
         this.lifecycle = lifecycle;
+        this.chatRoomPairReader = chatRoomPairReader;
+        this.pairChatSchedule = pairChatSchedule;
     }
 
     /**
@@ -190,11 +201,19 @@ public class ChatService {
                 ? ChatMessage.create(chatRoomId, senderId, content)
                 : ChatMessage.reply(chatRoomId, senderId, content, original, replySenderName(chatRoom, original));
         lifecycle.requireActive(chatRoom);
+        Long sourceRoomId = chatRoom.roomId();
+        if (chatRoom.type() == ChatRoomType.PAIR) {
+            // 대화 시간 1:1(#540)은 운영자가 정한 시간에만 보낼 수 있다. 방 종료는 위 requireActive 가 먼저 막는다.
+            sourceRoomId = chatRoomPairReader.getByChatRoomId(chatRoomId).roomId();
+            if (!pairChatSchedule.windowAt(sourceRoomId, LocalDateTime.now(clock)).isOpen()) {
+                throw new PairChatClosedException();
+            }
+        }
         ChatMessage saved = chatMessageWriter.save(toSave);
-        // 발신자 표시 이름(#393): GROUP은 방 세션 가명, DIRECT는 매칭쌍이라 실명. 푸시 본문("OO님이…")에 그대로 실린다.
+        // 발신자 표시 이름(#393): GROUP·PAIR는 방 세션 가명, DIRECT는 매칭쌍이라 실명. 푸시 본문("OO님이…")에 그대로 실린다.
         String senderNickname = participants.displayName(chatRoom, senderId);
         eventPublisher.publishEvent(new ChatMessageSentEvent(
-                saved.id(), chatRoomId, chatRoom.type(), chatRoom.roomId(), senderId,
+                saved.id(), chatRoomId, chatRoom.type(), sourceRoomId, senderId,
                 recipientIds, senderNickname, saved.createdAt(), original == null ? null : original.senderId()));
         ChatMessageBroadcast broadcast = ChatMessageBroadcast.from(saved);
         eventPublisher.publishEvent(new ChatMessageBroadcastEvent(broadcast));
@@ -214,12 +233,20 @@ public class ChatService {
                 .orElseThrow(ChatReplyInvalidException::new);
     }
 
-    /** 내 채팅방 목록. 마지막 메시지 최신순으로 정렬한다. 차단 관계 필터 세트는 루프 밖에서 한 번만 조회한다(#408, N+1 방지). */
+    /** 내 채팅방 목록(DIRECT·GROUP). 구버전 앱은 두 유형만 읽으므로 기본 목록에 PAIR 를 섞지 않는다(#540). */
     public ChatRoomsResponse getMyRooms(Long userId) {
+        return getMyRooms(userId, false);
+    }
+
+    /**
+     * 내 채팅방 목록. 마지막 메시지 최신순으로 정렬한다. 차단 관계 필터 세트는 루프 밖에서 한 번만 조회한다(#408, N+1 방지).
+     * includePair 면 대화 시간 1:1(PAIR) 방도 넣는다(메시지 없는 방·끝난 방·상대 탈퇴·차단 관계 방 제외).
+     */
+    public ChatRoomsResponse getMyRooms(Long userId, boolean includePair) {
         Set<Long> myBlocked = blockReader.getBlockedUserIds(userId);
         Set<Long> blockRelated = blockReader.getRelatedUserIds(userId);
         List<ChatRoomsResponse.ChatRoomSummary> summaries = chatRoomMemberReader.findActiveByUserId(userId).stream()
-                .map(me -> toSummary(me, userId, myBlocked, blockRelated))
+                .map(me -> toSummary(me, userId, myBlocked, blockRelated, includePair))
                 .filter(Objects::nonNull)
                 .sorted(Comparator.comparing(
                         ChatRoomsResponse.ChatRoomSummary::lastMessageAt,
@@ -232,9 +259,15 @@ public class ChatService {
         requireMember(chatRoomId, userId);
         ChatRoom room = chatRoomReader.getById(chatRoomId);
         if (room.type() == ChatRoomType.GROUP) {
-            return ChatRoomDetailResponse.group(chatRoomId, otherMemberBriefs(room.roomId(), chatRoomId, userId), room.createdAt());
+            return ChatRoomDetailResponse.group(chatRoomId, otherMemberBriefs(room.roomId(), chatRoomId, userId),
+                    room.createdAt(), room.roomId());
         }
         Long partnerUserId = participants.requireActivePartner(chatRoomId, userId);
+        if (room.type() == ChatRoomType.PAIR) {
+            ChatRoomPair pair = chatRoomPairReader.getByChatRoomId(chatRoomId);
+            return ChatRoomDetailResponse.pair(chatRoomId, toPseudonymBrief(pair.roomId(), partnerUserId),
+                    room.createdAt(), pair.roomId(), pairChatState(room, pair));
+        }
         return ChatRoomDetailResponse.direct(chatRoomId, toPartnerBrief(partnerUserId), room.createdAt());
     }
 
@@ -248,7 +281,7 @@ public class ChatService {
     /** 과거 메시지(최신순 커서 페이지). 삭제된 메시지는 제외. */
     public MessagePageResponse getMessages(Long chatRoomId, Long userId, Long cursor, int size) {
         requireMember(chatRoomId, userId);
-        participants.requireActiveIfDirect(chatRoomId, userId);
+        participants.requireActiveIfOneToOne(chatRoomId, userId);
         int limit = Math.min(Math.max(size, 1), MAX_MESSAGE_PAGE_SIZE);
         List<ChatMessage> messages = chatMessageReader.findPage(chatRoomId, cursor, limit);
         return MessagePageResponse.of(messages, limit, chatMessageViews.toItems(messages, userId));
@@ -260,7 +293,7 @@ public class ChatService {
         // 나가기와 읽음 갱신이 경합해 이전 leftAt=null 값으로 퇴장을 덮어쓰지 않게 한다.
         chatRoomReader.lockForUpdate(chatRoomId);
         ChatRoomMember member = requireMember(chatRoomId, userId);
-        participants.requireActiveIfDirect(chatRoomId, userId);
+        participants.requireActiveIfOneToOne(chatRoomId, userId);
         ChatRoomMember updated = chatRoomMemberWriter.save(member.readUpTo(lastReadMessageId));
         // 안읽음 수에서 내 메시지 + 내가 차단한 상대의 메시지를 제외한다(#408 — 그룹채팅 반영, 단방향).
         Set<Long> excludedSenders = new HashSet<>(blockReader.getBlockedUserIds(userId));
@@ -281,6 +314,10 @@ public class ChatService {
             throw new ChatRoomNotFoundException();
         }
         LocalDateTime now = LocalDateTime.now(clock);
+        if (room.orElseThrow(ChatRoomNotFoundException::new).type() == ChatRoomType.PAIR) {
+            // 대화 시간 1:1 은 방이 끝나면 함께 닫힌다. 나가기(DIRECT 처럼 방 삭제)는 없다(#540).
+            throw new PairChatLeaveNotAllowedException();
+        }
         if (room.orElseThrow(ChatRoomNotFoundException::new).type() == ChatRoomType.GROUP) {
             if (member.hasLeft()) throw new ChatNotMemberException();
             chatRoomMemberWriter.save(member.leave(now));
@@ -293,14 +330,18 @@ public class ChatService {
                 members.stream().map(ChatRoomMember::userId).toList()));
     }
 
-    /** null 반환 = 목록에서 제외(차단 관계 DIRECT 방, #408). */
+    /** null 반환 = 목록에서 제외(차단 관계 DIRECT 방 #408, 조건에 안 맞는 PAIR 방 #540). */
     private ChatRoomsResponse.ChatRoomSummary toSummary(ChatRoomMember me, Long userId,
-                                                        Set<Long> myBlocked, Set<Long> blockRelated) {
+                                                        Set<Long> myBlocked, Set<Long> blockRelated,
+                                                        boolean includePair) {
         Long chatRoomId = me.chatRoomId();
         Optional<ChatRoom> found = chatRoomReader.findById(chatRoomId);
         // 활성 멤버 조회 직후 다른 트랜잭션이 종료했을 때 목록 전체를 실패시키지 않는다.
         if (found.isEmpty()) return null;
         ChatRoom room = found.orElseThrow(ChatRoomNotFoundException::new);
+        if (room.type() == ChatRoomType.PAIR) {
+            return includePair ? toPairSummary(me, userId, room, blockRelated) : null;
+        }
 
         // DIRECT 상대 탈퇴는 마지막 메시지 조회 전에 걸러야 목록 전체가 죽지 않는다(#255).
         Long directPartnerUserId = null;
@@ -326,7 +367,8 @@ public class ChatService {
 
         if (room.type() == ChatRoomType.GROUP) {
             return ChatRoomsResponse.ChatRoomSummary.group(
-                    chatRoomId, otherMemberBriefs(room.roomId(), chatRoomId, userId), lastMessage, lastMessageAt, unread);
+                    chatRoomId, otherMemberBriefs(room.roomId(), chatRoomId, userId), lastMessage, lastMessageAt, unread,
+                    room.roomId());
         }
         return ChatRoomsResponse.ChatRoomSummary.direct(
                 chatRoomId, toPartnerBrief(directPartnerUserId), lastMessage, lastMessageAt, unread);
@@ -346,7 +388,38 @@ public class ChatService {
                 .toList();
     }
 
-    /** 발신자 제외 수신자 목록(푸시 대상). DIRECT=상대 1명, GROUP=나 제외 현재 참여자(나간 멤버 제외). */
+    /**
+     * PAIR 목록 한 줄(#540). 방이 끝나 닫힌 방, 메시지가 하나도 없는 방(열기만 하고 안 보낸 방),
+     * 상대가 탈퇴했거나 차단 관계(양방향)인 방은 목록에 넣지 않는다.
+     */
+    private ChatRoomsResponse.ChatRoomSummary toPairSummary(ChatRoomMember me, Long userId, ChatRoom room,
+                                                            Set<Long> blockRelated) {
+        if (room.closeAt() != null) return null;
+        ChatRoomPair pair = chatRoomPairReader.findByChatRoomId(room.id())
+                .filter(found -> found.includes(userId))
+                .orElse(null);
+        if (pair == null) return null;
+        Long partnerUserId = pair.partnerOf(userId);
+        if (blockRelated.contains(partnerUserId) || userService.isWithdrawn(partnerUserId)) return null;
+        ChatMessage last = chatMessageReader.findLast(room.id(), Set.of()).orElse(null);
+        if (last == null) return null;
+        long unread = chatMessageReader.countUnread(room.id(), me.lastReadMessageId(), Set.of(userId));
+        return ChatRoomsResponse.ChatRoomSummary.pair(room.id(), toPseudonymBrief(pair.roomId(), partnerUserId),
+                last.displayContent(), last.createdAt(), unread, pair.roomId());
+    }
+
+    /** PAIR 상세의 대화 시간 상태. 방이 끝나 닫힌 방은 다시 열리지 않는다. */
+    private ChatRoomDetailResponse.PairChatState pairChatState(ChatRoom room, ChatRoomPair pair) {
+        if (room.closeAt() != null) return ChatRoomDetailResponse.PairChatState.CLOSED;
+        PairChatWindow window = pairChatSchedule.windowAt(pair.roomId(), LocalDateTime.now(clock));
+        return switch (window.state()) {
+            case OPEN -> new ChatRoomDetailResponse.PairChatState(true, window.closesAt(), null);
+            case SCHEDULED -> new ChatRoomDetailResponse.PairChatState(false, null, window.opensAt());
+            case NONE -> ChatRoomDetailResponse.PairChatState.CLOSED;
+        };
+    }
+
+    /** 발신자 제외 수신자 목록(푸시 대상). DIRECT·PAIR=상대 1명, GROUP=나 제외 현재 참여자(나간 멤버 제외). */
     private List<Long> recipientsFor(ChatRoom room, Long senderId) {
         Long chatRoomId = room.id();
         if (room.type() == ChatRoomType.GROUP) {
@@ -363,6 +436,12 @@ public class ChatService {
     private PartnerBrief toPartnerBrief(Long partnerUserId) {
         var profile = profileService.getProfile(partnerUserId);
         return new PartnerBrief(partnerUserId, profile.nickname(), representativeImageUrl(profile));
+    }
+
+    /** PAIR 상대 경량 정보. GROUP 과 같이 방 세션 가명으로 가린다(#540, 매칭 전 실명 노출 금지 #393). */
+    private PartnerBrief toPseudonymBrief(Long sourceRoomId, Long memberUserId) {
+        return toGroupMemberBrief(roomMemberReader.findByRoomIdAndUserId(sourceRoomId, memberUserId).orElse(null),
+                memberUserId);
     }
 
     /** GROUP 참여자 경량 정보. 이름은 방 세션 가명(없으면 익명 플레이스홀더)으로 가린다 — 매칭 전 실명 노출 금지(#393). */

@@ -74,4 +74,9 @@ public class ChatRoomRepositoryImpl implements ChatRoomRepository {
     public boolean closeGroupByRoomId(Long roomId, LocalDateTime closeAt) {
         return chatRoomJpaRepository.closeGroupByRoomId(roomId, closeAt) > 0;
     }
+
+    @Override
+    public int closePairsByRoomId(Long roomId, LocalDateTime closeAt) {
+        return chatRoomJpaRepository.closePairsByRoomId(roomId, closeAt);
+    }
 }

@@ -54,7 +54,8 @@ class EntityAuditColumnRoundTripTest {
         var types = new org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry(java.util.List.of(
                 new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionHandler(),
                 new org.son.haruharu.domain.mission.types.profilereveal.implement.ProfileRevealMissionHandler(),
-                new org.son.haruharu.domain.mission.types.recording.implement.RecordingMissionHandler()));
+                new org.son.haruharu.domain.mission.types.recording.implement.RecordingMissionHandler(),
+                new org.son.haruharu.domain.mission.types.pairchat.implement.PairChatMissionHandler()));
         var mission = new org.son.haruharu.domain.mission.common.implement.RoomMission(1L, 2L,
                 org.son.haruharu.domain.mission.common.implement.MissionType.ANNOUNCEMENT,
                 new org.son.haruharu.domain.mission.types.announcement.implement.AnnouncementMissionDefinition("안내"),

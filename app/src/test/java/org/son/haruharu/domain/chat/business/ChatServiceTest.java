@@ -72,6 +72,8 @@ class ChatServiceTest {
     @Mock BlockReader blockReader;
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock org.son.haruharu.domain.chat.implement.ChatMessageReactionReader chatMessageReactionReader;
+    @Mock org.son.haruharu.domain.chat.implement.ChatRoomPairReader chatRoomPairReader;
+    @Mock org.son.haruharu.domain.chat.implement.PairChatSchedule pairChatSchedule;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-03T03:00:00Z"), ZoneOffset.UTC);
 
@@ -87,8 +89,9 @@ class ChatServiceTest {
                 roomMemberReader, roomReader, blockReader,
                 new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader,
                         org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatMissionLookup.class)),
-                new ChatParticipantPolicy(chatRoomReader, chatRoomMemberReader, roomMemberReader, profileService, userService, blockReader),
-                eventPublisher, clock, new ChatRoomLifecyclePolicy());
+                new ChatParticipantPolicy(chatRoomReader, chatRoomMemberReader, chatRoomPairReader, roomMemberReader,
+                        profileService, userService, blockReader),
+                eventPublisher, clock, new ChatRoomLifecyclePolicy(), chatRoomPairReader, pairChatSchedule);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -946,4 +949,214 @@ class ChatServiceTest {
         assertThat(chatService.getMyRooms(ME).chatRooms()).isEmpty();
     }
 
+
+    // ── 대화 시간 1:1(PAIR, #540) ──
+
+    private static final Long SOURCE_ROOM = 104L;
+    private static final Long PARTNER = 2L;
+
+    private ChatRoom pairRoom(Long chatRoomId) {
+        return new ChatRoom(chatRoomId, ChatRoomType.PAIR, null, null, LocalDateTime.now(clock));
+    }
+
+    private org.son.haruharu.domain.chat.implement.ChatRoomPair pairOf(Long chatRoomId) {
+        return org.son.haruharu.domain.chat.implement.ChatRoomPair.of(chatRoomId, SOURCE_ROOM, ME, PARTNER,
+                LocalDateTime.now(clock));
+    }
+
+    private org.son.haruharu.domain.room.implement.RoomMember roomMember(Long userId, String pseudonym) {
+        return new org.son.haruharu.domain.room.implement.RoomMember(userId * 10, SOURCE_ROOM, userId, "FEMALE",
+                pseudonym, null, LocalDateTime.now(clock));
+    }
+
+    private void givenPairMembers(Long chatRoomId) {
+        given(chatRoomMemberReader.findByChatRoomId(chatRoomId))
+                .willReturn(List.of(membership(chatRoomId, ME, null), membership(chatRoomId, PARTNER, null)));
+    }
+
+    @Test
+    @DisplayName("PAIR 는 대화 시간 중에 보내면 저장하고, 원본 방 id·가명 발신자로 상대 1명에게 이벤트를 발행한다")
+    void givenOpenPairWindow_whenSend_thenSavedWithPseudonymAndSourceRoom() {
+        var now = LocalDateTime.now(clock);
+        given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        givenPairMembers(ROOM);
+        given(chatRoomPairReader.getByChatRoomId(ROOM)).willReturn(pairOf(ROOM));
+        given(pairChatSchedule.windowAt(SOURCE_ROOM, now))
+                .willReturn(org.son.haruharu.domain.chat.implement.PairChatWindow.open(now.minusMinutes(10), 1, now.plusHours(1)));
+        given(chatMessageWriter.save(any())).willReturn(new ChatMessage(60L, ROOM, ME, "안녕하세요", now));
+        given(roomMemberReader.findByRoomIdAndUserId(SOURCE_ROOM, ME)).willReturn(Optional.of(roomMember(ME, "하늘")));
+
+        chatService.sendMessage(ROOM, ME, "안녕하세요");
+
+        then(eventPublisher).should().publishEvent(new ChatMessageSentEvent(
+                60L, ROOM, ChatRoomType.PAIR, SOURCE_ROOM, ME, List.of(PARTNER), "하늘", now));
+        then(profileService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("PAIR 는 대화 시간 밖이면 PAIR_CHAT_CLOSED 로 거절하고 저장·발행하지 않는다")
+    void givenClosedPairWindow_whenSend_thenRejected() {
+        var now = LocalDateTime.now(clock);
+        given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        givenPairMembers(ROOM);
+        given(chatRoomPairReader.getByChatRoomId(ROOM)).willReturn(pairOf(ROOM));
+        given(pairChatSchedule.windowAt(SOURCE_ROOM, now))
+                .willReturn(org.son.haruharu.domain.chat.implement.PairChatWindow.scheduled(now.plusHours(1), 2, now.plusHours(3)));
+
+        assertThatThrownBy(() -> chatService.sendMessage(ROOM, ME, "늦었어요"))
+                .isInstanceOf(org.son.haruharu.domain.chat.business.exception.PairChatClosedException.class);
+        then(chatMessageWriter).shouldHaveNoInteractions();
+        then(eventPublisher).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("방이 끝나 닫힌 PAIR 는 대화 시간과 관계없이 CHAT_ROOM_CLOSED 로 막는다")
+    void givenRoomEndedPair_whenSend_thenChatRoomClosed() {
+        given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM).close(LocalDateTime.now(clock)));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        givenPairMembers(ROOM);
+
+        assertThatThrownBy(() -> chatService.sendMessage(ROOM, ME, "늦었어요"))
+                .isInstanceOf(org.son.haruharu.domain.chat.business.exception.ChatRoomClosedException.class);
+        then(chatMessageWriter).shouldHaveNoInteractions();
+        then(pairChatSchedule).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("기본 채팅 목록에는 PAIR 를 넣지 않는다(구버전 앱 호환)")
+    void givenPairRoom_whenDefaultList_thenExcluded() {
+        given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(membership(ROOM, ME, null)));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(pairRoom(ROOM)));
+
+        assertThat(chatService.getMyRooms(ME).chatRooms()).isEmpty();
+        then(chatRoomPairReader).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("include_pair 목록의 PAIR 는 상대를 실명이 아닌 방 가명으로, 원본 방 id 와 함께 보여 준다")
+    void givenPairRoomWithMessages_whenListIncludingPair_thenPseudonymSummary() {
+        var at = LocalDateTime.now(clock).minusMinutes(3);
+        given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(membership(ROOM, ME, null)));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(pairRoom(ROOM)));
+        given(chatRoomPairReader.findByChatRoomId(ROOM)).willReturn(Optional.of(pairOf(ROOM)));
+        given(chatMessageReader.findLast(ROOM, Set.of())).willReturn(Optional.of(message(9L, ROOM, PARTNER, "어디예요?", at)));
+        given(chatMessageReader.countUnread(ROOM, null, Set.of(ME))).willReturn(1L);
+        given(roomMemberReader.findByRoomIdAndUserId(SOURCE_ROOM, PARTNER)).willReturn(Optional.of(roomMember(PARTNER, "서연")));
+        given(profileService.getProfile(PARTNER)).willReturn(profile("김실명"));
+
+        var rooms = chatService.getMyRooms(ME, true).chatRooms();
+
+        assertThat(rooms).hasSize(1);
+        var summary = rooms.getFirst();
+        assertThat(summary.type()).isEqualTo("PAIR");
+        assertThat(summary.partner().nickname()).isEqualTo("서연");
+        assertThat(summary.partner().userId()).isEqualTo(PARTNER);
+        assertThat(summary.members()).isNull();
+        assertThat(summary.lastMessage()).isEqualTo("어디예요?");
+        assertThat(summary.unreadCount()).isEqualTo(1L);
+        assertThat(summary.roomId()).isEqualTo(SOURCE_ROOM);
+    }
+
+    @Test
+    @DisplayName("include_pair 목록에서도 메시지가 없거나 방이 끝난 PAIR, 차단 관계 PAIR 는 뺀다")
+    void givenEmptyClosedOrBlockedPair_whenListIncludingPair_thenExcluded() {
+        Long empty = 31L, closed = 32L, blocked = 33L;
+        given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(
+                membership(empty, ME, null), membership(closed, ME, null), membership(blocked, ME, null)));
+        given(chatRoomReader.findById(empty)).willReturn(Optional.of(pairRoom(empty)));
+        given(chatRoomReader.findById(closed)).willReturn(Optional.of(pairRoom(closed).close(LocalDateTime.now(clock))));
+        given(chatRoomReader.findById(blocked)).willReturn(Optional.of(pairRoom(blocked)));
+        given(chatRoomPairReader.findByChatRoomId(empty)).willReturn(Optional.of(pairOf(empty)));
+        given(chatRoomPairReader.findByChatRoomId(blocked)).willReturn(Optional.of(
+                org.son.haruharu.domain.chat.implement.ChatRoomPair.of(blocked, SOURCE_ROOM, ME, 7L, LocalDateTime.now(clock))));
+        given(blockReader.getRelatedUserIds(ME)).willReturn(Set.of(7L));
+        given(chatMessageReader.findLast(empty, Set.of())).willReturn(Optional.empty());
+
+        assertThat(chatService.getMyRooms(ME, true).chatRooms()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("PAIR 상세는 가명 상대·원본 방 id 와 지금 보낼 수 있는지·이번 시간의 끝을 알려 준다")
+    void givenOpenPair_whenGetRoom_thenPairDetailOpen() {
+        var now = LocalDateTime.now(clock);
+        given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        givenPairMembers(ROOM);
+        given(chatRoomPairReader.getByChatRoomId(ROOM)).willReturn(pairOf(ROOM));
+        given(roomMemberReader.findByRoomIdAndUserId(SOURCE_ROOM, PARTNER)).willReturn(Optional.of(roomMember(PARTNER, "서연")));
+        given(profileService.getProfile(PARTNER)).willReturn(profile("김실명"));
+        given(pairChatSchedule.windowAt(SOURCE_ROOM, now))
+                .willReturn(org.son.haruharu.domain.chat.implement.PairChatWindow.open(now.minusMinutes(5), 1, now.plusHours(2)));
+
+        var detail = chatService.getRoom(ROOM, ME);
+
+        assertThat(detail.type()).isEqualTo("PAIR");
+        assertThat(detail.partner().nickname()).isEqualTo("서연");
+        assertThat(detail.roomId()).isEqualTo(SOURCE_ROOM);
+        assertThat(detail.pairChat()).isEqualTo(new ChatRoomDetailResponse.PairChatState(true, now.plusHours(2), null));
+    }
+
+    @Test
+    @DisplayName("PAIR 상세는 대화 시간 밖이면 닫힘과 다음 대화 시간의 시작을 알려 준다")
+    void givenScheduledPair_whenGetRoom_thenClosedWithNextOpen() {
+        var now = LocalDateTime.now(clock);
+        given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        givenPairMembers(ROOM);
+        given(chatRoomPairReader.getByChatRoomId(ROOM)).willReturn(pairOf(ROOM));
+        given(roomMemberReader.findByRoomIdAndUserId(SOURCE_ROOM, PARTNER)).willReturn(Optional.of(roomMember(PARTNER, "서연")));
+        given(profileService.getProfile(PARTNER)).willReturn(profile("김실명"));
+        given(pairChatSchedule.windowAt(SOURCE_ROOM, now))
+                .willReturn(org.son.haruharu.domain.chat.implement.PairChatWindow.scheduled(now.plusDays(1), 2, now.plusDays(1).plusHours(2)));
+
+        assertThat(chatService.getRoom(ROOM, ME).pairChat())
+                .isEqualTo(new ChatRoomDetailResponse.PairChatState(false, null, now.plusDays(1)));
+    }
+
+    @Test
+    @DisplayName("PAIR 는 나가기를 막고 아무것도 바꾸지 않는다")
+    void givenPairRoom_whenLeave_thenRejected() {
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(pairRoom(ROOM)));
+
+        assertThatThrownBy(() -> chatService.leaveRoom(ROOM, ME))
+                .isInstanceOf(org.son.haruharu.domain.chat.business.exception.PairChatLeaveNotAllowedException.class);
+        then(chatRoomMemberWriter).shouldHaveNoInteractions();
+        then(chatRoomWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("include_pair 목록에서 상대가 탈퇴한 PAIR 는 메시지가 있어도 뺀다(DIRECT 의 탈퇴 표시 줄을 두지 않는다)")
+    void givenWithdrawnPairPartner_whenListIncludingPair_thenExcluded() {
+        given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(membership(ROOM, ME, null)));
+        given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(pairRoom(ROOM)));
+        given(chatRoomPairReader.findByChatRoomId(ROOM)).willReturn(Optional.of(pairOf(ROOM)));
+        given(userService.isWithdrawn(PARTNER)).willReturn(true);
+        // 메시지가 있는 방이라 빠지는 이유는 상대 탈퇴뿐이다.
+        org.mockito.Mockito.lenient().when(chatMessageReader.findLast(ROOM, Set.of()))
+                .thenReturn(Optional.of(message(9L, ROOM, PARTNER, "탈퇴 전 메시지", LocalDateTime.now(clock))));
+
+        assertThat(chatService.getMyRooms(ME, true).chatRooms()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("방이 끝나 닫힌 PAIR 상세는 일정상 대화 시간이어도 닫힘이다(open=false, closes_at·next_opens_at 없음)")
+    void givenRoomEndedPair_whenGetRoom_thenPairChatClosed() {
+        var now = LocalDateTime.now(clock);
+        given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM).close(now));
+        given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
+        givenPairMembers(ROOM);
+        given(chatRoomPairReader.getByChatRoomId(ROOM)).willReturn(pairOf(ROOM));
+        given(roomMemberReader.findByRoomIdAndUserId(SOURCE_ROOM, PARTNER)).willReturn(Optional.of(roomMember(PARTNER, "서연")));
+        given(profileService.getProfile(PARTNER)).willReturn(profile("김실명"));
+        org.mockito.Mockito.lenient().when(pairChatSchedule.windowAt(SOURCE_ROOM, now))
+                .thenReturn(org.son.haruharu.domain.chat.implement.PairChatWindow.open(now.minusMinutes(5), 1, now.plusHours(2)));
+
+        var detail = chatService.getRoom(ROOM, ME);
+
+        assertThat(detail.type()).isEqualTo("PAIR");
+        assertThat(detail.pairChat()).isEqualTo(new ChatRoomDetailResponse.PairChatState(false, null, null));
+    }
 }

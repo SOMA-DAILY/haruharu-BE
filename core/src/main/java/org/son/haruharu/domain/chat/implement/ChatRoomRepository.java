@@ -17,4 +17,5 @@ public interface ChatRoomRepository {
     Optional<ChatRoom> findByRoomId(Long roomId);
     Optional<Long> findIdByRoomId(Long roomId);
     boolean closeGroupByRoomId(Long roomId, LocalDateTime closeAt);
+    int closePairsByRoomId(Long roomId, LocalDateTime closeAt);
 }

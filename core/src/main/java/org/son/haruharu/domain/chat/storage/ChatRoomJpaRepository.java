@@ -37,4 +37,13 @@ public interface ChatRoomJpaRepository extends JpaRepository<ChatRoomEntity, Lon
             where room_id = :roomId and type = 'GROUP' and close_at is null and deleted_at is null
             """, nativeQuery = true)
     int closeGroupByRoomId(@Param("roomId") Long roomId, @Param("closeAt") LocalDateTime closeAt);
+
+    // 방 종료 때 그 방의 대화 시간 1:1(PAIR) 채팅도 닫는다(#540). GROUP 종료와 같은 규칙(최초 종료 시각 보존).
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            update chat_rooms set close_at = :closeAt, updated_at = :closeAt
+            where type = 'PAIR' and close_at is null and deleted_at is null
+              and id in (select chat_room_id from chat_room_pairs where room_id = :roomId)
+            """, nativeQuery = true)
+    int closePairsByRoomId(@Param("roomId") Long roomId, @Param("closeAt") LocalDateTime closeAt);
 }

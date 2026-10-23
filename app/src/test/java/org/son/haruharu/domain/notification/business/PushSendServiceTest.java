@@ -325,13 +325,13 @@ class PushSendServiceTest {
     // ===================== 야간 차단 예외(#446) =====================
 
     @Test
-    @DisplayName("야간 예외 타입은 채팅·영상 반응·영상 메시지·영상 업로드·질문 도착·답변 도착·답장(#455) 7종뿐이다")
+    @DisplayName("야간 예외 타입은 채팅·영상 반응·영상 메시지·영상 업로드·질문 도착·답변 도착·답장(#455)·1:1 대화(#540) 8종뿐이다")
     void givenNotificationTypes_whenInspectQuietHoursExempt_thenOnlyUserInteractionTypes() {
         assertThat(java.util.Arrays.stream(NotificationType.values()).filter(NotificationType::quietHoursExempt))
                 .containsExactlyInAnyOrder(
                         NotificationType.CHAT, NotificationType.REACTION_RECEIVED, NotificationType.VIDEO_REPLY,
                         NotificationType.VIDEO_UPLOADED, NotificationType.QUESTION_RECEIVED,
-                        NotificationType.QUESTION_ANSWERED, NotificationType.CHAT_REPLY);
+                        NotificationType.QUESTION_ANSWERED, NotificationType.CHAT_REPLY, NotificationType.PAIR_CHAT);
     }
 
     @Test

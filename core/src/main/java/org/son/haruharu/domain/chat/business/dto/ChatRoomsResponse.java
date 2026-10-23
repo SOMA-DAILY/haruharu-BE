@@ -11,32 +11,44 @@ public record ChatRoomsResponse(
 ) {
     public record ChatRoomSummary(
             @Schema(description = "채팅방 id", example = "5") Long chatRoomId,
-            @Schema(description = "채팅방 유형", example = "GROUP") String type,
-            @Schema(description = "DIRECT 상대 최소 정보(GROUP·상대 탈퇴 시 null)", nullable = true) PartnerBrief partner,
-            @Schema(description = "GROUP 참여자 목록(나 제외, DIRECT면 null)", nullable = true) List<PartnerBrief> members,
+            @Schema(description = "채팅방 유형(GROUP·DIRECT, include_pair=true 면 PAIR 도)", example = "GROUP") String type,
+            @Schema(description = "DIRECT·PAIR 상대 최소 정보(GROUP·상대 탈퇴 시 null). PAIR 의 이름은 방 가명", nullable = true)
+            PartnerBrief partner,
+            @Schema(description = "GROUP 참여자 목록(나 제외, DIRECT·PAIR면 null)", nullable = true) List<PartnerBrief> members,
             @Schema(description = "마지막 메시지 미리보기(없거나 상대 탈퇴 시 null)", example = "내일 만나요!",
                     nullable = true) String lastMessage,
             @Schema(description = "마지막 메시지 시각(없거나 상대 탈퇴 시 null)", nullable = true)
             LocalDateTime lastMessageAt,
             @Schema(description = "안 읽은 메시지 수(상대 탈퇴 시 0)", example = "2") long unreadCount,
             @Schema(description = "DIRECT 상대가 탈퇴했는지. true면 partner·lastMessage가 비고 방에 진입할 수 없다",
-                    example = "false") boolean partnerWithdrawn
+                    example = "false") boolean partnerWithdrawn,
+            @Schema(description = "원본 소개팅방 id(GROUP·PAIR, DIRECT 면 null)", example = "104", nullable = true)
+            Long roomId
     ) {
         public static ChatRoomSummary direct(Long chatRoomId, PartnerBrief partner,
                                              String lastMessage, LocalDateTime lastMessageAt, long unreadCount) {
             return new ChatRoomSummary(chatRoomId, "DIRECT", partner, null,
-                    lastMessage, lastMessageAt, unreadCount, false);
+                    lastMessage, lastMessageAt, unreadCount, false, null);
         }
 
         public static ChatRoomSummary group(Long chatRoomId, List<PartnerBrief> members,
-                                            String lastMessage, LocalDateTime lastMessageAt, long unreadCount) {
+                                            String lastMessage, LocalDateTime lastMessageAt, long unreadCount,
+                                            Long roomId) {
             return new ChatRoomSummary(chatRoomId, "GROUP", null, members,
-                    lastMessage, lastMessageAt, unreadCount, false);
+                    lastMessage, lastMessageAt, unreadCount, false, roomId);
+        }
+
+        /** 대화 시간 1:1(#540). 상대 이름은 방 가명이다. */
+        public static ChatRoomSummary pair(Long chatRoomId, PartnerBrief partner,
+                                           String lastMessage, LocalDateTime lastMessageAt, long unreadCount,
+                                           Long roomId) {
+            return new ChatRoomSummary(chatRoomId, "PAIR", partner, null,
+                    lastMessage, lastMessageAt, unreadCount, false, roomId);
         }
 
         /** DIRECT 상대가 탈퇴한 방. 대화 기록을 노출하지 않고 탈퇴 사실만 알린다(#255). */
         public static ChatRoomSummary withdrawn(Long chatRoomId) {
-            return new ChatRoomSummary(chatRoomId, "DIRECT", null, null, null, null, 0L, true);
+            return new ChatRoomSummary(chatRoomId, "DIRECT", null, null, null, null, 0L, true, null);
         }
     }
 }
