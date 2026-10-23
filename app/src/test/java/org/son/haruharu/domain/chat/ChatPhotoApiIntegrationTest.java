@@ -14,8 +14,10 @@ import org.son.haruharu.domain.user.implement.*;
 import org.son.haruharu.domain.user.storage.*;
 import org.son.haruharu.domain.video.implement.*;
 import org.son.haruharu.domain.video.storage.*;
+import org.son.haruharu.utils.JwtProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -27,12 +29,19 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.*;
+import tools.jackson.databind.json.JsonMapper;
 
+import java.net.Socket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
@@ -65,6 +74,8 @@ class ChatPhotoApiIntegrationTest {
     org.son.haruharu.infrastructure.s3.S3StoragePort storage;
     @Autowired PlatformTransactionManager tx;
     @Autowired Clock clock;
+    @LocalServerPort int port;
+    @Autowired JwtProvider jwtProvider;
     Long roomId, chatId, sender, owner, observer, outsider, videoId;
 
     @BeforeEach
@@ -94,6 +105,58 @@ class ChatPhotoApiIntegrationTest {
         return out.toByteArray();
     }
     long count() { return jdbc.queryForObject("select count(*) from chat_messages where chat_room_id=?", Long.class, chatId); }
+
+    @Test
+    @DisplayName("실제 HTTP에서 파일 용량을 초과하면 413과 업로드 오류를 반환하고 저장하지 않는다")
+    void givenOversizedMultipart_whenSendOverHttp_thenReturnsUploadTooLarge() throws Exception {
+        String boundary = "chat-photo-size-boundary";
+        var body = HttpRequest.BodyPublishers.concat(
+                HttpRequest.BodyPublishers.ofString("--" + boundary + "\r\n"
+                        + "Content-Disposition: form-data; name=\"file\"; filename=\"large.png\"\r\n"
+                        + "Content-Type: image/png\r\n\r\n"),
+                HttpRequest.BodyPublishers.ofByteArray(new byte[10 * 1024 * 1024 + 1]),
+                HttpRequest.BodyPublishers.ofString("\r\n--" + boundary + "--\r\n"));
+        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/v1/chat-rooms/" + chatId + "/photo-messages?request_id=" + UUID.randomUUID()))
+                .header("Authorization", "Bearer " + jwtProvider.generateAccessToken(sender))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .timeout(Duration.ofSeconds(30))
+                .POST(body).build();
+
+        try (var client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()) {
+            var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(413);
+            var error = JsonMapper.builder().build().readTree(response.body()).path("error");
+            assertThat(error.path("code").asText()).isEqualTo("UPLOAD_TOO_LARGE");
+            assertThat(error.path("message").asText()).isEqualTo("10MB 이하 파일을 선택해 주세요.");
+        }
+        assertThat(count()).isZero();
+        org.mockito.Mockito.verifyNoInteractions(storage);
+    }
+
+    @Test
+    @DisplayName("전체 요청 제한 초과는 본문 전송 전에 413으로 거절한다")
+    void givenOversizedContentLength_whenSendHeaders_thenRejectsBeforeBody() throws Exception {
+        // 이미 거절된 본문을 계속 쓰면 클라이언트가 연결 종료를 먼저 관찰할 수 있다.
+        // 헤더만 전송해 Tomcat의 실제 Content-Length 검사와 조기 오류 응답을 확인한다.
+        try (var socket = new Socket("localhost", port)) {
+            socket.setSoTimeout(30_000);
+            String headers = "POST /api/v1/chat-rooms/" + chatId
+                    + "/photo-messages?request_id=" + UUID.randomUUID() + " HTTP/1.1\r\n"
+                    + "Host: localhost:" + port + "\r\n"
+                    + "Authorization: Bearer " + jwtProvider.generateAccessToken(sender) + "\r\n"
+                    + "Content-Type: multipart/form-data; boundary=chat-photo-size-boundary\r\n"
+                    + "Content-Length: " + (12 * 1024 * 1024) + "\r\n"
+                    + "Expect: 100-continue\r\nConnection: close\r\n\r\n";
+            socket.getOutputStream().write(headers.getBytes(StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+            String response = new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(response).contains("HTTP/1.1 413", "\"code\":\"UPLOAD_TOO_LARGE\"",
+                    "10MB 이하 파일을 선택해 주세요.");
+        }
+        assertThat(count()).isZero();
+        org.mockito.Mockito.verifyNoInteractions(storage);
+    }
 
     @Test @DisplayName("동시 재전송은 사진 한 장·메시지 하나만 만들고 다른 파일의 요청 ID 재사용은 거절한다")
     void givenConcurrentRetries_whenSend_thenPersistsOnce() throws Exception {
