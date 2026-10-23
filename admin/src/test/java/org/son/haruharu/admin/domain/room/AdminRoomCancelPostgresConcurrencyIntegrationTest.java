@@ -61,13 +61,11 @@ class AdminRoomCancelPostgresConcurrencyIntegrationTest {
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired org.son.haruharu.domain.chat.storage.ChatRoomJpaRepository chatRooms;
-    @Autowired org.son.haruharu.domain.chat.storage.ChatRoomPairJpaRepository chatRoomPairs;
 
     @BeforeEach
     void clean() {
         jdbcTemplate.execute("TRUNCATE TABLE rooms RESTART IDENTITY CASCADE");
         jdbcTemplate.execute("TRUNCATE TABLE chat_rooms RESTART IDENTITY CASCADE");
-        jdbcTemplate.execute("TRUNCATE TABLE chat_room_pairs");
     }
 
     @Test
@@ -96,12 +94,15 @@ class AdminRoomCancelPostgresConcurrencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("admin 취소는 같은 트랜잭션에서 그 방의 열린 1:1 대화(PAIR)도 닫고, 이미 닫힌 방·다른 방의 PAIR 는 그대로 둔다(#540)")
+    @DisplayName("admin 취소는 같은 트랜잭션에서 그 방의 GROUP 과 열린 1:1 대화(PAIR)를 함께 닫고, 이미 닫힌 방·다른 방의 PAIR 는 그대로 둔다(#540)")
     void givenStartedRoomWithPairChats_whenAdminCancels_thenClosesOnlyItsOpenPairChats() {
         var now = LocalDateTime.now();
         Long roomId = startedRoom(now);
         Long otherRoomId = startedRoom(now);
         LocalDateTime closedEarlier = now.minusMinutes(30).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        // 같은 방(room_id)에 GROUP 과 PAIR 가 함께 있다.
+        Long group = chatRooms.save(org.son.haruharu.domain.chat.storage.ChatRoomEntity.from(
+                org.son.haruharu.domain.chat.implement.ChatRoom.createGroup(roomId))).toDomain().id();
         Long openPair = pairChat(roomId, 1L, 2L, null);
         Long closedPair = pairChat(roomId, 1L, 3L, closedEarlier);
         Long otherRoomPair = pairChat(otherRoomId, 1L, 2L, null);
@@ -116,6 +117,7 @@ class AdminRoomCancelPostgresConcurrencyIntegrationTest {
         adminRoomCommandService.cancelRoom(roomId);
         var firstCloseAt = closeAt(openPair);
         assertThat(firstCloseAt).isNotNull();
+        assertThat(closeAt(group)).isNotNull();
         assertThat(closeAt(closedPair)).isEqualTo(closedEarlier);
         assertThat(closeAt(otherRoomPair)).isNull();
         adminRoomCommandService.cancelRoom(roomId);
@@ -209,11 +211,12 @@ class AdminRoomCancelPostgresConcurrencyIntegrationTest {
     }
 
     private Long pairChat(Long roomId, Long userA, Long userB, LocalDateTime closeAt) {
-        var chat = org.son.haruharu.domain.chat.implement.ChatRoom.createPair();
+        var chat = org.son.haruharu.domain.chat.implement.ChatRoom.createPair(roomId);
         Long chatId = chatRooms.save(org.son.haruharu.domain.chat.storage.ChatRoomEntity.from(
                 closeAt == null ? chat : chat.close(closeAt))).toDomain().id();
-        chatRoomPairs.save(org.son.haruharu.domain.chat.storage.ChatRoomPairEntity.from(
-                org.son.haruharu.domain.chat.implement.ChatRoomPair.of(chatId, roomId, userA, userB, LocalDateTime.now())));
+        for (Long userId : java.util.List.of(userA, userB))
+            jdbcTemplate.update("insert into chat_room_members (chat_room_id, user_id, joined_at) values (?, ?, ?)",
+                    chatId, userId, LocalDateTime.now());
         return chatId;
     }
 

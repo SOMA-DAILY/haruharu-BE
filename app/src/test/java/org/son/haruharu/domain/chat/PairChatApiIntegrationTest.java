@@ -94,6 +94,7 @@ class PairChatApiIntegrationTest {
     @Autowired RoomService roomService;
     @Autowired ChatService chats;
     @Autowired PairChatService pairChats;
+    @Autowired org.son.haruharu.domain.chat.implement.ChatRoomReader chatRoomReader;
     @Autowired RoomStatusTransitionService transitions;
     @Autowired ApplicationEvents events;
     @Autowired Clock clock;
@@ -163,9 +164,9 @@ class PairChatApiIntegrationTest {
         long chatId = open(me, partnerMemberId);
         assertThat(open(me, partnerMemberId)).isEqualTo(chatId);
         assertThat(open(partner, myMemberId)).isEqualTo(chatId);
-        assertThat(jdbc.queryForObject("select count(*) from chat_room_pairs where room_id=?", Long.class, roomId))
+        assertThat(jdbc.queryForObject("select count(*) from chat_rooms where type='PAIR' and room_id=?", Long.class, roomId))
                 .isEqualTo(1L);
-        assertThat(jdbc.queryForObject("select room_id from chat_rooms where id=?", Long.class, chatId)).isNull();
+        assertThat(jdbc.queryForObject("select room_id from chat_rooms where id=?", Long.class, chatId)).isEqualTo(roomId);
 
         mvc.perform(get("/api/v1/chat-rooms/{id}", chatId).with(authentication(auth(me))))
                 .andExpect(status().isOk())
@@ -264,6 +265,34 @@ class PairChatApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("같은 방에 PAIR 가 있어도 room_id 로 찾는 GROUP 조회·생성·멤버 추가는 GROUP 만 다룬다")
+    void givenPairInRoom_whenGroupLookupCreateAndJoin_thenOnlyGroupTouched() throws Exception {
+        window(now.minusMinutes(10), now.plusMinutes(50));
+        long pairId = open(me, partnerMemberId);
+
+        // PAIR 만 있으면 GROUP 은 없는 것이다(있다고 보면 방 시작 때 GROUP 을 만들지 않는다).
+        assertThat(chatRoomReader.existsByRoomId(roomId)).isFalse();
+        assertThat(chatRoomReader.findByRoomId(roomId)).isEmpty();
+
+        chats.createGroupRoom(roomId);
+        chats.createGroupRoom(roomId); // 시작 이벤트 재발행에도 GROUP 은 하나
+        Long groupId = jdbc.queryForObject("select id from chat_rooms where type='GROUP' and room_id=?", Long.class, roomId);
+
+        assertThat(chatRoomReader.existsByRoomId(roomId)).isTrue();
+        assertThat(chatRoomReader.getByRoomId(roomId).id()).isEqualTo(groupId);
+        assertThat(chatRoomReader.getIdByRoomId(roomId)).isEqualTo(groupId);
+        assertThat(chats.getGroupRoomBySourceRoom(roomId, me).chatRoomId()).isEqualTo(groupId);
+
+        Long newcomer = user("정실명");
+        member(newcomer, "민준");
+        chats.addGroupRoomMember(roomId, newcomer, now);
+        assertThat(jdbc.queryForObject("select count(*) from chat_room_members where chat_room_id=? and user_id=?",
+                Long.class, groupId, newcomer)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("select count(*) from chat_room_members where chat_room_id=?", Long.class, pairId))
+                .isEqualTo(2L);
+    }
+
+    @Test
     @DisplayName("방이 끝 시각이 되어 상태 전이로 끝나도 PAIR 가 닫히고, 두 사람에게 한 번 종료를 알린다")
     void givenRoomEndsByTime_whenTransition_thenPairClosed() throws Exception {
         window(now.minusMinutes(10), now.plusMinutes(50));
@@ -317,7 +346,7 @@ class PairChatApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("두 사람이 동시에 서로를 열어도 쌍 행과 채팅방은 하나다")
+    @DisplayName("두 사람이 동시에 서로를 열어도 PAIR 채팅방은 하나다")
     void givenConcurrentOpens_whenBothOpen_thenSinglePairRoom() throws Exception {
         window(now.minusMinutes(10), now.plusMinutes(50));
         var executor = Executors.newFixedThreadPool(6);
@@ -335,14 +364,10 @@ class PairChatApiIntegrationTest {
         } finally {
             executor.shutdownNow();
         }
-        assertThat(jdbc.queryForObject("select count(*) from chat_room_pairs where room_id=?", Long.class, roomId))
+        assertThat(jdbc.queryForObject("select count(*) from chat_rooms where type='PAIR' and room_id=?", Long.class, roomId))
                 .isEqualTo(1L);
-        // 실패한 동시 열기가 쌍 없는 PAIR 채팅방을 남기지 않는다.
-        assertThat(jdbc.queryForObject("""
-                select count(*) from chat_rooms c where c.type='PAIR'
-                and not exists (select 1 from chat_room_pairs p where p.chat_room_id = c.id)""", Long.class)).isZero();
         assertThat(jdbc.queryForObject("select count(*) from chat_room_members where chat_room_id=?", Long.class,
-                jdbc.queryForObject("select chat_room_id from chat_room_pairs where room_id=?", Long.class, roomId)))
+                jdbc.queryForObject("select id from chat_rooms where type='PAIR' and room_id=?", Long.class, roomId)))
                 .isEqualTo(2L);
     }
 }

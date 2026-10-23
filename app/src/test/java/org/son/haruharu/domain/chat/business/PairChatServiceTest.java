@@ -20,11 +20,8 @@ import org.son.haruharu.domain.chat.business.exception.PairChatInvalidTargetExce
 import org.son.haruharu.domain.chat.business.exception.PairChatNotOpenException;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
-import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
-import org.son.haruharu.domain.chat.implement.ChatRoomPair;
-import org.son.haruharu.domain.chat.implement.ChatRoomPairReader;
-import org.son.haruharu.domain.chat.implement.ChatRoomPairWriter;
+import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.chat.implement.PairChatSchedule;
@@ -50,11 +47,9 @@ class PairChatServiceTest {
 
     @Mock RoomReader roomReader;
     @Mock RoomMemberReader roomMemberReader;
+    @Mock ChatRoomReader chatRoomReader;
     @Mock ChatRoomWriter chatRoomWriter;
-    @Mock ChatRoomMemberReader chatRoomMemberReader;
     @Mock ChatRoomMemberWriter chatRoomMemberWriter;
-    @Mock ChatRoomPairReader chatRoomPairReader;
-    @Mock ChatRoomPairWriter chatRoomPairWriter;
     @Mock PairChatSchedule pairChatSchedule;
     @Mock BlockReader blockReader;
     @Mock UserService userService;
@@ -70,9 +65,8 @@ class PairChatServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PairChatService(roomReader, roomMemberReader, chatRoomWriter, chatRoomMemberReader,
-                chatRoomMemberWriter, chatRoomPairReader, chatRoomPairWriter, pairChatSchedule, blockReader,
-                userService, clock);
+        service = new PairChatService(roomReader, roomMemberReader, chatRoomReader, chatRoomWriter,
+                chatRoomMemberWriter, pairChatSchedule, blockReader, userService, clock);
     }
 
     RoomMember member(Long id, Long roomId, Long userId, String pseudonym) {
@@ -90,12 +84,12 @@ class PairChatServiceTest {
     }
 
     @Test
-    @DisplayName("대화 시간 중 처음 열면 PAIR 채팅방·쌍·두 사람 멤버를 만든다")
+    @DisplayName("대화 시간 중 처음 열면 원본 방 id 를 가진 PAIR 채팅방과 두 사람 멤버를 만든다")
     void givenOpenWindow_whenOpenFirstTime_thenCreatesPairRoom() {
         givenParticipantAndTarget();
         givenOpenWindow();
-        given(chatRoomPairReader.findByRoomIdAndUsers(ROOM, ME, PARTNER)).willReturn(Optional.empty());
-        given(chatRoomWriter.save(any())).willReturn(new ChatRoom(345L, ChatRoomType.PAIR, null, null, now));
+        given(chatRoomReader.findPair(ROOM, ME, PARTNER)).willReturn(Optional.empty());
+        given(chatRoomWriter.save(any())).willReturn(new ChatRoom(345L, ChatRoomType.PAIR, ROOM, null, now));
 
         var result = service.open(ROOM, ME, PARTNER_MEMBER);
 
@@ -103,8 +97,7 @@ class PairChatServiceTest {
         ArgumentCaptor<ChatRoom> room = ArgumentCaptor.forClass(ChatRoom.class);
         then(chatRoomWriter).should().save(room.capture());
         assertThat(room.getValue().type()).isEqualTo(ChatRoomType.PAIR);
-        assertThat(room.getValue().roomId()).isNull();
-        then(chatRoomPairWriter).should().save(ChatRoomPair.of(345L, ROOM, ME, PARTNER, now));
+        assertThat(room.getValue().roomId()).isEqualTo(ROOM);
         then(chatRoomMemberWriter).should().save(ChatRoomMember.join(345L, ME, now));
         then(chatRoomMemberWriter).should().save(ChatRoomMember.join(345L, PARTNER, now));
     }
@@ -114,14 +107,11 @@ class PairChatServiceTest {
     void givenExistingPair_whenOpen_thenReturnsSameRoom() {
         givenParticipantAndTarget();
         givenOpenWindow();
-        given(chatRoomPairReader.findByRoomIdAndUsers(ROOM, ME, PARTNER))
-                .willReturn(Optional.of(ChatRoomPair.of(345L, ROOM, PARTNER, ME, now.minusDays(1))));
-        given(chatRoomMemberReader.findMembership(345L, ME)).willReturn(Optional.of(ChatRoomMember.join(345L, ME, now)));
-        given(chatRoomMemberReader.findMembership(345L, PARTNER)).willReturn(Optional.of(ChatRoomMember.join(345L, PARTNER, now)));
+        given(chatRoomReader.findPair(ROOM, ME, PARTNER))
+                .willReturn(Optional.of(new ChatRoom(345L, ChatRoomType.PAIR, ROOM, null, now.minusDays(1))));
 
         assertThat(service.open(ROOM, ME, PARTNER_MEMBER).chatRoomId()).isEqualTo(345L);
         then(chatRoomWriter).should(never()).save(any());
-        then(chatRoomPairWriter).shouldHaveNoInteractions();
         then(chatRoomMemberWriter).shouldHaveNoInteractions();
     }
 
@@ -133,7 +123,6 @@ class PairChatServiceTest {
 
         assertThatThrownBy(() -> service.open(ROOM, ME, PARTNER_MEMBER)).isInstanceOf(PairChatNotOpenException.class);
         then(chatRoomWriter).shouldHaveNoInteractions();
-        then(chatRoomPairWriter).shouldHaveNoInteractions();
     }
 
     @Test

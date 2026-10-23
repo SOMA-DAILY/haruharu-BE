@@ -12,8 +12,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.chat.business.event.ChatRoomClosedEvent;
-import org.son.haruharu.domain.chat.implement.ChatRoomPair;
-import org.son.haruharu.domain.chat.implement.ChatRoomPairReader;
+import org.son.haruharu.domain.chat.implement.ChatRoom;
+import org.son.haruharu.domain.chat.implement.ChatRoomMember;
+import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
+import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.room.business.event.RoomEndedEvent;
 import org.springframework.context.ApplicationEventPublisher;
@@ -25,7 +28,8 @@ import static org.mockito.BDDMockito.then;
 class PairChatCloseListenerTest {
 
     @Mock ChatRoomWriter writer;
-    @Mock ChatRoomPairReader pairs;
+    @Mock ChatRoomReader rooms;
+    @Mock ChatRoomMemberReader members;
     @Mock ApplicationEventPublisher events;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-10-30T12:00:00Z"), ZoneOffset.UTC);
@@ -35,15 +39,20 @@ class PairChatCloseListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new PairChatCloseListener(writer, pairs, events, clock);
+        listener = new PairChatCloseListener(writer, rooms, members, events, clock);
     }
 
     @Test
-    @DisplayName("방이 끝나면 열린 PAIR 를 한 번에 닫고, 방마다 쌍의 두 사람에게 종료를 알린다")
+    @DisplayName("방이 끝나면 열린 PAIR 를 한 번에 닫고, 방마다 두 멤버에게 종료를 알린다")
     void givenOpenPairs_whenRoomEnded_thenClosesAllAndNotifiesBothUsersOfEachPair() {
         LocalDateTime createdAt = LocalDateTime.now(clock).minusDays(1);
-        given(pairs.findOpenByRoomId(ROOM)).willReturn(List.of(
-                ChatRoomPair.of(31L, ROOM, 7L, 3L, createdAt), ChatRoomPair.of(32L, ROOM, 3L, 9L, createdAt)));
+        given(rooms.findOpenPairsByRoomId(ROOM)).willReturn(List.of(
+                new ChatRoom(31L, ChatRoomType.PAIR, ROOM, null, createdAt),
+                new ChatRoom(32L, ChatRoomType.PAIR, ROOM, null, createdAt)));
+        given(members.findByChatRoomId(31L)).willReturn(List.of(
+                ChatRoomMember.join(31L, 3L, createdAt), ChatRoomMember.join(31L, 7L, createdAt)));
+        given(members.findByChatRoomId(32L)).willReturn(List.of(
+                ChatRoomMember.join(32L, 3L, createdAt), ChatRoomMember.join(32L, 9L, createdAt)));
 
         listener.onRoomEnded(new RoomEndedEvent(ROOM));
 
@@ -56,7 +65,7 @@ class PairChatCloseListenerTest {
     @Test
     @DisplayName("열린 PAIR 가 없으면(없거나 이미 닫힘) 닫기도 알림도 하지 않는다")
     void givenNoOpenPair_whenRoomEnded_thenNothing() {
-        given(pairs.findOpenByRoomId(ROOM)).willReturn(List.of());
+        given(rooms.findOpenPairsByRoomId(ROOM)).willReturn(List.of());
 
         listener.onRoomEnded(new RoomEndedEvent(ROOM));
 

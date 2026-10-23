@@ -1,16 +1,18 @@
--- #540 되돌리기. 1:1 대화 데이터(PAIR_CHAT 미션·PAIR 채팅방·쌍·PAIR_CHAT 알림)가 하나라도 있으면 멈춘다.
+-- #540 되돌리기. 1:1 대화 데이터(PAIR_CHAT 미션·PAIR 채팅방·PAIR_CHAT 알림)가 하나라도 있으면 멈춘다.
 -- 행을 지우지 않는다. 데이터가 있으면 보관·정리 방법을 먼저 정한다.
 BEGIN;
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM room_mission_instances WHERE type = 'PAIR_CHAT')
             OR EXISTS (SELECT 1 FROM chat_rooms WHERE type = 'PAIR')
-            OR (to_regclass('chat_room_pairs') IS NOT NULL AND EXISTS (SELECT 1 FROM chat_room_pairs))
             OR EXISTS (SELECT 1 FROM notification_history WHERE type = 'PAIR_CHAT') THEN
         RAISE EXCEPTION 'Pair chat data exists; manual reconciliation required';
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'chat_rooms'::regclass AND conname = 'uq_chat_rooms_room') THEN
+        ALTER TABLE chat_rooms ADD CONSTRAINT uq_chat_rooms_room UNIQUE (room_id);
+    END IF;
 END $$;
-DROP TABLE IF EXISTS chat_room_pairs;
+DROP INDEX IF EXISTS ux_chat_rooms_group_room;
 ALTER TABLE room_mission_instances DROP CONSTRAINT IF EXISTS room_mission_instances_type_check;
 ALTER TABLE room_mission_instances ADD CONSTRAINT room_mission_instances_type_check
     CHECK (type IN ('ANNOUNCEMENT', 'PROFILE_REVEAL', 'RECORDING'));

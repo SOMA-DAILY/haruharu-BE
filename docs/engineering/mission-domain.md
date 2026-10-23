@@ -224,8 +224,9 @@ app은 하위 패키지를 자동 스캔한다. admin은 필요한 빈만 명시
 채팅은 구체 유형을 모르고 채팅 소유 포트 `PairChatSchedule`(→ `PairChatWindow` OPEN·SCHEDULED·NONE)만 쓴다.
 `types/pairchat`의 `PairChatMissionSchedule`이 취소되지 않은 `PAIR_CHAT` 미션을 공통 상태 규칙(`statusAt`·`effectiveClosesAt`)으로
 계산해 구현한다. 방 시작 전에 잡힌 시작은 방 시작으로 당기고, `opens_day`는 방 시작일 기준 달력 일차다.
-`PAIR` 방은 `chat_rooms.room_id`(GROUP 1방 유일)를 비우고 `chat_room_pairs(chat_room_id, room_id, low_user_id, high_user_id)`
-UNIQUE(room_id, low, high)로 원본 방과 두 사람을 잇는다. 열기는 원본 방 행을 잠가 같은 두 사람의 동시 열기를 한 방으로 모은다.
+`PAIR` 방은 GROUP 과 같이 `chat_rooms.room_id`로 원본 방을 잇고, 두 사람은 `chat_room_members` 두 행이다. room_id 유일은
+GROUP 에만 거는 부분 유니크 `ux_chat_rooms_group_room`(WHERE type='GROUP')이고, room_id 로 GROUP 을 찾는 저장소 조회는
+type 까지 건다. 열기는 원본 방 행을 잠근 뒤 같은 두 사람의 PAIR 를 찾고 없을 때만 만들어 동시 열기도 한 방으로 모은다.
 메시지 전송은 대화 시간 밖이면 409 `PAIR_CHAT_CLOSED`, 방 종료 뒤엔 기존 `CHAT_ROOM_CLOSED`다. 방이 끝 시각에 끝나거나(app 전이)
 어드민이 취소하면 원본 방 트랜잭션 안에서 `PairChatCloseListener`가 그 방의 PAIR 를 닫고 쌍의 두 사람에게 종료를 알린다
 (admin 은 `AdminRoomDomainConfig`에 이 리스너를 등록한다. app 전이는 취소된 방을 건너뛴다).
@@ -398,8 +399,11 @@ FE 코드 수정·기기 UI 확인·운영 DB 적용·배포는 이 검증에 �
 - 촬영 미션 유형(2026-10-10, #496): `RECORDING` 추가. 유형 값 목록은 DB `type` CHECK에도 있으므로, #496 이전에
   `room_mission_instances`가 만들어진 DB에는 `scripts/sql/496-mission-type-recording-up.sql`을 app/admin 배포 전에 적용한다
   (재실행 가능). 적용하지 않으면 기동은 되지만 촬영 미션 저장이 실패한다. 새로 이관하는 DB는 `486-mission-up.sql`이 같은 목록으로 만든다.
-- 1:1 대화 시간(2026-10-23, #540): `PAIR_CHAT` 미션·`PAIR` 채팅방·`PAIR_CHAT` 알림과 `chat_room_pairs`. app(validate)·admin 배포 전에
-  `scripts/sql/540-pair-chat-up.sql`을 적용한다(재실행 가능, 세 표의 생성된 이름 CHECK 도 교체). admin 은 `ddl-auto: none`이라 표 없이도
-  기동되지만 방 취소가 같은 트랜잭션에서 `chat_room_pairs`를 읽으므로 취소가 실패한다. dev 처럼 Hibernate(update)가 표를 먼저 만든 DB 에는
-  외래 키가 없으므로 up 이 빠진 외래 키만 붙인다. 되돌리기 `540-pair-chat-down.sql`은 1:1 대화 데이터가 있으면 멈춘다.
-  확인은 `540-pair-chat-verify.sql`(쌍 표·외래 키가 없으면 멈춘다). 서버가 먼저 나가도 `PAIR_CHAT` 미션을 만들기 전까지 동작 변화가 없다.
+- 1:1 대화 시간(2026-10-23, #540): `PAIR_CHAT` 미션·`PAIR` 채팅방·`PAIR_CHAT` 알림. app·admin 배포 전에
+  `scripts/sql/540-pair-chat-up.sql`을 적용한다(재실행 가능, 세 표의 생성된 이름 CHECK 교체 + `uq_chat_rooms_room` 을 GROUP 부분 유니크
+  `ux_chat_rooms_group_room`으로 교체). 적용 자체는 옛 서버와 함께 돌아도 안전하다(PAIR 행이 없으면 막는 범위가 같다).
+  **PAIR 행이 생긴 뒤에는 #540 이전 이미지를 돌리면 안 된다** — 옛 서버의 room_id 조회는 type 조건이 없어 같은 방 GROUP·PAIR 를
+  함께 집고 방 입장·종료·취소가 실패한다. 롤백 하한은 #540 이미지이고, 첫 `PAIR_CHAT` 미션은 옛 task 가 모두 빠진 뒤 만든다. 옛 엔티티는
+  `uq_chat_rooms_room`을 선언하고 있어 dev(`ddl-auto: update`)에서 옛 서버가 재시작하면 전체 유니크를 되살린다 — dev 는 새 서버 배포 뒤
+  up 을 (다시) 적용한다. SQL 없이 새 서버가 먼저 나가도 `PAIR_CHAT` 미션을 만들기 전까지 동작 변화가 없다. 되돌리기
+  `540-pair-chat-down.sql`은 1:1 대화 데이터가 있으면 멈춘다. 확인은 `540-pair-chat-verify.sql`.

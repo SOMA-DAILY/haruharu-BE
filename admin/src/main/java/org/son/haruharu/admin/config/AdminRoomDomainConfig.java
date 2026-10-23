@@ -5,11 +5,9 @@ import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.storage.ChatMessageRepositoryImpl;
 import org.son.haruharu.domain.chat.business.GroupChatCloseListener;
 import org.son.haruharu.domain.chat.business.PairChatCloseListener;
-import org.son.haruharu.domain.chat.implement.ChatRoomPairReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
-import org.son.haruharu.domain.chat.storage.ChatRoomPairRepositoryImpl;
 import org.son.haruharu.domain.chat.storage.ChatRoomRepositoryImpl;
 import org.son.haruharu.domain.chat.storage.ChatRoomMemberRepositoryImpl;
 import org.son.haruharu.domain.mission.chat.business.MissionAnnouncementService;
@@ -66,7 +64,7 @@ import org.springframework.context.annotation.Import;
         ChatRoomReader.class, ChatRoomWriter.class, ChatRoomMemberReader.class,
         ChatRoomRepositoryImpl.class, ChatRoomMemberRepositoryImpl.class,
         // #540: 같은 트랜잭션에서 그 방의 1:1 대화(PAIR) 채팅도 닫는다. 앱 reconciler 는 취소된 방을 건너뛴다.
-        PairChatCloseListener.class, ChatRoomPairReader.class, ChatRoomPairRepositoryImpl.class,
+        PairChatCloseListener.class,
         // implement — 위 서비스가 쓰는 협력자만.
         RoomReader.class,
         RoomWriter.class,

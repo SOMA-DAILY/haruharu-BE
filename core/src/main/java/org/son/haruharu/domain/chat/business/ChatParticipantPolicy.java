@@ -7,7 +7,6 @@ import org.son.haruharu.domain.chat.business.exception.ChatPartnerWithdrawnExcep
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
-import org.son.haruharu.domain.chat.implement.ChatRoomPairReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.profile.business.ProfileService;
@@ -22,19 +21,16 @@ public class ChatParticipantPolicy {
 
     private final ChatRoomReader chatRoomReader;
     private final ChatRoomMemberReader chatRoomMemberReader;
-    private final ChatRoomPairReader chatRoomPairReader;
     private final RoomMemberReader roomMemberReader;
     private final ProfileService profileService;
     private final UserService userService;
     private final BlockReader blockReader;
 
     public ChatParticipantPolicy(ChatRoomReader chatRoomReader, ChatRoomMemberReader chatRoomMemberReader,
-                                 ChatRoomPairReader chatRoomPairReader,
                                  RoomMemberReader roomMemberReader, ProfileService profileService,
                                  UserService userService, BlockReader blockReader) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomMemberReader = chatRoomMemberReader;
-        this.chatRoomPairReader = chatRoomPairReader;
         this.roomMemberReader = roomMemberReader;
         this.profileService = profileService;
         this.userService = userService;
@@ -46,19 +42,12 @@ public class ChatParticipantPolicy {
      * DIRECT 는 실명.
      */
     public String displayName(ChatRoom chatRoom, Long userId) {
-        if (chatRoom.type() == ChatRoomType.GROUP) {
-            return pseudonym(chatRoom.roomId(), userId);
-        }
-        if (chatRoom.type() == ChatRoomType.PAIR) {
-            return pseudonym(chatRoomPairReader.getByChatRoomId(chatRoom.id()).roomId(), userId);
+        if (chatRoom.type() != ChatRoomType.DIRECT) {
+            return roomMemberReader.findByRoomIdAndUserId(chatRoom.roomId(), userId)
+                    .map(RoomMember::displayPseudonym)
+                    .orElse(RoomMember.ANONYMOUS_NAME);
         }
         return profileService.getNickname(userId);
-    }
-
-    private String pseudonym(Long roomId, Long userId) {
-        return roomMemberReader.findByRoomIdAndUserId(roomId, userId)
-                .map(RoomMember::displayPseudonym)
-                .orElse(RoomMember.ANONYMOUS_NAME);
     }
 
     /** 1:1 방(DIRECT·PAIR)만 상대 탈퇴·차단을 검사한다(GROUP 은 상대 단수 개념이 없어 통과). */
