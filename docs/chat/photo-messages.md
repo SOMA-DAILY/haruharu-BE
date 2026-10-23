@@ -1,6 +1,6 @@
 # Chat photo messages (#538)
 
-- `POST /api/v1/chat-rooms/{id}/photo-messages`: authenticated multipart `file` (JPEG/PNG, 10MB,25MP), `request_id` (canonical UUID). One photo per message; clients may select up to10 and upload in order. Response uses the normal message envelope with `message_type:IMAGE`, `content:사진`, `client_request_id` and `photo:{key,url,width,height}`. Never retry already acknowledged photos with a fresh request ID.
+- `POST /api/v1/chat-rooms/{id}/photo-messages`: authenticated multipart `file` (JPEG/PNG, 10MB,25MP), `request_id` (canonical UUID). One photo per message; clients select and confirm one photo per send. Response uses the normal message envelope with `message_type:IMAGE`, `content:사진`, `client_request_id` and `photo:{key,url,width,height}`. Never retry already acknowledged photos with a fresh request ID.
 - A request ID belongs to a chat and sender. Same ID+bytes returns the original message with no second upload/event. Different bytes with the same ID returns409 `CHAT_PHOTO_REQUEST_CONFLICT`.
 - Multipart file (10MB) or request (11MB) size limit violations return 413 `UPLOAD_TOO_LARGE` with `10MB 이하 파일을 선택해 주세요.`. Requests whose declared length exceeds the request limit are rejected before the body is read; clients that continue uploading may observe a closed connection.
 - `GET /api/v1/chat-rooms/{id}/messages/{messageId}/photo` refreshes the short-lived image URL after checking active membership, DIRECT block/withdrawal, same-room ownership, sender block and message deletion.
