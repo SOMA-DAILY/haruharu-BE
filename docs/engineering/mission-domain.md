@@ -401,7 +401,9 @@ FE 코드 수정·기기 UI 확인·운영 DB 적용·배포는 이 검증에 �
   (재실행 가능). 적용하지 않으면 기동은 되지만 촬영 미션 저장이 실패한다. 새로 이관하는 DB는 `486-mission-up.sql`이 같은 목록으로 만든다.
 - 1:1 대화 시간(2026-10-23, #540): `PAIR_CHAT` 미션·`PAIR` 채팅방·`PAIR_CHAT` 알림. app·admin 배포 전에
   `scripts/sql/540-pair-chat-up.sql`을 적용한다(재실행 가능, 세 표의 생성된 이름 CHECK 교체 + `uq_chat_rooms_room` 을 GROUP 부분 유니크
-  `ux_chat_rooms_group_room`으로 교체). 옛 서버와 함께 돌아도 안전하다(옛 서버는 room_id 를 GROUP 에만 쓴다). 다만 옛 엔티티는
+  `ux_chat_rooms_group_room`으로 교체). 적용 자체는 옛 서버와 함께 돌아도 안전하다(PAIR 행이 없으면 막는 범위가 같다).
+  **PAIR 행이 생긴 뒤에는 #540 이전 이미지를 돌리면 안 된다** — 옛 서버의 room_id 조회는 type 조건이 없어 같은 방 GROUP·PAIR 를
+  함께 집고 방 입장·종료·취소가 실패한다. 롤백 하한은 #540 이미지이고, 첫 `PAIR_CHAT` 미션은 옛 task 가 모두 빠진 뒤 만든다. 옛 엔티티는
   `uq_chat_rooms_room`을 선언하고 있어 dev(`ddl-auto: update`)에서 옛 서버가 재시작하면 전체 유니크를 되살린다 — dev 는 새 서버 배포 뒤
   up 을 (다시) 적용한다. SQL 없이 새 서버가 먼저 나가도 `PAIR_CHAT` 미션을 만들기 전까지 동작 변화가 없다. 되돌리기
   `540-pair-chat-down.sql`은 1:1 대화 데이터가 있으면 멈춘다. 확인은 `540-pair-chat-verify.sql`.

@@ -32,12 +32,14 @@ public interface ChatRoomJpaRepository extends JpaRepository<ChatRoomEntity, Lon
     @Query("select c.id from ChatRoomEntity c where c.roomId = :roomId and c.type = :type")
     Optional<Long> findIdByRoomIdAndType(@Param("roomId") Long roomId, @Param("type") ChatRoomType type);
 
-    // 같은 방 두 사람의 PAIR(#540). 생성은 원본 방 행 잠금 안에서만 하므로 쌍마다 1방이다.
+    // 같은 방 두 사람의 PAIR(#540). 생성은 원본 방 행 잠금 안에서만 하므로 두 사람마다 1방이다.
+    // DB 제약은 없어 혹시 둘이 생겨도 열기가 실패하지 않게 가장 먼저 만든 방을 쓴다.
     @Query(value = """
             select c.* from chat_rooms c
             join chat_room_members a on a.chat_room_id = c.id and a.user_id = :userA
             join chat_room_members b on b.chat_room_id = c.id and b.user_id = :userB
             where c.room_id = :roomId and c.type = 'PAIR' and c.deleted_at is null
+            order by c.id limit 1
             """, nativeQuery = true)
     Optional<ChatRoomEntity> findPairByRoomIdAndUsers(@Param("roomId") Long roomId,
                                                       @Param("userA") Long userA, @Param("userB") Long userB);

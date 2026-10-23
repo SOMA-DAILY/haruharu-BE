@@ -2,7 +2,9 @@
 --   미션 유형 PAIR_CHAT · 채팅방 유형 PAIR · 알림 유형 PAIR_CHAT 허용, chat_rooms.room_id 유일을 GROUP 한정으로 바꾼다.
 -- 새 app·admin 을 띄우기 전에 적용한다. dev(ddl-auto=update)는 옛 서버 재시작이 옛 유니크를 되살리므로 새 서버 배포 뒤 다시 적용한다.
 -- 여러 번 실행해도 같은 결과이고 기존 행은 바꾸지 않는다.
--- 옛 서버와 함께 돌아도 안전하다: 옛 서버는 새 유형 값을 쓰지 않고 room_id 를 GROUP 에만 쓴다.
+-- 적용 자체는 옛 서버와 함께 돌아도 안전하다(PAIR 행이 없으면 막는 범위가 옛 유니크와 같다).
+-- 단 PAIR 행이 하나라도 생긴 뒤에는 이 변경 이전 서버(room_id 조회에 type 조건 없음)를 돌리면 안 된다:
+-- 같은 방의 GROUP·PAIR 를 함께 집어 방 입장·종료·취소가 실패한다. 롤백 하한은 #540 이미지다.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
