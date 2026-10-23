@@ -12,4 +12,8 @@ public interface MissionTypeHandler {
     MissionDefinition fromStored(Map<String, Object> stored);
     boolean requiresResponse();
     default boolean allowsEmptyAnnouncement(MissionAnnouncementType purpose, MissionDefinition definition) { return false; }
+    /** 마감(closes_at)을 반드시 지정해야 하는 유형. 기본은 null 이면 방 종료를 따른다. */
+    default boolean requiresExplicitClose() { return false; }
+    /** 같은 방의 취소되지 않은 같은 유형 미션과 시간이 겹치면 안 되는 유형. 공통 서비스가 저장 전에 확인한다. */
+    default boolean exclusiveSchedule() { return false; }
 }

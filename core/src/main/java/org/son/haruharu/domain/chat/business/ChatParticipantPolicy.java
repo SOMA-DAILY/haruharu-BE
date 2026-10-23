@@ -15,7 +15,7 @@ import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.user.business.UserService;
 import org.springframework.stereotype.Component;
 
-/** 채팅 참여자 규칙. 표시 이름과 DIRECT 상대 접근 검사를 ChatService 와 반응 서비스가 같이 쓴다. */
+/** 채팅 참여자 규칙. 표시 이름과 1:1(DIRECT·PAIR) 상대 접근 검사를 ChatService 와 반응 서비스가 같이 쓴다. */
 @Component
 public class ChatParticipantPolicy {
 
@@ -37,9 +37,12 @@ public class ChatParticipantPolicy {
         this.blockReader = blockReader;
     }
 
-    /** 채팅 표시 이름. GROUP 은 방 세션 가명(없으면 익명 플레이스홀더, 매칭 전 실명 노출 금지 #393), DIRECT 는 실명. */
+    /**
+     * 채팅 표시 이름. GROUP·PAIR 는 방 세션 가명(없으면 익명 플레이스홀더, 매칭 전 실명 노출 금지 #393·#540),
+     * DIRECT 는 실명.
+     */
     public String displayName(ChatRoom chatRoom, Long userId) {
-        if (chatRoom.type() == ChatRoomType.GROUP) {
+        if (chatRoom.type() != ChatRoomType.DIRECT) {
             return roomMemberReader.findByRoomIdAndUserId(chatRoom.roomId(), userId)
                     .map(RoomMember::displayPseudonym)
                     .orElse(RoomMember.ANONYMOUS_NAME);
@@ -47,9 +50,9 @@ public class ChatParticipantPolicy {
         return profileService.getNickname(userId);
     }
 
-    /** DIRECT 방만 상대 탈퇴·차단을 검사한다(GROUP 은 상대 단수 개념이 없어 통과). */
-    public void requireActiveIfDirect(Long chatRoomId, Long userId) {
-        if (chatRoomReader.getById(chatRoomId).type() == ChatRoomType.DIRECT) {
+    /** 1:1 방(DIRECT·PAIR)만 상대 탈퇴·차단을 검사한다(GROUP 은 상대 단수 개념이 없어 통과). */
+    public void requireActiveIfOneToOne(Long chatRoomId, Long userId) {
+        if (chatRoomReader.getById(chatRoomId).type() != ChatRoomType.GROUP) {
             requireActivePartner(chatRoomId, userId);
         }
     }

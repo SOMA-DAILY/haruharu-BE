@@ -364,7 +364,7 @@ class GroupChatClosurePostgresIntegrationTest {
                     now.minusHours(1), now.minusMinutes(1), 3).materialized(terminal);
             Long id = rooms.save(RoomEntity.from(source)).toDomain().id();
             chats.createGroupRoom(id);
-            var created = chatRooms.findByRoomId(id).orElseThrow().toDomain();
+            var created = chatRooms.findByRoomIdAndType(id, org.son.haruharu.domain.chat.implement.ChatRoomType.GROUP).orElseThrow().toDomain();
             assertThat(created.closeAt()).isNotNull();
             assertThat(delivery.isActive(created.id())).isFalse();
         }

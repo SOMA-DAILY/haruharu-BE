@@ -272,7 +272,7 @@ public static UserEntity from(User user) {
 - `agreement` — user_agreements. 약관 동의
 - `room` — rooms(초대코드·어드민 스케줄·status·기수·성별 정원) · room_members(입장 경로 INVITE/APPLICATION) · room_invites(신규) · final_selections · match_results. 초대코드 정원(`max_uses`)은 INVITE 멤버만 세고, 방 전체 성별 정원은 rooms 가 따로 갖는다. 입장(가명·저장·`RoomMemberJoinedEvent`)은 `RoomMemberJoiner` 한 경로로 초대코드 입장과 앱 신청자 배정이 함께 쓴다(#513). 초대코드 입장은 앱 전용 `RoomJoinService`(어드민은 발급만 하는 `RoomInviteService`)가 맡고, `haruharu.room.join-identity-required`(기본 OFF)를 켜면 PASS 없는 계정의 새 입장을 403 `IDENTITY_REQUIRED` 로 막는다. 멤버 성별·생년은 PASS 값, PASS 가 없을 때만 프로필 성별(#514)
 - `video` — video_posts(슬롯 시간창) · video_reactions
-- `chat` — chat_rooms(GROUP/DIRECT) · chat_room_members · chat_messages
+- `chat` — chat_rooms(GROUP/DIRECT/PAIR, GROUP·PAIR 는 room_id·GROUP 만 방당 1개 #540) · chat_room_members · chat_messages
 - `mission` — #486의 공통 방 미션(`common`), 안내형 상세(`types/announcement`), 채팅 게시 계획(`chat`).
 - 이전 자동 미션 도메인은 #482에서 폐기. 과거 미션 테이블·영상의 `mission_id`는 데이터 호환을 위해 보존하며 런타임 엔티티·배치·API는 제공하지 않는다.
 - `notification` — device_tokens · notification_settings · notification_history (FCM)

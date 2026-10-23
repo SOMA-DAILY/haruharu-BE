@@ -11,6 +11,8 @@ import org.son.haruharu.domain.block.implement.BlockReader;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.chat.implement.ChatRoomType;
+import org.son.haruharu.domain.chat.storage.exception.ChatRoomNotFoundException;
 import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.MemberProfileService;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
@@ -59,6 +61,9 @@ public class ChatPartnerService {
         chatRoomMemberReader.findMembership(chatRoomId, userId)
                 .filter(member -> !member.hasLeft())
                 .orElseThrow(ChatNotMemberException::new); // 방 참여자(=매칭쌍)만
+        if (chatRoom.type() != ChatRoomType.DIRECT) {
+            throw new ChatRoomNotFoundException(); // 프로필 카드는 매칭 상대 전용. GROUP·PAIR(#540)에는 매칭 결과가 없다
+        }
 
         PartnerMemberRef partner = matchResultService.resolvePartner(chatRoom.matchResultId(), userId);
         if (userService.isWithdrawn(partner.partnerUserId())) {

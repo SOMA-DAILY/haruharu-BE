@@ -173,7 +173,7 @@ class ChatMessageReactionServiceTest {
         given(chatRoomMemberReader.findActiveMembership(CHAT, ME))
                 .willReturn(Optional.of(new ChatRoomMember(1L, CHAT, ME, LocalDateTime.now(clock), null, null)));
         org.mockito.BDDMockito.willThrow(new org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException())
-                .given(participants).requireActiveIfDirect(CHAT, ME);
+                .given(participants).requireActiveIfOneToOne(CHAT, ME);
 
         assertThatThrownBy(() -> service.toggle(ME, CHAT, MSG, ReactionType.LIKE))
                 .isInstanceOf(org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException.class);

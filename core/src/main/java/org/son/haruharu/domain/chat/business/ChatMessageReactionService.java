@@ -120,7 +120,7 @@ public class ChatMessageReactionService {
     private ChatRoom requireActiveMember(Long chatRoomId, Long userId) {
         ChatRoom chatRoom = chatRoomReader.getById(chatRoomId);
         chatRoomMemberReader.findActiveMembership(chatRoomId, userId).orElseThrow(ChatNotMemberException::new);
-        participants.requireActiveIfDirect(chatRoomId, userId); // DIRECT: 상대 탈퇴·차단이면 토글·조회 불가(메시지 목록과 같은 규칙)
+        participants.requireActiveIfOneToOne(chatRoomId, userId); // DIRECT: 상대 탈퇴·차단이면 토글·조회 불가(메시지 목록과 같은 규칙)
         return chatRoom;
     }
 

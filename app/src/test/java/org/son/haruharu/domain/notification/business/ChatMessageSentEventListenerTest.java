@@ -214,6 +214,22 @@ class ChatMessageSentEventListenerTest {
                 "💬 새 메시지", "윤슬님이 메시지를 보냈어요", ALERT);
     }
 
+    @Test
+    @DisplayName("대화 시간 1:1(PAIR) 메시지는 상대에게 PAIR_CHAT 하나만 보내고 원본 방 id 를 싣는다. 답장이어도 CHAT_REPLY 를 따로 보내지 않는다(#540)")
+    void givenPairChatReply_whenHandle_thenSinglePairChatPushWithRoomId() {
+        allowDelivery();
+        listener = listener(replyPush(true));
+
+        listener.handle(new ChatMessageSentEvent(
+                20L, 10L, ChatRoomType.PAIR, 104L, 1L,
+                List.of(2L), "서연", LocalDateTime.of(2026, 10, 28, 20, 10), 2L));
+
+        then(pushSendService).should().sendToUsers(List.of(2L), NotificationType.PAIR_CHAT,
+                Map.of("chatRoomId", "10", "roomId", "104"), "서연");
+        then(pushSendService).shouldHaveNoMoreInteractions();
+        then(pushBundleService).shouldHaveNoInteractions();
+    }
+
     private void allowDelivery() {
         willAnswer(inv -> {
             ((Runnable) inv.getArgument(1)).run();

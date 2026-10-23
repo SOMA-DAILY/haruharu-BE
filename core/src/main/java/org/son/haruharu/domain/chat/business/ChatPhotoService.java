@@ -9,11 +9,14 @@ import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
 import org.son.haruharu.domain.chat.business.exception.ChatMessageNotFoundException;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.business.exception.ChatPhotoRequestConflictException;
+import org.son.haruharu.domain.chat.business.exception.PairChatClosedException;
 import org.son.haruharu.domain.chat.implement.*;
 import org.son.haruharu.domain.chat.implement.exception.InvalidChatPhotoException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -29,6 +32,8 @@ public class ChatPhotoService {
     private final ChatPhotoStore photos;
     private final BlockReader blocks;
     private final ApplicationEventPublisher events;
+    private final PairChatSchedule pairChatSchedule;
+    private final Clock clock;
 
     /** 한 장 한 메시지. 방 잠금으로 나가기·동시 재시도와 직렬화하고 커밋 후에만 방송한다. */
     @Transactional
@@ -46,6 +51,9 @@ public class ChatPhotoService {
             return broadcast(message);
         }
         lifecycle.requireActive(chat);
+        // 대화 시간 1:1(#540)은 글과 같이 사진도 운영자가 정한 시간에만 보낸다.
+        if (chat.type() == ChatRoomType.PAIR && !pairChatSchedule.windowAt(chat.roomId(), LocalDateTime.now(clock)).isOpen())
+            throw new PairChatClosedException();
         ChatPhoto photo = photos.upload(chatId, bytes, file);
         ChatMessage saved = writer.save(ChatMessage.photo(chatId, senderId, requestId, photo));
         var recipients = members.findByChatRoomId(chatId).stream().filter(m -> !m.hasLeft())
@@ -76,7 +84,7 @@ public class ChatPhotoService {
     private void requireAccess(Long chatId, Long userId) {
         members.findActiveMembership(chatId, userId).orElseThrow(ChatNotMemberException::new);
         rooms.getById(chatId);
-        participants.requireActiveIfDirect(chatId, userId);
+        participants.requireActiveIfOneToOne(chatId, userId);
     }
 
     private void requireRequestId(String requestId) {

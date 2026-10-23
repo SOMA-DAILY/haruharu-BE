@@ -70,6 +70,7 @@ class ChatPhotoApiIntegrationTest {
     @Autowired VideoPostJpaRepository videos;
     @Autowired ChatService chats;
     @Autowired ChatPhotoService photos;
+    @Autowired org.son.haruharu.domain.mission.common.business.RoomMissionService missions;
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     org.son.haruharu.infrastructure.s3.S3StoragePort storage;
     @Autowired PlatformTransactionManager tx;
@@ -105,6 +106,31 @@ class ChatPhotoApiIntegrationTest {
         return out.toByteArray();
     }
     long count() { return jdbc.queryForObject("select count(*) from chat_messages where chat_room_id=?", Long.class, chatId); }
+
+    @Test
+    @DisplayName("PAIR(#540) 사진도 대화 시간 밖이면 PAIR_CHAT_CLOSED 로 막고 저장·업로드하지 않으며, 대화 시간 안이면 보낸다")
+    void givenPairChat_whenSendPhotoOutsideAndInsideWindow_thenOnlyInsideSends() throws Exception {
+        var now = LocalDateTime.now(clock);
+        Long pair = jdbc.queryForObject("""
+                insert into chat_rooms (type, room_id, created_at, updated_at) values ('PAIR', ?, ?, ?) returning id""",
+                Long.class, roomId, now, now);
+        for (Long userId : List.of(sender, owner))
+            jdbc.update("insert into chat_room_members (chat_room_id, user_id, joined_at) values (?, ?, ?)", pair, userId, now);
+
+        assertThatThrownBy(() -> photos.send(pair, sender, UUID.randomUUID().toString(), png(16), "image/png"))
+                .isInstanceOf(org.son.haruharu.domain.chat.business.exception.PairChatClosedException.class);
+        assertThat(jdbc.queryForObject("select count(*) from chat_messages where chat_room_id=?", Long.class, pair)).isZero();
+        org.mockito.Mockito.verify(storage, org.mockito.Mockito.never())
+                .putImage(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any());
+
+        missions.create(roomId, new org.son.haruharu.domain.mission.common.business.command.RoomMissionCommand(
+                org.son.haruharu.domain.mission.common.implement.MissionType.PAIR_CHAT,
+                new org.son.haruharu.domain.mission.types.pairchat.implement.PairChatMissionDefinition(),
+                now.minusMinutes(5), now.plusMinutes(30), null), "admin:1");
+        photos.send(pair, sender, UUID.randomUUID().toString(), png(16), "image/png");
+        assertThat(jdbc.queryForObject("select count(*) from chat_messages where chat_room_id=?", Long.class, pair)).isEqualTo(1L);
+    }
 
     @Test
     @DisplayName("실제 HTTP에서 파일 용량을 초과하면 413과 업로드 오류를 반환하고 저장하지 않는다")

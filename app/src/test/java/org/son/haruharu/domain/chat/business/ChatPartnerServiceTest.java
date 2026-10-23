@@ -8,6 +8,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.block.implement.BlockReader;
@@ -20,6 +22,7 @@ import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomReader;
+import org.son.haruharu.domain.chat.storage.exception.ChatRoomNotFoundException;
 import org.son.haruharu.domain.room.business.MatchResultService;
 import org.son.haruharu.domain.room.business.MemberProfileService;
 import org.son.haruharu.domain.room.business.dto.MemberProfileResponse;
@@ -171,5 +174,28 @@ class ChatPartnerServiceTest {
                 .isInstanceOf(ChatPartnerWithdrawnException.class);
         then(memberProfileService).should(never()).getMemberProfile(anyLong(), anyLong(), anyLong());
         then(videoService).should(never()).getMemberVideos(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ChatRoomType.class, names = {"GROUP", "PAIR"})
+    @DisplayName("매칭 결과가 없는 GROUP·PAIR 방은 상대 카드를 ChatRoomNotFoundException(404)으로 거절하고 매칭 상대를 찾지 않는다")
+    void givenNonDirectRoom_whenGetPartner_thenChatRoomNotFound(ChatRoomType type) {
+        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, type, null, null, LocalDateTime.now()));
+        given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME)).willReturn(Optional.of(membership(ME, null)));
+
+        assertThatThrownBy(() -> service.getPartner(CHAT_ROOM, ME))
+                .isInstanceOf(ChatRoomNotFoundException.class);
+        then(matchResultService).should(never()).resolvePartner(any(), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ChatRoomType.class, names = {"GROUP", "PAIR"})
+    @DisplayName("GROUP·PAIR 방이어도 참여자가 아니면 유형 확인보다 먼저 ChatNotMemberException(403)이다")
+    void givenNonMemberOfNonDirectRoom_whenGetPartner_thenNotMemberFirst(ChatRoomType type) {
+        given(chatRoomReader.getById(CHAT_ROOM)).willReturn(new ChatRoom(CHAT_ROOM, type, null, null, LocalDateTime.now()));
+        given(chatRoomMemberReader.findMembership(CHAT_ROOM, ME)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getPartner(CHAT_ROOM, ME))
+                .isInstanceOf(ChatNotMemberException.class);
     }
 }

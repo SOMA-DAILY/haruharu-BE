@@ -28,6 +28,10 @@ public class RoomMemberReader {
                 .orElseThrow(RoomMemberNotFoundException::new);
     }
 
+    public Optional<RoomMember> findById(Long id) {
+        return roomMemberRepository.findById(id);
+    }
+
     public List<RoomMember> findByUserId(Long userId) {
         return roomMemberRepository.findByUserId(userId);
     }

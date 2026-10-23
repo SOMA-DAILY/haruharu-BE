@@ -48,11 +48,15 @@ public class ChatController {
     }
 
     @Operation(summary = "내 채팅방 목록 조회",
-            description = "매칭으로 생성된 내 채팅방 목록. 방마다 상대 정보·마지막 메시지·안 읽은 개수 포함. 마지막 메시지 최신순 정렬.")
+            description = "내 채팅방 목록(DIRECT·GROUP). 방마다 상대 정보·마지막 메시지·안 읽은 개수 포함. 마지막 메시지 최신순 정렬. "
+                    + "include_pair=true 면 대화 시간 1:1(PAIR, #540) 방도 포함한다(구버전 앱 호환을 위해 기본은 제외).")
     @GetMapping
-    public ApiResponse<ChatRoomsResponse> getMyRooms(Authentication authentication) {
+    public ApiResponse<ChatRoomsResponse> getMyRooms(
+            @Parameter(description = "대화 시간 1:1(PAIR) 방 포함 여부") @RequestParam(name = "include_pair", defaultValue = "false")
+            boolean includePair,
+            Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
-        return ApiResponse.ok(chatService.getMyRooms(userId));
+        return ApiResponse.ok(chatService.getMyRooms(userId, includePair));
     }
 
     @Operation(summary = "방 ID로 GROUP 채팅방 조회",
@@ -76,7 +80,8 @@ public class ChatController {
     }
 
     @Operation(summary = "상대 프로필 조회",
-            description = "매칭 상대의 공개 프로필(전 항목 공개 + 1~3일차 영상 day별). 참여자만 조회 가능.")
+            description = "매칭 상대의 공개 프로필(전 항목 공개 + 1~3일차 영상 day별). 참여자만 조회 가능. "
+                    + "매칭(DIRECT) 방 전용이며 GROUP·PAIR 방은 404 CHAT_ROOM_NOT_FOUND.")
     @GetMapping("/{chatRoomId}/partner")
     public ApiResponse<PartnerProfileResponse> getPartner(@Parameter(description = "채팅방 id") @PathVariable Long chatRoomId,
                                                           Authentication authentication) {

@@ -3,8 +3,8 @@ package org.son.haruharu.domain.chat.implement;
 import java.time.LocalDateTime;
 
 /**
- * 채팅방. type으로 GROUP(소개팅방 전체 6인, roomId 연결)·DIRECT(최종선택 상호성사 1:1, matchResultId 연결)를 구분한다.
- * roomId·matchResultId는 type에 따라 한쪽만 채워진다(다른 쪽 null).
+ * 채팅방. type으로 GROUP(소개팅방 전체 6인, roomId 연결)·DIRECT(최종선택 상호성사 1:1, matchResultId 연결)·
+ * PAIR(대화 시간 1:1, roomId 연결)를 구분한다. GROUP·PAIR 는 roomId, DIRECT 는 matchResultId 만 채워진다.
  */
 public record ChatRoom(
         Long id,
@@ -32,5 +32,13 @@ public record ChatRoom(
     /** 상호매칭 성사 1:1 채팅: match_result_id 당 1방 멱등. (자동 생성은 #61에서 사용) */
     public static ChatRoom createDirect(Long matchResultId) {
         return new ChatRoom(null, ChatRoomType.DIRECT, null, matchResultId, null);
+    }
+
+    /**
+     * 대화 시간 1:1 채팅(#540). 원본 방은 roomId, 두 사람은 chat_room_members 가 가진다.
+     * room_id 유일 제약은 GROUP 에만 걸려 있어(부분 유니크) 같은 방의 GROUP 과 함께 둘 수 있다.
+     */
+    public static ChatRoom createPair(Long roomId) {
+        return new ChatRoom(null, ChatRoomType.PAIR, roomId, null, null);
     }
 }

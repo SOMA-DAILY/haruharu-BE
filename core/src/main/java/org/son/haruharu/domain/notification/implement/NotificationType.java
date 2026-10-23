@@ -46,6 +46,9 @@ public enum NotificationType {
     PROFILE_REVEAL("%1$s", "%2$s", true, NotificationCategory.ACTIVITY),
     // 답장 푸시. body 의 %s 는 답장한 사람 표시 이름(GROUP 가명 / DIRECT 실명). 유저 간 실시간 상호작용이라 야간 예외.
     CHAT_REPLY("💬 답장", "%s님이 답장했어요", true, NotificationCategory.ACTIVITY, true),
+    // 대화 시간 1:1(#540) 메시지. body 의 %s 는 보낸 사람의 방 가명. 구버전 앱은 모르는 type 이라 눌러도 이동하지 않는다
+    // (CHAT 으로 보내면 구버전 앱이 PAIR 상세를 못 읽어 오류 화면이 뜬다). 답장도 이 type 하나로 보낸다.
+    PAIR_CHAT("💬 1:1 대화", "%s님이 메시지를 보냈어요", true, NotificationCategory.ACTIVITY, true),
 
     // ── C. 시스템 / 거래 ──
     // 폐기된 자동매칭 환불 알림의 이력 호환용. 발송 트리거는 제거됨.

@@ -54,6 +54,13 @@ public class ChatMessageSentEventListener {
             if (recipients.isEmpty()) {
                 return;
             }
+            if (event.chatRoomType() == ChatRoomType.PAIR) {
+                // 대화 시간 1:1(#540): 상대 1명에게 PAIR_CHAT 하나만 보낸다(답장 푸시 없음). 원본 방 id 를 함께 싣는다.
+                pushSendService.sendToUsers(recipients, NotificationType.PAIR_CHAT,
+                        Map.of("chatRoomId", event.chatRoomId().toString(), "roomId", String.valueOf(event.roomId())),
+                        event.senderNickname());
+                return;
+            }
             Map<String, String> data = Map.of("chatRoomId", event.chatRoomId().toString());
             // 답장(#456): 플래그 ON 이면 원문 주인은 CHAT 대신 CHAT_REPLY 1건만 받는다(같은 사람에게 두 번 안 감).
             // 원문 주인이 수신자가 아니면(본인 답장, 차단, 운영 글 시스템 유저) 답장 푸시는 없다.

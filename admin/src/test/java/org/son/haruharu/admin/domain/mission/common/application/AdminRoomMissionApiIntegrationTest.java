@@ -451,4 +451,67 @@ class AdminRoomMissionApiIntegrationTest {
                 """.formatted(start)))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.fields[0].field").value("type"));
     }
+
+    // ── 1:1 대화(PAIR_CHAT, #540) ──
+
+    @Test
+    void givenPairChatType_whenCreateWithStartAndEnd_thenSavedWithEmptyDetailsAndListed() throws Exception {
+        long room = room("[]");
+        var body = mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"PAIR_CHAT","details":{},"opens_at":"%s","closes_at":"%s",
+                 "announcement":{"announcement_type":"START","run_at":"%s","content":"지금부터 22시까지 1:1 대화 시간이에요","push":true}}
+                """.formatted(start.plusHours(8), start.plusHours(10), start.plusHours(8))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.type").value("PAIR_CHAT"))
+                .andExpect(jsonPath("$.data.interaction_type").value("PAIR_CHAT"))
+                .andExpect(jsonPath("$.data.details").isEmpty())
+                .andExpect(jsonPath("$.data.closes_at").value(start.plusHours(10).toString() + ":00"))
+                .andExpect(jsonPath("$.data.requires_response").value(false))
+                .andReturn().getResponse().getContentAsString();
+        long mission = JsonPath.parse(body).read("$.data.mission_id", Long.class);
+        // 시작 전 수정은 전체 교체: 끝 시각을 늦춰도 자기 자신과는 겹침으로 보지 않는다.
+        mvc.perform(put(base(room) + "/" + mission).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"PAIR_CHAT","details":{},"opens_at":"%s","closes_at":"%s"}
+                """.formatted(start.plusHours(8), start.plusHours(11))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.closes_at").value(start.plusHours(11).toString() + ":00"));
+        mvc.perform(get(base(room)).with(authentication(role("CS"))))
+                .andExpect(jsonPath("$.data.missions[0].type").value("PAIR_CHAT"));
+    }
+
+    @Test
+    void givenInvalidPairChatMission_whenCreate_thenFieldErrors() throws Exception {
+        long room = room("[]");
+        // 끝 시각은 필수다.
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"PAIR_CHAT","details":{},"opens_at":"%s"}
+                """.formatted(start.plusHours(8))))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.fields[0].field").value("closes_at"));
+        // 다른 유형의 필드는 조용히 버리지 않는다.
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"PAIR_CHAT","details":{"content":"1:1 대화"},"opens_at":"%s","closes_at":"%s"}
+                """.formatted(start.plusHours(8), start.plusHours(10))))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.fields[0].field").value("details.content"));
+        // 같은 방에서 시간이 겹치면 거절한다.
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"PAIR_CHAT","details":{},"opens_at":"%s","closes_at":"%s"}
+                """.formatted(start.plusHours(8), start.plusHours(10))))
+                .andExpect(status().isCreated());
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"PAIR_CHAT","details":{},"opens_at":"%s","closes_at":"%s"}
+                """.formatted(start.plusHours(9), start.plusHours(11))))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.fields[0].field").value("opens_at"));
+        // 맞닿은 시간은 허용한다.
+        mvc.perform(post(base(room)).with(authentication(role("OPERATOR")))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                {"type":"PAIR_CHAT","details":{},"opens_at":"%s","closes_at":"%s"}
+                """.formatted(start.plusHours(10), start.plusHours(11))))
+                .andExpect(status().isCreated());
+    }
 }

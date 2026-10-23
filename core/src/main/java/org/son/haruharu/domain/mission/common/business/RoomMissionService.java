@@ -21,6 +21,7 @@ import org.son.haruharu.domain.mission.common.business.exception.MissionAnnounce
 import org.son.haruharu.domain.mission.common.business.exception.MissionNotEditableException;
 import org.son.haruharu.domain.mission.common.implement.MissionImage;
 import org.son.haruharu.domain.mission.common.implement.MissionImageStore;
+import org.son.haruharu.domain.mission.common.implement.MissionTypeHandler;
 import org.son.haruharu.domain.mission.common.implement.MissionTypeRegistry;
 import org.son.haruharu.domain.mission.common.implement.RoomMission;
 import org.son.haruharu.domain.mission.common.implement.RoomMissionReader;
@@ -57,6 +58,7 @@ public class RoomMissionService {
         RoomMission mission = definition(roomId, command, image, actor);
 
         types.get(mission.type()).validate(mission.details());
+        validateSchedule(mission, null);
         validateInitialAnnouncement(mission, command);
 
         RoomMission saved = writer.save(mission);
@@ -77,6 +79,8 @@ public class RoomMissionService {
         List<MissionImage> missionImages = new ArrayList<>();
         // 같은 사진을 여러 미션에 붙여도 S3 확인은 키마다 한 번만 한다(방 생성 트랜잭션 안).
         Map<String, MissionImage> confirmed = new HashMap<>();
+        // 시간이 겹치면 안 되는 유형은 같은 요청 안의 앞선 미션과도 비교한다.
+        List<RoomMission> accepted = new ArrayList<>();
 
         for (int i = 0; i < commands.size(); i++) {
             try {
@@ -88,7 +92,10 @@ public class RoomMissionService {
                 }
                 var mission = definition(roomId, commands.get(i), missionImages.get(i), actor);
                 types.get(mission.type()).validate(mission.details());
+                validateSchedule(mission, null);
+                rejectOverlap(mission, accepted);
                 validateInitialAnnouncement(mission, commands.get(i));
+                accepted.add(mission);
             } catch (InvalidMissionException e) {
                 String prefix = "missions[" + i + "].";
                 e.getFieldErrors().forEach(error -> errors.add(new ApiFieldError(prefix + error.field(), error.message())));
@@ -119,6 +126,7 @@ public class RoomMissionService {
             throw new InvalidMissionException("type", "유형은 변경할 수 없으며 안내는 별도 API로 수정해 주세요");
         RoomMission updated = current.update(command.details(), image, command.opensAt(), command.closesAt(), actor, now);
         types.get(updated.type()).validate(updated.details());
+        validateSchedule(updated, missionId);
         // 정의 변경으로 기존 예약의 게시 시각이나 본문 생략 조건이 깨지지 않게 한다.
         for (MissionAnnouncement announcement : announcements.findByMissionId(missionId)) {
             if (announcement.status() == MissionAnnouncementStatus.SCHEDULED) {
@@ -190,6 +198,33 @@ public class RoomMissionService {
         if (command == null) throw new InvalidMissionException("mission", "미션 내용을 입력해 주세요");
         return RoomMission.create(roomId, command.type(), command.details(), image,
                 command.opensAt(), command.closesAt(), actor);
+    }
+
+    /**
+     * 유형이 요구하는 일정 규칙(#540). 마감 필수 유형은 closes_at 이 있어야 하고, 겹침 금지 유형은 같은 방의
+     * 취소되지 않은 같은 유형 미션과 시간이 겹치면 안 된다. 호출 전에 방을 잠가 동시 생성끼리도 순서가 정해진다.
+     */
+    private void validateSchedule(RoomMission mission, Long editingMissionId) {
+        MissionTypeHandler handler = types.get(mission.type());
+        if (handler.requiresExplicitClose() && mission.closesAt() == null)
+            throw new InvalidMissionException("closes_at", "끝 시각을 지정해 주세요");
+        if (!handler.exclusiveSchedule()) return;
+        rejectOverlap(mission, reader.findByRoomIdAndType(mission.roomId(), mission.type()).stream()
+                .filter(other -> other.canceledAt() == null)
+                .filter(other -> editingMissionId == null || !editingMissionId.equals(other.id()))
+                .toList());
+    }
+
+    /** 겹침 금지 유형끼리 [시작, 끝) 구간이 겹치면 거절한다. 끝이 없는 미션은 끝없이 열린 것으로 본다. */
+    private void rejectOverlap(RoomMission mission, List<RoomMission> others) {
+        if (!types.get(mission.type()).exclusiveSchedule()) return;
+        LocalDateTime end = mission.closesAt() == null ? LocalDateTime.MAX : mission.closesAt();
+        for (RoomMission other : others) {
+            if (other.type() != mission.type()) continue;
+            LocalDateTime otherEnd = other.closesAt() == null ? LocalDateTime.MAX : other.closesAt();
+            if (mission.opensAt().isBefore(otherEnd) && other.opensAt().isBefore(end))
+                throw new InvalidMissionException("opens_at", "같은 시간에 같은 유형의 미션이 있어요");
+        }
     }
 
     /** 방 잠금 전에 확인한다(S3 조회). 사진이 없으면 null. */

@@ -260,7 +260,7 @@ class MissionDispatchIntegrationTest {
             profiles.save(org.son.haruharu.domain.profile.storage.UserProfileEntity.from(
                     org.son.haruharu.domain.profile.implement.UserProfile.empty(userId)));
         }
-        assertThat(chats.getMyRooms(bob).chatRooms().stream().filter(r -> r.chatRoomId().equals(chatId)).findFirst().orElseThrow().lastMessage())
+        assertThat(chats.getMyRooms(bob, false).chatRooms().stream().filter(r -> r.chatRoomId().equals(chatId)).findFirst().orElseThrow().lastMessage())
                 .isEqualTo("삭제된 메시지");
     }
 

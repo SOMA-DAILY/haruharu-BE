@@ -94,6 +94,37 @@ class AdminRoomCancelPostgresConcurrencyIntegrationTest {
     }
 
     @Test
+    @DisplayName("admin 취소는 같은 트랜잭션에서 그 방의 GROUP 과 열린 1:1 대화(PAIR)를 함께 닫고, 이미 닫힌 방·다른 방의 PAIR 는 그대로 둔다(#540)")
+    void givenStartedRoomWithPairChats_whenAdminCancels_thenClosesOnlyItsOpenPairChats() {
+        var now = LocalDateTime.now();
+        Long roomId = startedRoom(now);
+        Long otherRoomId = startedRoom(now);
+        LocalDateTime closedEarlier = now.minusMinutes(30).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        // 같은 방(room_id)에 GROUP 과 PAIR 가 함께 있다.
+        Long group = chatRooms.save(org.son.haruharu.domain.chat.storage.ChatRoomEntity.from(
+                org.son.haruharu.domain.chat.implement.ChatRoom.createGroup(roomId))).toDomain().id();
+        Long openPair = pairChat(roomId, 1L, 2L, null);
+        Long closedPair = pairChat(roomId, 1L, 3L, closedEarlier);
+        Long otherRoomPair = pairChat(otherRoomId, 1L, 2L, null);
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            adminRoomCommandService.cancelRoom(roomId);
+            assertThat(closeAt(openPair)).isNotNull();
+            status.setRollbackOnly();
+        });
+        assertThat(closeAt(openPair)).isNull();
+
+        adminRoomCommandService.cancelRoom(roomId);
+        var firstCloseAt = closeAt(openPair);
+        assertThat(firstCloseAt).isNotNull();
+        assertThat(closeAt(group)).isNotNull();
+        assertThat(closeAt(closedPair)).isEqualTo(closedEarlier);
+        assertThat(closeAt(otherRoomPair)).isNull();
+        adminRoomCommandService.cancelRoom(roomId);
+        assertThat(closeAt(openPair)).isEqualTo(firstCloseAt);
+    }
+
+    @Test
     @DisplayName("admin cancel이 scalar 존재 확인 뒤 room lock을 기다리면 동시 ENDED 상태를 덮어쓰지 않는다")
     void givenRoomEndsAfterAdminExistenceGate_whenCancelAcquiresLock_thenEndedWins() throws Exception {
         LocalDateTime startedAt = LocalDateTime.of(2026, 9, 1, 9, 0);
@@ -171,5 +202,25 @@ class AdminRoomCancelPostgresConcurrencyIntegrationTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("interrupted while waiting", e);
         }
+    }
+
+    private Long startedRoom(LocalDateTime now) {
+        return roomWriter.save(Room.createScheduled(now.minusHours(1), now.plusHours(1),
+                now.plusHours(2), now.plusHours(3), now.plusDays(1), 3)
+                .materialized(RoomStatus.ACTIVE)).id();
+    }
+
+    private Long pairChat(Long roomId, Long userA, Long userB, LocalDateTime closeAt) {
+        var chat = org.son.haruharu.domain.chat.implement.ChatRoom.createPair(roomId);
+        Long chatId = chatRooms.save(org.son.haruharu.domain.chat.storage.ChatRoomEntity.from(
+                closeAt == null ? chat : chat.close(closeAt))).toDomain().id();
+        for (Long userId : java.util.List.of(userA, userB))
+            jdbcTemplate.update("insert into chat_room_members (chat_room_id, user_id, joined_at) values (?, ?, ?)",
+                    chatId, userId, LocalDateTime.now());
+        return chatId;
+    }
+
+    private LocalDateTime closeAt(Long chatId) {
+        return chatRooms.findById(chatId).orElseThrow().toDomain().closeAt();
     }
 }
