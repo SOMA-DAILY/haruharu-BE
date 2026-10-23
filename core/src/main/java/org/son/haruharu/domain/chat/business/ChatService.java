@@ -209,6 +209,11 @@ public class ChatService {
                 saved.id(), chatRoomId, chatRoom.type(), chatRoom.roomId(), senderId,
                 recipientIds, senderNickname, saved.createdAt(), original == null ? null : original.senderId()));
         ChatMessageBroadcast broadcast = ChatMessageBroadcast.from(saved);
+        if (original != null && original.photo() != null) {
+            var photo = original.photo();
+            broadcast = broadcast.withReplyPhoto(new org.son.haruharu.domain.chat.business.dto.ChatPhotoView(
+                    photo.key(), null, photo.width(), photo.height()));
+        }
         eventPublisher.publishEvent(new ChatMessageBroadcastEvent(broadcast));
         return broadcast;
     }

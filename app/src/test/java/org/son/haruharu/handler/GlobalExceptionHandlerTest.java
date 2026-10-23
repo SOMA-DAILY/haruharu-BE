@@ -45,6 +45,22 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("업로드 용량 초과는 413을 반환하고 원문·스택 없이 WARN으로 기록한다")
+    void givenOversizedUpload_whenHandle_thenLogsWarningWithoutCause() {
+        var exception = new org.springframework.web.multipart.MaxUploadSizeExceededException(
+                10 * 1024 * 1024, new IllegalStateException("private-upload-filename.png"));
+
+        var response = handler.handleUploadTooLarge(exception,
+                request("POST", "/api/v1/chat-rooms/1/photo-messages"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+        assertThat(logs.at(Level.ERROR)).isEmpty();
+        assertThat(logs.at(Level.WARN)).hasSize(1);
+        assertThat(logs.first().getThrowableProxy()).isNull();
+        assertThat(logs.text()).contains("UPLOAD_TOO_LARGE").doesNotContain("private-upload-filename.png");
+    }
+
+    @Test
     @DisplayName("FCM 토큰 유니크 충돌 로그에 제약명만 남고 토큰 실제 값은 남지 않는다")
     void givenUniqueViolationWithDetail_whenHandle_thenLogsConstraintNameWithoutValue() {
         // given — pgjdbc가 logServerErrorDetail=true 로 DETAIL 을 실어 보낸 상황 (드라이버 설정이 누락된 환경)
