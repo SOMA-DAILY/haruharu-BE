@@ -23,6 +23,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.util.DisconnectedClientHelper;
 
@@ -119,6 +120,17 @@ public class GlobalExceptionHandler {
 
     // ===================== 프레임워크 예외 (4xx) =====================
     // 도메인 예외와 같은 기준으로 남긴다 — FE 연동 시 "왜 400인지"를 서버 로그로 답할 수 있어야 한다.
+
+    /** multipart 파서의 용량 제한은 Controller의 파일 검사 전에 적용된다. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUploadTooLarge(MaxUploadSizeExceededException e,
+                                                                 HttpServletRequest request) {
+        String code = "UPLOAD_TOO_LARGE";
+        String message = "10MB 이하 파일을 선택해 주세요.";
+        warn(413, request, code, message);
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
+                .body(ApiResponse.error(new ApiErrorDetail(code, message)));
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e,

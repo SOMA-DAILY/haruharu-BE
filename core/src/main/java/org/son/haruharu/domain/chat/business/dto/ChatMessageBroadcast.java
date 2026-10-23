@@ -25,10 +25,26 @@ public record ChatMessageBroadcast(
         String senderName,
         boolean deleted,
         String senderType,
-        ChatMissionReference mission
+        ChatMissionReference mission,
+        ChatPhotoView photo,
+        String clientRequestId
 ) {
+    public ChatMessageBroadcast(Long messageId, Long chatRoomId, Long senderId, String content, LocalDateTime sentAt, Long videoPostId, List<ReactionCountItem> reactions, String myReaction, ReplyToView replyTo, String messageType, String senderName, boolean deleted, String senderType, ChatMissionReference mission) {
+        this(messageId, chatRoomId, senderId, content, sentAt, videoPostId, reactions, myReaction, replyTo, messageType, senderName, deleted, senderType, mission, null, null);
+    }
+
     public ChatMessageBroadcast(Long messageId, Long chatRoomId, Long senderId, String content, LocalDateTime sentAt) {
         this(messageId, chatRoomId, senderId, content, sentAt, null, List.of(), null, null, "TEXT", null, false, "USER", null);
+    }
+
+    public ChatMessageBroadcast withPhoto(ChatPhotoView photo, String requestId) {
+        return new ChatMessageBroadcast(messageId, chatRoomId, senderId, content, sentAt, videoPostId, reactions, myReaction, replyTo, messageType, senderName, deleted, senderType, mission, deleted ? null : photo, requestId);
+    }
+
+    public ChatMessageBroadcast withReplyPhoto(ChatPhotoView photo) {
+        return new ChatMessageBroadcast(messageId, chatRoomId, senderId, content, sentAt, videoPostId, reactions,
+                myReaction, replyTo == null ? null : replyTo.withPhoto(photo), messageType, senderName,
+                deleted, senderType, mission, this.photo, clientRequestId);
     }
 
     public static ChatMessageBroadcast from(ChatMessage message) {

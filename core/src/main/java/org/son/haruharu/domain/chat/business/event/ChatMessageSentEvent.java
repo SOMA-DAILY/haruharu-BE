@@ -20,8 +20,16 @@ public record ChatMessageSentEvent(
         List<Long> recipientUserIds,
         String senderNickname,
         LocalDateTime occurredAt,
-        Long replyToSenderUserId
+        Long replyToSenderUserId,
+        boolean photo
 ) {
+    public ChatMessageSentEvent(Long chatMessageId, Long chatRoomId, ChatRoomType chatRoomType, Long roomId,
+                                Long senderUserId, List<Long> recipientUserIds, String senderNickname,
+                                LocalDateTime occurredAt, Long replyToSenderUserId) {
+        this(chatMessageId, chatRoomId, chatRoomType, roomId, senderUserId, recipientUserIds, senderNickname,
+                occurredAt, replyToSenderUserId, false);
+    }
+
     /** 답장 이전(#456) 8-arg 호환. 답장 아님. */
     public ChatMessageSentEvent(Long chatMessageId, Long chatRoomId, ChatRoomType chatRoomType, Long roomId,
                                 Long senderUserId, List<Long> recipientUserIds, String senderNickname,

@@ -26,10 +26,20 @@ public record MessagePageResponse(
             @Schema(description = "운영 글이면 '하루', 아니면 null(앱이 members 에서 찾음)", nullable = true) String senderName,
             @Schema(description = "운영자가 지운 메시지면 true(content 는 '삭제된 메시지')") boolean deleted,
             @Schema(description = "발신자 유형(USER 또는 SYSTEM)", example = "SYSTEM") String senderType,
-            @Schema(description = "미션 참조. 일반·삭제된 메시지에는 null", nullable = true) ChatMissionReference mission
+            @Schema(description = "미션 참조. 일반·삭제된 메시지에는 null", nullable = true) ChatMissionReference mission,
+            ChatPhotoView photo,
+            String clientRequestId
     ) {
+        public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt, Long videoPostId, List<ReactionCountItem> reactions, String myReaction, ReplyToView replyTo, String messageType, String senderName, boolean deleted, String senderType, ChatMissionReference mission) {
+            this(messageId, senderId, content, sentAt, videoPostId, reactions, myReaction, replyTo, messageType, senderName, deleted, senderType, mission, null, null);
+        }
+
         public MessageItem(Long messageId, Long senderId, String content, LocalDateTime sentAt) {
             this(messageId, senderId, content, sentAt, null, List.of(), null, null, "TEXT", null, false, "USER", null);
+        }
+
+        public MessageItem withPhoto(ChatPhotoView photo, String requestId) {
+            return new MessageItem(messageId, senderId, content, sentAt, videoPostId, reactions, myReaction, replyTo, messageType, senderName, deleted, senderType, mission, deleted ? null : photo, requestId);
         }
 
         public static MessageItem of(ChatMessage message, List<ReactionCountItem> reactions, String myReaction,

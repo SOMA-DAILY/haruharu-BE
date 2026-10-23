@@ -24,8 +24,24 @@ public record ChatMessage(
         LocalDateTime deleteBroadcastAt,
         ChatSenderType senderType,
         Long roomMissionId,
-        Long missionAnnouncementId
+        Long missionAnnouncementId,
+        ChatPhoto photo
 ) {
+    public ChatMessage(Long id, Long chatRoomId, Long senderId, String content, LocalDateTime createdAt,
+                       Long videoPostId, String clientRequestId, Long replyToMessageId, String replyPreviewSender,
+                       String replyPreviewContent, ChatMessageType messageType, Long scheduleItemId,
+                       LocalDateTime adminDeletedAt, LocalDateTime deleteBroadcastAt, ChatSenderType senderType,
+                       Long roomMissionId, Long missionAnnouncementId) {
+        this(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId, replyToMessageId,
+                replyPreviewSender, replyPreviewContent, messageType, scheduleItemId, adminDeletedAt,
+                deleteBroadcastAt, senderType, roomMissionId, missionAnnouncementId, null);
+    }
+
+    public static ChatMessage photo(Long chatRoomId, Long senderId, String requestId, ChatPhoto photo) {
+        return new ChatMessage(null, chatRoomId, senderId, "사진", null, null, requestId,
+                null, null, null, ChatMessageType.IMAGE, null, null, null, ChatSenderType.USER, null, null, photo);
+    }
+
     /** 운영자가 지운 메시지 대신 내려주는 문구(#457). */
     public static final String DELETED_CONTENT = "삭제된 메시지";
 
@@ -36,6 +52,10 @@ public record ChatMessage(
         }
         if (messageType == null) {
             messageType = ChatMessageType.TEXT;
+        }
+        if ((messageType == ChatMessageType.IMAGE) != (photo != null)
+                || (photo != null && (senderType != ChatSenderType.USER || clientRequestId == null))) {
+            throw new org.son.haruharu.domain.chat.implement.exception.InvalidChatPhotoException();
         }
         if (messageType == ChatMessageType.MISSION) {
             if (senderType != ChatSenderType.SYSTEM || roomMissionId == null || roomMissionId <= 0

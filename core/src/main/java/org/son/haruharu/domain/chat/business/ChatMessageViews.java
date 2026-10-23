@@ -30,13 +30,16 @@ public class ChatMessageViews {
     private final ChatMessageReader messageReader;
     private final BlockReader blockReader;
     private final ChatMissionLookup missionLookup;
+    private final org.son.haruharu.domain.chat.implement.ChatPhotoStore photoStore;
 
     public ChatMessageViews(ChatMessageReactionReader reactionReader, ChatMessageReader messageReader,
-                            BlockReader blockReader, ChatMissionLookup missionLookup) {
+                            BlockReader blockReader, ChatMissionLookup missionLookup,
+                            org.son.haruharu.domain.chat.implement.ChatPhotoStore photoStore) {
         this.reactionReader = reactionReader;
         this.messageReader = messageReader;
         this.blockReader = blockReader;
         this.missionLookup = missionLookup;
+        this.photoStore = photoStore;
     }
 
     public List<MessageItem> toItems(List<ChatMessage> messages, Long viewerId) {
@@ -53,7 +56,7 @@ public class ChatMessageViews {
         Map<Long, ChatMessage> originals = replyIds.isEmpty() ? Map.of()
                 : messageReader.findAllByIds(replyIds).stream()
                         .collect(Collectors.toMap(ChatMessage::id, Function.identity()));
-        Set<Long> blocked = replyIds.isEmpty() ? Set.of() : blockReader.getBlockedUserIds(viewerId);
+        Set<Long> blocked = blockReader.getBlockedUserIds(viewerId);
         List<Long> announcementIds = messages.stream().filter(m -> !m.isAdminDeleted())
                 .map(ChatMessage::missionAnnouncementId).filter(Objects::nonNull).distinct().toList();
         Map<Long, ChatMissionReference> missions = announcementIds.isEmpty() ? Map.of()
@@ -64,7 +67,9 @@ public class ChatMessageViews {
                         ReactionCountItem.sorted(counts.getOrDefault(m.id(), List.of())),
                         mine.get(m.id()),
                         replyTo(m, originals, blocked),
-                        m.missionAnnouncementId() == null ? null : missions.get(m.missionAnnouncementId())))
+                        m.missionAnnouncementId() == null ? null : missions.get(m.missionAnnouncementId()))
+                        .withPhoto(m.isAdminDeleted() || (!m.isSystem() && blocked.contains(m.senderId()))
+                                ? null : photoStore.view(m.photo()), m.clientRequestId()))
                 .toList();
     }
 
@@ -75,7 +80,8 @@ public class ChatMessageViews {
         ChatMessage original = originals.get(message.replyToMessageId());
         boolean available = isViewable(original, blocked);
         return ReplyToView.of(message.replyToMessageId(), message.replyPreviewSender(),
-                message.replyPreviewContent(), available);
+                message.replyPreviewContent(), available)
+                .withPhoto(available ? photoStore.view(original.photo()) : null);
     }
 
     /** 원문이 남아 있고(운영자 삭제 아님, #457) 조회자가 원문 보낸 사람을 차단하지 않았을 때 볼 수 있다. */
