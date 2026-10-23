@@ -3,6 +3,7 @@ package org.son.haruharu.domain.chat.implement;
 import org.son.haruharu.domain.chat.storage.exception.ChatRoomNotFoundException;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -58,6 +59,15 @@ public class ChatRoomReader {
     public ChatRoom getByRoomId(Long roomId) {
         return chatRoomRepository.findByRoomId(roomId)
                 .orElseThrow(ChatRoomNotFoundException::new);
+    }
+
+    /** 같은 방 두 사람의 PAIR(#540). 순서는 상관없다. */
+    public Optional<ChatRoom> findPair(Long roomId, Long userA, Long userB) {
+        return chatRoomRepository.findPairByRoomIdAndUsers(roomId, userA, userB);
+    }
+
+    public List<ChatRoom> findOpenPairsByRoomId(Long roomId) {
+        return chatRoomRepository.findOpenPairsByRoomId(roomId);
     }
 
     /** 잠금 전에 엔티티를 1차 캐시에 올리지 않도록 ID만 조회한다. */

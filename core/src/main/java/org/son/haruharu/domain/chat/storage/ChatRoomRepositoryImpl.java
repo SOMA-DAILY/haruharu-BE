@@ -5,8 +5,10 @@ import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomRepository;
+import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -57,17 +59,28 @@ public class ChatRoomRepositoryImpl implements ChatRoomRepository {
 
     @Override
     public boolean existsByRoomId(Long roomId) {
-        return chatRoomJpaRepository.existsByRoomId(roomId);
+        return chatRoomJpaRepository.existsByRoomIdAndType(roomId, ChatRoomType.GROUP);
     }
 
     @Override
     public Optional<ChatRoom> findByRoomId(Long roomId) {
-        return chatRoomJpaRepository.findByRoomId(roomId).map(ChatRoomEntity::toDomain);
+        return chatRoomJpaRepository.findByRoomIdAndType(roomId, ChatRoomType.GROUP).map(ChatRoomEntity::toDomain);
     }
 
     @Override
     public Optional<Long> findIdByRoomId(Long roomId) {
-        return chatRoomJpaRepository.findIdByRoomId(roomId);
+        return chatRoomJpaRepository.findIdByRoomIdAndType(roomId, ChatRoomType.GROUP);
+    }
+
+    @Override
+    public Optional<ChatRoom> findPairByRoomIdAndUsers(Long roomId, Long userA, Long userB) {
+        return chatRoomJpaRepository.findPairByRoomIdAndUsers(roomId, userA, userB).map(ChatRoomEntity::toDomain);
+    }
+
+    @Override
+    public List<ChatRoom> findOpenPairsByRoomId(Long roomId) {
+        return chatRoomJpaRepository.findOpenByRoomIdAndType(roomId, ChatRoomType.PAIR).stream()
+                .map(ChatRoomEntity::toDomain).toList();
     }
 
     @Override

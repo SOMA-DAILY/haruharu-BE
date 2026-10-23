@@ -17,8 +17,6 @@ import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.son.haruharu.domain.chat.implement.ChatMessageWriter;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
-import org.son.haruharu.domain.chat.implement.ChatRoomPair;
-import org.son.haruharu.domain.chat.implement.ChatRoomPairReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
 import org.son.haruharu.domain.chat.implement.PairChatSchedule;
 import org.son.haruharu.domain.chat.implement.PairChatWindow;
@@ -79,7 +77,6 @@ public class ChatService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
     private final ChatRoomLifecyclePolicy lifecycle;
-    private final ChatRoomPairReader chatRoomPairReader;
     private final PairChatSchedule pairChatSchedule;
 
     public ChatService(ChatRoomReader chatRoomReader,
@@ -97,7 +94,7 @@ public class ChatService {
                        ChatParticipantPolicy participants,
                        ApplicationEventPublisher eventPublisher,
                        Clock clock, ChatRoomLifecyclePolicy lifecycle,
-                       ChatRoomPairReader chatRoomPairReader, PairChatSchedule pairChatSchedule) {
+                       PairChatSchedule pairChatSchedule) {
         this.chatRoomReader = chatRoomReader;
         this.chatRoomWriter = chatRoomWriter;
         this.chatRoomMemberReader = chatRoomMemberReader;
@@ -114,7 +111,6 @@ public class ChatService {
         this.eventPublisher = eventPublisher;
         this.clock = clock;
         this.lifecycle = lifecycle;
-        this.chatRoomPairReader = chatRoomPairReader;
         this.pairChatSchedule = pairChatSchedule;
     }
 
@@ -201,19 +197,16 @@ public class ChatService {
                 ? ChatMessage.create(chatRoomId, senderId, content)
                 : ChatMessage.reply(chatRoomId, senderId, content, original, replySenderName(chatRoom, original));
         lifecycle.requireActive(chatRoom);
-        Long sourceRoomId = chatRoom.roomId();
-        if (chatRoom.type() == ChatRoomType.PAIR) {
-            // 대화 시간 1:1(#540)은 운영자가 정한 시간에만 보낼 수 있다. 방 종료는 위 requireActive 가 먼저 막는다.
-            sourceRoomId = chatRoomPairReader.getByChatRoomId(chatRoomId).roomId();
-            if (!pairChatSchedule.windowAt(sourceRoomId, LocalDateTime.now(clock)).isOpen()) {
-                throw new PairChatClosedException();
-            }
+        // 대화 시간 1:1(#540)은 운영자가 정한 시간에만 보낼 수 있다. 방 종료는 위 requireActive 가 먼저 막는다.
+        if (chatRoom.type() == ChatRoomType.PAIR
+                && !pairChatSchedule.windowAt(chatRoom.roomId(), LocalDateTime.now(clock)).isOpen()) {
+            throw new PairChatClosedException();
         }
         ChatMessage saved = chatMessageWriter.save(toSave);
         // 발신자 표시 이름(#393): GROUP·PAIR는 방 세션 가명, DIRECT는 매칭쌍이라 실명. 푸시 본문("OO님이…")에 그대로 실린다.
         String senderNickname = participants.displayName(chatRoom, senderId);
         eventPublisher.publishEvent(new ChatMessageSentEvent(
-                saved.id(), chatRoomId, chatRoom.type(), sourceRoomId, senderId,
+                saved.id(), chatRoomId, chatRoom.type(), chatRoom.roomId(), senderId,
                 recipientIds, senderNickname, saved.createdAt(), original == null ? null : original.senderId()));
         ChatMessageBroadcast broadcast = ChatMessageBroadcast.from(saved);
         eventPublisher.publishEvent(new ChatMessageBroadcastEvent(broadcast));
@@ -231,11 +224,6 @@ public class ChatService {
                 .filter(original -> original.chatRoomId().equals(chatRoomId))
                 .filter(original -> !original.isAdminDeleted())
                 .orElseThrow(ChatReplyInvalidException::new);
-    }
-
-    /** 내 채팅방 목록(DIRECT·GROUP). 구버전 앱은 두 유형만 읽으므로 기본 목록에 PAIR 를 섞지 않는다(#540). */
-    public ChatRoomsResponse getMyRooms(Long userId) {
-        return getMyRooms(userId, false);
     }
 
     /**
@@ -264,9 +252,8 @@ public class ChatService {
         }
         Long partnerUserId = participants.requireActivePartner(chatRoomId, userId);
         if (room.type() == ChatRoomType.PAIR) {
-            ChatRoomPair pair = chatRoomPairReader.getByChatRoomId(chatRoomId);
-            return ChatRoomDetailResponse.pair(chatRoomId, toPseudonymBrief(pair.roomId(), partnerUserId),
-                    room.createdAt(), pair.roomId(), pairChatState(room, pair));
+            return ChatRoomDetailResponse.pair(chatRoomId, toPseudonymBrief(room.roomId(), partnerUserId),
+                    room.createdAt(), room.roomId(), pairChatState(room));
         }
         return ChatRoomDetailResponse.direct(chatRoomId, toPartnerBrief(partnerUserId), room.createdAt());
     }
@@ -395,23 +382,22 @@ public class ChatService {
     private ChatRoomsResponse.ChatRoomSummary toPairSummary(ChatRoomMember me, Long userId, ChatRoom room,
                                                             Set<Long> blockRelated) {
         if (room.closeAt() != null) return null;
-        ChatRoomPair pair = chatRoomPairReader.findByChatRoomId(room.id())
-                .filter(found -> found.includes(userId))
-                .orElse(null);
-        if (pair == null) return null;
-        Long partnerUserId = pair.partnerOf(userId);
-        if (blockRelated.contains(partnerUserId) || userService.isWithdrawn(partnerUserId)) return null;
+        // 상대 멤버 행이 없으면 목록 전체를 실패시키지 않고 이 줄만 뺀다.
+        Long partnerUserId = chatRoomMemberReader.findByChatRoomId(room.id()).stream()
+                .map(ChatRoomMember::userId).filter(id -> !id.equals(userId)).findFirst().orElse(null);
+        if (partnerUserId == null || blockRelated.contains(partnerUserId)
+                || userService.isWithdrawn(partnerUserId)) return null;
         ChatMessage last = chatMessageReader.findLast(room.id(), Set.of()).orElse(null);
         if (last == null) return null;
         long unread = chatMessageReader.countUnread(room.id(), me.lastReadMessageId(), Set.of(userId));
-        return ChatRoomsResponse.ChatRoomSummary.pair(room.id(), toPseudonymBrief(pair.roomId(), partnerUserId),
-                last.displayContent(), last.createdAt(), unread, pair.roomId());
+        return ChatRoomsResponse.ChatRoomSummary.pair(room.id(), toPseudonymBrief(room.roomId(), partnerUserId),
+                last.displayContent(), last.createdAt(), unread, room.roomId());
     }
 
     /** PAIR 상세의 대화 시간 상태. 방이 끝나 닫힌 방은 다시 열리지 않는다. */
-    private ChatRoomDetailResponse.PairChatState pairChatState(ChatRoom room, ChatRoomPair pair) {
+    private ChatRoomDetailResponse.PairChatState pairChatState(ChatRoom room) {
         if (room.closeAt() != null) return ChatRoomDetailResponse.PairChatState.CLOSED;
-        PairChatWindow window = pairChatSchedule.windowAt(pair.roomId(), LocalDateTime.now(clock));
+        PairChatWindow window = pairChatSchedule.windowAt(room.roomId(), LocalDateTime.now(clock));
         return switch (window.state()) {
             case OPEN -> new ChatRoomDetailResponse.PairChatState(true, window.closesAt(), null);
             case SCHEDULED -> new ChatRoomDetailResponse.PairChatState(false, null, window.opensAt());

@@ -72,7 +72,6 @@ class ChatServiceTest {
     @Mock BlockReader blockReader;
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock org.son.haruharu.domain.chat.implement.ChatMessageReactionReader chatMessageReactionReader;
-    @Mock org.son.haruharu.domain.chat.implement.ChatRoomPairReader chatRoomPairReader;
     @Mock org.son.haruharu.domain.chat.implement.PairChatSchedule pairChatSchedule;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-03T03:00:00Z"), ZoneOffset.UTC);
@@ -89,9 +88,9 @@ class ChatServiceTest {
                 roomMemberReader, roomReader, blockReader,
                 new ChatMessageViews(chatMessageReactionReader, chatMessageReader, blockReader,
                         org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatMissionLookup.class)),
-                new ChatParticipantPolicy(chatRoomReader, chatRoomMemberReader, chatRoomPairReader, roomMemberReader,
+                new ChatParticipantPolicy(chatRoomReader, chatRoomMemberReader, roomMemberReader,
                         profileService, userService, blockReader),
-                eventPublisher, clock, new ChatRoomLifecyclePolicy(), chatRoomPairReader, pairChatSchedule);
+                eventPublisher, clock, new ChatRoomLifecyclePolicy(), pairChatSchedule);
     }
 
     private ChatRoomMember membership(Long chatRoomId, Long userId, Long lastReadMessageId) {
@@ -154,7 +153,7 @@ class ChatServiceTest {
         given(chatMessageReader.countUnread(20L, null, Set.of(ME))).willReturn(1L);
         given(chatMessageReader.countUnread(10L, 5L, Set.of(ME))).willReturn(2L);
 
-        ChatRoomsResponse result = chatService.getMyRooms(ME);
+        ChatRoomsResponse result = chatService.getMyRooms(ME, false);
 
         assertThat(result.chatRooms()).hasSize(2);
         ChatRoomsResponse.ChatRoomSummary first = result.chatRooms().get(0);
@@ -182,7 +181,7 @@ class ChatServiceTest {
         given(chatMessageReader.findLast(10L, Set.of())).willReturn(Optional.empty());
         given(chatMessageReader.countUnread(10L, null, Set.of(ME))).willReturn(0L);
 
-        ChatRoomsResponse result = chatService.getMyRooms(ME);
+        ChatRoomsResponse result = chatService.getMyRooms(ME, false);
 
         PartnerBrief partner = result.chatRooms().get(0).partner();
         assertThat(partner.nickname()).isEqualTo("하늘");
@@ -514,7 +513,7 @@ class ChatServiceTest {
                 .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
         given(userService.isWithdrawn(2L)).willReturn(true);
 
-        ChatRoomsResponse result = chatService.getMyRooms(ME);
+        ChatRoomsResponse result = chatService.getMyRooms(ME, false);
 
         ChatRoomsResponse.ChatRoomSummary summary = result.chatRooms().get(0);
         assertThat(summary.chatRoomId()).isEqualTo(ROOM);
@@ -545,7 +544,7 @@ class ChatServiceTest {
                 .willReturn(Optional.of(message(8L, 10L, 2L, "안녕", LocalDateTime.of(2026, 7, 3, 11, 0))));
         given(chatMessageReader.countUnread(10L, null, Set.of(ME))).willReturn(2L);
 
-        ChatRoomsResponse result = chatService.getMyRooms(ME);
+        ChatRoomsResponse result = chatService.getMyRooms(ME, false);
 
         assertThat(result.chatRooms()).hasSize(2);
         // 마지막 메시지가 있는 정상 방이 먼저, 탈퇴 방(lastMessageAt=null)은 뒤로
@@ -665,7 +664,7 @@ class ChatServiceTest {
                 .willReturn(List.of(membership(ROOM, ME, null), membership(ROOM, 2L, null)));
         given(blockReader.getRelatedUserIds(ME)).willReturn(Set.of(2L));
 
-        ChatRoomsResponse result = chatService.getMyRooms(ME);
+        ChatRoomsResponse result = chatService.getMyRooms(ME, false);
 
         assertThat(result.chatRooms()).isEmpty();
         // 차단 방은 프로필·메시지 조회를 아예 건드리지 않는다
@@ -691,7 +690,7 @@ class ChatServiceTest {
         given(chatMessageReader.findLast(10L, Set.of(2L))).willReturn(Optional.of(message(8L, 10L, 3L, "안녕", at)));
         given(chatMessageReader.countUnread(10L, null, Set.of(ME, 2L))).willReturn(1L);
 
-        ChatRoomsResponse result = chatService.getMyRooms(ME);
+        ChatRoomsResponse result = chatService.getMyRooms(ME, false);
 
         ChatRoomsResponse.ChatRoomSummary summary = result.chatRooms().get(0);
         assertThat(summary.lastMessage()).isEqualTo("안녕");
@@ -946,7 +945,7 @@ class ChatServiceTest {
     void givenRoomClosedDuringList_whenList_thenSkips() {
         given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(membership(ROOM, ME, null)));
         given(chatRoomReader.findById(ROOM)).willReturn(Optional.empty());
-        assertThat(chatService.getMyRooms(ME).chatRooms()).isEmpty();
+        assertThat(chatService.getMyRooms(ME, false).chatRooms()).isEmpty();
     }
 
 
@@ -956,12 +955,7 @@ class ChatServiceTest {
     private static final Long PARTNER = 2L;
 
     private ChatRoom pairRoom(Long chatRoomId) {
-        return new ChatRoom(chatRoomId, ChatRoomType.PAIR, null, null, LocalDateTime.now(clock));
-    }
-
-    private org.son.haruharu.domain.chat.implement.ChatRoomPair pairOf(Long chatRoomId) {
-        return org.son.haruharu.domain.chat.implement.ChatRoomPair.of(chatRoomId, SOURCE_ROOM, ME, PARTNER,
-                LocalDateTime.now(clock));
+        return new ChatRoom(chatRoomId, ChatRoomType.PAIR, SOURCE_ROOM, null, LocalDateTime.now(clock));
     }
 
     private org.son.haruharu.domain.room.implement.RoomMember roomMember(Long userId, String pseudonym) {
@@ -981,7 +975,6 @@ class ChatServiceTest {
         given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM));
         given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
         givenPairMembers(ROOM);
-        given(chatRoomPairReader.getByChatRoomId(ROOM)).willReturn(pairOf(ROOM));
         given(pairChatSchedule.windowAt(SOURCE_ROOM, now))
                 .willReturn(org.son.haruharu.domain.chat.implement.PairChatWindow.open(now.minusMinutes(10), 1, now.plusHours(1)));
         given(chatMessageWriter.save(any())).willReturn(new ChatMessage(60L, ROOM, ME, "안녕하세요", now));
@@ -1001,7 +994,6 @@ class ChatServiceTest {
         given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM));
         given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
         givenPairMembers(ROOM);
-        given(chatRoomPairReader.getByChatRoomId(ROOM)).willReturn(pairOf(ROOM));
         given(pairChatSchedule.windowAt(SOURCE_ROOM, now))
                 .willReturn(org.son.haruharu.domain.chat.implement.PairChatWindow.scheduled(now.plusHours(1), 2, now.plusHours(3)));
 
@@ -1030,8 +1022,8 @@ class ChatServiceTest {
         given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(membership(ROOM, ME, null)));
         given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(pairRoom(ROOM)));
 
-        assertThat(chatService.getMyRooms(ME).chatRooms()).isEmpty();
-        then(chatRoomPairReader).shouldHaveNoInteractions();
+        assertThat(chatService.getMyRooms(ME, false).chatRooms()).isEmpty();
+        then(chatMessageReader).shouldHaveNoInteractions();
     }
 
     @Test
@@ -1040,7 +1032,7 @@ class ChatServiceTest {
         var at = LocalDateTime.now(clock).minusMinutes(3);
         given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(membership(ROOM, ME, null)));
         given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(pairRoom(ROOM)));
-        given(chatRoomPairReader.findByChatRoomId(ROOM)).willReturn(Optional.of(pairOf(ROOM)));
+        givenPairMembers(ROOM);
         given(chatMessageReader.findLast(ROOM, Set.of())).willReturn(Optional.of(message(9L, ROOM, PARTNER, "어디예요?", at)));
         given(chatMessageReader.countUnread(ROOM, null, Set.of(ME))).willReturn(1L);
         given(roomMemberReader.findByRoomIdAndUserId(SOURCE_ROOM, PARTNER)).willReturn(Optional.of(roomMember(PARTNER, "서연")));
@@ -1068,9 +1060,9 @@ class ChatServiceTest {
         given(chatRoomReader.findById(empty)).willReturn(Optional.of(pairRoom(empty)));
         given(chatRoomReader.findById(closed)).willReturn(Optional.of(pairRoom(closed).close(LocalDateTime.now(clock))));
         given(chatRoomReader.findById(blocked)).willReturn(Optional.of(pairRoom(blocked)));
-        given(chatRoomPairReader.findByChatRoomId(empty)).willReturn(Optional.of(pairOf(empty)));
-        given(chatRoomPairReader.findByChatRoomId(blocked)).willReturn(Optional.of(
-                org.son.haruharu.domain.chat.implement.ChatRoomPair.of(blocked, SOURCE_ROOM, ME, 7L, LocalDateTime.now(clock))));
+        givenPairMembers(empty);
+        given(chatRoomMemberReader.findByChatRoomId(blocked))
+                .willReturn(List.of(membership(blocked, ME, null), membership(blocked, 7L, null)));
         given(blockReader.getRelatedUserIds(ME)).willReturn(Set.of(7L));
         given(chatMessageReader.findLast(empty, Set.of())).willReturn(Optional.empty());
 
@@ -1084,7 +1076,6 @@ class ChatServiceTest {
         given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM));
         given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
         givenPairMembers(ROOM);
-        given(chatRoomPairReader.getByChatRoomId(ROOM)).willReturn(pairOf(ROOM));
         given(roomMemberReader.findByRoomIdAndUserId(SOURCE_ROOM, PARTNER)).willReturn(Optional.of(roomMember(PARTNER, "서연")));
         given(profileService.getProfile(PARTNER)).willReturn(profile("김실명"));
         given(pairChatSchedule.windowAt(SOURCE_ROOM, now))
@@ -1105,7 +1096,6 @@ class ChatServiceTest {
         given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM));
         given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
         givenPairMembers(ROOM);
-        given(chatRoomPairReader.getByChatRoomId(ROOM)).willReturn(pairOf(ROOM));
         given(roomMemberReader.findByRoomIdAndUserId(SOURCE_ROOM, PARTNER)).willReturn(Optional.of(roomMember(PARTNER, "서연")));
         given(profileService.getProfile(PARTNER)).willReturn(profile("김실명"));
         given(pairChatSchedule.windowAt(SOURCE_ROOM, now))
@@ -1132,7 +1122,7 @@ class ChatServiceTest {
     void givenWithdrawnPairPartner_whenListIncludingPair_thenExcluded() {
         given(chatRoomMemberReader.findActiveByUserId(ME)).willReturn(List.of(membership(ROOM, ME, null)));
         given(chatRoomReader.findById(ROOM)).willReturn(Optional.of(pairRoom(ROOM)));
-        given(chatRoomPairReader.findByChatRoomId(ROOM)).willReturn(Optional.of(pairOf(ROOM)));
+        givenPairMembers(ROOM);
         given(userService.isWithdrawn(PARTNER)).willReturn(true);
         // 메시지가 있는 방이라 빠지는 이유는 상대 탈퇴뿐이다.
         org.mockito.Mockito.lenient().when(chatMessageReader.findLast(ROOM, Set.of()))
@@ -1148,7 +1138,6 @@ class ChatServiceTest {
         given(chatRoomReader.getById(ROOM)).willReturn(pairRoom(ROOM).close(now));
         given(chatRoomMemberReader.findMembership(ROOM, ME)).willReturn(Optional.of(membership(ROOM, ME, null)));
         givenPairMembers(ROOM);
-        given(chatRoomPairReader.getByChatRoomId(ROOM)).willReturn(pairOf(ROOM));
         given(roomMemberReader.findByRoomIdAndUserId(SOURCE_ROOM, PARTNER)).willReturn(Optional.of(roomMember(PARTNER, "서연")));
         given(profileService.getProfile(PARTNER)).willReturn(profile("김실명"));
         org.mockito.Mockito.lenient().when(pairChatSchedule.windowAt(SOURCE_ROOM, now))

@@ -17,17 +17,15 @@ import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomType;
 
 /**
- * 채팅방. type(GROUP/DIRECT)에 따라 room_id 또는 match_result_id 한쪽만 채워진다.
- * UNIQUE는 각 축별로 둔다 — GROUP은 room_id, DIRECT는 match_result_id 당 1방(멱등 보장).
- * 두 컬럼 모두 nullable이라 UNIQUE는 NULL 다중 허용(표준 SQL)으로 반대 type 행과 충돌하지 않는다.
+ * 채팅방. type(GROUP/DIRECT/PAIR)에 따라 room_id(GROUP·PAIR) 또는 match_result_id(DIRECT)가 채워진다.
+ * DIRECT는 match_result_id 당 1방(UNIQUE). GROUP의 room_id 당 1방은 부분 유니크
+ * ux_chat_rooms_group_room(WHERE type='GROUP', #540 SQL)이 맡는다 — 같은 방의 PAIR 여러 개와 함께 두기 위해서다.
+ * 부분 유니크는 JPA 로 표현할 수 없어 여기 선언하지 않는다(ddl-auto=update 가 옛 전체 유니크를 되살리지 않게).
  */
 @Entity
 @Table(
         name = "chat_rooms",
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uq_chat_rooms_match_result", columnNames = "match_result_id"),
-                @UniqueConstraint(name = "uq_chat_rooms_room", columnNames = "room_id")
-        }
+        uniqueConstraints = @UniqueConstraint(name = "uq_chat_rooms_match_result", columnNames = "match_result_id")
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatRoomEntity extends BaseEntity {

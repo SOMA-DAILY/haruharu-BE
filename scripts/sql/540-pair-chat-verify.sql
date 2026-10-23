@@ -1,30 +1,22 @@
--- #540 적용 확인. up 직후 실행한다. 쌍 표나 그 외래 키가 빠졌으면 예외로 멈춘다.
+-- #540 적용 확인. up 직후 실행한다. room_id 유일이 GROUP 한정이 아니면 예외로 멈춘다.
 DO $$
-DECLARE problems text;
 BEGIN
-    IF to_regclass('chat_room_pairs') IS NULL THEN
-        RAISE EXCEPTION 'chat_room_pairs is missing: run 540-pair-chat-up.sql';
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attname = 'room_id'
+        WHERE c.conrelid = 'chat_rooms'::regclass AND c.contype = 'u' AND c.conkey = ARRAY[a.attnum]) THEN
+        RAISE EXCEPTION 'chat_rooms.room_id still has a full UNIQUE (PAIR cannot share room_id): run 540-pair-chat-up.sql';
     END IF;
-    -- 외래 키: 만든 경로(up 의 CREATE, 먼저 생긴 표에 up 이 덧붙임, 이전 up)마다 이름이 달라 양쪽 칸·검증 완료로 본다.
-    SELECT string_agg(e.col || ' -> ' || e.ref_tbl || '(id)', ', ') INTO problems
-    FROM (VALUES ('chat_room_id', 'chat_rooms'), ('room_id', 'rooms')) AS e(col, ref_tbl)
-    WHERE NOT EXISTS (
-        SELECT 1 FROM pg_constraint c
-        WHERE c.contype = 'f' AND c.conrelid = 'chat_room_pairs'::regclass AND c.confrelid = e.ref_tbl::regclass
-          AND c.conkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'chat_room_pairs'::regclass AND attname = e.col)]
-          AND c.confkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = e.ref_tbl::regclass AND attname = 'id')]
-          AND c.convalidated);
-    IF problems IS NOT NULL THEN
-        RAISE EXCEPTION 'chat_room_pairs foreign keys missing (run 540-pair-chat-up.sql): %', problems;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+        WHERE c.relname = 'ux_chat_rooms_group_room' AND i.indrelid = 'chat_rooms'::regclass AND i.indisunique
+          AND i.indisvalid AND pg_get_expr(i.indpred, i.indrelid) LIKE '%''GROUP''%') THEN
+        RAISE EXCEPTION 'ux_chat_rooms_group_room (UNIQUE room_id WHERE type = GROUP) is missing: run 540-pair-chat-up.sql';
     END IF;
 END $$;
--- 세 CHECK 의 허용 목록에 새 값이 있고, 쌍 표의 제약·외래 키가 있어야 한다.
+-- 세 CHECK 의 허용 목록에 새 값이 있어야 한다.
 SELECT conrelid::regclass AS table_name, conname, pg_get_constraintdef(oid) AS definition
 FROM pg_constraint
-WHERE conname IN ('room_mission_instances_type_check', 'chat_rooms_type_check', 'notification_history_type_check',
-                  'ck_chat_room_pairs_order', 'uq_chat_room_pairs_room_users')
-   OR (conrelid = 'chat_room_pairs'::regclass AND contype = 'f')
+WHERE conname IN ('room_mission_instances_type_check', 'chat_rooms_type_check', 'notification_history_type_check')
 ORDER BY conname;
--- 쌍 없는 PAIR 채팅방(0 이어야 한다).
-SELECT count(*) AS orphan_pair_rooms FROM chat_rooms c
-WHERE c.type = 'PAIR' AND NOT EXISTS (SELECT 1 FROM chat_room_pairs p WHERE p.chat_room_id = c.id);
+-- 방마다 GROUP 은 1개 이하여야 한다(0 행이어야 한다).
+SELECT room_id, count(*) FROM chat_rooms WHERE type = 'GROUP' AND room_id IS NOT NULL GROUP BY room_id HAVING count(*) > 1;

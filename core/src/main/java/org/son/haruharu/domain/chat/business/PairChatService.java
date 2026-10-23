@@ -11,11 +11,8 @@ import org.son.haruharu.domain.chat.business.exception.PairChatInvalidTargetExce
 import org.son.haruharu.domain.chat.business.exception.PairChatNotOpenException;
 import org.son.haruharu.domain.chat.implement.ChatRoom;
 import org.son.haruharu.domain.chat.implement.ChatRoomMember;
-import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberWriter;
-import org.son.haruharu.domain.chat.implement.ChatRoomPair;
-import org.son.haruharu.domain.chat.implement.ChatRoomPairReader;
-import org.son.haruharu.domain.chat.implement.ChatRoomPairWriter;
+import org.son.haruharu.domain.chat.implement.ChatRoomReader;
 import org.son.haruharu.domain.chat.implement.ChatRoomWriter;
 import org.son.haruharu.domain.chat.implement.PairChatSchedule;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
@@ -36,28 +33,23 @@ public class PairChatService {
 
     private final RoomReader roomReader;
     private final RoomMemberReader roomMemberReader;
+    private final ChatRoomReader chatRoomReader;
     private final ChatRoomWriter chatRoomWriter;
-    private final ChatRoomMemberReader chatRoomMemberReader;
     private final ChatRoomMemberWriter chatRoomMemberWriter;
-    private final ChatRoomPairReader chatRoomPairReader;
-    private final ChatRoomPairWriter chatRoomPairWriter;
     private final PairChatSchedule pairChatSchedule;
     private final BlockReader blockReader;
     private final UserService userService;
     private final Clock clock;
 
-    public PairChatService(RoomReader roomReader, RoomMemberReader roomMemberReader, ChatRoomWriter chatRoomWriter,
-                           ChatRoomMemberReader chatRoomMemberReader, ChatRoomMemberWriter chatRoomMemberWriter,
-                           ChatRoomPairReader chatRoomPairReader, ChatRoomPairWriter chatRoomPairWriter,
+    public PairChatService(RoomReader roomReader, RoomMemberReader roomMemberReader, ChatRoomReader chatRoomReader,
+                           ChatRoomWriter chatRoomWriter, ChatRoomMemberWriter chatRoomMemberWriter,
                            PairChatSchedule pairChatSchedule, BlockReader blockReader, UserService userService,
                            Clock clock) {
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
+        this.chatRoomReader = chatRoomReader;
         this.chatRoomWriter = chatRoomWriter;
-        this.chatRoomMemberReader = chatRoomMemberReader;
         this.chatRoomMemberWriter = chatRoomMemberWriter;
-        this.chatRoomPairReader = chatRoomPairReader;
-        this.chatRoomPairWriter = chatRoomPairWriter;
         this.pairChatSchedule = pairChatSchedule;
         this.blockReader = blockReader;
         this.userService = userService;
@@ -74,7 +66,7 @@ public class PairChatService {
     /**
      * 같은 방 참가자와의 1:1 방을 연다. 같은 두 사람이면 기존 방을 돌려준다(멱등).
      * 대화 시간 중에만 열 수 있고, 나 자신·다른 방 멤버·탈퇴·차단 관계는 거절한다.
-     * 원본 방 행을 잠가 같은 두 사람이 동시에 열어도 한 방으로 모은다.
+     * 원본 방 행을 잠가 같은 두 사람이 동시에 열어도 한 방으로 모은다(PAIR 생성 경로는 이것 하나다).
      */
     @Transactional
     public PairChatRoomResponse open(Long roomId, Long userId, Long targetRoomMemberId) {
@@ -95,23 +87,13 @@ public class PairChatService {
         if (blockReader.isBlockedBetween(userId, partnerUserId)) {
             throw new ChatPartnerBlockedException();
         }
-        ChatRoomPair existing = chatRoomPairReader.findByRoomIdAndUsers(roomId, userId, partnerUserId).orElse(null);
+        Long existing = chatRoomReader.findPair(roomId, userId, partnerUserId).map(ChatRoom::id).orElse(null);
         if (existing != null) {
-            ensureMember(existing.chatRoomId(), userId, now);
-            ensureMember(existing.chatRoomId(), partnerUserId, now);
-            return new PairChatRoomResponse(existing.chatRoomId());
+            return new PairChatRoomResponse(existing);
         }
-        ChatRoom chatRoom = chatRoomWriter.save(ChatRoom.createPair());
-        chatRoomPairWriter.save(ChatRoomPair.of(chatRoom.id(), roomId, userId, partnerUserId, now));
+        ChatRoom chatRoom = chatRoomWriter.save(ChatRoom.createPair(roomId));
         chatRoomMemberWriter.save(ChatRoomMember.join(chatRoom.id(), userId, now));
         chatRoomMemberWriter.save(ChatRoomMember.join(chatRoom.id(), partnerUserId, now));
         return new PairChatRoomResponse(chatRoom.id());
-    }
-
-    /** 쌍 행은 있는데 멤버 행이 없는 경우(부분 실패 복구)만 채운다. 나간 기록은 되살리지 않는다(PAIR 는 나가기가 없다). */
-    private void ensureMember(Long chatRoomId, Long userId, LocalDateTime now) {
-        if (chatRoomMemberReader.findMembership(chatRoomId, userId).isEmpty()) {
-            chatRoomMemberWriter.save(ChatRoomMember.join(chatRoomId, userId, now));
-        }
     }
 }

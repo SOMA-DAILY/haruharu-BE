@@ -61,13 +61,11 @@ class AdminRoomCancelPostgresConcurrencyIntegrationTest {
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired org.son.haruharu.domain.chat.storage.ChatRoomJpaRepository chatRooms;
-    @Autowired org.son.haruharu.domain.chat.storage.ChatRoomPairJpaRepository chatRoomPairs;
 
     @BeforeEach
     void clean() {
         jdbcTemplate.execute("TRUNCATE TABLE rooms RESTART IDENTITY CASCADE");
         jdbcTemplate.execute("TRUNCATE TABLE chat_rooms RESTART IDENTITY CASCADE");
-        jdbcTemplate.execute("TRUNCATE TABLE chat_room_pairs");
     }
 
     @Test
@@ -209,11 +207,12 @@ class AdminRoomCancelPostgresConcurrencyIntegrationTest {
     }
 
     private Long pairChat(Long roomId, Long userA, Long userB, LocalDateTime closeAt) {
-        var chat = org.son.haruharu.domain.chat.implement.ChatRoom.createPair();
+        var chat = org.son.haruharu.domain.chat.implement.ChatRoom.createPair(roomId);
         Long chatId = chatRooms.save(org.son.haruharu.domain.chat.storage.ChatRoomEntity.from(
                 closeAt == null ? chat : chat.close(closeAt))).toDomain().id();
-        chatRoomPairs.save(org.son.haruharu.domain.chat.storage.ChatRoomPairEntity.from(
-                org.son.haruharu.domain.chat.implement.ChatRoomPair.of(chatId, roomId, userA, userB, LocalDateTime.now())));
+        for (Long userId : java.util.List.of(userA, userB))
+            jdbcTemplate.update("insert into chat_room_members (chat_room_id, user_id, joined_at) values (?, ?, ?)",
+                    chatId, userId, LocalDateTime.now());
         return chatId;
     }
 

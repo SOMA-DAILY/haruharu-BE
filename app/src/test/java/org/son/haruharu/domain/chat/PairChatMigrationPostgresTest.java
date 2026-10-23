@@ -16,8 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * #540 SQL(540-pair-chat-up/down/verify) — 생성된 이름의 옛 CHECK 교체, 재실행, 쌍 제약, 먼저 생긴 쌍 표의 외래 키 보강,
- * 데이터 있을 때 되돌리기 거절.
+ * #540 SQL(540-pair-chat-up/down/verify) — 생성된 이름의 옛 CHECK 교체, room_id 전체 유니크를 GROUP 부분 유니크로 교체,
+ * 재실행, 데이터 있을 때 되돌리기 거절.
  */
 @Testcontainers
 class PairChatMigrationPostgresTest {
@@ -42,30 +42,32 @@ class PairChatMigrationPostgresTest {
         execute(Files.readString(root.resolve("scripts/sql/" + name)));
     }
 
-    /** 운영 DB 모양: Hibernate 가 만든 이름의 type CHECK 가 세 표에 걸려 있다. */
-    @BeforeEach
-    void legacyDatabase() throws Exception {
+    /** 운영 DB 모양: Hibernate 가 만든 이름의 type CHECK 가 세 표에 걸려 있고 room_id 는 전체 유니크다. */
+    void legacyDatabase(String roomIdUnique) throws Exception {
         execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
         execute("""
             CREATE TABLE rooms(id bigint PRIMARY KEY);
             INSERT INTO rooms VALUES (1), (2);
-            CREATE TABLE chat_rooms(id bigint PRIMARY KEY, type varchar(10) NOT NULL, room_id bigint UNIQUE,
-                match_result_id bigint UNIQUE, close_at timestamp(6), created_at timestamp(6) NOT NULL,
+            CREATE TABLE chat_rooms(id bigint PRIMARY KEY, type varchar(10) NOT NULL, room_id bigint,
+                match_result_id bigint, close_at timestamp(6), created_at timestamp(6) NOT NULL,
                 updated_at timestamp(6) NOT NULL, deleted_at timestamp(6),
+                CONSTRAINT uq_chat_rooms_match_result UNIQUE (match_result_id),
+                %s,
                 CONSTRAINT chat_rooms_type_check_generated CHECK (type IN ('GROUP', 'DIRECT')));
             INSERT INTO chat_rooms(id, type, room_id, created_at, updated_at) VALUES (10, 'GROUP', 1, now(), now());
+            INSERT INTO chat_rooms(id, type, match_result_id, created_at, updated_at) VALUES (11, 'DIRECT', 500, now(), now());
             CREATE TABLE room_mission_instances(id bigint PRIMARY KEY, room_id bigint NOT NULL, type varchar(30) NOT NULL,
                 details jsonb NOT NULL, CONSTRAINT legacy_generated_type_check CHECK (type IN ('ANNOUNCEMENT', 'PROFILE_REVEAL', 'RECORDING')));
             INSERT INTO room_mission_instances VALUES (100, 1, 'RECORDING', '{"content":"점심"}');
             CREATE TABLE notification_history(id bigint PRIMARY KEY, type varchar(40) NOT NULL,
                 CONSTRAINT notification_history_type_check CHECK (type IN ('CHAT', 'CHAT_REPLY', 'ADMIN_MESSAGE')));
             INSERT INTO notification_history VALUES (1000, 'CHAT');
-            """);
+            """.formatted(roomIdUnique));
     }
 
-    long foreignKeysTo(String referenced) throws Exception {
-        return count("SELECT count(*) FROM pg_constraint WHERE conrelid='chat_room_pairs'::regclass AND contype='f' "
-                + "AND confrelid='" + referenced + "'::regclass");
+    @BeforeEach
+    void prodShape() throws Exception {
+        legacyDatabase("CONSTRAINT uq_chat_rooms_room UNIQUE (room_id)");
     }
 
     long typeChecks(String table) throws Exception {
@@ -73,41 +75,47 @@ class PairChatMigrationPostgresTest {
                 + "WHERE c.conrelid='" + table + "'::regclass AND c.contype='c' AND a.attnum=ANY(c.conkey)");
     }
 
+    long roomIdUniqueConstraints() throws Exception {
+        return count("SELECT count(*) FROM pg_constraint c JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attname='room_id' "
+                + "WHERE c.conrelid='chat_rooms'::regclass AND c.contype='u' AND c.conkey=ARRAY[a.attnum]");
+    }
+
+    void insertChat(long id, String type, long roomId) throws Exception {
+        execute("INSERT INTO chat_rooms(id, type, room_id, created_at, updated_at) VALUES (" + id + ", '" + type + "', "
+                + roomId + ", now(), now())");
+    }
+
     @Test
-    @DisplayName("up 은 세 표의 옛 type CHECK 를 바꾸고 쌍 표를 만들며, 두 번 돌려도 같다")
-    void givenLegacySchema_whenUpTwice_thenAllowsPairValuesAndCreatesPairTable() throws Exception {
-        assertThatThrownBy(() -> execute("INSERT INTO chat_rooms(id, type, created_at, updated_at) VALUES (20, 'PAIR', now(), now())"))
+    @DisplayName("up 은 새 유형 값을 허용하고 room_id 유일을 GROUP 한정으로 바꾸며, 두 번 돌려도 같다")
+    void givenProdSchema_whenUpTwice_thenPairSharesRoomIdButGroupStaysOnePerRoom() throws Exception {
+        assertThatThrownBy(() -> script("540-pair-chat-verify.sql"))
+                .isInstanceOf(SQLException.class).hasMessageContaining("full UNIQUE");
+        assertThatThrownBy(() -> insertChat(20, "PAIR", 1))
                 .isInstanceOf(SQLException.class).hasMessageContaining("chat_rooms_type_check_generated");
 
         script("540-pair-chat-up.sql");
         script("540-pair-chat-up.sql");
         script("540-pair-chat-verify.sql");
 
-        assertThat(foreignKeysTo("chat_rooms")).isEqualTo(1);
-        assertThat(foreignKeysTo("rooms")).isEqualTo(1);
-        // 방별 조회는 유일 제약(room_id 가 앞 칸)의 색인으로 충분하다. 기본 키·유일 제약 색인만 있다.
-        assertThat(count("SELECT count(*) FROM pg_indexes WHERE tablename='chat_room_pairs'")).isEqualTo(2);
-        execute("INSERT INTO chat_rooms(id, type, created_at, updated_at) VALUES (20, 'PAIR', now(), now())");
-        execute("INSERT INTO chat_room_pairs VALUES (20, 1, 5, 7, now())");
+        assertThat(roomIdUniqueConstraints()).isZero();
+        // 같은 방(1)의 GROUP 10 옆에 PAIR 여러 개를 둘 수 있다.
+        insertChat(20, "PAIR", 1);
+        insertChat(21, "PAIR", 1);
+        // GROUP 은 방당 1개 그대로다. 다른 방 GROUP 은 된다.
+        assertThatThrownBy(() -> insertChat(22, "GROUP", 1))
+                .isInstanceOf(SQLException.class).hasMessageContaining("ux_chat_rooms_group_room");
+        insertChat(23, "GROUP", 2);
         execute("INSERT INTO room_mission_instances VALUES (101, 1, 'PAIR_CHAT', '{}')");
         execute("INSERT INTO notification_history VALUES (1001, 'PAIR_CHAT')");
         assertThat(typeChecks("chat_rooms")).isEqualTo(1);
         assertThat(typeChecks("room_mission_instances")).isEqualTo(1);
         assertThat(typeChecks("notification_history")).isEqualTo(1);
-        // 기존 행은 그대로다.
+        // 기존 행과 DIRECT 유일은 그대로다.
         assertThat(count("SELECT count(*) FROM chat_rooms WHERE type='GROUP' AND room_id=1")).isEqualTo(1);
         assertThat(count("SELECT count(*) FROM room_mission_instances WHERE type='RECORDING'")).isEqualTo(1);
-
-        // 같은 방의 같은 두 사람은 한 행, 작은 id 가 low, 없는 채팅방·방은 거절.
-        execute("INSERT INTO chat_rooms(id, type, created_at, updated_at) VALUES (21, 'PAIR', now(), now())");
-        assertThatThrownBy(() -> execute("INSERT INTO chat_room_pairs VALUES (21, 1, 5, 7, now())"))
-                .isInstanceOf(SQLException.class).hasMessageContaining("uq_chat_room_pairs_room_users");
-        assertThatThrownBy(() -> execute("INSERT INTO chat_room_pairs VALUES (21, 1, 7, 5, now())"))
-                .isInstanceOf(SQLException.class).hasMessageContaining("ck_chat_room_pairs_order");
-        assertThatThrownBy(() -> execute("INSERT INTO chat_room_pairs VALUES (99, 1, 1, 2, now())"))
-                .isInstanceOf(SQLException.class);
-        assertThatThrownBy(() -> execute("INSERT INTO chat_room_pairs VALUES (21, 9, 1, 2, now())"))
-                .isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> execute("INSERT INTO chat_rooms(id, type, match_result_id, created_at, updated_at) "
+                + "VALUES (24, 'DIRECT', 500, now(), now())"))
+                .isInstanceOf(SQLException.class).hasMessageContaining("uq_chat_rooms_match_result");
         // 허용하지 않는 값은 여전히 막는다.
         assertThatThrownBy(() -> execute("UPDATE chat_rooms SET type='SECRET' WHERE id=21"))
                 .isInstanceOf(SQLException.class).hasMessageContaining("chat_rooms_type_check");
@@ -116,66 +124,35 @@ class PairChatMigrationPostgresTest {
     }
 
     @Test
-    @DisplayName("Hibernate 가 먼저 만든(외래 키 없는) 쌍 표: verify 는 멈추고, up 은 두 외래 키를 한 번씩만 붙인다")
-    void givenPairTableCreatedWithoutForeignKeys_whenUpTwice_thenAddsBothForeignKeysOnce() throws Exception {
-        // dev(ddl-auto=update) 모양: 엔티티에 연관이 없어 기본 키·유일 제약·CHECK 만 있고 외래 키가 없다.
-        execute("""
-            CREATE TABLE chat_room_pairs (chat_room_id bigint NOT NULL PRIMARY KEY, room_id bigint NOT NULL,
-                low_user_id bigint NOT NULL, high_user_id bigint NOT NULL, created_at timestamp(6) NOT NULL,
-                CONSTRAINT uq_chat_room_pairs_room_users UNIQUE (room_id, low_user_id, high_user_id),
-                CONSTRAINT ck_chat_room_pairs_order CHECK (low_user_id < high_user_id))
-            """);
-        assertThatThrownBy(() -> script("540-pair-chat-verify.sql"))
-                .isInstanceOf(SQLException.class).hasMessageContaining("foreign keys missing");
+    @DisplayName("room_id 전체 유니크가 자동 이름이어도 up 이 지우고 GROUP 부분 유니크로 바꾼다")
+    void givenGeneratedRoomIdUniqueName_whenUp_thenReplaced() throws Exception {
+        legacyDatabase("UNIQUE (room_id)");
 
         script("540-pair-chat-up.sql");
-        script("540-pair-chat-up.sql");
-
-        assertThat(foreignKeysTo("chat_rooms")).isEqualTo(1);
-        assertThat(foreignKeysTo("rooms")).isEqualTo(1);
         script("540-pair-chat-verify.sql");
-        execute("INSERT INTO chat_rooms(id, type, created_at, updated_at) VALUES (20, 'PAIR', now(), now())");
-        execute("INSERT INTO chat_room_pairs VALUES (20, 1, 5, 7, now())");
-        assertThatThrownBy(() -> execute("INSERT INTO chat_room_pairs VALUES (99, 1, 1, 2, now())"))
-                .isInstanceOf(SQLException.class).hasMessageContaining("fk_chat_room_pairs_chat_room");
-        execute("INSERT INTO chat_rooms(id, type, created_at, updated_at) VALUES (21, 'PAIR', now(), now())");
-        assertThatThrownBy(() -> execute("INSERT INTO chat_room_pairs VALUES (21, 9, 1, 2, now())"))
-                .isInstanceOf(SQLException.class).hasMessageContaining("fk_chat_room_pairs_room");
+
+        assertThat(roomIdUniqueConstraints()).isZero();
+        insertChat(20, "PAIR", 1);
+        assertThatThrownBy(() -> insertChat(22, "GROUP", 1))
+                .isInstanceOf(SQLException.class).hasMessageContaining("ux_chat_rooms_group_room");
     }
 
     @Test
-    @DisplayName("이전 up 이 자동 이름으로 만든 외래 키가 있으면 up 을 다시 돌려도 같은 칸의 외래 키를 더하지 않는다")
-    void givenPairTableWithGeneratedForeignKeyNames_whenUp_thenNoDuplicateForeignKeys() throws Exception {
-        execute("""
-            CREATE TABLE chat_room_pairs (chat_room_id bigint PRIMARY KEY REFERENCES chat_rooms(id),
-                room_id bigint NOT NULL REFERENCES rooms(id), low_user_id bigint NOT NULL, high_user_id bigint NOT NULL,
-                created_at timestamp(6) NOT NULL,
-                CONSTRAINT ck_chat_room_pairs_order CHECK (low_user_id < high_user_id),
-                CONSTRAINT uq_chat_room_pairs_room_users UNIQUE (room_id, low_user_id, high_user_id))
-            """);
-
-        script("540-pair-chat-up.sql");
-
-        assertThat(foreignKeysTo("chat_rooms")).isEqualTo(1);
-        assertThat(foreignKeysTo("rooms")).isEqualTo(1);
-        script("540-pair-chat-verify.sql");
-    }
-
-    @Test
-    @DisplayName("down 은 1:1 대화 데이터가 있으면 멈추고, 없으면 새 값과 쌍 표를 거둔다")
+    @DisplayName("down 은 1:1 대화 데이터가 있으면 멈추고, 없으면 새 값을 거두고 room_id 전체 유니크로 되돌린다")
     void givenPairData_whenDown_thenRefusesUntilCleared() throws Exception {
         script("540-pair-chat-up.sql");
-        execute("INSERT INTO room_mission_instances VALUES (101, 1, 'PAIR_CHAT', '{}')");
+        insertChat(20, "PAIR", 1);
 
         assertThatThrownBy(() -> script("540-pair-chat-down.sql"))
                 .isInstanceOf(SQLException.class).hasMessageContaining("manual reconciliation");
-        assertThat(count("SELECT count(*) FROM room_mission_instances WHERE type='PAIR_CHAT'")).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM chat_rooms WHERE type='PAIR'")).isEqualTo(1);
 
-        execute("DELETE FROM room_mission_instances WHERE type='PAIR_CHAT'");
+        execute("DELETE FROM chat_rooms WHERE type='PAIR'");
         script("540-pair-chat-down.sql");
 
-        assertThat(count("SELECT count(*) FROM pg_class WHERE relname='chat_room_pairs'")).isZero();
-        assertThatThrownBy(() -> execute("INSERT INTO chat_rooms(id, type, created_at, updated_at) VALUES (22, 'PAIR', now(), now())"))
+        assertThat(count("SELECT count(*) FROM pg_class WHERE relname='ux_chat_rooms_group_room'")).isZero();
+        assertThat(count("SELECT count(*) FROM pg_constraint WHERE conname='uq_chat_rooms_room'")).isEqualTo(1);
+        assertThatThrownBy(() -> insertChat(22, "PAIR", 2))
                 .isInstanceOf(SQLException.class).hasMessageContaining("chat_rooms_type_check");
         assertThatThrownBy(() -> execute("INSERT INTO room_mission_instances VALUES (103, 1, 'PAIR_CHAT', '{}')"))
                 .isInstanceOf(SQLException.class).hasMessageContaining("room_mission_instances_type_check");

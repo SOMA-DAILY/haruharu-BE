@@ -1,7 +1,6 @@
 package org.son.haruharu.domain.mission.types.pairchat.implement;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import org.son.haruharu.domain.chat.implement.PairChatSchedule;
@@ -48,7 +47,7 @@ public class PairChatMissionSchedule implements PairChatSchedule {
                 .orElse(null);
         if (open != null) {
             LocalDateTime opensAt = effectiveOpensAt(open, room);
-            return PairChatWindow.open(opensAt, dayOf(room, opensAt), open.effectiveClosesAt(room));
+            return PairChatWindow.open(opensAt, room.calendarDayOf(opensAt), open.effectiveClosesAt(room));
         }
 
         return windows.stream()
@@ -57,7 +56,7 @@ public class PairChatMissionSchedule implements PairChatSchedule {
                 .min(Comparator.comparing(mission -> effectiveOpensAt(mission, room)))
                 .map(mission -> {
                     LocalDateTime opensAt = effectiveOpensAt(mission, room);
-                    return PairChatWindow.scheduled(opensAt, dayOf(room, opensAt), mission.effectiveClosesAt(room));
+                    return PairChatWindow.scheduled(opensAt, room.calendarDayOf(opensAt), mission.effectiveClosesAt(room));
                 })
                 .orElse(PairChatWindow.none());
     }
@@ -73,9 +72,4 @@ public class PairChatMissionSchedule implements PairChatSchedule {
         return closesAt == null || effectiveOpensAt(mission, room).isBefore(closesAt);
     }
 
-    /** 방 시작일 기준 달력 일차(1부터). 시작 시각이 없는 구 모델 방은 알 수 없다(null). */
-    private static Integer dayOf(Room room, LocalDateTime at) {
-        if (room.startsAt() == null) return null;
-        return (int) ChronoUnit.DAYS.between(room.startsAt().toLocalDate(), at.toLocalDate()) + 1;
-    }
 }

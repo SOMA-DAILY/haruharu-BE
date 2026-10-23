@@ -66,7 +66,7 @@ class GroupChatAutoCreateIntegrationTest {
         assertThat(chatRoomMemberReader.findByChatRoomId(group.id()))
                 .extracting(ChatRoomMember::userId).containsExactly(9416L);
         assertThat(chatService.getGroupRoomBySourceRoom(room.id(), 9416L)).isNotNull();
-        assertThat(chatService.getMyRooms(9416L).chatRooms())
+        assertThat(chatService.getMyRooms(9416L, false).chatRooms())
                 .extracting(summary -> summary.chatRoomId()).contains(group.id());
         assertThat(chatService.getMessages(group.id(), 9416L, null, 30).messages())
                 .extracting(message -> message.content()).contains("입장 전 대화");
