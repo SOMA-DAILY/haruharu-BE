@@ -1,7 +1,9 @@
 package org.son.haruharu.domain.chat;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +43,10 @@ import org.son.haruharu.domain.user.storage.UserJpaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -70,7 +76,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Testcontainers
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @RecordApplicationEvents
+@Import(PairChatApiIntegrationTest.ClockOverride.class)
 class PairChatApiIntegrationTest {
+    /** Day1 편성 시나리오가 실행 시각(새벽)의 날짜 경계에 따라 Day2가 되지 않도록 고정한다. */
+    @TestConfiguration
+    static class ClockOverride {
+        @Bean
+        @Primary
+        Clock pairChatTestClock() {
+            return Clock.fixed(Instant.parse("2026-10-20T05:00:00Z"), ZoneId.of("Asia/Seoul"));
+        }
+    }
+
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
