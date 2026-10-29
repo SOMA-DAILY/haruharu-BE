@@ -258,6 +258,24 @@ class QuestionApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("익명 질문도 아동 안전 사유를 저장하며 작성자 식별자를 클라이언트에 노출하지 않는다")
+    void givenChildSafetyConcern_whenReportQuestion_thenStoresSharedReason() throws Exception {
+        create(0, UUID.randomUUID()).andExpect(status().isOk());
+        Long id = questionId();
+
+        send(recipients.getFirst(), "/" + id + "/report",
+                        "{\"reason\":\"CHILD_SAFETY\",\"detail\":\"아동 안전 관련 우려\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reported_user_id").doesNotExist())
+                .andExpect(jsonPath("$.data.sender_user_id").doesNotExist());
+
+        assertThat(jdbc.queryForObject("select reason from reports where question_id = ?", String.class, id))
+                .isEqualTo("CHILD_SAFETY");
+        assertThat(jdbc.queryForObject("select detail from reports where question_id = ?", String.class, id))
+                .isEqualTo("아동 안전 관련 우려");
+    }
+
+    @Test
     @DisplayName("동시 신고는 한 번 접수되고 신고자에게만 숨기며 상대의 추가 답변을 막는다")
     void givenConcurrentReports_whenReport_thenOneReportAndOneSidedVisibility() throws Exception {
         create(0, UUID.randomUUID()).andExpect(status().isOk());

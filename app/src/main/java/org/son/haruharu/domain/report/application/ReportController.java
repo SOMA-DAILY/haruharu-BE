@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "신고", description = "유저 신고 접수 — 사유 선택(5종) + 상세 설명(선택). 접수 후 운영이 수동 대응한다")
+@Tag(name = "신고", description = "유저 신고 접수 — 미성년자·아동 안전 등 사유 선택(6종) + 상세 설명(선택). 접수 후 운영이 수동 대응한다")
 @RestController
 @RequestMapping("/api/v1/reports")
 public class ReportController {
