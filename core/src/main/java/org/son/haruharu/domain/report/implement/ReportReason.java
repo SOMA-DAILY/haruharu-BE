@@ -5,6 +5,8 @@ package org.son.haruharu.domain.report.implement;
  * 유저 노출 카피는 클라이언트 소유 — 백엔드는 enum 코드만 관리한다.
  */
 public enum ReportReason {
+    /** 미성년자·아동 안전 */
+    CHILD_SAFETY,
     /** 부적절한 사진·영상 */
     INAPPROPRIATE_MEDIA,
     /** 욕설·비방·혐오 표현 */

@@ -5,6 +5,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.son.haruharu.domain.report.storage.ReportJpaRepository;
 import org.son.haruharu.domain.user.implement.User;
 import org.son.haruharu.domain.user.implement.UserStatus;
@@ -68,6 +70,27 @@ class ReportApiIntegrationTest {
 
         assertThat(reportJpaRepository.findAll()).singleElement()
                 .satisfies(e -> assertThat(e.toDomain().status().name()).isEqualTo("RECEIVED"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CHILD_SAFETY", "INAPPROPRIATE_MEDIA", "ABUSIVE_LANGUAGE", "FAKE_PROFILE", "SPAM_AD", "OTHER"})
+    @DisplayName("아동 안전을 포함한 모든 신고 사유는 상세 내용과 함께 저장되고 접수번호를 반환한다")
+    void givenSupportedReason_whenReport_thenReasonAndDetailAreStored(String reason) throws Exception {
+        var response = mockMvc.perform(post("/api/v1/reports").with(authentication(auth(reporterId)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reported_user_id": %d, "reason": "%s", "detail": "안전 우려 상세 내용"}
+                                """.formatted(reportedId, reason)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true));
+
+        var report = reportJpaRepository.findAll().getFirst().toDomain();
+        assertThat(report.reason().name()).isEqualTo(reason);
+        assertThat(report.detail()).isEqualTo("안전 우려 상세 내용");
+        assertThat(report.reporterUserId()).isEqualTo(reporterId);
+        assertThat(report.reportedUserId()).isEqualTo(reportedId);
+        assertThat(report.status().name()).isEqualTo("RECEIVED");
+        response.andExpect(jsonPath("$.data.report_id").value(report.id()));
     }
 
     @Test
