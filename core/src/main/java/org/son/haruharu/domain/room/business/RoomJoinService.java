@@ -1,18 +1,9 @@
 package org.son.haruharu.domain.room.business;
 
 import java.time.Clock;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Optional;
 
-import lombok.extern.slf4j.Slf4j;
-import org.son.haruharu.domain.identity.implement.UserIdentity;
-import org.son.haruharu.domain.identity.implement.UserIdentityReader;
-import org.son.haruharu.domain.profile.implement.Gender;
-import org.son.haruharu.domain.profile.implement.UserProfile;
-import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.room.business.dto.JoinRoomResponse;
-import org.son.haruharu.domain.room.business.exception.IdentityRequiredException;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotFoundException;
 import org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
@@ -26,7 +17,6 @@ import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomReader;
 import org.son.haruharu.domain.room.implement.RoomStatus;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code haruharu.room.join-identity-required}(기본 false)가 켜지면 PASS 본인확인을 하지 않은 계정의
  * 새 입장을 403 IDENTITY_REQUIRED 로 막는다(#514). 계정당 한 번 인증하면 이후 입장은 그대로 된다.
  */
-@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class RoomJoinService {
@@ -94,12 +83,17 @@ public class RoomJoinService {
             return new JoinRoomResponse(room.id());
         }
 
+        // 퇴장으로 코드 자리가 다시 열려도 최종 선택이 시작된 방에는 새로 들어올 수 없다(#548).
+        if (room.finalSelectionOpensAt() != null && !now.isBefore(room.finalSelectionOpensAt())) {
+            throw new InviteCodeNotUsableException();
+        }
+
         if (!invite.hasCapacity(roomMemberReader.countByRoomIdAndEntryPath(room.id(), RoomEntryPath.INVITE))) {
             throw new InviteCodeNotUsableException();
         }
 
         // PASS 본인확인 게이트(#514): 새 입장에만 적용한다 — 위의 기존 멤버 재입장·코드 거절은 그대로 둔다.
-        var identity=entryIdentity.snapshot(userId);
+        var identity=entryIdentity.snapshot(room.id(),userId);
         roomMemberJoiner.join(RoomMember.of(room.id(),userId,identity.gender(),identity.birthday(),now));
         roomInviteWriter.save(invite.incrementUsed());
         return new JoinRoomResponse(room.id());

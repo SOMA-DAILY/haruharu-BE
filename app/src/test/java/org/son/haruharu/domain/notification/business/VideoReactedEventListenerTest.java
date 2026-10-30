@@ -78,8 +78,7 @@ class VideoReactedEventListenerTest {
     }
 
     private void allowDelivery() {
-        org.mockito.BDDMockito.willAnswer(inv -> { ((Runnable) inv.getArgument(3)).run(); return null; })
-                .given(delivery).deliverIfActive(eq(100L), eq(2L), eq(5L), any(Runnable.class));
+        given(delivery.canDeliver(100L, 2L, 5L)).willReturn(true);
     }
 
     @Test

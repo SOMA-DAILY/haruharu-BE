@@ -53,7 +53,6 @@ public class ParticipationAdminService {
         var room=rooms.findByIdForUpdate(roomId).orElseThrow(RoomNotFoundException::new);
         var now=LocalDateTime.now(clock);
         requireRecruiting(room,now);
-        gate.initialize(room);
         if(seats<1 || seats>gate.available(room)) throw new ParticipationUnavailableException("충원 인원은 현재 빈자리 안에서 지정해 주세요.");
         var expires=expiry(room,now,requestedExpiry);
         var campaign=writer.save(new ParticipationCampaign(null,roomId,seats,0,expires,null,now));
@@ -103,14 +102,11 @@ public class ParticipationAdminService {
     public List<ParticipationCampaignView> campaigns(Long roomId,int page,int size) {
         int limit=Math.max(1,Math.min(size,100));
         var now=LocalDateTime.now(clock);
-        return reader.campaigns(roomId,Math.max(0,page)*limit,limit).stream().map(c->campaignView(c,now)).toList();
+        return reader.campaigns(roomId,Math.max(0,page),limit).stream().map(c->campaignView(c,now)).toList();
     }
     private boolean eligible(Long roomId,Long userId) {
         return users.findActiveIds(List.of(userId)).contains(userId)
-                && members.findByRoomIdAndUserId(roomId,userId).isEmpty() && !isRemoved(roomId,userId);
-    }
-    private boolean isRemoved(Long roomId,Long userId) {
-        try { gate.assertNotRemoved(roomId,userId);return false; } catch(ParticipationUnavailableException e) { return true; }
+                && members.findByRoomIdAndUserId(roomId,userId).isEmpty() && !gate.isRemoved(roomId,userId);
     }
     private void requireActive(Long userId) {
         if(!users.findActiveIds(List.of(userId)).contains(userId)) throw new ParticipationUnavailableException();

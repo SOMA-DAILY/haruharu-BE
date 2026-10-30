@@ -50,7 +50,7 @@ public class VideoReactionService {
         VideoPost discovered = videoPostReader.getById(videoPostId);
         RoomMember discoveredAuthor=roomMemberReader.getById(discovered.roomMemberId());
         roomReader.findByIdForUpdate(discoveredAuthor.roomId()).orElseThrow(org.son.haruharu.domain.room.business.exception.RoomNotFoundException::new);
-        roomMemberReader.lockById(discovered.roomMemberId());
+        roomMemberReader.requireActive(discovered.roomMemberId());
         VideoPost post = videoPostReader.getById(videoPostId);
         if (post.deletedAt() != null) {
             throw new VideoPostNotFoundException();

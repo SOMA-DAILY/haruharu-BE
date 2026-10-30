@@ -15,5 +15,5 @@ public class ParticipationReader {
     public ParticipationInvitation lockedInvitation(Long id) { return repository.invitationForUpdate(id).orElseThrow(ParticipationNotFoundException::new); }
     public List<ParticipationInvitation> invitations(Long userId, Long before, int limit) { return repository.invitations(userId,before,limit); }
     public List<ParticipationInvitation> recipients(Long campaignId) { return repository.campaignInvitations(campaignId); }
-    public List<ParticipationCampaign> campaigns(Long roomId,int offset,int limit) { return repository.campaigns(roomId,offset,limit); }
+    public List<ParticipationCampaign> campaigns(Long roomId,int page,int limit) { return repository.campaigns(roomId,page,limit); }
 }

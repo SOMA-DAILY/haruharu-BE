@@ -10,11 +10,8 @@ import org.son.haruharu.domain.room.implement.*;
 /** 원본 필드와 일반 삭제 표시는 보존하고 방 범위의 비노출 표시만 추가한다. */
 @Repository @RequiredArgsConstructor
 public class RoomParticipationRepositoryImpl implements RoomParticipationRepository {
-    private final ParticipationRoomLimitJpaRepository limits;
     private final MemberRemovalJpaRepository removals;
     private final EntityManager em;
-    public Optional<Integer> capacity(Long roomId) { return limits.findById(roomId).map(ParticipationRoomLimitEntity::capacity); }
-    public void saveCapacity(Long roomId,int capacity) { limits.saveAndFlush(ParticipationRoomLimitEntity.of(roomId,capacity)); }
     public Optional<MemberRemoval> removal(Long memberId) { return removals.findById(memberId).map(MemberRemovalEntity::toDomain); }
     public boolean removed(Long roomId,Long userId) { return removals.existsByRoomIdAndUserId(roomId,userId); }
     public Set<String> historicalPseudonyms(Long roomId) {
@@ -29,7 +26,7 @@ public class RoomParticipationRepositoryImpl implements RoomParticipationReposit
     private static final String MESSAGES="select id from chat_messages where sender_id=:userId and chat_room_id in ("+GROUPS+")";
     private static final String QUESTIONS="select id from anonymous_questions where room_id=:roomId and (sender_user_id=:userId or recipient_user_id=:userId)";
 
-    public List<Long> remove(MemberRemoval r) {
+    public void remove(MemberRemoval r) {
         em.flush();
         @SuppressWarnings("unchecked")
         List<Number> privateRows=parameterize("""
@@ -42,7 +39,7 @@ public class RoomParticipationRepositoryImpl implements RoomParticipationReposit
             """,r).getResultList();
         List<Long> privateIds=privateRows.stream().map(Number::longValue).sorted().toList();
         var lockIds=new java.util.TreeSet<Long>(privateIds);
-        for(Object id:parameterize("select id from chat_rooms where room_id=:roomId and type='GROUP'",r).getResultList()) lockIds.add(((Number)id).longValue());
+        for(Object id:parameterize(GROUPS,r).getResultList()) lockIds.add(((Number)id).longValue());
         // 전송·사진·반응·읽음도 같은 chat_room 행을 잠근다. 반드시 정리보다 먼저 id 오름차순으로 획득한다.
         if(!lockIds.isEmpty()) em.createNativeQuery("select id from chat_rooms where id in (:ids) order by id for update")
                 .setParameter("ids",lockIds).getResultList();
@@ -71,35 +68,35 @@ public class RoomParticipationRepositoryImpl implements RoomParticipationReposit
                     .setParameter("now",r.removedAt()).setParameter("ids",privateIds).executeUpdate();
         }
         // 기존 알림에도 가명·참조가 남지 않게 연결된 기록만 숨긴다. 다른 방 알림은 유지한다.
+        // 방이 생기기 전 알림은 이 방과 무관하다. 전체 이력을 파싱하지 않도록 먼저 좁힌다.
+        String afterRoomCreated=" and created_at>=(select created_at from rooms where id=:roomId)";
         String json="cast(coalesce(payload_json,'{}') as jsonb)";
         String sourceRoom="coalesce("+json+"->>'room_id',"+json+"->>'roomId')";
         String sourceVideo="coalesce("+json+"->>'video_id',"+json+"->>'videoId',"+json+"->>'video_post_id',"+json+"->>'videoPostId')";
         String sourceMessage="coalesce("+json+"->>'message_id',"+json+"->>'messageId')";
         String sourceQuestion="coalesce("+json+"->>'question_id',"+json+"->>'questionId')";
-        update("update notification_history set member_removed_at=:now where ("+sourceRoom+"=cast(:roomId as text) and user_id=:userId)"
+        update("update notification_history set member_removed_at=:now where (("+sourceRoom+"=cast(:roomId as text) and user_id=:userId)"
                 +" or "+sourceVideo+" in (select cast(id as text) from video_posts where room_member_id=:memberId)"
                 +" or "+sourceMessage+" in (select cast(id as text) from chat_messages where sender_id=:userId and chat_room_id in ("+GROUPS+"))"
-                +" or "+sourceQuestion+" in (select cast(id as text) from anonymous_questions where id in ("+QUESTIONS+"))",r);
+                +" or "+sourceQuestion+" in (select cast(id as text) from anonymous_questions where id in ("+QUESTIONS+")))"+afterRoomCreated,r);
         // 반응자가 퇴장한 경우: 새 payload는 식별자로, 기존 이력은 같은 방 영상과 가명으로 한정한다.
         String reactionActor=json+"->>'reactor_user_id'";
-        update("update notification_history set member_removed_at=:now where type='REACTION_RECEIVED' and "+sourceVideo+
+        update("update notification_history set member_removed_at=:now where type='REACTION_RECEIVED'"+afterRoomCreated+" and "+sourceVideo+
                 " in (select cast(v.id as text) from video_posts v join room_members m on m.id=v.room_member_id where m.room_id=:roomId)"
                 +" and ("+reactionActor+"=cast(:userId as text) or ("+reactionActor+" is null and position((select concat(coalesce(pseudonym,'익명'),'님이 반응을 남겼어요') from room_members where id=:memberId) in title)>0))",r);
         String priorChat="coalesce("+json+"->>'chat_room_id',"+json+"->>'chatRoomId')";
-        update("update notification_history set member_removed_at=:now where "+priorChat+
+        update("update notification_history set member_removed_at=:now where type in ('CHAT','CHAT_REPLY','VIDEO_REPLY')"+afterRoomCreated+" and "+priorChat+
                 " in (select cast(id as text) from chat_rooms where room_id=:roomId and type='GROUP')"
-                +" and type in ('CHAT','CHAT_REPLY','VIDEO_REPLY') and body like (select concat(coalesce(pseudonym,'익명'),'님%') from room_members where id=:memberId)",r);
+                +" and (user_id=:userId or body like (select concat(coalesce(pseudonym,'익명'),'님%') from room_members where id=:memberId))",r);
         if(!privateIds.isEmpty()) {
-            String sourceChat="coalesce("+json+"->>'chat_room_id',"+json+"->>'chatRoomId')";
-            em.createNativeQuery("update notification_history set member_removed_at=:now where "+sourceChat+
+            em.createNativeQuery("update notification_history set member_removed_at=:now where created_at>=(select created_at from rooms where id=:roomId) and "+priorChat+
                     " in (select cast(id as text) from chat_rooms where id in (:ids))")
-                    .setParameter("now",r.removedAt()).setParameter("ids",privateIds).executeUpdate();
+                    .setParameter("now",r.removedAt()).setParameter("roomId",r.roomId()).setParameter("ids",privateIds).executeUpdate();
         }
         update("update mid_participation_invitations set member_removed_at=:now where user_id=:userId and campaign_id in (select id from mid_participation_campaigns where room_id=:roomId)",r);
         update("update room_members set member_removed_at=:now where id=:memberId",r);
         em.clear();
         removals.saveAndFlush(MemberRemovalEntity.from(r));
-        return privateIds;
     }
     public RoomVisibility visibility(Long userId) {
         Object[] version=(Object[])em.createNativeQuery("select count(*),max(x.removed_at) from room_member_removals x where x.user_id=:userId or exists (select 1 from room_members m where m.room_id=x.room_id and m.user_id=:userId and m.deleted_at is null and m.member_removed_at is null)").setParameter("userId",userId).getSingleResult();

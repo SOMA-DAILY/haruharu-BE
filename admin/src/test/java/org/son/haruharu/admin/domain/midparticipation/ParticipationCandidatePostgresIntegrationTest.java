@@ -103,6 +103,8 @@ class ParticipationCandidatePostgresIntegrationTest {
         for (String type : List.of("MID_PARTICIPATION_INTEREST", "MID_PARTICIPATION_OFFER")) {
             sql.update("insert into notification_history(user_id,type,title,body,payload_json,is_read,created_at,updated_at) values (?,?,'안내','안내','{}',false,now(),now())", user(), type);
         }
+        assertThatThrownBy(()->sql.update("insert into notification_history(user_id,type,title,body,payload_json,is_read,created_at,updated_at) values (1,'NOT_A_TYPE','안내','안내','{}',false,now(),now())"))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
         var rows=sql.queryForList(Files.readString(root.resolve("scripts/sql/548-mid-participation-verify.sql")));
         assertThat(rows).allSatisfy(row->assertThat(((Number)row.get("violations")).longValue()).isZero());
     }

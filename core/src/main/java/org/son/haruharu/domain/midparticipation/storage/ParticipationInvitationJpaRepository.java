@@ -20,7 +20,4 @@ public interface ParticipationInvitationJpaRepository extends JpaRepository<Part
     @Modifying(clearAutomatically=true,flushAutomatically=true)
     @Query("update ParticipationInvitationEntity i set i.notifiedVersion=:version where i.id=:id and i.notifiedVersion<:version")
     int finishNotification(@Param("id") Long id,@Param("version") int version);
-    @Modifying
-    @Query("update ParticipationInvitationEntity i set i.declinedAt=:now, i.seenVersion=i.deliveryVersion where i.userId=:userId and i.kind=:kind and i.acceptedAt is null and i.declinedAt is null")
-    void withdraw(@Param("userId") Long userId,@Param("now") LocalDateTime now,@Param("kind") org.son.haruharu.domain.midparticipation.implement.ParticipationInvitation.Kind kind);
 }

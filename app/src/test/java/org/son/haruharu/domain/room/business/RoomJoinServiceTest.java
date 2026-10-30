@@ -483,7 +483,8 @@ class RoomJoinServiceTest {
 
     @Test
     @DisplayName("PASS 성별이 남녀가 아니면 프로필로 대신하지 않고 성별 미정(null)으로 두며 생년은 PASS 값이다")
-    void givenPassWithUnsupportedGender_whenJoin_thenGenderNullAndBirthdayFromPass() {
+    @org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
+    void givenPassWithUnsupportedGender_whenJoin_thenGenderNullAndBirthdayFromPass(org.springframework.boot.test.system.CapturedOutput output) {
         givenNewInviteMember();
         lenient().when(userProfileReader.findByUserId(USER_ID)).thenReturn(Optional.of(
                 new org.son.haruharu.domain.profile.implement.UserProfile(
@@ -496,6 +497,7 @@ class RoomJoinServiceTest {
 
         verify(roomMemberWriter).save(argThat(member -> member.gender() == null && member.pseudonym() == null
                 && LocalDate.of(1999, 5, 6).equals(member.birthday())));
+        assertThat(output).contains("운영진 성별 부여 필요");
     }
 
     @Test

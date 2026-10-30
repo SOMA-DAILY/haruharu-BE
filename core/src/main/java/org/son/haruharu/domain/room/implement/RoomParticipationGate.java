@@ -11,42 +11,29 @@ public class RoomParticipationGate {
     private final RoomMemberReader members;
     private final RoomInviteReader invites;
     private final RoomReader rooms;
-    private int resolvedCapacity(Room room) {
-        var existing=repository.capacity(room.id());
-        int configured=configuredCapacity(room);
-        if (existing.isPresent()) return configured>0 ? configured : existing.orElseThrow(org.son.haruharu.domain.midparticipation.implement.exception.ParticipationUnavailableException::new);
-        long active=members.countByRoomId(room.id());
-        int capacity=configured;
-        if(capacity<=0) {
-            int inviteCapacity=invites.findByRoomId(room.id()).stream()
-                    .map(RoomInvite::maxUses).filter(Objects::nonNull).findFirst().orElse(0);
-            capacity=(int)Math.max(active,inviteCapacity+members.countByRoomIdAndEntryPath(room.id(),RoomEntryPath.APPLICATION));
-        }
-        return capacity;
-    }
-    public int initialize(Room room) {
-        int capacity=resolvedCapacity(room);
-        if(repository.capacity(room.id()).isEmpty()) repository.saveCapacity(room.id(),capacity);
-        return capacity;
-    }
-    private int configuredCapacity(Room room) {
+    /** 정원이 없는 방의 빈자리. 한 번에 보낼 수 있는 제안 상한과 같다. */
+    private static final int UNLIMITED_SEATS=100;
+    /** 남녀 정원 합, 없으면 활성 코드 인원. 둘 다 없으면 정원 없음(null). */
+    private Integer capacity(Room room) {
         var c=room.composition();
-        return c.maleCapacity()!=null && c.femaleCapacity()!=null ? c.maleCapacity()+c.femaleCapacity() : 0;
+        if(c.maleCapacity()!=null && c.femaleCapacity()!=null && c.maleCapacity()+c.femaleCapacity()>0) return c.maleCapacity()+c.femaleCapacity();
+        var active=invites.findByRoomId(room.id()).stream().filter(i->i.status()==RoomInviteStatus.ACTIVE).toList();
+        if(active.isEmpty() || active.stream().anyMatch(i->i.maxUses()==null)) return null;
+        return active.stream().mapToInt(RoomInvite::maxUses).max().orElseThrow()+(int)members.countByRoomIdAndEntryPath(room.id(),RoomEntryPath.APPLICATION);
     }
     public int available(Room room) {
-        return Math.max(0,resolvedCapacity(room)-(int)members.countByRoomId(room.id()));
+        Integer capacity=capacity(room);
+        return capacity==null ? UNLIMITED_SEATS : Math.max(0,capacity-(int)members.countByRoomId(room.id()));
     }
+    public boolean isRemoved(Long roomId,Long userId) { return repository.removed(roomId,userId); }
     public void assertNotRemoved(Long roomId,Long userId) {
-        if(repository.removed(roomId,userId)) throw new ParticipationUnavailableException("참여가 종료된 방에는 다시 입장할 수 없어요.");
+        if(isRemoved(roomId,userId)) throw new ParticipationUnavailableException("참여가 종료된 방에는 다시 입장할 수 없어요.");
     }
     public void checkJoin(Long roomId,Long userId) {
         assertNotRemoved(roomId,userId);
-        var limit=repository.capacity(roomId);
-        if(limit.isEmpty()) return;
         var room=rooms.findById(roomId).orElseThrow(org.son.haruharu.domain.room.business.exception.RoomNotFoundException::new);
-        int configured=configuredCapacity(room);
-        int capacity=configured>0 ? configured : limit.orElseThrow(org.son.haruharu.domain.midparticipation.implement.exception.ParticipationUnavailableException::new);
-        if(members.countByRoomId(roomId)>=capacity) throw new ParticipationUnavailableException("이미 다른 분이 참여해 자리가 마감되었어요.");
+        Integer capacity=capacity(room);
+        if(capacity!=null && members.countByRoomId(roomId)>=capacity) throw new ParticipationUnavailableException("이미 다른 분이 참여해 자리가 마감되었어요.");
     }
     public String uniquePseudonym(Long roomId,String gender,int initialIndex) {
         if(gender==null) return null;
@@ -58,5 +45,5 @@ public class RoomParticipationGate {
     }
     public RoomVisibility visibility(Long userId) { return repository.visibility(userId); }
     public Optional<MemberRemoval> removal(Long memberId) { return repository.removal(memberId); }
-    public List<Long> remove(MemberRemoval removal) { return repository.remove(removal); }
+    public void remove(MemberRemoval removal) { repository.remove(removal); }
 }

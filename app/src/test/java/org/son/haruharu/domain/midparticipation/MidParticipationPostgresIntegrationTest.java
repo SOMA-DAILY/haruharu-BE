@@ -50,6 +50,8 @@ class MidParticipationPostgresIntegrationTest {
     @Autowired org.son.haruharu.domain.chat.business.ChatDeliveryService delivery;
     @Autowired org.springframework.context.ApplicationEventPublisher events;
     @Autowired org.son.haruharu.domain.notification.business.VideoReactedEventListener reactionNotifications;
+    @Autowired org.son.haruharu.domain.video.business.VideoReactionService reactions;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean org.son.haruharu.domain.notification.business.PushSendService push;
 
     private Long user() {
         return users.save(UserEntity.from(new User(null,UserStatus.ACTIVE,null))).toDomain().id();
@@ -189,6 +191,110 @@ class MidParticipationPostgresIntegrationTest {
         assertThat(service.invitation(u,id).popupPending()).isFalse();
     }
 
+    @Test void inviteCodeCannotAddANewMemberAfterFinalSelectionOpens() {
+        var room=room(5);Long newcomer=user();
+        String code=invites.issueFor(room.id(),6,null,"test").code();
+        sql.update("update rooms set final_selection_opens_at=? where id=?",LocalDateTime.now().minusMinutes(1),room.id());
+        assertThatThrownBy(()->normalJoin.join(newcomer,code)).isInstanceOf(org.son.haruharu.domain.room.business.exception.InviteCodeNotUsableException.class);
+        assertThat(members.countByRoomId(room.id())).isEqualTo(5);
+    }
+    @Test void removedMemberInboxLosesGroupChatNotificationsFromOthers() {
+        var room=room(2);var target=members.getByRoomId(room.id()).get(0);
+        long group=sql.queryForObject("select id from chat_rooms where room_id=? and type='GROUP'",Long.class,room.id());
+        for(String type:List.of("CHAT","VIDEO_REPLY"))
+            sql.update("insert into notification_history(user_id,type,title,body,payload_json,is_read,created_at,updated_at) values (?,?,'알림','유진님이 메시지를 보냈어요',?,false,?,?)",
+                    target.userId(),type,"{\"chatRoomId\":\""+group+"\"}",LocalDateTime.now(),LocalDateTime.now());
+        removals.remove(room.id(),target.id(),"미참여",1L);
+        assertThat(sql.queryForObject("select count(*) from notification_history where user_id=? and member_removed_at is null",Long.class,target.userId())).isZero();
+    }
+
+    @Test void unlimitedInviteRoomKeepsAcceptingInviteCodesAfterRemoval() {
+        var start=LocalDateTime.now().plusDays(1);
+        var room=rooms.save(Room.createScheduled(start,start.plusDays(2),start.plusDays(2).plusHours(2),
+                start.plusDays(2).plusHours(3),start.plusDays(3),3,RoomComposition.of(null,"무제한 코드",null,null)));
+        String code=invites.issueFor(room.id(),null,null,"test").code();
+        for(int i=0;i<3;i++) normalJoin.join(user(),code);
+        removals.remove(room.id(),members.getByRoomId(room.id()).get(0).id(),"미참여",1L);
+        normalJoin.join(user(),code);normalJoin.join(user(),code);
+        assertThat(members.countByRoomId(room.id())).isEqualTo(4);
+    }
+    private Room roomWithoutGenderCapacity() {
+        var start=LocalDateTime.now().minusHours(1);
+        return rooms.save(Room.createScheduled(start,start.plusDays(2),start.plusDays(2).plusHours(2),
+                start.plusDays(2).plusHours(3),start.plusDays(3),3,RoomComposition.of(null,"코드 정원",null,null)));
+    }
+    @Test void reissuedInviteLimitBecomesTheRoomCapacityAfterRemoval() {
+        var room=roomWithoutGenderCapacity();
+        String code=invites.issueFor(room.id(),3,null,"test").code();
+        for(int i=0;i<3;i++) normalJoin.join(user(),code);
+        removals.remove(room.id(),members.getByRoomId(room.id()).get(0).id(),"미참여",1L);
+        String bigger=invites.reissueFor(room.id(),6,null,"test").code();
+        normalJoin.join(user(),bigger);normalJoin.join(user(),bigger);
+        assertThat(members.countByRoomId(room.id())).isEqualTo(4);
+        assertThat(admin.availability(room.id()).capacity()).isEqualTo(6);
+    }
+    @Test void removedSeatInInviteLimitedRoomIsFilledByExactlyOneOffer() {
+        var room=roomWithoutGenderCapacity();
+        String code=invites.issueFor(room.id(),3,null,"test").code();
+        for(int i=0;i<3;i++) normalJoin.join(user(),code);
+        removals.remove(room.id(),members.getByRoomId(room.id()).get(0).id(),"미참여",1L);
+        Long first=user(),second=user();
+        admin.createCampaign(room.id(),1,null,List.of(first,second));
+        service.accept(first,invitation(first));
+        assertThatThrownBy(()->service.accept(second,invitation(second))).isInstanceOf(ParticipationUnavailableException.class);
+        assertThat(members.countByRoomId(room.id())).isEqualTo(3);
+    }
+
+    @Test void reactionDoesNotHoldTheRoomLockWhileAuthorUploadHoldsTheMemberLock() throws Exception {
+        var room=room(2);var participants=members.getByRoomId(room.id());var author=participants.get(0);var reactor=participants.get(1);
+        long video=sql.queryForObject("insert into video_posts(room_member_id,slot_start,video_url,is_hidden,created_at) values (?,now(),'local-test-video',false,now()) returning id",Long.class,author.id());
+        var held=new CountDownLatch(1);var release=new CountDownLatch(1);var pool=Executors.newFixedThreadPool(3);
+        try {
+            var upload=pool.submit(()->tx.executeWithoutResult(s->{members.lockById(author.id());held.countDown();
+                try {release.await(20,TimeUnit.SECONDS);} catch(InterruptedException e){throw new RuntimeException(e);}}));
+            held.await();
+            var reaction=pool.submit(()->reactions.toggle(reactor.userId(),video,org.son.haruharu.domain.video.implement.ReactionType.values()[0]));
+            reaction.get(5,TimeUnit.SECONDS);
+            assertThat(roomLockIsFree(room.id())).isTrue();
+            release.countDown();upload.get(10,TimeUnit.SECONDS);
+        } finally { release.countDown();pool.shutdownNow(); }
+    }
+    @Test void reactionWaitingForTheRoomLockFailsWhenTheAuthorIsRemovedMeanwhile() throws Exception {
+        var room=room(2);var participants=members.getByRoomId(room.id());var author=participants.get(0);var reactor=participants.get(1);
+        long video=sql.queryForObject("insert into video_posts(room_member_id,slot_start,video_url,is_hidden,created_at) values (?,now(),'local-test-video',false,now()) returning id",Long.class,author.id());
+        var held=new CountDownLatch(1);var release=new CountDownLatch(1);var pool=Executors.newFixedThreadPool(2);
+        try {
+            var removal=pool.submit(()->tx.executeWithoutResult(s->{roomReader.findByIdForUpdate(room.id());held.countDown();
+                try {release.await(20,TimeUnit.SECONDS);} catch(InterruptedException e){throw new RuntimeException(e);}
+                removals.remove(room.id(),author.id(),"미참여",1L);}));
+            held.await();
+            var reaction=pool.submit(()->reactions.toggle(reactor.userId(),video,org.son.haruharu.domain.video.implement.ReactionType.values()[0]));
+            Thread.sleep(500);release.countDown();removal.get(10,TimeUnit.SECONDS);
+            assertThatThrownBy(()->reaction.get(10,TimeUnit.SECONDS)).hasCauseInstanceOf(org.son.haruharu.common.exception.NotFoundException.class);
+        } finally { release.countDown();pool.shutdownNow(); }
+        assertThat(sql.queryForObject("select count(*) from video_reactions where video_post_id=?",Long.class,video)).isZero();
+    }
+
+    @Test void reactionPushIsSentAfterTheRoomLockIsReleased() {
+        var room=room(2);var participants=members.getByRoomId(room.id());var author=participants.get(0);var reactor=participants.get(1);
+        long video=sql.queryForObject("insert into video_posts(room_member_id,slot_start,video_url,is_hidden,created_at) values (?,now(),'local-test-video',false,now()) returning id",Long.class,author.id());
+        var roomLockFree=new java.util.concurrent.atomic.AtomicBoolean();
+        org.mockito.Mockito.doAnswer(call->{roomLockFree.set(roomLockIsFree(room.id()));return null;}).when(push).sendToUsers(
+                org.mockito.ArgumentMatchers.eq(List.of(author.userId())),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any());
+        reactionNotifications.handle(new org.son.haruharu.domain.video.business.event.VideoReactedEvent(author.userId(),reactor.userId(),video,"다른참가자","HEART"));
+        assertThat(roomLockFree).isTrue();
+    }
+    private boolean roomLockIsFree(Long roomId) throws Exception {
+        var pool=Executors.newSingleThreadExecutor();
+        try {
+            return pool.submit(()->{
+                try { tx.executeWithoutResult(s->sql.queryForList("select id from rooms where id=? for update nowait",roomId));return true; }
+                catch(org.springframework.dao.DataAccessException e) { return false; }
+            }).get(5,TimeUnit.SECONDS);
+        } finally { pool.shutdownNow(); }
+    }
+
     @Test void removalPreservesOriginalsHidesReferencesAndPreventsReentry() {
         var room=room(3);var participants=members.getByRoomId(room.id());var target=participants.get(0);var other=participants.get(1);
         long group=sql.queryForObject("select id from chat_rooms where room_id=? and type='GROUP'",Long.class,room.id());
@@ -202,6 +308,9 @@ class MidParticipationPostgresIntegrationTest {
                 "{\"videoPostId\":\""+otherVideo+"\"}")) {
             sql.update("insert into notification_history(user_id,type,title,body,payload_json,is_read,created_at,updated_at) values (?,'REACTION_RECEIVED',?,'반응',?,false,now(),now())",other.userId(),"❤️ "+targetName+"님이 반응을 남겼어요",payload);
         }
+        // 방보다 오래된 알림은 파싱하지 않는다. 깨진 옛 payload가 있어도 퇴장이 실패하지 않아야 한다.
+        sql.update("insert into notification_history(user_id,type,title,body,payload_json,is_read,created_at,updated_at) values (?,'CHAT','옛 알림','옛 알림','not-json',false,?,?)",
+                other.userId(),LocalDateTime.now().minusDays(30),LocalDateTime.now().minusDays(30));
         String code=invites.reissueFor(room.id(),6,null,"test").code();
         removals.remove(room.id(),target.id(),"미참여",1L);
         assertThat(members.findById(target.id())).isEmpty();

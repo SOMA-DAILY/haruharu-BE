@@ -10,5 +10,4 @@ public class ParticipationWriter {
     public void preference(Long userId,boolean enabled) { repository.savePreference(new ParticipationPreference(userId,enabled)); }
     public boolean claimNotification(Long id,int version,LocalDateTime now,LocalDateTime staleBefore) { return repository.claimNotification(id,version,now,staleBefore); }
     public void finishNotification(Long id,int version) { repository.finishNotification(id,version); }
-    public void withdraw(Long userId,LocalDateTime now) { repository.withdrawInvitations(userId,now); }
 }

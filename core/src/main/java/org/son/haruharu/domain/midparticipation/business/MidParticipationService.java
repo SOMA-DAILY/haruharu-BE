@@ -7,17 +7,13 @@ import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.context.ApplicationEventPublisher;
 import org.son.haruharu.domain.midparticipation.implement.*;
 import org.son.haruharu.domain.midparticipation.implement.exception.*;
 import org.son.haruharu.domain.midparticipation.business.dto.*;
-import org.son.haruharu.domain.midparticipation.business.event.ParticipationDeliveryEvent;
 import org.son.haruharu.domain.room.implement.*;
 import org.son.haruharu.domain.room.business.RoomMemberJoiner;
 import org.son.haruharu.domain.room.business.dto.JoinRoomResponse;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
-import org.son.haruharu.domain.profile.implement.UserProfileReader;
-import org.son.haruharu.domain.identity.implement.UserIdentityReader;
 import org.son.haruharu.domain.user.implement.UserReader;
 
 /** 잠금 순서: room → campaign → user(오름차순) → invitation. 알림은 커밋 이후 보낸다. */
@@ -111,18 +107,14 @@ public class MidParticipationService {
             throw new ParticipationUnavailableException();
         if(members.findByRoomIdAndUserId(room.id(),userId).isPresent())
             throw new ParticipationUnavailableException("이미 참여 중인 방이에요.");
-        gate.initialize(room);
         if(gate.available(room)<1) throw new ParticipationUnavailableException("이미 다른 분이 참여해 자리가 마감되었어요.");
-        var identity=entryIdentity.snapshot(userId);
+        var identity=entryIdentity.snapshot(room.id(),userId);
         var member=new RoomMember(null,room.id(),userId,identity.gender(),null,identity.birthday(),
                 now,RoomEntryPath.MID_PARTICIPATION,null);
         var saved=joiner.join(member);
         writer.save(campaign.accept(now));
         writer.save(invitation.accept(saved.id(),now));
         return new JoinRoomResponse(room.id());
-    }
-    private boolean isRemoved(Long roomId,Long userId) {
-        try { gate.assertNotRemoved(roomId,userId);return false; } catch(ParticipationUnavailableException e) { return true; }
     }
     private void requireActive(Long userId) {
         if(!users.findActiveIds(List.of(userId)).contains(userId)) throw new ParticipationUnavailableException();
@@ -138,7 +130,7 @@ public class MidParticipationService {
         String status=i.acceptedAt()!=null?"ACCEPTED":i.declinedAt()!=null?"DECLINED":
                 c.cancelledAt()!=null?"CANCELLED":!now.isBefore(c.expiresAt())?"EXPIRED":
                 room==null || room.statusAt(now)!=RoomStatus.ACTIVE?"EXPIRED":
-                isRemoved(c.roomId(),i.userId())?"UNAVAILABLE":
+                gate.isRemoved(c.roomId(),i.userId())?"UNAVAILABLE":
                 members.findByRoomIdAndUserId(c.roomId(),i.userId()).isPresent()?"ALREADY_JOINED":
                 c.acceptedCount()>=c.seats() || gate.available(room)<1?"FULL":"AVAILABLE";
         int remaining=room==null?0:Math.max(0,Math.min(c.seats()-c.acceptedCount(),gate.available(room)));
