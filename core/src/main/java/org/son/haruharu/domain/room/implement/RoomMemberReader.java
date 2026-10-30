@@ -23,6 +23,13 @@ public class RoomMemberReader {
         roomMemberRepository.lockById(id);
     }
 
+    /** 영속성 컨텍스트를 거치지 않고 DB 에서 활성 멤버인지 다시 확인한다. 잠금 대기 뒤 퇴장 재검사에 쓴다. */
+    public void requireActive(Long id) {
+        if (!roomMemberRepository.existsById(id)) {
+            throw new RoomMemberNotFoundException();
+        }
+    }
+
     public RoomMember getById(Long id) {
         return roomMemberRepository.findById(id)
                 .orElseThrow(RoomMemberNotFoundException::new);

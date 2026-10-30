@@ -50,7 +50,7 @@ public record MessagePageResponse(
         public static MessageItem of(ChatMessage message, List<ReactionCountItem> reactions, String myReaction,
                                      ReplyToView replyTo, ChatMissionReference mission) {
             return new MessageItem(message.id(), message.senderId(), message.displayContent(), message.createdAt(),
-                    message.videoPostId(), reactions, myReaction, replyTo, message.messageType().name(),
+                    message.referenceSuppressed() ? null : message.videoPostId(), reactions, myReaction, replyTo, message.messageType().name(),
                     message.senderName(), message.isAdminDeleted(), message.senderType().name(),
                     message.isAdminDeleted() ? null : mission);
         }

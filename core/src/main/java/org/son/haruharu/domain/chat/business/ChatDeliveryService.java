@@ -11,10 +11,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChatDeliveryService {
     private final ChatRoomReader chatRoomReader;
     private final ChatRoomLifecyclePolicy lifecycle;
+    private final org.son.haruharu.domain.chat.implement.ChatRoomMemberReader members;
 
-    public ChatDeliveryService(ChatRoomReader chatRoomReader, ChatRoomLifecyclePolicy lifecycle) {
+    public ChatDeliveryService(ChatRoomReader chatRoomReader, ChatRoomLifecyclePolicy lifecycle,org.son.haruharu.domain.chat.implement.ChatRoomMemberReader members) {
         this.chatRoomReader = chatRoomReader;
         this.lifecycle = lifecycle;
+        this.members = members;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -30,5 +32,12 @@ public class ChatDeliveryService {
      */
     public boolean isActive(Long chatRoomId) {
         return chatRoomReader.findById(chatRoomId).filter(lifecycle::isActive).isPresent();
+    }
+
+    public boolean isActiveFor(Long chatRoomId,Long userId) {
+        return isActive(chatRoomId) && members.findActiveMembership(chatRoomId,userId).isPresent();
+    }
+    public java.util.Set<Long> activeUserIds(Long chatRoomId) {
+        return members.findByChatRoomId(chatRoomId).stream().filter(m->!m.hasLeft()).map(m->m.userId()).collect(java.util.stream.Collectors.toSet());
     }
 }

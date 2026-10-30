@@ -15,10 +15,15 @@ import org.son.haruharu.domain.room.implement.MatchResult;
 
 import java.time.LocalDateTime;
 
+@org.hibernate.annotations.SQLRestriction("member_removed_at is null")
 @Entity
 @Table(name = "match_results", uniqueConstraints = @UniqueConstraint(columnNames = {"member_a_id", "member_b_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MatchResultEntity extends BaseEntity {
+
+    /** 관리자 퇴장에 따른 비노출. 원본·일반 삭제 상태는 별도로 보존한다. */
+    @Column(name = "member_removed_at", updatable=false)
+    private java.time.LocalDateTime memberRemovedAt;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -9,11 +9,11 @@ import org.son.haruharu.admin.domain.room.implement.AdminRoomReader;
 import org.son.haruharu.domain.mission.common.business.RoomMissionService;
 import org.son.haruharu.domain.room.business.RoomInviteService;
 import org.son.haruharu.domain.room.business.RoomService;
-import org.son.haruharu.domain.room.implement.PseudonymPool;
 import org.son.haruharu.domain.room.implement.RoomInvite;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.implement.RoomMemberReader;
 import org.son.haruharu.domain.room.implement.RoomMemberWriter;
+import org.son.haruharu.domain.room.implement.RoomParticipationGate;
 import org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +39,7 @@ public class AdminRoomCommandService {
     private final RoomMemberWriter roomMemberWriter;
     private final AdminRoomReader adminRoomReader;
     private final RoomMissionService roomMissionService;
+    private final RoomParticipationGate participationGate;
 
     public AdminRoomCommandService(
             RoomService roomService,
@@ -48,7 +49,9 @@ public class AdminRoomCommandService {
             AdminRoomReader adminRoomReader,
             RoomMissionService roomMissionService,
             org.son.haruharu.admin.domain.room.implement.AdminRoomOrganizationManager
-                    organization) {
+                    organization,
+            RoomParticipationGate participationGate) {
+        this.participationGate = participationGate;
         this.organization = organization;
         this.roomService = roomService;
         this.roomInviteService = roomInviteService;
@@ -117,7 +120,8 @@ public class AdminRoomCommandService {
                 gendered.pseudonym() != null
                         ? gendered
                         : gendered.withPseudonym(
-                                PseudonymPool.assign(
+                                participationGate.uniquePseudonym(
+                                        roomId,
                                         command.gender(),
                                         (int)
                                                 roomMemberReader.countByRoomIdAndGender(

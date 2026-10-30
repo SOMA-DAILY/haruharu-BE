@@ -112,7 +112,7 @@ class ChatRoomLeaveIntegrationTest {
     @DisplayName("삭제된 매칭의 생성 이벤트를 재처리해도 방이 복원되거나 유니크 오류가 나지 않는다")
     void givenClosedMatch_whenCreateAgain_thenRemainsClosed() {
         chatService.leaveRoom(roomId, a);
-        chatService.createRoomFromMatch(matchId, a, b);
+        chatService.createRoomFromMatch(roomId,matchId, a, b);
         assertThat(rooms.findByMatchResultId(matchId)).isEmpty();
         assertThat(jdbc.queryForObject("select count(*) from chat_rooms where match_result_id = ?",
                 Long.class, matchId)).isEqualTo(1);
@@ -167,7 +167,7 @@ class ChatRoomLeaveIntegrationTest {
         blockService.unblock(a, b);
         assertThat(rooms.findById(roomId)).isEmpty();
         assertThat(members.findByChatRoomId(roomId)).allMatch(member -> member.toDomain().hasLeft());
-        chatService.createRoomFromMatch(matchId, a, b);
+        chatService.createRoomFromMatch(roomId,matchId, a, b);
         assertThat(rooms.findByMatchResultId(matchId)).isEmpty();
     }
 }

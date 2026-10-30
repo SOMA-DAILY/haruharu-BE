@@ -13,12 +13,17 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /** 기기 업로드 세션. 게시 완료 행도 멱등 재시도 응답을 위해 보존한다. */
+@org.hibernate.annotations.SQLRestriction("member_removed_at is null")
 @Entity
 @Table(name = "video_upload_sessions", indexes = {
         @Index(name = "idx_video_upload_member_slot", columnList = "memberId, slotStart")
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VideoUploadSessionEntity {
+
+    /** 관리자 퇴장에 따른 비노출. 원본·일반 삭제 상태는 별도로 보존한다. */
+    @Column(name = "member_removed_at", updatable=false)
+    private java.time.LocalDateTime memberRemovedAt;
 
     @Id
     private UUID id;

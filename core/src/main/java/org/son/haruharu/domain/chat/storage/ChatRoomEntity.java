@@ -22,6 +22,7 @@ import org.son.haruharu.domain.chat.implement.ChatRoomType;
  * ux_chat_rooms_group_room(WHERE type='GROUP', #540 SQL)이 맡는다 — 같은 방의 PAIR 여러 개와 함께 두기 위해서다.
  * 부분 유니크는 JPA 로 표현할 수 없어 여기 선언하지 않는다(ddl-auto=update 가 옛 전체 유니크를 되살리지 않게).
  */
+@org.hibernate.annotations.SQLRestriction("member_removed_at is null")
 @Entity
 @Table(
         name = "chat_rooms",
@@ -29,6 +30,10 @@ import org.son.haruharu.domain.chat.implement.ChatRoomType;
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatRoomEntity extends BaseEntity {
+
+    /** 관리자 퇴장에 따른 비노출. 원본·일반 삭제 상태는 별도로 보존한다. */
+    @Column(name = "member_removed_at", updatable=false)
+    private java.time.LocalDateTime memberRemovedAt;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

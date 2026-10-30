@@ -46,11 +46,21 @@ class VideoReplySentEventListenerTest {
     void givenActiveOwner_whenDeliver_thenOnlyOwnerReceivesReplyNotification() {
         when(members.findMembership(1L, 2L))
                 .thenReturn(Optional.of(ChatRoomMember.join(1L, 2L, LocalDateTime.now())));
+        when(members.findMembership(1L, 3L))
+                .thenReturn(Optional.of(ChatRoomMember.join(1L, 3L, LocalDateTime.now())));
         listener.handle(event);
         verify(pushSendService)
                 .sendToUsers(
-                        List.of(2L), NotificationType.VIDEO_REPLY, Map.of("chatRoomId", "1"), "민준");
+                        List.of(2L), NotificationType.VIDEO_REPLY, Map.of("chatRoomId", "1", "sender_user_id", "3"), "민준");
         verifyNoMoreInteractions(pushSendService);
+    }
+
+    @Test
+    void givenRemovedSenderAfterCommit_whenDeliver_thenNoNotification() {
+        when(members.findMembership(1L, 2L))
+                .thenReturn(Optional.of(ChatRoomMember.join(1L, 2L, LocalDateTime.now())));
+        listener.handle(event);
+        verifyNoInteractions(pushSendService);
     }
 
     @Test

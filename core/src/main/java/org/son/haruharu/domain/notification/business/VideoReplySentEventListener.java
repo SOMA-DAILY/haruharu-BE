@@ -33,10 +33,12 @@ public class VideoReplySentEventListener {
                     if (members.findMembership(event.chatRoomId(), event.ownerId())
                             .filter(m -> !m.hasLeft())
                             .isEmpty()) return;
+                    if (members.findMembership(event.chatRoomId(), event.senderId())
+                            .filter(m -> !m.hasLeft()).isEmpty()) return;
                     pushSendService.sendToUsers(
                             List.of(event.ownerId()),
                             NotificationType.VIDEO_REPLY,
-                            Map.of("chatRoomId", event.chatRoomId().toString()),
+                            Map.of("chatRoomId", event.chatRoomId().toString(), "sender_user_id", event.senderId().toString()),
                             event.senderName());
                 });
     }

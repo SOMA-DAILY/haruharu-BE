@@ -21,6 +21,7 @@ import org.son.haruharu.domain.chat.implement.ChatSenderType;
 
 import java.time.LocalDateTime;
 
+@org.hibernate.annotations.SQLRestriction("member_removed_at is null")
 @Entity
 @Table(name = "chat_messages", uniqueConstraints = {
         @UniqueConstraint(name="uq_chat_messages_reply_request", columnNames={"chat_room_id", "sender_id", "client_request_id"}),
@@ -45,6 +46,10 @@ import java.time.LocalDateTime;
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatMessageEntity extends BaseEntity {
+
+    /** 관리자 퇴장에 따른 비노출. 원본·일반 삭제 상태는 별도로 보존한다. */
+    @Column(name = "member_removed_at", updatable=false)
+    private java.time.LocalDateTime memberRemovedAt;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -108,9 +113,14 @@ public class ChatMessageEntity extends BaseEntity {
     @Column(name = "photo_digest", length = 64)
     private String photoDigest;
 
+    @org.hibernate.annotations.ColumnDefault("false")
+    @Column(nullable=false)
+    private boolean referenceSuppressed;
+
     public static ChatMessageEntity from(ChatMessage message) {
         ChatMessageEntity entity = new ChatMessageEntity();
         entity.id = message.id();
+        entity.referenceSuppressed = message.referenceSuppressed();
         entity.chatRoomId = message.chatRoomId();
         entity.senderId = message.senderId();
         entity.senderType = message.senderType();
@@ -140,6 +150,6 @@ public class ChatMessageEntity extends BaseEntity {
         return new ChatMessage(id, chatRoomId, senderId, content, createdAt, videoPostId, clientRequestId,
                 replyToMessageId, replyPreviewSender, replyPreviewContent, messageType, scheduleItemId,
                 adminDeletedAt, deleteBroadcastAt, senderType, roomMissionId, missionAnnouncementId,
-                photoKey == null ? null : new ChatPhoto(photoKey, photoWidth, photoHeight, photoDigest));
+                photoKey == null ? null : new ChatPhoto(photoKey, photoWidth, photoHeight, photoDigest), referenceSuppressed);
     }
 }

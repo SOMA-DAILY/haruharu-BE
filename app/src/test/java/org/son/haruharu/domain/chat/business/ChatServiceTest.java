@@ -732,10 +732,13 @@ class ChatServiceTest {
     @Test
     @DisplayName("상호매칭 성사 시 DIRECT 채팅방과 두 참여자를 생성한다")
     void createRoomFromMatch_createsRoomAndTwoMembers() {
+        given(roomReader.findByIdForUpdate(ROOM)).willReturn(java.util.Optional.of(new org.son.haruharu.domain.room.implement.Room(ROOM,org.son.haruharu.domain.room.implement.RoomStatus.ACTIVE,LocalDateTime.now(clock).toLocalDate(),3,LocalDateTime.now(clock),null)));
+        given(roomMemberReader.findByRoomIdAndUserId(ROOM,1L)).willReturn(java.util.Optional.of(new org.son.haruharu.domain.room.implement.RoomMember(1L,ROOM,1L,"MALE",null,null,LocalDateTime.now(clock))));
+        given(roomMemberReader.findByRoomIdAndUserId(ROOM,2L)).willReturn(java.util.Optional.of(new org.son.haruharu.domain.room.implement.RoomMember(2L,ROOM,2L,"FEMALE",null,null,LocalDateTime.now(clock))));
         given(chatRoomReader.existsIncludingDeletedByMatchResultId(500L)).willReturn(false);
         given(chatRoomWriter.save(any())).willReturn(new ChatRoom(77L, ChatRoomType.DIRECT, null, 500L, LocalDateTime.now(clock)));
 
-        chatService.createRoomFromMatch(500L, 1L, 2L);
+        chatService.createRoomFromMatch(ROOM,500L, 1L, 2L);
 
         ArgumentCaptor<ChatRoom> roomCaptor = ArgumentCaptor.forClass(ChatRoom.class);
         verify(chatRoomWriter).save(roomCaptor.capture());
@@ -751,7 +754,7 @@ class ChatServiceTest {
     void createRoomFromMatch_whenAlreadyExists_skips() {
         given(chatRoomReader.existsIncludingDeletedByMatchResultId(500L)).willReturn(true);
 
-        chatService.createRoomFromMatch(500L, 1L, 2L);
+        chatService.createRoomFromMatch(ROOM,500L, 1L, 2L);
 
         then(chatRoomWriter).should(never()).save(any());
         then(chatRoomMemberWriter).should(never()).save(any());

@@ -13,10 +13,15 @@ import org.son.haruharu.domain.video.implement.VideoReaction;
 
 import java.time.LocalDateTime;
 
+@org.hibernate.annotations.SQLRestriction("member_removed_at is null")
 @Entity
 @Table(name = "video_reactions", uniqueConstraints = @UniqueConstraint(columnNames = {"video_post_id", "user_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VideoReactionEntity {
+
+    /** 관리자 퇴장에 따른 비노출. 원본·일반 삭제 상태는 별도로 보존한다. */
+    @Column(name = "member_removed_at", updatable=false)
+    private java.time.LocalDateTime memberRemovedAt;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

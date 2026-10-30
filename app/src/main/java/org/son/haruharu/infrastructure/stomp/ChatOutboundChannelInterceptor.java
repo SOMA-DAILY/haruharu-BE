@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ChatOutboundChannelInterceptor implements ExecutorChannelInterceptor {
     private final ChatDeliveryService delivery;
+    private final ChatSubscriptionRegistry subscriptions;
 
     @Override
     public Message<?> beforeHandle(Message<?> message, MessageChannel channel, MessageHandler handler) {
@@ -24,7 +25,12 @@ public class ChatOutboundChannelInterceptor implements ExecutorChannelIntercepto
             return message;
         }
         try {
-            return delivery.isActive(roomId) ? message : null;
+            var recipient=subscriptions.recipient(SimpMessageHeaderAccessor.getSessionId(message.getHeaders()),
+                    SimpMessageHeaderAccessor.getSubscriptionId(message.getHeaders()));
+            if(recipient.isEmpty()) return null;
+            Long userId;
+            try { userId=Long.valueOf(recipient.orElseThrow().getName()); } catch(NumberFormatException e) { return null; }
+            return delivery.isActiveFor(roomId,userId) ? message : null;
         } catch (RuntimeException e) {
             log.warn("채팅 outbound 상태 확인 실패: chatRoomId={}", roomId, e);
             return null;

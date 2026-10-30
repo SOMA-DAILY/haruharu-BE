@@ -25,8 +25,20 @@ public record ChatMessage(
         ChatSenderType senderType,
         Long roomMissionId,
         Long missionAnnouncementId,
-        ChatPhoto photo
+        ChatPhoto photo,
+        boolean referenceSuppressed
 ) {
+    /** 이전 생성자 호환. 원본 인용은 보관하고 응답에서만 숨기는 퇴장 표시를 별도로 둔다. */
+    public ChatMessage(Long id, Long chatRoomId, Long senderId, String content, LocalDateTime createdAt,
+                       Long videoPostId, String clientRequestId, Long replyToMessageId, String replyPreviewSender,
+                       String replyPreviewContent, ChatMessageType messageType, Long scheduleItemId,
+                       LocalDateTime adminDeletedAt, LocalDateTime deleteBroadcastAt, ChatSenderType senderType,
+                       Long roomMissionId, Long missionAnnouncementId, ChatPhoto photo) {
+        this(id,chatRoomId,senderId,content,createdAt,videoPostId,clientRequestId,replyToMessageId,
+             replyPreviewSender,replyPreviewContent,messageType,scheduleItemId,adminDeletedAt,
+             deleteBroadcastAt,senderType,roomMissionId,missionAnnouncementId,photo,false);
+    }
+
     public ChatMessage(Long id, Long chatRoomId, Long senderId, String content, LocalDateTime createdAt,
                        Long videoPostId, String clientRequestId, Long replyToMessageId, String replyPreviewSender,
                        String replyPreviewContent, ChatMessageType messageType, Long scheduleItemId,

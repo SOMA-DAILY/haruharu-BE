@@ -50,6 +50,9 @@ public enum NotificationType {
     // (CHAT 으로 보내면 구버전 앱이 PAIR 상세를 못 읽어 오류 화면이 뜬다). 답장도 이 type 하나로 보낸다.
     PAIR_CHAT("💬 1:1 대화", "%s님이 메시지를 보냈어요", true, NotificationCategory.ACTIVITY, true),
 
+    MID_PARTICIPATION_INTEREST("중간 참여에 관심 있으세요?", "빈자리가 생기면 앱으로 무료 참여를 제안드려요. 안내를 확인해 보세요", true, NotificationCategory.ACTIVITY),
+    MID_PARTICIPATION_OFFER("지금 참여할 수 있는 자리가 있어요", "남은 일정과 참여 안내를 확인하고 선착순으로 입장하세요", true, NotificationCategory.ACTIVITY, true),
+
     // ── C. 시스템 / 거래 ──
     // 폐기된 자동매칭 환불 알림의 이력 호환용. 발송 트리거는 제거됨.
     COIN_REFUNDED("☁️ 구름 %d개를 돌려드렸어요", "이번엔 인연이 닿지 않았지만, 다음 기회에 다시 만나요", true, NotificationCategory.TRANSACTIONAL),

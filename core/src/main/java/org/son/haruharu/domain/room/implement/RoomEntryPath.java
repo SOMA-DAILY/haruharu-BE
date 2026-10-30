@@ -8,5 +8,7 @@ public enum RoomEntryPath {
     /** 초대코드(웹 신청·공용 코드)로 입장 */
     INVITE,
     /** 앱 기수 신청을 운영진이 방에 배정 */
-    APPLICATION
+    APPLICATION,
+    /** 사전 동의 후 관리자 지명 제안을 선착순 수락한 무료 중간 참여 */
+    MID_PARTICIPATION
 }

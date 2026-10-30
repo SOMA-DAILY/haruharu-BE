@@ -62,6 +62,10 @@ public class ChatSubscriptionRegistry extends DefaultSubscriptionRegistry {
         subscriptions.keySet().removeIf(key -> key.session().equals(session));
     }
 
+    public synchronized java.util.Optional<Principal> recipient(String session,String subscriptionId) {
+        var subscription=subscriptions.get(new Key(session,subscriptionId));
+        return java.util.Optional.ofNullable(subscription==null?null:subscription.user());
+    }
     public synchronized Set<Long> roomIds() {
         return subscriptions.values().stream().map(s -> roomId(s.destination()))
                 .filter(Objects::nonNull).collect(Collectors.toSet());

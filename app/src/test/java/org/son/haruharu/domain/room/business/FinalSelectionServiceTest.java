@@ -87,7 +87,7 @@ class FinalSelectionServiceTest {
 
     private void stubMeAndRoom() {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, userId, roomId));
-        given(roomReader.findById(roomId)).willReturn(Optional.of(room()));
+        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(room()));
     }
 
     @Test
@@ -142,7 +142,7 @@ class FinalSelectionServiceTest {
         LocalDateTime startedAt = LocalDateTime.of(2026, 6, 24, 9, 0);
         Room legacy = new Room(roomId, RoomStatus.ACTIVE, LocalDate.of(2026, 6, 24), 3, startedAt, null);
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, userId, roomId));
-        given(roomReader.findById(roomId)).willReturn(Optional.of(legacy));
+        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(legacy));
         given(roomMemberReader.getById(selectedId)).willReturn(female(selectedId, 2L, roomId));
         given(finalSelectionReader.hasSelected(meId)).willReturn(false);
 
@@ -303,6 +303,8 @@ class FinalSelectionServiceTest {
         given(finalSelectionReader.findByRoomMemberId(meId))
                 .willReturn(Optional.of(new FinalSelection(1L, meId, selectedId, submittedAt)));
 
+        given(roomMemberReader.findById(selectedId)).willReturn(Optional.of(female(selectedId, 2L, roomId)));
+
         MyFinalSelectionResponse result = service.getMySelection(roomId, userId);
 
         assertThat(result.submitted()).isTrue();
@@ -374,6 +376,22 @@ class FinalSelectionServiceTest {
                 .isInstanceOf(NotRoomMemberException.class);
     }
 
+    @Test
+    @DisplayName("선택한 상대가 퇴장했으면 제출 상태를 유지하고 대상은 숨긴다")
+    void givenSelectedMemberRemoved_whenGetMySelection_thenHidesTarget() {
+        LocalDateTime submittedAt = LocalDateTime.of(2026, 6, 26, 18, 30);
+        given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, userId, roomId));
+        given(finalSelectionReader.findByRoomMemberId(meId))
+                .willReturn(Optional.of(new FinalSelection(1L, meId, selectedId, submittedAt)));
+        given(roomMemberReader.findById(selectedId)).willReturn(Optional.empty());
+
+        MyFinalSelectionResponse result = service.getMySelection(roomId, userId);
+
+        assertThat(result.submitted()).isTrue();
+        assertThat(result.selectedMemberId()).isNull();
+        assertThat(result.selectedAt()).isEqualTo(submittedAt);
+    }
+
     // ── #320 ③ 새 모델: 어드민이 입력한 시각을 따르고 Day 게이트를 타지 않는다 ──
 
     /** starts_at=2026-06-24 19:00 · opens=2026-06-26 18:00(= starts 기준 Day2) · closes=21:00 · result=22:00 · ends=익일 09:00 */
@@ -389,7 +407,7 @@ class FinalSelectionServiceTest {
 
     private void stubMeAndScheduledRoom() {
         given(roomMemberReader.getByRoomIdAndUserId(roomId, userId)).willReturn(member(meId, userId, roomId));
-        given(roomReader.findById(roomId)).willReturn(Optional.of(scheduledRoom()));
+        given(roomReader.findByIdForUpdate(roomId)).willReturn(Optional.of(scheduledRoom()));
     }
 
     @Test

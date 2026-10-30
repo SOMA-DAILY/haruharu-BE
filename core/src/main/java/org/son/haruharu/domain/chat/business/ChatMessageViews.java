@@ -74,7 +74,7 @@ public class ChatMessageViews {
     }
 
     private ReplyToView replyTo(ChatMessage message, Map<Long, ChatMessage> originals, Set<Long> blocked) {
-        if (message.replyToMessageId() == null) {
+        if (message.referenceSuppressed() || message.replyToMessageId() == null) {
             return null;
         }
         ChatMessage original = originals.get(message.replyToMessageId());

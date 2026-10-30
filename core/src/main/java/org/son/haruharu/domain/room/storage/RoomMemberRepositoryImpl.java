@@ -20,8 +20,14 @@ public class RoomMemberRepositoryImpl implements RoomMemberRepository {
     private final EntityManager entityManager;
 
     @Override
+    public boolean existsById(Long id) {
+        return jpaRepository.existsById(id);
+    }
+
+    @Override
     public void lockById(Long id) {
-        entityManager.find(RoomMemberEntity.class, id, LockModeType.PESSIMISTIC_WRITE);
+        var rows=entityManager.createNativeQuery("select id from room_members where id=:id and deleted_at is null and member_removed_at is null for update").setParameter("id",id).getResultList();
+        if(rows.isEmpty()) throw new org.son.haruharu.domain.room.storage.exception.RoomMemberNotFoundException();
     }
 
     @Override

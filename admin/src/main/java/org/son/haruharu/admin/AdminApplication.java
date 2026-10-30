@@ -25,6 +25,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication
 @EntityScan({
         "org.son.haruharu.admin.domain",
+        "org.son.haruharu.domain.midparticipation.storage",
+        "org.son.haruharu.domain.notification.storage",
         "org.son.haruharu.domain.appupdate.storage",
         "org.son.haruharu.domain.room.storage",
         "org.son.haruharu.domain.user.storage",
@@ -40,7 +42,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         // #510: 모집 트랙·기수
         "org.son.haruharu.domain.cohort.storage"
 })
-@EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.appupdate.storage", "org.son.haruharu.domain.room.storage",
+@EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.midparticipation.storage", "org.son.haruharu.domain.appupdate.storage", "org.son.haruharu.domain.room.storage",
         // #321: RoomInviteService.join 의 유저 행 비관적 락(UserRepositoryImpl→UserJpaRepository) 배선.
         "org.son.haruharu.domain.user.storage",
         // 관리자 참여자 대표사진: 기존 UserImageJpaRepository 재사용.

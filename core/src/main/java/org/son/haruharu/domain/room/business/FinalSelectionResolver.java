@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 public class FinalSelectionResolver {
 
     private final RoomMemberReader roomMemberReader;
+    private final org.son.haruharu.domain.room.implement.RoomReader roomReader;
     private final FinalSelectionReader finalSelectionReader;
     private final MatchResultReader matchResultReader;
     private final MatchResultWriter matchResultWriter;
@@ -44,8 +45,9 @@ public class FinalSelectionResolver {
 
     public FinalSelectionResolver(RoomMemberReader roomMemberReader, FinalSelectionReader finalSelectionReader,
                                   MatchResultReader matchResultReader, MatchResultWriter matchResultWriter,
-                                  BlockReader blockReader, ApplicationEventPublisher eventPublisher) {
+                                  BlockReader blockReader, ApplicationEventPublisher eventPublisher, org.son.haruharu.domain.room.implement.RoomReader roomReader) {
         this.roomMemberReader = roomMemberReader;
+        this.roomReader = roomReader;
         this.finalSelectionReader = finalSelectionReader;
         this.matchResultReader = matchResultReader;
         this.matchResultWriter = matchResultWriter;
@@ -59,6 +61,7 @@ public class FinalSelectionResolver {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int resolveForRoom(Long roomId, LocalDateTime now) {
+        roomReader.findByIdForUpdate(roomId).orElseThrow(org.son.haruharu.domain.room.business.exception.RoomNotFoundException::new);
         List<RoomMember> members = roomMemberReader.getByRoomId(roomId);
         if (members.isEmpty()) {
             return 0;

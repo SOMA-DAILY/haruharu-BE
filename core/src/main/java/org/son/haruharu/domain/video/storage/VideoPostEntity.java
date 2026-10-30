@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
  * 슬롯당 1업로드(재촬영 제외) 유니크는 partial index(WHERE deleted_at IS NULL)라
  * JPA/H2 DDL로는 생성되지 않는다. 멱등성 보장은 #40 업로드 로직(앱 레벨 중복검사)에서 처리한다.
  */
+@org.hibernate.annotations.SQLRestriction("member_removed_at is null")
 @Entity
 @Table(name = "video_posts", indexes = {
         // 슬롯 잠금 판정·중복검사·피드가 (room_member_id, slot_start)로 조회한다.
@@ -24,6 +25,10 @@ import java.time.LocalDateTime;
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VideoPostEntity {
+
+    /** 관리자 퇴장에 따른 비노출. 원본·일반 삭제 상태는 별도로 보존한다. */
+    @Column(name = "member_removed_at", updatable=false)
+    private java.time.LocalDateTime memberRemovedAt;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

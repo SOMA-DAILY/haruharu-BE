@@ -35,6 +35,7 @@ import static org.mockito.Mockito.never;
 @ExtendWith(MockitoExtension.class)
 class VideoReactionServiceTest {
 
+    @Mock org.son.haruharu.domain.room.implement.RoomReader roomReader;
     @Mock VideoPostReader videoPostReader;
     @Mock RoomMemberReader roomMemberReader;
     @Mock VideoReactionReader videoReactionReader;
@@ -45,12 +46,13 @@ class VideoReactionServiceTest {
 
     private VideoReactionService service() {
         return new VideoReactionService(videoPostReader, roomMemberReader, videoReactionReader,
-                videoReactionWriter, eventPublisher, clock);
+                videoReactionWriter, eventPublisher, clock,roomReader);
     }
 
     private void stubPostAndMembership(Long postId, Long userId) {
         Long authorMemberId = 40L;
         Long roomId = 50L;
+        org.mockito.Mockito.lenient().when(roomReader.findByIdForUpdate(roomId)).thenReturn(java.util.Optional.of(new org.son.haruharu.domain.room.implement.Room(roomId,org.son.haruharu.domain.room.implement.RoomStatus.ACTIVE,LocalDateTime.now().toLocalDate(),3,LocalDateTime.now().minusDays(1),null)));
         VideoPost post = new VideoPost(postId, authorMemberId, LocalDateTime.of(2026, 6, 26, 20, 0), null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
@@ -132,6 +134,7 @@ class VideoReactionServiceTest {
         Long postId = 100L;
         Long authorMemberId = 40L;
         Long roomId = 50L;
+        org.mockito.Mockito.lenient().when(roomReader.findByIdForUpdate(roomId)).thenReturn(java.util.Optional.of(new org.son.haruharu.domain.room.implement.Room(roomId,org.son.haruharu.domain.room.implement.RoomStatus.ACTIVE,LocalDateTime.now().toLocalDate(),3,LocalDateTime.now().minusDays(1),null)));
         VideoPost post = new VideoPost(postId, authorMemberId, LocalDateTime.of(2026, 6, 26, 20, 0), null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);
@@ -165,6 +168,7 @@ class VideoReactionServiceTest {
         Long postId = 1L;
         Long authorMemberId = 41L;
         Long roomId = 51L;
+        given(roomReader.findByIdForUpdate(roomId)).willReturn(java.util.Optional.of(new org.son.haruharu.domain.room.implement.Room(roomId,org.son.haruharu.domain.room.implement.RoomStatus.ACTIVE,LocalDateTime.now().toLocalDate(),3,LocalDateTime.now(),null)));
         VideoPost post = new VideoPost(postId, authorMemberId, LocalDateTime.of(2026, 6, 26, 20, 0), null, null,
                 "url", null, false, null, null, LocalDateTime.now());
         given(videoPostReader.getById(postId)).willReturn(post);

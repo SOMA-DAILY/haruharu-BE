@@ -47,9 +47,11 @@ public class ChatMessageSentEventListener {
         }
         chatDeliveryService.deliverIfActive(event.chatRoomId(), () -> {
             // 발신자를 차단한 수신자는 제외한다(#408, 수신자별 단건 조회 방지).
+            Set<Long> active=chatDeliveryService.activeUserIds(event.chatRoomId());
+            if(!active.contains(event.senderUserId())) return;
             Set<Long> blockers = blockReader.getBlockerUserIds(event.senderUserId());
             List<Long> recipients = event.recipientUserIds().stream()
-                    .filter(id -> !blockers.contains(id))
+                    .filter(id -> !blockers.contains(id) && active.contains(id))
                     .toList();
             if (recipients.isEmpty()) {
                 return;
@@ -61,7 +63,11 @@ public class ChatMessageSentEventListener {
                         event.senderNickname());
                 return;
             }
-            Map<String, String> data = Map.of("chatRoomId", event.chatRoomId().toString());
+            Map<String, String> data = new java.util.HashMap<>();
+            data.put("chatRoomId",event.chatRoomId().toString());
+            data.put("message_id",event.chatMessageId().toString());
+            data.put("sender_user_id",event.senderUserId().toString());
+            if(event.roomId()!=null) data.put("room_id",event.roomId().toString());
             // 답장(#456): 플래그 ON 이면 원문 주인은 CHAT 대신 CHAT_REPLY 1건만 받는다(같은 사람에게 두 번 안 감).
             // 원문 주인이 수신자가 아니면(본인 답장, 차단, 운영 글 시스템 유저) 답장 푸시는 없다.
             Long replyTarget = event.replyToSenderUserId();

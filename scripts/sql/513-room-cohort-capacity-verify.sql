@@ -81,7 +81,7 @@ BEGIN
     -- 운영 중 직접 SQL 로 이 칸을 고친 뒤에도 이 스크립트를 다시 돌려 확인한다. 알 수 없는 entry_path 는 엔티티 로딩부터 실패한다.
     SELECT string_agg(problem, ', ') INTO problems FROM (
         SELECT 'room_members.entry_path unknown: ' || count(*) AS problem FROM room_members
-        WHERE deleted_at IS NULL AND entry_path NOT IN ('INVITE', 'APPLICATION') HAVING count(*) > 0
+        WHERE deleted_at IS NULL AND entry_path NOT IN ('INVITE', 'APPLICATION', 'MID_PARTICIPATION') HAVING count(*) > 0
         UNION ALL
         SELECT 'room_members entry_path/application_id mismatch: ' || count(*) FROM room_members
         WHERE deleted_at IS NULL AND (entry_path = 'APPLICATION') <> (application_id IS NOT NULL) HAVING count(*) > 0

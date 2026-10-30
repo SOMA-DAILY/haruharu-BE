@@ -21,7 +21,7 @@ class ChatDeliveryServiceTest {
     void givenActiveRoom_whenDeliver_thenRunsAfterLock() {
         given(reader.lockIfPresent(10L)).willReturn(true);
         given(reader.findById(10L)).willReturn(Optional.of(ChatRoom.createDirect(100L)));
-        new ChatDeliveryService(reader, new ChatRoomLifecyclePolicy()).deliverIfActive(10L, delivery);
+        new ChatDeliveryService(reader, new ChatRoomLifecyclePolicy(),org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatRoomMemberReader.class)).deliverIfActive(10L, delivery);
         var order = inOrder(reader, delivery);
         order.verify(reader).lockIfPresent(10L);
         order.verify(reader).findById(10L);
@@ -30,11 +30,11 @@ class ChatDeliveryServiceTest {
     @Test
     @DisplayName("물리 삭제 또는 소프트 삭제된 방이면 외부 전송을 생략한다")
     void givenMissingOrClosedRoom_whenDeliver_thenSkips() {
-        new ChatDeliveryService(reader, new ChatRoomLifecyclePolicy()).deliverIfActive(10L, delivery);
+        new ChatDeliveryService(reader, new ChatRoomLifecyclePolicy(),org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatRoomMemberReader.class)).deliverIfActive(10L, delivery);
         then(reader).should(never()).findById(10L);
         given(reader.lockIfPresent(10L)).willReturn(true);
         given(reader.findById(10L)).willReturn(Optional.empty());
-        new ChatDeliveryService(reader, new ChatRoomLifecyclePolicy()).deliverIfActive(10L, delivery);
+        new ChatDeliveryService(reader, new ChatRoomLifecyclePolicy(),org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatRoomMemberReader.class)).deliverIfActive(10L, delivery);
         then(delivery).shouldHaveNoInteractions();
     }
     @Test
@@ -42,7 +42,7 @@ class ChatDeliveryServiceTest {
     void givenRoomState_whenIsActive_thenReflectsPresenceWithoutLock() {
         given(reader.findById(10L)).willReturn(Optional.of(ChatRoom.createDirect(100L)));
         given(reader.findById(11L)).willReturn(Optional.empty());
-        ChatDeliveryService service = new ChatDeliveryService(reader, new ChatRoomLifecyclePolicy());
+        ChatDeliveryService service = new ChatDeliveryService(reader, new ChatRoomLifecyclePolicy(),org.mockito.Mockito.mock(org.son.haruharu.domain.chat.implement.ChatRoomMemberReader.class));
         assertThat(service.isActive(10L)).isTrue();
         assertThat(service.isActive(11L)).isFalse();
         then(reader).should(never()).lockIfPresent(anyLong());

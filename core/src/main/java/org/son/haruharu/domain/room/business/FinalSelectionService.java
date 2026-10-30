@@ -52,9 +52,8 @@ public class FinalSelectionService {
 
     @Transactional
     public FinalSelectionResponse select(Long roomId, Long selectedMemberId, Long userId) {
-        RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
-        Room room = roomReader.findById(roomId)
-                .orElseThrow(RoomNotFoundException::new);
+        Room room = roomReader.findByIdForUpdate(roomId).orElseThrow(RoomNotFoundException::new);
+        RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 잠금 후 멤버십 재확인
         LocalDateTime now = LocalDateTime.now(clock);
         // 최종선택은 Day 가 아니라 어드민이 방마다 입력한 시각(opens_at)으로만 판정한다("두 시계 분리", #320).
         if (now.isBefore(selectionOpensAt(room))) {
@@ -101,7 +100,7 @@ public class FinalSelectionService {
     public MyFinalSelectionResponse getMySelection(Long roomId, Long userId) {
         RoomMember me = roomMemberReader.getByRoomIdAndUserId(roomId, userId); // 멤버십 인가 게이트
         return finalSelectionReader.findByRoomMemberId(me.id())
-                .map(selection -> new MyFinalSelectionResponse(true, selection.selectedMemberId(), selection.submittedAt()))
+                .map(selection -> new MyFinalSelectionResponse(true, selection.selectedMemberId() != null && roomMemberReader.findById(selection.selectedMemberId()).isEmpty() ? null : selection.selectedMemberId(), selection.submittedAt()))
                 .orElseGet(MyFinalSelectionResponse::notSubmitted);
     }
 

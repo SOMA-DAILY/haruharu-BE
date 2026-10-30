@@ -26,21 +26,23 @@ class VideoReactedEventListenerTest {
 
     @Mock PushSendService pushSendService;
     @Mock BlockReader blockReader;
+    @Mock RoomReactionDeliveryService delivery;
 
     VideoReactedEventListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new VideoReactedEventListener(pushSendService, blockReader);
+        listener = new VideoReactedEventListener(pushSendService, blockReader, delivery);
     }
 
     @Test
     @DisplayName("반응 이벤트 수신 시 작성자에게 반응자 닉네임·반응 동사·반응 이모지를 치환 인자로 REACTION_RECEIVED 푸시를 발송한다")
     void givenEvent_whenHandle_thenSendsReactionPushWithReactorNicknameVerbAndEmoji() {
+        allowDelivery();
         listener.handle(new VideoReactedEvent(2L, 5L, 100L, "노을", "HEART"));
 
         then(pushSendService).should().sendToUsers(
-                List.of(2L), NotificationType.REACTION_RECEIVED, Map.of("videoPostId", "100"),
+                List.of(2L), NotificationType.REACTION_RECEIVED, Map.of("videoPostId", "100", "reactor_user_id", "5"),
                 "노을", "마음에 들어해요", "❤️");
     }
 
@@ -48,6 +50,7 @@ class VideoReactedEventListenerTest {
     @CsvSource({"LIKE,👍", "HEART,❤️", "LOVE,😍", "LAUGH,😂", "WOW,😮", "FIRE,🔥", "UNKNOWN,👀"})
     @DisplayName("반응 유형별 이모지를 제목 치환 인자로 넘기고, 알 수 없는 유형이면 👀로 대체한다(#446)")
     void givenReactionType_whenHandle_thenPassesMatchingEmoji(String reactionType, String emoji) {
+        allowDelivery();
         listener.handle(new VideoReactedEvent(2L, 5L, 100L, "노을", reactionType));
 
         then(pushSendService).should().sendToUsers(
@@ -68,9 +71,14 @@ class VideoReactedEventListenerTest {
     void givenAuthorBlockedReactor_whenHandle_thenNoPush() {
         given(blockReader.hasBlocked(2L, 5L)).willReturn(true);
 
+        allowDelivery();
         listener.handle(new VideoReactedEvent(2L, 5L, 100L, "노을", "HEART"));
 
         then(pushSendService).shouldHaveNoInteractions();
+    }
+
+    private void allowDelivery() {
+        given(delivery.canDeliver(100L, 2L, 5L)).willReturn(true);
     }
 
     @Test

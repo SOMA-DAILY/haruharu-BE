@@ -22,11 +22,16 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 // (room_id, user_id) 유니크: 초대코드 동시 입장 중복 생성 방지 backstop(#312).
+@org.hibernate.annotations.SQLRestriction("member_removed_at is null")
 @Entity
 @Table(name = "room_members",
         uniqueConstraints = @UniqueConstraint(name = "uk_room_member_room_user", columnNames = {"room_id", "user_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RoomMemberEntity extends BaseEntity {
+
+    /** 관리자 퇴장에 따른 비노출. 원본·일반 삭제 상태는 별도로 보존한다. */
+    @Column(name = "member_removed_at", updatable=false)
+    private java.time.LocalDateTime memberRemovedAt;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

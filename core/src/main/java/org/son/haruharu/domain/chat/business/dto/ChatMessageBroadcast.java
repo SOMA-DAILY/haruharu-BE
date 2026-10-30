@@ -54,14 +54,14 @@ public record ChatMessageBroadcast(
     public static ChatMessageBroadcast from(ChatMessage message, ChatMissionReference mission) {
         return new ChatMessageBroadcast(
                 message.id(), message.chatRoomId(), message.senderId(), message.displayContent(), message.createdAt(),
-                message.videoPostId(), List.of(), null, replyOf(message), message.messageType().name(),
+                message.referenceSuppressed() ? null : message.videoPostId(), List.of(), null, replyOf(message), message.messageType().name(),
                 message.senderName(), message.isAdminDeleted(), message.senderType().name(),
                 message.isAdminDeleted() ? null : mission);
     }
 
     /** 방금 저장된 답장의 인용. 원문은 저장 직전에 검증했으므로 available=true. */
     private static ReplyToView replyOf(ChatMessage message) {
-        if (message.replyToMessageId() == null) {
+        if (message.referenceSuppressed() || message.replyToMessageId() == null) {
             return null;
         }
         return ReplyToView.of(message.replyToMessageId(), message.replyPreviewSender(),

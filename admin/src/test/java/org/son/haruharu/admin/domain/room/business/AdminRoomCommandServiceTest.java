@@ -54,6 +54,7 @@ class AdminRoomCommandServiceTest {
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock AdminRoomReader adminRoomReader;
     @Mock org.son.haruharu.domain.mission.common.business.RoomMissionService roomMissionService;
+    @Mock org.son.haruharu.domain.room.implement.RoomParticipationRepository participation;
 
     AdminRoomCommandService service;
 
@@ -69,7 +70,9 @@ class AdminRoomCommandServiceTest {
                         roomMissionService,
                         org.mockito.Mockito.mock(
                                 org.son.haruharu.admin.domain.room.implement
-                                        .AdminRoomOrganizationManager.class));
+                                        .AdminRoomOrganizationManager.class),
+                        new org.son.haruharu.domain.room.implement.RoomParticipationGate(
+                                participation, null, null, null));
     }
 
     private CreateAdminRoomCommand createCommand() {
@@ -167,6 +170,21 @@ class AdminRoomCommandServiceTest {
         // 응답에도 부여된 성별·백필된 가명이 함께 내려간다(#400)
         assertThat(res.gender()).isEqualTo("FEMALE");
         assertThat(res.pseudonym()).isEqualTo("지우");
+    }
+
+    @Test
+    @DisplayName("퇴장자가 쓴 가명과 현재 멤버 가명은 성별 부여 때 다시 배정하지 않는다(#548)")
+    void givenRemovedMemberPseudonym_whenAssignGender_thenSkipsUsedPseudonyms() {
+        given(roomMemberReader.getById(MEMBER_ID)).willReturn(memberOfRoom(ROOM_ID));
+        // 남자 3명 중 민준 퇴장 → 활성 2명이라 순번 2(현우)가 나오지만 이미 쓰는 이름이다.
+        given(roomMemberReader.countByRoomIdAndGender(ROOM_ID, "MALE")).willReturn(2L);
+        given(participation.historicalPseudonyms(ROOM_ID))
+                .willReturn(java.util.Set.of("민준", "정석", "현우"));
+        given(roomMemberWriter.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        service.assignGender(ROOM_ID, MEMBER_ID, new AssignGenderCommand("MALE"));
+
+        verify(roomMemberWriter).save(argThat(m -> "도윤".equals(m.pseudonym())));
     }
 
     @Test
