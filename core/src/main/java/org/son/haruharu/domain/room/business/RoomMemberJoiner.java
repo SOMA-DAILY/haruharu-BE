@@ -21,19 +21,23 @@ public class RoomMemberJoiner {
     private final RoomMemberReader roomMemberReader;
     private final RoomMemberWriter roomMemberWriter;
     private final ApplicationEventPublisher eventPublisher;
+    private final org.son.haruharu.domain.room.implement.RoomParticipationGate participationGate;
 
     public RoomMemberJoiner(RoomMemberReader roomMemberReader, RoomMemberWriter roomMemberWriter,
-                            ApplicationEventPublisher eventPublisher) {
+                            ApplicationEventPublisher eventPublisher,
+                            org.son.haruharu.domain.room.implement.RoomParticipationGate participationGate) {
         this.roomMemberReader = roomMemberReader;
         this.roomMemberWriter = roomMemberWriter;
         this.eventPublisher = eventPublisher;
+        this.participationGate = participationGate;
     }
 
     /** 새 멤버를 저장하고 저장된 멤버를 돌려준다. 가명은 같은 성별 기존 인원(0-based)을 순번으로 배정한다(#393). */
     public RoomMember join(RoomMember newcomer) {
+        participationGate.checkJoin(newcomer.roomId(),newcomer.userId());
         String gender = newcomer.gender();
         String pseudonym = gender == null ? null
-                : PseudonymPool.assign(gender, (int) roomMemberReader.countByRoomIdAndGender(newcomer.roomId(), gender));
+                : participationGate.uniquePseudonym(newcomer.roomId(),gender, (int) roomMemberReader.countByRoomIdAndGender(newcomer.roomId(), gender));
         RoomMember saved = roomMemberWriter.save(newcomer.withPseudonym(pseudonym));
         eventPublisher.publishEvent(new RoomMemberJoinedEvent(newcomer.roomId(), newcomer.userId(), newcomer.joinedAt()));
         return saved;

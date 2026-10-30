@@ -41,6 +41,8 @@ identity:
 # 티켓·결제 로직 테스트용 — 운영 기본값은 application.yaml에서 OFF(#492), 여기선 켜서 로직을 검증.
 # (disabled 동작 검증 테스트는 각자 @SpringBootTest(properties=...enabled=false)로 개별 오버라이드한다.)
 haruharu:
+  mid-participation:
+    delivery-enabled: false
   # 테스트 중 cron 이 실제 잡을 띄워 테스트 데이터와 경합하지 않게 런처만 끈다(잡 빈은 그대로라 직접 실행 테스트는 가능).
   room:
     reconcile:

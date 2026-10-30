@@ -21,6 +21,6 @@ public class ChatRoomAutoCreateListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleMutualMatch(MutualMatchEvent event) {
-        chatService.createRoomFromMatch(event.matchResultId(), event.userIdA(), event.userIdB());
+        chatService.createRoomFromMatch(event.roomId(), event.matchResultId(), event.userIdA(), event.userIdB());
     }
 }

@@ -67,6 +67,7 @@ class RoomJoinServiceTest {
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock org.son.haruharu.domain.profile.implement.UserProfileReader userProfileReader;
     @Mock ApplicationEventPublisher eventPublisher;
+    @Mock org.son.haruharu.domain.room.implement.RoomParticipationGate participationGate;
     @Mock UserIdentityReader userIdentityReader;
 
     RoomJoinService service;
@@ -85,9 +86,10 @@ class RoomJoinServiceTest {
 
     private RoomJoinService service(Clock serviceClock, boolean identityRequired) {
         // 입장 공통 컴포넌트(#513)는 실제 객체로 두고 그 아래 협력자만 목으로 둔다 — 초대코드 입장의 저장·이벤트 동작을 그대로 검증한다.
-        RoomMemberJoiner joiner = new RoomMemberJoiner(roomMemberReader, roomMemberWriter, eventPublisher);
+        RoomMemberJoiner joiner = new RoomMemberJoiner(roomMemberReader, roomMemberWriter, eventPublisher, participationGate);
+        org.mockito.Mockito.lenient().when(participationGate.uniquePseudonym(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.anyInt())).thenAnswer(i -> org.son.haruharu.domain.room.implement.PseudonymPool.assign(i.getArgument(1),i.getArgument(2)));
         return new RoomJoinService(roomInviteReader, roomInviteWriter, roomReader,
-                roomMemberReader, joiner, userProfileReader, userIdentityReader, serviceClock, identityRequired);
+                roomMemberReader, joiner, new RoomEntryIdentityService(userProfileReader,userIdentityReader,identityRequired), serviceClock);
     }
 
     private RoomInvite activeInvite() {

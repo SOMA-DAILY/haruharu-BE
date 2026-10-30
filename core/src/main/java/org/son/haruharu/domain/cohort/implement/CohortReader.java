@@ -12,6 +12,10 @@ public class CohortReader {
 
     private final CohortRepository cohortRepository;
 
+    public java.util.Optional<Cohort> findById(Long id) {
+        return cohortRepository.findById(id);
+    }
+
     public Cohort getById(Long id) {
         return cohortRepository.findById(id).orElseThrow(CohortNotFoundException::new);
     }

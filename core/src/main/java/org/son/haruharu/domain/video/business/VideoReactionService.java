@@ -31,20 +31,26 @@ public class VideoReactionService {
     private final VideoReactionWriter videoReactionWriter;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+    private final org.son.haruharu.domain.room.implement.RoomReader roomReader;
 
     public VideoReactionService(VideoPostReader videoPostReader, RoomMemberReader roomMemberReader,
                                 VideoReactionReader videoReactionReader,
                                 VideoReactionWriter videoReactionWriter,
-                                ApplicationEventPublisher eventPublisher, Clock clock) {
+                                ApplicationEventPublisher eventPublisher, Clock clock, org.son.haruharu.domain.room.implement.RoomReader roomReader) {
         this.videoPostReader = videoPostReader;
         this.roomMemberReader = roomMemberReader;
         this.videoReactionReader = videoReactionReader;
         this.videoReactionWriter = videoReactionWriter;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
+        this.roomReader = roomReader;
     }
 
     public ReactionResponse toggle(Long userId, Long videoPostId, ReactionType reactionType) {
+        VideoPost discovered = videoPostReader.getById(videoPostId);
+        RoomMember discoveredAuthor=roomMemberReader.getById(discovered.roomMemberId());
+        roomReader.findByIdForUpdate(discoveredAuthor.roomId()).orElseThrow(org.son.haruharu.domain.room.business.exception.RoomNotFoundException::new);
+        roomMemberReader.lockById(discovered.roomMemberId());
         VideoPost post = videoPostReader.getById(videoPostId);
         if (post.deletedAt() != null) {
             throw new VideoPostNotFoundException();

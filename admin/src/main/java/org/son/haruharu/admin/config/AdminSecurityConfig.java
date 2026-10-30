@@ -121,7 +121,10 @@ public class AdminSecurityConfig {
                                                 "/api/v1/admin/rooms",
                                                 "/api/v1/admin/room-groups",
                                                 "/api/v1/admin/rooms/*/invites",
-                                                "/api/v1/admin/rooms/*/cancel")
+                                                "/api/v1/admin/rooms/*/cancel",
+                                                "/api/v1/admin/mid-participation/**",
+                                                "/api/v1/admin/rooms/*/mid-participation",
+                                                "/api/v1/admin/rooms/*/members/*/remove")
                                         .hasAnyRole("SUPER", "OPERATOR")
                                         .requestMatchers(
                                                 HttpMethod.PATCH,

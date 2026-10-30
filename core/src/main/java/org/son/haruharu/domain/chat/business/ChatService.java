@@ -122,10 +122,12 @@ public class ChatService {
      * 원본(최종선택) 트랜잭션은 이미 커밋된 상태라, REQUIRED면 커밋된 트랜잭션에 join되어 INSERT가 유실된다.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void createRoomFromMatch(Long matchResultId, Long userIdA, Long userIdB) {
-        if (chatRoomReader.existsIncludingDeletedByMatchResultId(matchResultId)) {
-            return;
-        }
+    public void createRoomFromMatch(Long sourceRoomId, Long matchResultId, Long userIdA, Long userIdB) {
+        if(chatRoomReader.existsIncludingDeletedByMatchResultId(matchResultId)) return;
+        if(roomReader.findByIdForUpdate(sourceRoomId).isEmpty()) return;
+        if (chatRoomReader.existsIncludingDeletedByMatchResultId(matchResultId)) return;
+        if(roomMemberReader.findByRoomIdAndUserId(sourceRoomId,userIdA).isEmpty()
+                || roomMemberReader.findByRoomIdAndUserId(sourceRoomId,userIdB).isEmpty()) return;
         ChatRoom room = chatRoomWriter.save(ChatRoom.createDirect(matchResultId));
         LocalDateTime now = LocalDateTime.now(clock);
         chatRoomMemberWriter.save(ChatRoomMember.join(room.id(), userIdA, now));

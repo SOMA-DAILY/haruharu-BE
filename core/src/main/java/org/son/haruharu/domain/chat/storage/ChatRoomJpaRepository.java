@@ -38,7 +38,7 @@ public interface ChatRoomJpaRepository extends JpaRepository<ChatRoomEntity, Lon
             select c.* from chat_rooms c
             join chat_room_members a on a.chat_room_id = c.id and a.user_id = :userA
             join chat_room_members b on b.chat_room_id = c.id and b.user_id = :userB
-            where c.room_id = :roomId and c.type = 'PAIR' and c.deleted_at is null
+            where c.room_id = :roomId and c.type = 'PAIR' and c.deleted_at is null and c.member_removed_at is null and a.member_removed_at is null and b.member_removed_at is null
             order by c.id limit 1
             """, nativeQuery = true)
     Optional<ChatRoomEntity> findPairByRoomIdAndUsers(@Param("roomId") Long roomId,

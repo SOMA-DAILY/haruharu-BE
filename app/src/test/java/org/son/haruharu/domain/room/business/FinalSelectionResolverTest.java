@@ -39,6 +39,7 @@ class FinalSelectionResolverTest {
     @Mock BlockReader blockReader;
     @Mock ApplicationEventPublisher eventPublisher;
 
+    @Mock org.son.haruharu.domain.room.implement.RoomReader roomReader;
     FinalSelectionResolver resolver;
 
     private static final Long ROOM = 10L;
@@ -47,7 +48,8 @@ class FinalSelectionResolverTest {
     @BeforeEach
     void setUp() {
         resolver = new FinalSelectionResolver(roomMemberReader, finalSelectionReader,
-                matchResultReader, matchResultWriter, blockReader, eventPublisher);
+                matchResultReader, matchResultWriter, blockReader, eventPublisher,roomReader);
+        org.mockito.Mockito.lenient().when(roomReader.findByIdForUpdate(ROOM)).thenReturn(java.util.Optional.of(new org.son.haruharu.domain.room.implement.Room(ROOM,org.son.haruharu.domain.room.implement.RoomStatus.ACTIVE,NOW.toLocalDate(),3,NOW.minusDays(2),null)));
     }
 
     private RoomMember member(Long id, Long userId, String gender) {

@@ -11,10 +11,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChatDeliveryService {
     private final ChatRoomReader chatRoomReader;
     private final ChatRoomLifecyclePolicy lifecycle;
+    private final org.son.haruharu.domain.chat.implement.ChatRoomMemberReader members;
 
-    public ChatDeliveryService(ChatRoomReader chatRoomReader, ChatRoomLifecyclePolicy lifecycle) {
+    public ChatDeliveryService(ChatRoomReader chatRoomReader, ChatRoomLifecyclePolicy lifecycle,org.son.haruharu.domain.chat.implement.ChatRoomMemberReader members) {
         this.chatRoomReader = chatRoomReader;
         this.lifecycle = lifecycle;
+        this.members = members;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -28,6 +30,12 @@ public class ChatDeliveryService {
      * 방이 아직 활성인지(삭제되지 않았고 GROUP·PAIR의 close_at이 비어 있는지). 다른 인스턴스의 메시지를 로컬 전달하기 직전 재확인용(#453) —
      * 발행 인스턴스의 {@link #deliverIfActive} 이후 방이 닫혔으면 버린다. 잠금 없이 조회만 한다.
      */
+    public boolean isActiveFor(Long chatRoomId,Long userId) {
+        return isActive(chatRoomId) && members.findActiveMembership(chatRoomId,userId).isPresent();
+    }
+    public java.util.Set<Long> activeUserIds(Long chatRoomId) {
+        return members.findByChatRoomId(chatRoomId).stream().filter(m->!m.hasLeft()).map(m->m.userId()).collect(java.util.stream.Collectors.toSet());
+    }
     public boolean isActive(Long chatRoomId) {
         return chatRoomReader.findById(chatRoomId).filter(lifecycle::isActive).isPresent();
     }

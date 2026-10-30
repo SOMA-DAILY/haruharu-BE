@@ -31,7 +31,10 @@ class ChatMessageSentEventListenerTest {
     @Mock ChatDeliveryService chatDeliveryService;
     @Mock PushBundleService pushBundleService;
 
-    static final Map<String, String> DATA = Map.of("chatRoomId", "10");
+    static final Map<String, String> DIRECT_DATA = Map.of(
+            "chatRoomId", "10", "message_id", "20", "sender_user_id", "1");
+    static final Map<String, String> DATA = Map.of(
+            "chatRoomId", "10", "message_id", "20", "sender_user_id", "1", "room_id", "5");
     static final PushStyle ALERT = PushStyle.alert("chat:10");
     static final PushStyle QUIET = PushStyle.quiet("chat:10");
 
@@ -56,7 +59,7 @@ class ChatMessageSentEventListenerTest {
                 List.of(2L), "지예", LocalDateTime.of(2026, 9, 1, 15, 0)));
 
         then(pushSendService).should().sendToUsers(
-                List.of(2L), NotificationType.CHAT, Map.of("chatRoomId", "10"), "지예");
+                List.of(2L), NotificationType.CHAT, DIRECT_DATA, "지예");
     }
 
     @Test
@@ -199,7 +202,7 @@ class ChatMessageSentEventListenerTest {
         listener.handle(new ChatMessageSentEvent(20L, 10L, ChatRoomType.DIRECT, null, 1L,
                 List.of(2L), "윤슬", LocalDateTime.of(2026, 10, 14, 20, 0)));
 
-        then(pushSendService).should().sendToUsers(List.of(2L), NotificationType.CHAT, DATA, "윤슬");
+        then(pushSendService).should().sendToUsers(List.of(2L), NotificationType.CHAT, DIRECT_DATA, "윤슬");
         then(pushBundleService).shouldHaveNoInteractions();
     }
 
@@ -230,7 +233,35 @@ class ChatMessageSentEventListenerTest {
         then(pushBundleService).shouldHaveNoInteractions();
     }
 
+    @Test
+    @DisplayName("퇴장한 발신자의 대기 중인 채팅 알림은 보내지 않는다")
+    void givenRemovedSender_whenHandle_thenSkipsPush() {
+        allowDelivery();
+        given(chatDeliveryService.activeUserIds(10L)).willReturn(Set.of(2L, 3L));
+
+        listener.handle(new ChatMessageSentEvent(20L, 10L, ChatRoomType.GROUP, 5L, 1L,
+                List.of(2L, 3L), "퇴장자", LocalDateTime.now()));
+
+        then(blockReader).shouldHaveNoInteractions();
+        then(pushSendService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("퇴장한 수신자에게는 채팅 알림을 보내지 않는다")
+    void givenRemovedRecipient_whenHandle_thenOnlyActiveRecipientGetsPush() {
+        allowDelivery();
+        given(chatDeliveryService.activeUserIds(10L)).willReturn(Set.of(1L, 3L));
+        stubAllAlert(List.of(3L));
+
+        listener.handle(new ChatMessageSentEvent(20L, 10L, ChatRoomType.GROUP, 5L, 1L,
+                List.of(2L, 3L), "윤슬", LocalDateTime.now()));
+
+        thenGroupChatSentTo(List.of(3L));
+        then(pushSendService).shouldHaveNoMoreInteractions();
+    }
+
     private void allowDelivery() {
+        given(chatDeliveryService.activeUserIds(10L)).willReturn(Set.of(1L, 2L, 3L, 4L));
         willAnswer(inv -> {
             ((Runnable) inv.getArgument(1)).run();
             return null;

@@ -35,12 +35,14 @@ class RoomMemberJoinerTest {
     @Mock RoomMemberReader roomMemberReader;
     @Mock RoomMemberWriter roomMemberWriter;
     @Mock ApplicationEventPublisher eventPublisher;
+    @Mock org.son.haruharu.domain.room.implement.RoomParticipationGate participationGate;
 
     RoomMemberJoiner joiner;
 
     @BeforeEach
     void setUp() {
-        joiner = new RoomMemberJoiner(roomMemberReader, roomMemberWriter, eventPublisher);
+        joiner = new RoomMemberJoiner(roomMemberReader, roomMemberWriter, eventPublisher, participationGate);
+        org.mockito.Mockito.lenient().when(participationGate.uniquePseudonym(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.anyInt())).thenAnswer(i -> org.son.haruharu.domain.room.implement.PseudonymPool.assign(i.getArgument(1),i.getArgument(2)));
         given(roomMemberWriter.save(any())).willAnswer(invocation -> invocation.getArgument(0));
     }
 

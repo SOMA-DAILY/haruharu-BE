@@ -96,15 +96,17 @@ class ChatSubscriptionLifecycleTest {
     @Test
     void queuedOutboundIsRecheckedAndNativeHeaderCannotBypassGuard() {
         var delivery = mock(ChatDeliveryService.class);
-        var guard = new ChatOutboundChannelInterceptor(delivery);
+        var registry = mock(ChatSubscriptionRegistry.class);
+        when(registry.recipient(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of((java.security.Principal)()->"1"));
+        var guard = new ChatOutboundChannelInterceptor(delivery,registry);
         var headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
         headers.setDestination("/sub/chat-rooms/10");
         headers.setNativeHeader(ChatSubscriptionCloser.CLOSED_NOTIFICATION, "true");
         var message = MessageBuilder.createMessage(new byte[0], headers.getMessageHeaders());
         assertThat(guard.beforeHandle(message, null, null)).isNull();
-        when(delivery.isActive(10L)).thenReturn(true);
+        when(delivery.isActiveFor(10L,1L)).thenReturn(true);
         assertThat(guard.beforeHandle(message, null, null)).isSameAs(message);
-        when(delivery.isActive(10L)).thenThrow(new IllegalStateException("database unavailable"));
+        when(delivery.isActiveFor(10L,1L)).thenThrow(new IllegalStateException("database unavailable"));
         assertThat(guard.beforeHandle(message, null, null)).isNull();
         headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
         headers.setDestination("/sub/chat-rooms/10");

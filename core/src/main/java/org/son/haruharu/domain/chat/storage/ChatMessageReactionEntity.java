@@ -15,6 +15,7 @@ import org.son.haruharu.domain.chat.implement.ChatMessageReaction;
 import java.time.LocalDateTime;
 
 /** video_reactions 와 같은 구조(#456). BaseEntity 를 쓰지 않아 해제는 물리 삭제다(UNIQUE 재사용). */
+@org.hibernate.annotations.SQLRestriction("member_removed_at is null")
 @Entity
 @Table(name = "chat_message_reactions",
         uniqueConstraints = @UniqueConstraint(name = "uq_chat_message_reactions_message_user",
@@ -22,6 +23,10 @@ import java.time.LocalDateTime;
         indexes = @Index(name = "idx_chat_message_reactions_message", columnList = "message_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatMessageReactionEntity {
+
+    /** 관리자 퇴장에 따른 비노출. 원본·일반 삭제 상태는 별도로 보존한다. */
+    @Column(name = "member_removed_at", updatable=false)
+    private java.time.LocalDateTime memberRemovedAt;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

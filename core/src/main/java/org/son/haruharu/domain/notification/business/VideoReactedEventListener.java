@@ -17,21 +17,26 @@ public class VideoReactedEventListener {
     private final PushSendService pushSendService;
     private final BlockReader blockReader;
 
-    public VideoReactedEventListener(PushSendService pushSendService, BlockReader blockReader) {
+    private final RoomReactionDeliveryService delivery;
+
+    public VideoReactedEventListener(PushSendService pushSendService, BlockReader blockReader, RoomReactionDeliveryService delivery) {
         this.pushSendService = pushSendService;
         this.blockReader = blockReader;
+        this.delivery = delivery;
     }
 
     // 커밋 후 발송 — 반응 토글 트랜잭션이 푸시 실패로 롤백되지 않도록
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(VideoReactedEvent event) {
+        delivery.deliverIfActive(event.videoPostId(), event.authorUserId(), event.reactorUserId(), () -> {
         // 작성자가 반응자를 차단했으면 알림을 억제한다(#408 — 반응 자체는 허용, 알림만 차단).
         if (blockReader.hasBlocked(event.authorUserId(), event.reactorUserId())) {
             return;
         }
         pushSendService.sendToUsers(List.of(event.authorUserId()),
-                NotificationType.REACTION_RECEIVED, Map.of("videoPostId", event.videoPostId().toString()),
+                NotificationType.REACTION_RECEIVED, Map.of("videoPostId", event.videoPostId().toString(), "reactor_user_id", event.reactorUserId().toString()),
                 event.reactorNickname(), reactionVerb(event.reactionType()), reactionEmoji(event.reactionType()));
+        });
     }
 
     /** 푸시 제목 앞 이모지(#446). 알 수 없는 유형(과거 값 등)이면 기존 기본값 👀. */
