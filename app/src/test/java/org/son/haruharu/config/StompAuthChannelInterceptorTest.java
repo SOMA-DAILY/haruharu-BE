@@ -28,9 +28,41 @@ class StompAuthChannelInterceptorTest {
     @Mock org.springframework.context.ApplicationEventPublisher events;
     @Mock org.son.haruharu.domain.chat.business.ChatDeliveryService delivery;
 
+    @Mock org.son.haruharu.domain.user.implement.UserReader userReader;
+
     @org.junit.jupiter.api.BeforeEach
     void activeRoom() {
         org.mockito.Mockito.lenient().when(delivery.isActive(org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
+        org.mockito.Mockito.lenient().when(userReader.getById(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(inv ->
+                new org.son.haruharu.domain.user.implement.User(inv.getArgument(0),
+                        org.son.haruharu.domain.user.implement.UserStatus.ACTIVE, null));
+    }
+
+    @Test
+    @DisplayName("제재(BANNED)된 유저는 웹소켓 연결도, 이미 열린 연결의 전송·구독도 거부된다")
+    void bannedUserIsRejectedOnConnectSendAndSubscribe() {
+        org.mockito.Mockito.when(userReader.getById(7L)).thenReturn(new org.son.haruharu.domain.user.implement.User(7L,
+                org.son.haruharu.domain.user.implement.UserStatus.BANNED, null));
+        given(jwtProvider.isValid("valid")).willReturn(true);
+        given(jwtProvider.isAccessToken("valid")).willReturn(true);
+        given(jwtProvider.extractUserId("valid")).willReturn(7L);
+
+        var connect = StompHeaderAccessor.create(StompCommand.CONNECT);
+        connect.setNativeHeader("Authorization", "Bearer valid");
+        connect.setLeaveMutable(true);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> interceptor().preSend(
+                org.springframework.messaging.support.MessageBuilder.createMessage(new byte[0], connect.getMessageHeaders()), channel))
+                .isInstanceOf(StompAuthenticationException.class);
+
+        for (var command : java.util.List.of(StompCommand.SEND, StompCommand.SUBSCRIBE)) {
+            var frame = StompHeaderAccessor.create(command);
+            frame.setUser(new StompPrincipal(7L));
+            frame.setDestination(command == StompCommand.SEND ? "/pub/chat-rooms/10/messages" : "/sub/chat-rooms/10");
+            frame.setLeaveMutable(true);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> interceptor().preSend(
+                    org.springframework.messaging.support.MessageBuilder.createMessage(new byte[0], frame.getMessageHeaders()), channel))
+                    .isInstanceOf(StompAuthenticationException.class);
+        }
     }
 
     @Test
@@ -99,7 +131,7 @@ class StompAuthChannelInterceptorTest {
     private final MessageChannel channel = mock(MessageChannel.class);
 
     private StompAuthChannelInterceptor interceptor() {
-        return new StompAuthChannelInterceptor(jwtProvider, chatRoomMemberReader, delivery, events);
+        return new StompAuthChannelInterceptor(jwtProvider, chatRoomMemberReader, delivery, events, userReader);
     }
 
     private StompHeaderAccessor connectAccessor(String authHeader) {
