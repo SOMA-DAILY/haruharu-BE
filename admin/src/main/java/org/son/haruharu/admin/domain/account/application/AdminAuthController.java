@@ -2,11 +2,13 @@ package org.son.haruharu.admin.domain.account.application;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.son.haruharu.admin.domain.account.application.dto.AdminLoginRequest;
 import org.son.haruharu.admin.domain.account.business.AdminAuthService;
 import org.son.haruharu.admin.domain.account.business.dto.AdminMeResponse;
 import org.son.haruharu.admin.domain.account.business.dto.AdminTokenResponse;
+import org.son.haruharu.admin.common.AdminRequestMeta;
 import org.son.haruharu.common.ApiResponse;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,7 +30,9 @@ public class AdminAuthController {
 
     @Operation(summary = "관리자 로그인", description = "email/password 검증 후 role claim이 담긴 어드민 토큰을 발급한다.")
     @PostMapping("/auth/login")
-    public ApiResponse<AdminTokenResponse> login(@RequestBody @Valid AdminLoginRequest request) {
+    public ApiResponse<AdminTokenResponse> login(@RequestBody @Valid AdminLoginRequest request, HttpServletRequest http) {
+        // 접속기록(#554): 토큰 발급 전이라 SecurityContext 에 주체가 없다. 인터셉터가 이메일로 성공/실패 주체를 식별한다.
+        http.setAttribute(AdminRequestMeta.LOGIN_EMAIL_ATTRIBUTE, request.email());
         return ApiResponse.ok(adminAuthService.login(request.toCommand()));
     }
 

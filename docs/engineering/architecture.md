@@ -293,7 +293,7 @@ public static UserEntity from(User user) {
 
 **금지:**
 - `user/`에 user_credentials, user_profiles 등을 직접 추가하지 않는다.
-- 도메인 간 Storage 계층 직접 참조 금지 (예: auth 도메인이 UserJpaRepository를 직접 주입받는 것).
+- 도메인 간 Storage 계층 직접 참조 금지 (예: auth 도메인이 UserJpaRepository를 직접 주입받는 것). 예외 1개: 탈퇴 90일 파기 `user/storage/WithdrawnUserPurgeRepositoryImpl`(#555)은 전역 소프트삭제 때문에 여러 도메인 테이블을 native SQL 로 한 트랜잭션에 지운다. 다른 도메인이 테이블·컬럼 이름을 바꾸면 이 파일과 `WithdrawnUserPurgePostgresIntegrationTest` 도 같이 고친다.
 
 ## 외부 시스템 (OAuth 등)
 
