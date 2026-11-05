@@ -6,6 +6,7 @@ import org.springframework.messaging.simp.broker.SimpleBrokerMessageHandler;
 import lombok.extern.slf4j.Slf4j;
 
 import org.son.haruharu.domain.chat.implement.ChatRoomMemberReader;
+import org.son.haruharu.domain.user.implement.UserReader;
 import org.son.haruharu.domain.chat.business.ChatDeliveryService;
 import org.son.haruharu.utils.JwtProvider;
 import org.springframework.messaging.Message;
@@ -39,13 +40,26 @@ public class StompAuthChannelInterceptor implements ExecutorChannelInterceptor {
     private final ChatRoomMemberReader chatRoomMemberReader;
     private final ChatDeliveryService delivery;
     private final ApplicationEventPublisher events;
+    private final UserReader userReader;
 
     public StompAuthChannelInterceptor(JwtProvider jwtProvider, ChatRoomMemberReader chatRoomMemberReader,
-                                       ChatDeliveryService delivery, ApplicationEventPublisher events) {
+                                       ChatDeliveryService delivery, ApplicationEventPublisher events,
+                                       UserReader userReader) {
         this.jwtProvider = jwtProvider;
         this.chatRoomMemberReader = chatRoomMemberReader;
         this.delivery = delivery;
         this.events = events;
+        this.userReader = userReader;
+    }
+
+    /**
+     * 제재(BANNED)·탈퇴 유저 차단(#553). HTTP 는 JwtAuthenticationFilter 가 요청마다 보지만 웹소켓 프레임은 필터를 안 타므로
+     * 연결·구독·전송 때 여기서 본다. 이미 열린 연결도 다음 전송부터 막힌다.
+     */
+    private void requireActiveUser(Long userId) {
+        if (!userReader.getById(userId).status().canAuthenticate()) {
+            throw new StompAuthenticationException();
+        }
     }
 
     @Override
@@ -95,6 +109,7 @@ public class StompAuthChannelInterceptor implements ExecutorChannelInterceptor {
 
     private boolean authorizeSend(StompHeaderAccessor accessor) {
         Long userId = currentUserId(accessor);
+        requireActiveUser(userId);
         String destination = accessor.getDestination();
         Matcher matcher = CHAT_MESSAGE_ENDPOINT.matcher(destination == null ? "" : destination);
         if (!matcher.matches()) throw new StompAuthorizationException();
@@ -111,7 +126,9 @@ public class StompAuthChannelInterceptor implements ExecutorChannelInterceptor {
             throw new StompAuthenticationException();
         }
         try {
-            return new StompPrincipal(jwtProvider.extractUserId(token));
+            Long userId = jwtProvider.extractUserId(token);
+            requireActiveUser(userId);
+            return new StompPrincipal(userId);
         } catch (NumberFormatException e) {
             // subject가 Long이 아님(예: 마이그레이션 이전 발급된 구 UUID subject 토큰) → 인증 거부.
             throw new StompAuthenticationException();
@@ -127,6 +144,7 @@ public class StompAuthChannelInterceptor implements ExecutorChannelInterceptor {
      */
     private boolean authorizeSubscription(StompHeaderAccessor accessor) {
         Long userId = currentUserId(accessor);
+        requireActiveUser(userId);
         String destination = accessor.getDestination();
         if (destination == null) {
             throw new StompAuthorizationException();

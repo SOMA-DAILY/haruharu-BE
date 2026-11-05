@@ -126,6 +126,12 @@ public class AdminSecurityConfig {
                                                 "/api/v1/admin/rooms/*/mid-participation",
                                                 "/api/v1/admin/rooms/*/members/*/remove")
                                         .hasAnyRole("SUPER", "OPERATOR")
+                                        // #553: 신고 제재 승인·기각은 SUPER·OPERATOR. 목록·상세는 로그인만.
+                                        .requestMatchers(
+                                                HttpMethod.POST,
+                                                "/api/v1/admin/reports/*/approve",
+                                                "/api/v1/admin/reports/*/reject")
+                                        .hasAnyRole("SUPER", "OPERATOR")
                                         .requestMatchers(
                                                 HttpMethod.PATCH,
                                                 "/api/v1/admin/rooms/*/members/*",
@@ -177,6 +183,13 @@ public class AdminSecurityConfig {
                                         .hasAnyRole("SUPER", "OPERATOR")
                                         .requestMatchers(
                                                 HttpMethod.PUT, "/api/v1/admin/app-update-policy")
+                                        .hasRole("SUPER")
+                                        // 접속기록(#554): 반출 사유 등록은 자료를 내려받는 SUPER·OPERATOR,
+                                        // 기록 열람·요약·정기 점검은 SUPER 만.
+                                        .requestMatchers(
+                                                HttpMethod.POST, "/api/v1/admin/audit/exports")
+                                        .hasAnyRole("SUPER", "OPERATOR")
+                                        .requestMatchers("/api/v1/admin/audit/**")
                                         .hasRole("SUPER")
                                         .anyRequest()
                                         .authenticated())
