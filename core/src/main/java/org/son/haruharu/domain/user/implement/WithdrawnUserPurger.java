@@ -31,7 +31,7 @@ public class WithdrawnUserPurger {
     }
 
     public Map<String, Integer> purge(Long userId, LocalDateTime now) {
-        List<String> keys = new ArrayList<>(toKeys(repository.findVideoUrls(userId)));
+        List<String> keys = new ArrayList<>(toKeys(userId, repository.findVideoUrls(userId)));
         keys.addAll(repository.findChatPhotoKeys(userId));
         for (int i = 0; i < keys.size(); i += S3_DELETE_BATCH) {
             storage.deleteObjectsOrThrow(keys.subList(i, Math.min(i + S3_DELETE_BATCH, keys.size())));
@@ -41,13 +41,24 @@ public class WithdrawnUserPurger {
         return counts;
     }
 
-    /** 영상 URL 은 publicBaseUrl + key 로 저장돼 있다. 우리 버킷 밖 URL 은 건너뛴다. */
-    private List<String> toKeys(List<String> urls) {
+    /**
+     * 영상 URL 은 publicBaseUrl + key 로 저장돼 있다. 회원 업로드(users/)만 지우고 demo/ 같은 공용 시드와 외부 URL 은 남긴다.
+     * 업로드 경로(/users/)인데 지금 기본 주소로 시작하지 않으면(주소 변경 전 행) 키를 확정할 수 없어 이 회원 파기를 보류한다.
+     * 던지면 S3·DB 둘 다 손대지 않은 채 purged_at 이 비어 다음 날 재시도된다(S3 삭제 실패와 같은 경로).
+     */
+    private List<String> toKeys(Long userId, List<String> urls) {
         String base = storage.publicBaseUrl();
-        return urls.stream()
-                .filter(url -> url != null && base != null && url.startsWith(base) && url.length() > base.length())
-                .map(url -> url.substring(base.length()))
-                .distinct()
-                .toList();
+        List<String> keys = new ArrayList<>();
+        for (String url : urls) {
+            if (url.startsWith(base)) {
+                String key = url.substring(base.length());
+                if (key.startsWith("users/")) {
+                    keys.add(key);
+                }
+            } else if (url.contains("/users/")) {
+                throw new IllegalStateException("탈퇴 회원 파기 보류: 기본 주소와 다른 업로드 URL userId=" + userId);
+            }
+        }
+        return keys.stream().distinct().toList();
     }
 }

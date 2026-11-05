@@ -61,6 +61,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 
 /**
  * #555 탈퇴 90일 파기를 실제 PostgreSQL 에서 확인한다. 전역 소프트삭제가 걸린 테이블의 물리 삭제와
@@ -233,5 +234,30 @@ class WithdrawnUserPurgePostgresIntegrationTest {
                 .isEqualTo(1);
         assertThat(count("users", "id = ? AND purged_at IS NULL", due[0])).isEqualTo(1);
         assertThat(service.findDueUserIds(0L)).contains(due[0]);
+    }
+
+    @Test
+    @DisplayName("공용 데모 파일과 외부 주소는 지우지 않고, 업로드 경로인데 기본 주소가 다르면 S3/DB 를 건드리지 않고 파기를 보류한다")
+    void givenSharedOrOldBaseMediaUrls_whenPurge_thenSkipOrHold() {
+        given(storage.publicBaseUrl()).willReturn(BASE);
+        doNothing().when(storage).deleteObjectsOrThrow(anyCollection());
+        String videosOf = "room_member_id IN (SELECT id FROM room_members WHERE user_id = ?)";
+
+        long[] shared = seedWithdrawnUser(91);
+        jdbc.update("UPDATE video_posts SET video_url = ?, thumbnail_url = ?, feed_video_url = NULL WHERE " + videosOf,
+                BASE + "demo/shared.mp4", "https://picsum.photos/seed/1/200", shared[0]);
+        service.purge(shared[0]);
+        then(storage).should().deleteObjectsOrThrow(List.of("chat-photos/" + shared[2] + "/w.jpg"));
+        assertThat(count("users", "id = ? AND purged_at IS NOT NULL", shared[0])).isEqualTo(1);
+
+        long[] held = seedWithdrawnUser(120);
+        jdbc.update("UPDATE video_posts SET video_url = ? WHERE " + videosOf,
+                "https://old-media.example/users/" + held[0] + "/videos/v1/published/viewer.mp4", held[0]);
+        assertThatThrownBy(() -> service.purge(held[0])).isInstanceOf(IllegalStateException.class).hasMessageContaining("보류");
+        then(storage).should(never()).deleteObjectsOrThrow(List.of("chat-photos/" + held[2] + "/w.jpg"));
+        assertThat(count("user_profiles", "user_id = ?", held[0])).isEqualTo(1);
+        assertThat(count("video_posts", videosOf, held[0])).isEqualTo(1);
+        assertThat(count("users", "id = ? AND purged_at IS NULL", held[0])).isEqualTo(1);
+        assertThat(service.findDueUserIds(0L)).contains(held[0]);
     }
 }
