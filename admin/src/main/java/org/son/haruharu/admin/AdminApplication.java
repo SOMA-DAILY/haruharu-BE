@@ -40,7 +40,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "org.son.haruharu.domain.mission.common.storage",
         "org.son.haruharu.domain.mission.chat.storage",
         // #510: 모집 트랙·기수
-        "org.son.haruharu.domain.cohort.storage"
+        "org.son.haruharu.domain.cohort.storage",
+        // #553: 신고 처리(reports) + 제재 시 리프레시 토큰 폐기(refresh_tokens)
+        "org.son.haruharu.domain.report.storage",
+        "org.son.haruharu.domain.auth.storage"
 })
 @EnableJpaRepositories({"org.son.haruharu.admin.domain", "org.son.haruharu.domain.midparticipation.storage", "org.son.haruharu.domain.appupdate.storage", "org.son.haruharu.domain.room.storage",
         // #321: RoomInviteService.join 의 유저 행 비관적 락(UserRepositoryImpl→UserJpaRepository) 배선.
@@ -54,7 +57,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         // #492: 운영진 티켓 지급(TicketService→지갑·원장 JpaRepository) 배선.
         "org.son.haruharu.domain.ticket.storage",
         // #510: 모집 트랙·기수 관리(RecruitTrackService·CohortService) 배선.
-        "org.son.haruharu.domain.cohort.storage"})
+        "org.son.haruharu.domain.cohort.storage",
+        // #553: 제재 시 리프레시 토큰 폐기(RefreshTokenRepositoryImpl→RefreshTokenJpaRepository). 신고 자체는 admin JPQL.
+        "org.son.haruharu.domain.auth.storage"})
 @Import({JpaConfig.class, ClockConfig.class, TimeZoneConfig.class})
 public class AdminApplication {
 

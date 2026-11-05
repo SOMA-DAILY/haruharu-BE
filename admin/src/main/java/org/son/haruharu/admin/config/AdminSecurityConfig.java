@@ -126,6 +126,12 @@ public class AdminSecurityConfig {
                                                 "/api/v1/admin/rooms/*/mid-participation",
                                                 "/api/v1/admin/rooms/*/members/*/remove")
                                         .hasAnyRole("SUPER", "OPERATOR")
+                                        // #553: 신고 제재 승인·기각은 SUPER·OPERATOR. 목록·상세는 로그인만.
+                                        .requestMatchers(
+                                                HttpMethod.POST,
+                                                "/api/v1/admin/reports/*/approve",
+                                                "/api/v1/admin/reports/*/reject")
+                                        .hasAnyRole("SUPER", "OPERATOR")
                                         .requestMatchers(
                                                 HttpMethod.PATCH,
                                                 "/api/v1/admin/rooms/*/members/*",

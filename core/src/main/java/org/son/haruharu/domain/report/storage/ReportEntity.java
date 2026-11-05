@@ -54,6 +54,14 @@ public class ReportEntity extends BaseEntity {
     @Column(length = 500)
     private String detail;
 
+    // #553 처리자(admin id)와 처리 시각. 어드민 조건부 UPDATE 만 쓰고 앱 저장(from)은 건드리지 않는다 —
+    // 도메인 Report 에 넣지 않은 이유는 앱 쪽 생성 경로 5곳을 바꾸지 않기 위해서다. 어드민은 JPQL 프로젝션으로 읽는다.
+    @Column(insertable = false, updatable = false)
+    private Long resolvedByAdminId;
+
+    @Column(insertable = false, updatable = false)
+    private java.time.LocalDateTime resolvedAt;
+
     public static ReportEntity from(Report report) {
         var entity = new ReportEntity();
         entity.id = report.id();
