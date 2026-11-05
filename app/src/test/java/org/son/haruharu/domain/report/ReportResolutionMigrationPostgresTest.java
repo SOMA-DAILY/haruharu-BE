@@ -82,16 +82,16 @@ class ReportResolutionMigrationPostgresTest {
     }
 
     @Test
-    @DisplayName("down은 처리된 신고가 있으면 거절하고, 없으면 새 값만 막으며 up으로 되돌릴 수 있다")
+    @DisplayName("down은 처리된 신고가 있으면 거절하고, 없으면 RECEIVED 만 받게 되돌리며 up으로 다시 올릴 수 있다")
     void givenResolvedReport_whenDown_thenRefuses() throws Exception {
         script("up");
         execute("UPDATE reports SET status='REJECTED' WHERE id=1");
-        assertThatThrownBy(() -> script("down")).isInstanceOf(SQLException.class).hasMessageContaining("resolved reports exist");
+        assertThatThrownBy(() -> script("down")).isInstanceOf(SQLException.class).hasMessageContaining("violated by some row");
 
         execute("UPDATE reports SET status='RECEIVED' WHERE id=1");
         script("down");
         assertThatThrownBy(() -> execute("UPDATE reports SET status='SANCTIONED' WHERE id=1"))
-                .isInstanceOf(SQLException.class).hasMessageContaining("reports_status_rollback_check");
+                .isInstanceOf(SQLException.class).hasMessageContaining("reports_status_check");
         script("up");
         script("verify");
         execute("UPDATE reports SET status='SANCTIONED' WHERE id=1");

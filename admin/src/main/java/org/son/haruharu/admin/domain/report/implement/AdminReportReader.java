@@ -48,7 +48,7 @@ public class AdminReportReader {
         return queryRepository.findRoomIdsByUserIds(userIds);
     }
 
-    public Map<Long, AdminReportQueryRepository.Resolution> findResolutions(List<Long> reportIds) {
+    public Map<Long, ReportResolution> findResolutions(List<Long> reportIds) {
         return queryRepository.findResolutions(reportIds);
     }
 

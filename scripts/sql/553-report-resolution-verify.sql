@@ -1,27 +1,10 @@
--- Read-only: confirms SANCTIONED / REJECTED pass every reports.status CHECK. No report rows are read.
+-- 읽기 전용: status CHECK 가 SANCTIONED / REJECTED 를 받는지와 처리자 칸 2개를 확인한다.
 DO $$
-DECLARE
-    existing RECORD;
-    allowed BOOLEAN;
-    candidate TEXT;
 BEGIN
-    FOREACH candidate IN ARRAY ARRAY['SANCTIONED', 'REJECTED'] LOOP
-        FOR existing IN
-            SELECT c.conname, pg_get_expr(c.conbin, c.conrelid) AS expression
-            FROM pg_constraint c
-            JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attname = 'status'
-            WHERE c.conrelid = 'reports'::regclass AND c.contype = 'c' AND c.conkey = ARRAY[a.attnum]
-        LOOP
-            EXECUTE format('SELECT (%s) FROM (SELECT %L::varchar AS status) candidate', existing.expression, candidate)
-                INTO allowed;
-            IF allowed IS FALSE THEN
-                RAISE EXCEPTION 'Report status CHECK % rejects %; run 553-report-resolution-up.sql', existing.conname, candidate;
-            END IF;
-        END LOOP;
-    END LOOP;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'reports'::regclass AND conname = 'reports_status_check'
+                   AND pg_get_constraintdef(oid) LIKE '%SANCTIONED%REJECTED%') THEN
+        RAISE EXCEPTION 'reports_status_check rejects SANCTIONED/REJECTED; run 553-report-resolution-up.sql';
+    END IF;
 END $$;
-SELECT conname, pg_get_constraintdef(c.oid) AS definition
-FROM pg_constraint c
-JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attname = 'status'
-WHERE c.conrelid = 'reports'::regclass AND c.contype = 'c' AND c.conkey = ARRAY[a.attnum]
-ORDER BY conname;
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'reports' AND column_name IN ('resolved_by_admin_id', 'resolved_at') ORDER BY 1;

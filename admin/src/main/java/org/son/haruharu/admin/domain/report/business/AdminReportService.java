@@ -5,6 +5,7 @@ import org.son.haruharu.admin.domain.report.business.dto.AdminReportResponse;
 import org.son.haruharu.admin.domain.report.business.exception.AdminReportAlreadyResolvedException;
 import org.son.haruharu.admin.domain.report.implement.AdminReportReader;
 import org.son.haruharu.admin.domain.report.implement.AdminReportWriter;
+import org.son.haruharu.admin.domain.report.implement.ReportResolution;
 import org.son.haruharu.domain.auth.implement.RefreshTokenWriter;
 import org.son.haruharu.domain.report.implement.Report;
 import org.son.haruharu.domain.report.implement.ReportStatus;
@@ -19,6 +20,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 /**
@@ -105,9 +107,8 @@ public class AdminReportService {
         // 신고자 방도 같이 읽는다 — 사용자 신고의 "어느 방" 은 두 사람이 함께 있던 방으로 계산한다.
         Map<Long, List<Long>> roomIds = reportReader.findRoomIdsByUserIds(userIds);
         Map<Long, Long> questionRooms = reportReader.findQuestionRoomIds(
-                reports.stream().map(Report::questionId).filter(java.util.Objects::nonNull).distinct().toList());
-        Map<Long, org.son.haruharu.admin.domain.report.storage.AdminReportQueryRepository.Resolution> resolutions =
-                reportReader.findResolutions(reports.stream().map(Report::id).toList());
+                reports.stream().map(Report::questionId).filter(Objects::nonNull).distinct().toList());
+        Map<Long, ReportResolution> resolutions = reportReader.findResolutions(reports.stream().map(Report::id).toList());
         return reports.stream().map(r -> {
             User reported = users.get(r.reportedUserId());
             var resolution = resolutions.get(r.id());

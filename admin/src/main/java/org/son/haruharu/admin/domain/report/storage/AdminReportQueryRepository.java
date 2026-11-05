@@ -3,6 +3,7 @@ package org.son.haruharu.admin.domain.report.storage;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
+import org.son.haruharu.admin.domain.report.implement.ReportResolution;
 import org.son.haruharu.domain.profile.storage.UserProfileEntity;
 import org.son.haruharu.domain.report.implement.Report;
 import org.son.haruharu.domain.report.implement.ReportStatus;
@@ -74,7 +75,7 @@ public class AdminReportQueryRepository {
     }
 
     /** 신고별 처리자·처리 시각. 접수 상태면 둘 다 null 이라 결과에 없다. */
-    public Map<Long, Resolution> findResolutions(List<Long> reportIds) {
+    public Map<Long, ReportResolution> findResolutions(List<Long> reportIds) {
         if (reportIds.isEmpty()) {
             return Map.of();
         }
@@ -84,10 +85,8 @@ public class AdminReportQueryRepository {
                 .setParameter("ids", reportIds)
                 .getResultList().stream()
                 .collect(Collectors.toMap(row -> (Long) row[0],
-                        row -> new Resolution((Long) row[1], (LocalDateTime) row[2])));
+                        row -> new ReportResolution((Long) row[1], (LocalDateTime) row[2])));
     }
-
-    public record Resolution(Long adminId, LocalDateTime at) {}
 
     /** 질문 id → 질문이 속한 방 id. */
     public Map<Long, Long> findQuestionRoomIds(List<Long> questionIds) {
