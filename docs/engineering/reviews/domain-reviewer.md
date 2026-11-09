@@ -20,7 +20,7 @@
 - `implement/{Domain}Repository.java` 포트 인터페이스가 존재하는가 (없으면 **FAIL**)
 - `implement/Reader`, `implement/Writer`가 `{Domain}Repository` 인터페이스를 참조하는가
 - `implement/Reader`, `implement/Writer`가 `JpaRepository` 또는 `JpaXxx`를 직접 import하면 **FAIL**
-- `storage/{Domain}RepositoryImpl.java`가 `{Domain}Repository`를 implements하는가 (없으면 **FAIL**)
+- `storage/{Domain}RepositoryImpl.java`가 `{Domain}Repository`를 implements하는가 (없으면 **FAIL**). 예외: `replyrecommendation` 은 `ai_reply` 스키마를 `JdbcClient` SQL 로 다루므로 Entity·JpaRepository 가 없다([architecture.md](../architecture.md)의 영속성 예외)
 - `@Entity`가 `storage/` 외 다른 계층에 있으면 **FAIL**
 - `business/`가 `storage/`를 직접 import하면 **FAIL**
 

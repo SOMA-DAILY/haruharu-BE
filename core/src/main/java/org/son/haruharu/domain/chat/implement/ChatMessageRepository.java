@@ -16,6 +16,9 @@ public interface ChatMessageRepository {
      * 삭제된(deletedAt) 메시지는 제외.
      */
     List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit);
+
+    /** 기준 시각 이전 메시지 전체(시간순). 답장 추천의 방 기록 스냅샷에 쓴다(#558). */
+    List<ChatMessage> findHistoryBefore(Long chatRoomId, java.time.LocalDateTime before);
     /** 방의 마지막(가장 최신) 메시지. 목록 화면의 미리보기용. excludeSenderIds 발신자의 메시지는 건너뛴다(차단 필터, #408). */
     Optional<ChatMessage> findLast(Long chatRoomId, Set<Long> excludeSenderIds);
     /**

@@ -38,6 +38,12 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     }
 
     @Override
+    public List<ChatMessage> findHistoryBefore(Long chatRoomId, java.time.LocalDateTime before) {
+        return chatMessageJpaRepository.findByChatRoomIdAndCreatedAtBeforeOrderByIdAsc(chatRoomId, before)
+                .stream().map(ChatMessageEntity::toDomain).toList();
+    }
+
+    @Override
     public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
         List<ChatMessageEntity> rows = (cursorId == null)

@@ -271,12 +271,13 @@ public static UserEntity from(User user) {
 - `profile` — user_profiles · user_images. 온보딩=닉네임만 (옛 필드 nullable 잔존)
 - `agreement` — user_agreements. 약관 동의
 - `room` — rooms(초대코드·어드민 스케줄·status·기수·성별 정원) · room_members(입장 경로 INVITE/APPLICATION) · room_invites(신규) · final_selections · match_results. 초대코드 정원(`max_uses`)은 INVITE 멤버만 세고, 방 전체 성별 정원은 rooms 가 따로 갖는다. 입장(가명·저장·`RoomMemberJoinedEvent`)은 `RoomMemberJoiner` 한 경로로 초대코드 입장과 앱 신청자 배정이 함께 쓴다(#513). 초대코드 입장은 앱 전용 `RoomJoinService`(어드민은 발급만 하는 `RoomInviteService`)가 맡고, `haruharu.room.join-identity-required`(기본 OFF)를 켜면 PASS 없는 계정의 새 입장을 403 `IDENTITY_REQUIRED` 로 막는다. 멤버 성별·생년은 PASS 값, PASS 가 없을 때만 프로필 성별(#514)
-- `video` — video_posts(슬롯 시간창) · video_reactions
+- `video` — video_posts(슬롯 시간창) · video_reactions · video_caption_revisions(캡션 수정 전 값, #558 답장 추천이 게시 시각 캡션을 복원)
 - `chat` — chat_rooms(GROUP/DIRECT/PAIR, GROUP·PAIR 는 room_id·GROUP 만 방당 1개 #540) · chat_room_members · chat_messages
 - `mission` — #486의 공통 방 미션(`common`), 안내형 상세(`types/announcement`), 채팅 게시 계획(`chat`).
 - 이전 자동 미션 도메인은 #482에서 폐기. 과거 미션 테이블·영상의 `mission_id`는 데이터 호환을 위해 보존하며 런타임 엔티티·배치·API는 제공하지 않는다.
 - `notification` — device_tokens · notification_settings · notification_history (FCM)
 - `report` — reports
+- `replyrecommendation` — 영상 답장 추천 AI(#558). 별도 스키마 `ai_reply`(분석 요청·입력 스냅샷·작업 대기열·추천 요청·카드 세트·노출 사건·답장 연결)를 Python AI 작업기(`ai-worker/`)와 함께 쓴다. 기능·개인화·실사용자 수집은 기본 OFF. 흐름·표 소유·키·무효화는 [reply-recommendation.md](reply-recommendation.md)
 - `ticket` — ticket_wallet(단일 잔액) · ticket_ledger(append-only). 사유는 구매·사용·환불 회수·운영 지급(#492)·사용 반환(USE_REFUND, #511). 첫 사용처는 기수 신청(#511). 티켓 API 는 기본 OFF
 - `payment` — iap_product · iap_purchase · iap_webhook_event. RevenueCat webhook 으로만 구매·환불을 받는다(#492). 기본 OFF
 - `cohort` — recruit_tracks(모집 트랙·추가 문항 jsonb) · cohorts(트랙별 기수 번호·신청 기간·상태) · cohort_applications(기수 신청, 옛 matching_queue 대체). 트랙당 OPEN 1개는 부분 유니크 + 트랙 행 잠금(#510). 신청은 참가권 1장을 같은 트랜잭션에서 쓰고, 진행 중 신청 사람당 1건은 지갑 잠금 + 부분 유니크, 상태 전이는 조건부 UPDATE(#511). PASS 판정은 본인인증 커밋 후 리스너(`IdentityVerifiedEvent`, REQUIRES_NEW)가 하고, 실패하면 내 신청 조회가 다시 판정한다(#512). 잠금 순서 기수 → 방 → 신청(id 순) → 지갑. 앱 API 는 `haruharu.cohort.enabled` 기본 OFF
@@ -286,6 +287,8 @@ public static UserEntity from(User user) {
 - `value` — value_questions · user_value_answers. 가치관(MVP 온보딩 제외)
 
 **제거 완료(#451):** `matching`(대기열 자동매칭). 구형 방 활성화·종료 배치도 제거하며 초대코드 방 생명주기는 `RoomStatusReconciler`가 처리한다. 기존 원장·알림 이력의 enum 값과 과거 SQL은 데이터 호환성을 위해 보존한다.
+
+**영속성 예외 — `replyrecommendation/storage`(#558):** `ai_reply` 스키마는 Python 작업기와 함께 쓰고 JSONB·timestamptz·`ON CONFLICT`·`FOR UPDATE SKIP LOCKED`·부분 유니크 인덱스에 기대므로, JPA 엔티티 없이 `JdbcClient` SQL 로 읽고 쓴다(포트는 그대로 `{Domain}Repository` → `{Domain}RepositoryImpl`). Hibernate 는 이 스키마를 만들지 않고 `scripts/sql/558-reply-recommendations-up.sql` 이 유일한 정의다. `JdbcClient` 는 같은 DataSource 를 써서 JPA 트랜잭션에 참여한다. 게시 트랜잭션 안의 outbox 쓰기는 savepoint(`JdbcSavepointRunner`)로 감싸 실패해도 게시를 막지 않는다. 탈퇴 90일 파기(`WithdrawnUserPurgeRepositoryImpl`)가 `ai_reply` 행도 지우므로 이 스키마의 사용자 id 열을 바꾸면 그 파일도 같이 고친다.
 
 **도메인 간 호출 방향:**
 - `auth/` → OAuth 로그인 시 userId 확인 후 `user/UserReader.getById()` 위임

@@ -10,7 +10,9 @@ common/exception/
 ├── NotFoundException         # abstract, 404
 ├── UnauthorizedException     # abstract, 401
 ├── ForbiddenException        # abstract, 403
-└── ConflictException         # abstract, 409
+├── ConflictException         # abstract, 409
+├── UnprocessableEntityException  # abstract, 422 (형식은 맞지만 의미상 받을 수 없음 — #558 추천 사건)
+└── TooManyRequestsException  # abstract, 429 (짧은 시간 과다 요청 — #558 추천 요청)
         ↑ extends
 domain/{domain}/{layer}/exception/
 └── {Domain}{Reason}Exception.java   # 도메인별 구체 예외
@@ -61,6 +63,12 @@ throw new UserAlreadyExistsException();
 throw new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니다.");
 ```
 
+## 422·429 (#558)
+
+일반 형식 오류는 400 `INVALID_INPUT` 이다. 영상 답장 추천 사건 API 는 명세가 422 를 요구해 본문 검사를 서비스가 하고
+`UnprocessableEntityException`(예: `REPLY_RECOMMENDATION_EVENT_INVALID`)을 던진다. 새 AI 작업을 만드는 추천 요청이
+시청자당 분당 한도를 넘으면 `TooManyRequestsException`(`REPLY_RECOMMENDATION_RATE_LIMITED`)으로 429 다.
+
 ## 칸별 검증 400: VALIDATION_ERROR
 
 요청 칸마다 다른 메시지를 화면에 붙여야 하는 검증(방 온보딩 프로필, 방 편성)은 Bean Validation 대신 도메인 객체가 검증하고
@@ -87,6 +95,8 @@ public class InvalidRoomProfileException extends FieldValidationException {
 | `UnauthorizedException` | 401 | `warn` |
 | `ForbiddenException` | 403 | `warn` |
 | `ConflictException` | 409 | `warn` |
+| `UnprocessableEntityException` | 422 | `warn` |
+| `TooManyRequestsException` | 429 | `warn` |
 | `FieldValidationException` | 400 | `warn` (필드명만 — 값은 PII). `error.fields` 포함 |
 | `MethodArgumentNotValidException` | 400 | `warn` (필드명만 — 값은 PII) |
 | `ConstraintViolationException` | 400 | `warn` |

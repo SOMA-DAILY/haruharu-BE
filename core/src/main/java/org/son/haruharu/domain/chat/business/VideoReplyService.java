@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.son.haruharu.domain.chat.business.dto.ChatMessageBroadcast;
 import org.son.haruharu.domain.chat.business.dto.VideoReplyPreview;
 import org.son.haruharu.domain.chat.business.event.ChatMessageBroadcastEvent;
+import org.son.haruharu.domain.chat.business.command.VideoReplySource;
+import org.son.haruharu.domain.chat.business.event.VideoReplySavedEvent;
 import org.son.haruharu.domain.chat.business.event.VideoReplySentEvent;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.business.exception.ChatPartnerBlockedException;
@@ -67,6 +69,17 @@ public class VideoReplyService {
     @Transactional
     public ChatMessageBroadcast send(
             Long roomId, Long videoId, Long senderId, String content, String requestId) {
+        return send(roomId, videoId, senderId, content, requestId, null);
+    }
+
+    /**
+     * {@link #send(Long, Long, Long, String, String)} 와 같고, 앱이 답장 전에 본 추천을 함께 받는다(#558).
+     * 추천 출처는 저장을 막지 않는다. 새로 저장한 답장에만 {@link VideoReplySavedEvent} 를 내고,
+     * 같은 requestId 재전송은 처음 저장한 메시지와 처음 연결을 그대로 둔다.
+     */
+    @Transactional
+    public ChatMessageBroadcast send(
+            Long roomId, Long videoId, Long senderId, String content, String requestId, VideoReplySource source) {
         VideoReply reply = VideoReply.of(videoId, content, requestId);
 
         // 방에 속한 단체 채팅방을 찾고 잠근다
@@ -102,6 +115,12 @@ public class VideoReplyService {
         events.publishEvent(
                 new VideoReplySentEvent(
                         chat.id(), target.owner().userId(), senderId, sender.displayPseudonym()));
+        events.publishEvent(
+                new VideoReplySavedEvent(
+                        saved.id(), chat.id(), roomId, videoId, senderId, saved.createdAt(),
+                        source == null ? null : source.setId(),
+                        source == null ? null : source.cardId(),
+                        source == null ? null : source.sessionId()));
         return broadcast;
     }
 

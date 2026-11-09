@@ -53,4 +53,9 @@ public class VideoPostReader {
     public List<Long> getUploadedRoomMemberIds(List<Long> roomMemberIds, List<LocalDateTime> slotStarts) {
         return videoPostRepository.findUploadedRoomMemberIds(roomMemberIds, slotStarts);
     }
+
+    /** 지금 볼 수 없는 영상 id(삭제·숨김·퇴장 멤버·없음). 답장 추천의 근거 무효화에 쓴다(#558). */
+    public java.util.Set<Long> findUnavailableIds(java.util.Collection<Long> ids) {
+        return videoPostRepository.findUnavailableIds(ids);
+    }
 }

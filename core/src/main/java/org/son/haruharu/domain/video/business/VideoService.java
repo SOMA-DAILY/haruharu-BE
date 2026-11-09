@@ -26,6 +26,7 @@ import org.son.haruharu.domain.video.business.event.VideoUploadedEvent;
 import org.son.haruharu.domain.video.implement.SlotClock;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
+import org.son.haruharu.domain.video.implement.VideoCaptionHistory;
 import org.son.haruharu.domain.video.implement.VideoPostWriter;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.context.ApplicationEventPublisher;
@@ -47,18 +48,21 @@ public class VideoService {
     private final RoomMemberReader roomMemberReader;
     private final VideoPostReader videoPostReader;
     private final VideoPostWriter videoPostWriter;
+    private final VideoCaptionHistory captionHistory;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public VideoService(S3StoragePort s3StoragePort, RoomReader roomReader,
                         RoomMemberReader roomMemberReader,
                         VideoPostReader videoPostReader, VideoPostWriter videoPostWriter,
+                        VideoCaptionHistory captionHistory,
                         ApplicationEventPublisher eventPublisher, Clock clock) {
         this.s3StoragePort = s3StoragePort;
         this.roomReader = roomReader;
         this.roomMemberReader = roomMemberReader;
         this.videoPostReader = videoPostReader;
         this.videoPostWriter = videoPostWriter;
+        this.captionHistory = captionHistory;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -134,6 +138,8 @@ public class VideoService {
         }
         VideoPost updated = post.withCaption(command.caption());
         videoPostWriter.updateCaption(videoPostId, updated.caption());
+        // 답장 추천은 게시 시각의 캡션을 써야 한다. 바뀌기 전 값을 남긴다(#558).
+        captionHistory.record(videoPostId, post.caption(), updated.caption(), LocalDateTime.now(clock));
         return VideoCaptionResponse.from(updated);
     }
 

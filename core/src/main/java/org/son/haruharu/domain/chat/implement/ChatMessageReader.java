@@ -31,6 +31,11 @@ public class ChatMessageReader {
         return chatMessageRepository.findPendingDeleteBroadcasts(limit);
     }
 
+    /** 기준 시각 이전 메시지 전체(시간순). 답장 추천의 방 기록 스냅샷에 쓴다(#558). */
+    public List<ChatMessage> findHistoryBefore(Long chatRoomId, java.time.LocalDateTime before) {
+        return chatMessageRepository.findHistoryBefore(chatRoomId, before);
+    }
+
     public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
         return chatMessageRepository.findPage(chatRoomId, cursorId, limit);
     }
