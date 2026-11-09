@@ -1,0 +1,94 @@
+{
+  "spec_version": "video-reply-service-v1-draft-20261108",
+  "deployment_status": "specification_only",
+  "model": {
+    "provider": "openai",
+    "model_id": "gpt-6.1-terra",
+    "reasoning_effort": "low",
+    "api": "responses",
+    "store": false,
+    "max_output_tokens_by_stage": {
+      "analysis": 8192,
+      "generic": 4096,
+      "personal": 4096,
+      "gate": 8192,
+      "feedback_judgment": 4096,
+      "propose_patch": 2048
+    }
+  },
+  "embedding": {
+    "provider": "cloudflare_workers_ai",
+    "model_id": "@cf/qwen/qwen3-embedding-0.6b",
+    "base_model": "Qwen/Qwen3-Embedding-0.6B",
+    "revision": "managed-unpinned: drift-checked against resources/embedding_probe.json",
+    "request_mode": "text",
+    "max_input_bytes": 4096,
+    "dimensions": 1024,
+    "normalize": true,
+    "query_instruction": "Retrieve past short-video posts with a similar situation or conversational context that could inspire a natural reply.",
+    "top_k": 3,
+    "max_replies_per_video": 5,
+    "cosine_threshold": null,
+    "exact_search_first": true
+  },
+  "preprocess": {
+    "frame_percentages": [
+      10,
+      50,
+      90
+    ],
+    "current_description_max_chars": 650,
+    "context_description_max_chars": 1000,
+    "max_context_links": 3,
+    "history_scope": "all_authorized_records_in_current_room_before_publication",
+    "input_token_budget": 24000,
+    "on_overflow": "current_only_with_explicit_status"
+  },
+  "generation": {
+    "generic_max_candidates": 10,
+    "personal_max_candidates": 6,
+    "final_max_cards": 3,
+    "per_category_max": 1,
+    "min_quality": 3,
+    "title_max_chars": 30,
+    "example_max_chars": 120
+  },
+  "runtime": {
+    "worker_concurrency": 2,
+    "llm_timeout_seconds": 90,
+    "transport_max_attempts": 3,
+    "lease_seconds": 180,
+    "lease_heartbeat_seconds": 30,
+    "frontend_poll_delays_ms": [
+      1000,
+      2000,
+      4000,
+      8000
+    ],
+    "cache_ready_ttl_seconds": 86400,
+    "empty_ttl_seconds": 86400,
+    "daily_generation_budget_usd": 10,
+    "feedback_budget_usd_per_run": 10
+  },
+  "batch": {
+    "check_interval_minutes": 60,
+    "closed_episode_threshold": 20,
+    "max_wait_hours": 24,
+    "episode_close_hours": 24,
+    "min_reason_count": 3,
+    "max_patch_chars": 1200,
+    "activation": "validated_compare_and_swap",
+    "historical_eval_ids_protected": true
+  },
+  "features": {
+    "enabled": false,
+    "personalization_enabled": false,
+    "feedback_batch_enabled": false,
+    "automatic_activation_enabled": false
+  },
+  "notes": [
+    "운영 시작값이며 성능 측정값이 아니다. 입력 예산 초과는 기록을 조용히 자르지 않는다.",
+    "출시 전 모델 revision과 SDK 및 임베딩 라이브러리 lock 파일을 확정한다.",
+    "프롬프트 이식과 1회 분석 결과에서의 검색용 필드 사용은 연구 실행과 다르므로 재검증한다."
+  ]
+}

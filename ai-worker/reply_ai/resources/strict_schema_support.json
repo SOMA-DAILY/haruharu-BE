@@ -1,0 +1,13 @@
+{
+  "model": "gpt-6.1-terra",
+  "probed": true,
+  "probed_at": "2026-11-08T11:06:05.376429Z",
+  "unsupported_keywords": [],
+  "calls": [
+    {
+      "keywords": "all",
+      "ok": true,
+      "detail": "ok status=completed in=112 out=63"
+    }
+  ]
+}

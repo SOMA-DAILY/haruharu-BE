@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "content": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36
+    },
+    "recommendation_source": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "set_id": {
+              "type": "string"
+            },
+            "card_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "session_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "set_id",
+            "card_id",
+            "session_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "content",
+    "request_id"
+  ],
+  "additionalProperties": false
+}

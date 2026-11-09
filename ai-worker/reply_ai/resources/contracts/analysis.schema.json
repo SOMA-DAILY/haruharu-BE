@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "current_visual_description": {
+      "type": "string",
+      "maxLength": 650
+    },
+    "contextual_description": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "history_requirement": {
+      "type": "string",
+      "enum": [
+        "not_needed",
+        "helpful",
+        "required",
+        "uncertain"
+      ]
+    },
+    "history_used": {
+      "type": "boolean"
+    },
+    "history_note": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "visual_facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fact_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "frame_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "fact_id",
+          "text",
+          "frame_ids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "context_links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "link_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "background_fact",
+              "semantic_resolution",
+              "conversational_continuation"
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "description_span": {
+            "type": "string"
+          },
+          "source_quotes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source_id": {
+                  "type": "string"
+                },
+                "quote": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source_id",
+                "quote"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "current_anchor": {
+            "type": "string"
+          },
+          "strength": {
+            "type": "string",
+            "enum": [
+              "explicit",
+              "strong"
+            ]
+          }
+        },
+        "required": [
+          "link_id",
+          "kind",
+          "statement",
+          "description_span",
+          "source_quotes",
+          "current_anchor",
+          "strength"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 3
+    }
+  },
+  "required": [
+    "current_visual_description",
+    "contextual_description",
+    "history_requirement",
+    "history_used",
+    "history_note",
+    "visual_facts",
+    "context_links"
+  ],
+  "additionalProperties": false
+}

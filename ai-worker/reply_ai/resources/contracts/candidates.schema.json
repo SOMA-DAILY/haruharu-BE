@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidate_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "question",
+              "reaction",
+              "support",
+              "self_disclosure",
+              "information_suggestion",
+              "compliment",
+              "acknowledgment",
+              "humor",
+              "empathy",
+              "greeting"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "example": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "current_anchor": {
+            "type": "string"
+          },
+          "reference_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "personalization": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "direct_request",
+                  "shared_dialogue",
+                  "explicit_preference",
+                  "past_experience",
+                  "current_situation"
+                ]
+              },
+              "source_quotes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "source_id": {
+                      "type": "string"
+                    },
+                    "quote": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "source_id",
+                    "quote"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "actor_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "delta": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "source_quotes",
+              "actor_ids",
+              "delta"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "candidate_id",
+          "category",
+          "title",
+          "example",
+          "current_anchor",
+          "reference_ids",
+          "personalization"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 10
+    },
+    "personalization_used": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "candidates",
+    "personalization_used",
+    "reason"
+  ],
+  "additionalProperties": false
+}

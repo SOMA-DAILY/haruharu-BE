@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "proposed",
+        "deferred"
+      ]
+    },
+    "module": {
+      "type": "string",
+      "enum": [
+        "generation",
+        "verification",
+        "none"
+      ]
+    },
+    "instruction": {
+      "type": "string",
+      "maxLength": 1200
+    },
+    "reason_codes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "status",
+    "module",
+    "instruction",
+    "reason_codes"
+  ],
+  "additionalProperties": false
+}

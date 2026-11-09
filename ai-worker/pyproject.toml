@@ -1,0 +1,44 @@
+[project]
+name = "haruharu-reply-ai"
+version = "0.1.0"
+description = "하루하루 영상 답장 추천 AI 작업기(#558): 영상 이해·검색·생성·검수·개인화·피드백 배치"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "openai>=2.0",
+    "psycopg[binary]>=3.2",
+    "jsonschema>=4.23",
+    "tiktoken>=0.9",
+    "boto3>=1.35",
+    "numpy>=2.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+# 임베딩 서비스 전용(작업기 이미지에는 넣지 않는다). Qwen3-Embedding-0.6B 는 Apache-2.0.
+embedding = [
+    "sentence-transformers>=5.0",
+    "torch>=2.6",
+    "transformers>=4.51",
+    "huggingface-hub>=0.30",
+]
+
+[project.scripts]
+reply-ai = "reply_ai.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["reply_ai"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "pg: PostgreSQL 통합 테스트(127.0.0.1:5465 컨테이너, reply_ai_test_* DB 사용)",
+    "live: 실제 OpenAI 호출(기본 제외, -m live 로만 실행)",
+]
+addopts = "-m 'not live'"
