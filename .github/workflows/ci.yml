@@ -40,3 +40,30 @@ jobs:
             **/build/reports/tests/test/
             **/build/test-results/test/
           retention-days: 3
+
+  # AI 작업기(#558, Python). 테스트가 127.0.0.1:5465 PostgreSQL 에 reply_ai_test_* DB 를 만들고 지운다.
+  ai-worker:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: haruharu
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5465:5432']
+        options: >-
+          --health-cmd "pg_isready -U haruharu" --health-interval 5s --health-timeout 5s --health-retries 12
+    defaults:
+      run:
+        working-directory: ai-worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Test
+        run: uv run pytest -q

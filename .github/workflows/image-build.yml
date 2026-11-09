@@ -91,3 +91,16 @@ jobs:
             ${{ env.ECR_REGISTRY }}/haruharu-airflow:${{ steps.meta.outputs.branch }}
           cache-from: type=gha,scope=airflow
           cache-to: type=gha,mode=max,scope=airflow,ignore-error=true
+
+      # AI 작업기(#558): ai-worker/Dockerfile. app·admin·airflow 와 같은 SHA 태그(ECR 레포 haruharu-ai-worker, infra/ai-worker/stack.yml).
+      - name: Build & push (ai-worker)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ai-worker
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/haruharu-ai-worker:${{ steps.meta.outputs.sha }}
+            ${{ env.ECR_REGISTRY }}/haruharu-ai-worker:${{ steps.meta.outputs.branch }}
+          cache-from: type=gha,scope=ai-worker
+          cache-to: type=gha,mode=max,scope=ai-worker,ignore-error=true

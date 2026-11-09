@@ -1,0 +1,355 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  하루하루 영상 답장 추천 AI 작업기(#558). ECS Fargate 서비스(추천 작업)와 한 달에 한 번 개선 루프
+  (EventBridge Scheduler -> ECS 작업). 앱 서버와 같은 클러스터·서브넷·보안 그룹을 쓴다.
+  비밀값(OpenAI 키·Cloudflare 토큰·작업기 DB 주소)은 만든 뒤 Secrets Manager 에 사람이 직접 넣는다.
+  설명: docs/engineering/reply-recommendation.md 「운영 배포」.
+
+Parameters:
+  Env:
+    Type: String
+    AllowedValues: [dev, prod]
+  ClusterName:
+    Type: String
+    Default: haruharu
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: 앱 서비스(haruharu-app-svc-*)와 같은 서브넷
+  SecurityGroups:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: 앱 서비스와 같은 보안 그룹(DB 접근·외부 HTTPS)
+  AssignPublicIp:
+    Type: String
+    AllowedValues: [ENABLED, DISABLED]
+    Description: 앱 서비스와 같은 값
+  MediaBucket:
+    Type: String
+    Description: 영상 버킷(작업기는 users/·demo/ 아래만 읽는다)
+  ImageTag:
+    Type: String
+    Default: develop
+    Description: haruharu-ai-worker 이미지 태그(SHA 권장). 스택을 고칠 때는 지금 배포된 SHA 를 넘긴다
+  DesiredCount:
+    Type: Number
+    Default: 0
+    AllowedValues: [0, 1, 2]
+    Description: 비밀값을 넣고 이미지가 올라온 뒤 1 로 올린다
+  ScheduleState:
+    Type: String
+    AllowedValues: [ENABLED, DISABLED]
+    Default: DISABLED
+  ScheduleExpression:
+    Type: String
+    Default: "cron(0 4 1 * ? *)"
+    Description: 개선 루프 주기(기본 매달 1일 04:00, Asia/Seoul). 2026-11-09 사용자 결정 「현재는 한 달」
+  CloudflareAccountId:
+    Type: String
+  DailyBudgetUsd:
+    Type: Number
+    Default: 10
+  FeedbackBudgetUsd:
+    Type: Number
+    Default: 10
+  AutomaticActivation:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: 개선 루프가 검증을 통과한 버전을 자동 적용(CAS). 2026-11-09 사용자 결정
+  RealUserFeedback:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "false"
+    Description: 실제 사용자 답장을 개선 루프에 쓸지. 개인정보처리방침 개정·공지 전에는 false
+  CreateRepository:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: ECR 저장소 haruharu-ai-worker 는 계정에 하나(dev·prod 공유). 두 번째 스택은 false
+  GithubDeployRoleName:
+    Type: String
+    Default: github-actions-deploy-policy
+
+Conditions:
+  IsProd: !Equals [!Ref Env, prod]
+  MakeRepository: !Equals [!Ref CreateRepository, "true"]
+
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    Condition: MakeRepository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RepositoryName: haruharu-ai-worker
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: >-
+          {"rules":[{"rulePriority":1,"description":"keep last 40 images","selection":{"tagStatus":"any",
+          "countType":"imageCountMoreThan","countNumber":40},"action":{"type":"expire"}}]}
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/haruharu-ai-worker-${Env}
+      RetentionInDays: 30
+
+  # 값은 스택이 넣지 않는다(빈 칸). 만든 뒤 콘솔에서 세 키를 채운다. 이 템플릿의 SecretString 을 바꾸면 넣은 값이 덮어써지니 고치지 않는다.
+  Secret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: !Sub haruharu/${Env}/ai-worker
+      Description: AI 작업기 비밀값 — OPENAI_API_KEY, CLOUDFLARE_API_TOKEN(Workers AI 전용), REPLY_AI_DATABASE_URL(haruharu_ai_worker 계정)
+      SecretString: '{"OPENAI_API_KEY":"","CLOUDFLARE_API_TOKEN":"","REPLY_AI_DATABASE_URL":""}'
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub haruharu-ai-worker-exec-${Env}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ecs-tasks.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: read-ai-worker-secret
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref Secret
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub haruharu-ai-worker-task-${Env}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ecs-tasks.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: read-videos
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource:
+                  - !Sub arn:aws:s3:::${MediaBucket}/users/*
+                  - !Sub arn:aws:s3:::${MediaBucket}/demo/*
+
+  WorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !If [IsProd, haruharu-ai-worker, haruharu-ai-worker-dev]
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: "1024"
+      Memory: "2048"
+      RuntimePlatform: {CpuArchitecture: ARM64, OperatingSystemFamily: LINUX}
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: ai-worker
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/haruharu-ai-worker:${ImageTag}
+          Essential: true
+          # 추천 작업만 받는다. 개선 루프(FEEDBACK_BATCH)는 아래 월 1회 작업이 따로 돌린다.
+          Command: [reply-ai, worker, --types, "ANALYSIS,GENERIC,PERSONAL,PURGE_VIDEO"]
+          Environment:
+            - {Name: REPLY_AI_EMBEDDING_PROVIDER, Value: cloudflare_workers_ai}
+            - {Name: CLOUDFLARE_ACCOUNT_ID, Value: !Ref CloudflareAccountId}
+            - {Name: REPLY_AI_S3_BUCKET, Value: !Ref MediaBucket}
+            - {Name: REPLY_AI_S3_REGION, Value: !Ref AWS::Region}
+            - {Name: REPLY_AI_DAILY_BUDGET_USD, Value: !Ref DailyBudgetUsd}
+            - {Name: REPLY_AI_FEEDBACK_BATCH_ENABLED, Value: "false"}
+            - {Name: REPLY_AI_REAL_USER_FEEDBACK_ENABLED, Value: !Ref RealUserFeedback}
+            - {Name: REPLY_AI_WORKER_ID, Value: !Sub "ecs-${Env}"}
+          Secrets:
+            - {Name: OPENAI_API_KEY, ValueFrom: !Sub "${Secret}:OPENAI_API_KEY::"}
+            - {Name: CLOUDFLARE_API_TOKEN, ValueFrom: !Sub "${Secret}:CLOUDFLARE_API_TOKEN::"}
+            - {Name: REPLY_AI_DATABASE_URL, ValueFrom: !Sub "${Secret}:REPLY_AI_DATABASE_URL::"}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: worker
+
+  BatchTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !If [IsProd, haruharu-ai-worker-batch, haruharu-ai-worker-batch-dev]
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: "1024"
+      Memory: "2048"
+      RuntimePlatform: {CpuArchitecture: ARM64, OperatingSystemFamily: LINUX}
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: ai-worker
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/haruharu-ai-worker:${ImageTag}
+          Essential: true
+          # 지난 실행 뒤 새로 닫힌 관찰로 배치를 만들어 끝까지 돌리고 끝낸다(없으면 바로 끝).
+          Command: [reply-ai, batch, run-scheduled, --deadline-minutes, "120"]
+          Environment:
+            - {Name: REPLY_AI_EMBEDDING_PROVIDER, Value: cloudflare_workers_ai}
+            - {Name: CLOUDFLARE_ACCOUNT_ID, Value: !Ref CloudflareAccountId}
+            - {Name: REPLY_AI_S3_BUCKET, Value: !Ref MediaBucket}
+            - {Name: REPLY_AI_S3_REGION, Value: !Ref AWS::Region}
+            - {Name: REPLY_AI_FEEDBACK_BUDGET_USD, Value: !Ref FeedbackBudgetUsd}
+            - {Name: REPLY_AI_AUTOMATIC_ACTIVATION_ENABLED, Value: !Ref AutomaticActivation}
+            - {Name: REPLY_AI_REAL_USER_FEEDBACK_ENABLED, Value: !Ref RealUserFeedback}
+            - {Name: REPLY_AI_WORKER_ID, Value: !Sub "ecs-${Env}-batch"}
+          Secrets:
+            - {Name: OPENAI_API_KEY, ValueFrom: !Sub "${Secret}:OPENAI_API_KEY::"}
+            - {Name: CLOUDFLARE_API_TOKEN, ValueFrom: !Sub "${Secret}:CLOUDFLARE_API_TOKEN::"}
+            - {Name: REPLY_AI_DATABASE_URL, ValueFrom: !Sub "${Secret}:REPLY_AI_DATABASE_URL::"}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: batch
+
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub haruharu-ai-worker-svc-${Env}
+      Cluster: !Ref ClusterName
+      TaskDefinition: !Ref WorkerTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      # 작업은 DB lease 로 나눠 가지므로 배포 중 잠깐 두 개가 함께 돌아도 된다.
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+        DeploymentCircuitBreaker: {Enable: true, Rollback: true}
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref Subnets
+          SecurityGroups: !Ref SecurityGroups
+          AssignPublicIp: !Ref AssignPublicIp
+      PropagateTags: SERVICE
+      Tags:
+        - {Key: app, Value: haruharu-ai-worker}
+        - {Key: issue, Value: "558"}
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub haruharu-ai-scheduler-${Env}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: scheduler.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: {"aws:SourceAccount": !Ref AWS::AccountId}
+      Policies:
+        - PolicyName: run-feedback-task
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ecs:RunTask
+                Resource:
+                  - !Sub
+                    - arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/${Family}
+                    - Family: !If [IsProd, haruharu-ai-worker-batch, haruharu-ai-worker-batch-dev]
+                  - !Sub
+                    - arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/${Family}:*
+                    - Family: !If [IsProd, haruharu-ai-worker-batch, haruharu-ai-worker-batch-dev]
+                Condition:
+                  ArnEquals: {"ecs:cluster": !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}"}
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: [!GetAtt ExecutionRole.Arn, !GetAtt TaskRole.Arn]
+                Condition:
+                  StringLike: {"iam:PassedToService": ecs-tasks.amazonaws.com}
+
+  # 한 달에 한 번 개선 루프. 가족 이름(리비전 없음)으로 가리켜 CI 가 새 리비전을 올리면 다음 실행부터 그 이미지를 쓴다.
+  FeedbackSchedule:
+    Type: AWS::Scheduler::Schedule
+    DependsOn: BatchTaskDefinition
+    Properties:
+      Name: !Sub haruharu-ai-feedback-monthly-${Env}
+      Description: 영상 답장 추천 개선 루프(판정 -> 사례 -> 개선안 -> 동결 재검증 -> 통과 시 CAS 적용)
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: Asia/Seoul
+      FlexibleTimeWindow: {Mode: "OFF"}
+      State: !Ref ScheduleState
+      Target:
+        Arn: !Sub arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}
+        RoleArn: !GetAtt SchedulerRole.Arn
+        RetryPolicy: {MaximumRetryAttempts: 3, MaximumEventAgeInSeconds: 3600}
+        EcsParameters:
+          TaskDefinitionArn: !Sub
+            - arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/${Family}
+            - Family: !If [IsProd, haruharu-ai-worker-batch, haruharu-ai-worker-batch-dev]
+          LaunchType: FARGATE
+          PlatformVersion: LATEST
+          TaskCount: 1
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              Subnets: !Ref Subnets
+              SecurityGroups: !Ref SecurityGroups
+              AssignPublicIp: !Ref AssignPublicIp
+
+  # GitHub Actions 배포 역할(OIDC)이 이 작업기만 배포할 수 있게 하는 최소 권한(develop 이미지 빌드·deploy-ecs 워크플로).
+  GithubDeployPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub haruharu-ai-worker-deploy-${Env}
+      Roles: [!Ref GithubDeployRoleName]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: ecr:GetAuthorizationToken
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - ecr:BatchCheckLayerAvailability
+              - ecr:BatchGetImage
+              - ecr:GetDownloadUrlForLayer
+              - ecr:InitiateLayerUpload
+              - ecr:UploadLayerPart
+              - ecr:CompleteLayerUpload
+              - ecr:PutImage
+            Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/haruharu-ai-worker
+          - Effect: Allow
+            Action: [ecs:DescribeTaskDefinition, ecs:RegisterTaskDefinition]
+            Resource: "*"
+          - Effect: Allow
+            Action: [ecs:DescribeServices, ecs:UpdateService]
+            Resource: !Sub arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ClusterName}/haruharu-ai-worker-svc-${Env}
+          - Effect: Allow
+            Action: iam:PassRole
+            Resource: [!GetAtt ExecutionRole.Arn, !GetAtt TaskRole.Arn]
+            Condition:
+              StringLike: {"iam:PassedToService": ecs-tasks.amazonaws.com}
+
+Outputs:
+  ServiceName:
+    Value: !GetAtt Service.Name
+  WorkerFamily:
+    Value: !If [IsProd, haruharu-ai-worker, haruharu-ai-worker-dev]
+  BatchFamily:
+    Value: !If [IsProd, haruharu-ai-worker-batch, haruharu-ai-worker-batch-dev]
+  SecretArn:
+    Value: !Ref Secret
+  ScheduleName:
+    Value: !Ref FeedbackSchedule
+  LogGroup:
+    Value: !Ref LogGroup

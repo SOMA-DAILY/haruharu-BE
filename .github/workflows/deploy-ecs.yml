@@ -105,6 +105,14 @@ jobs:
             "${{ env.ECR_REGISTRY }}/haruharu-admin:${{ steps.map.outputs.tag }}" \
             "${{ steps.map.outputs.admin_service }}"
 
+      # AI 작업기(#558): 같은 SHA 로 추천 서비스와 월 1회 개선 루프 작업 정의를 올린다. 작업기 스택이 없는 환경은 건너뛴다.
+      - name: Deploy ai-worker
+        id: ai_worker
+        if: inputs.target != 'admin'
+        run: |
+          bash .github/scripts/deploy-ai-worker.sh "${{ inputs.environment }}" \
+            "${{ env.ECR_REGISTRY }}/haruharu-ai-worker:${{ steps.map.outputs.tag }}"
+
       # Airflow(#405): 컨테이너 5개(init·api-server·scheduler·dag-processor·triggerer)가 같은 이미지라 ALL 로 전부 교체.
       - name: Deploy airflow
         if: inputs.target != 'admin' && steps.map.outputs.airflow_service != ''
@@ -120,6 +128,9 @@ jobs:
             SERVICES="${{ steps.map.outputs.admin_service }}"
           else
             SERVICES="${{ steps.map.outputs.app_service }} ${{ steps.map.outputs.admin_service }} ${{ steps.map.outputs.airflow_service }}"
+            if [ "${{ steps.ai_worker.outputs.deployed }}" = "true" ]; then
+              SERVICES="$SERVICES ${{ steps.ai_worker.outputs.service }}"
+            fi
           fi
           aws ecs wait services-stable --cluster "${{ env.CLUSTER }}" --services $SERVICES
           echo "✅ ${{ inputs.environment }} 배포 완료 (tag=${{ steps.map.outputs.tag }})"
