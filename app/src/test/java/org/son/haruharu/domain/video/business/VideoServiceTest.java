@@ -29,6 +29,7 @@ import org.son.haruharu.domain.video.business.exception.RoomNotActiveException;
 import org.son.haruharu.domain.video.business.event.VideoUploadedEvent;
 import org.son.haruharu.domain.video.implement.VideoPost;
 import org.son.haruharu.domain.video.implement.VideoPostReader;
+import org.son.haruharu.domain.video.implement.VideoCaptionHistory;
 import org.son.haruharu.domain.video.implement.VideoPostWriter;
 import org.son.haruharu.domain.video.implement.exception.InvalidVideoCaptionException;
 import org.son.haruharu.domain.video.storage.exception.VideoPostNotFoundException;
@@ -59,11 +60,12 @@ class VideoServiceTest {
     @Mock VideoPostReader videoPostReader;
     @Mock VideoPostWriter videoPostWriter;
     @Mock ApplicationEventPublisher eventPublisher;
+    @Mock VideoCaptionHistory captionHistory;
 
     private VideoService serviceAt(int hour) {
         Clock clock = Clock.fixed(ZonedDateTime.of(2026, 6, 26, hour, 0, 0, 0, SEOUL).toInstant(), SEOUL);
         return new VideoService(s3StoragePort, roomReader, roomMemberReader,
-                videoPostReader, videoPostWriter, eventPublisher, clock);
+                videoPostReader, videoPostWriter, captionHistory, eventPublisher, clock);
     }
 
     private RoomMember member(Long id, Long userId) {
@@ -243,6 +245,19 @@ class VideoServiceTest {
         then(videoPostWriter).should().updateCaption(1L, "새 문구");
         then(eventPublisher).shouldHaveNoInteractions();
         then(roomReader).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("캡션을 바꾸면 바뀌기 전 문구와 수정 시각을 이력으로 남긴다")
+    void givenOwner_whenUpdateCaption_thenRecordsPreviousCaption() {
+        VideoPost post = new VideoPost(1L, 30L, SLOT_AT_12, null, "원문", "video", "thumb",
+                false, null, null, SLOT_AT_12.plusMinutes(1));
+        given(videoPostReader.getEditableById(1L)).willReturn(post);
+        given(roomMemberReader.getById(30L)).willReturn(member(30L, 1L));
+
+        serviceAt(12).updateCaption(1L, 1L, new VideoCaptionUpdateCommand("새 문구"));
+
+        then(captionHistory).should().record(1L, "원문", "새 문구", SLOT_AT_12);
     }
 
     @Test

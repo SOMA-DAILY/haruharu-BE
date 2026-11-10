@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "READY",
+        "EMPTY",
+        "UNAVAILABLE"
+      ]
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "set_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "version_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "question",
+              "reaction",
+              "support",
+              "self_disclosure",
+              "information_suggestion",
+              "compliment",
+              "acknowledgment",
+              "humor",
+              "empathy",
+              "greeting"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "category",
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 3
+    },
+    "retry_after_ms": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "status",
+    "request_id",
+    "set_id",
+    "version_id",
+    "cards",
+    "retry_after_ms",
+    "reason_code"
+  ],
+  "additionalProperties": false
+}

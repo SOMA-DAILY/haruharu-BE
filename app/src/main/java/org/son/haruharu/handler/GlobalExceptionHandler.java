@@ -12,6 +12,8 @@ import org.son.haruharu.common.exception.FieldValidationException;
 import org.son.haruharu.common.exception.ForbiddenException;
 import org.son.haruharu.common.exception.NotFoundException;
 import org.son.haruharu.common.exception.UnauthorizedException;
+import org.son.haruharu.common.exception.TooManyRequestsException;
+import org.son.haruharu.common.exception.UnprocessableEntityException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -115,6 +117,22 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException e, HttpServletRequest request) {
         warn(409, request, e.getCode(), e.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
+    }
+
+    @ExceptionHandler(UnprocessableEntityException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnprocessable(UnprocessableEntityException e,
+                                                                 HttpServletRequest request) {
+        warn(422, request, e.getCode(), e.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTooManyRequests(TooManyRequestsException e,
+                                                                   HttpServletRequest request) {
+        warn(429, request, e.getCode(), e.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(ApiResponse.error(new ApiErrorDetail(e.getCode(), e.getMessage())));
     }
 

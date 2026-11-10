@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "assessments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidate_id": {
+            "type": "string"
+          },
+          "grounded": {
+            "type": "boolean"
+          },
+          "actor_correct": {
+            "type": "boolean"
+          },
+          "time_supported": {
+            "type": "boolean"
+          },
+          "current_relevance": {
+            "type": "boolean"
+          },
+          "conversational_fit": {
+            "type": "boolean"
+          },
+          "evidence_sufficient": {
+            "type": "boolean"
+          },
+          "no_unwarranted_personal_claim": {
+            "type": "boolean"
+          },
+          "no_already_answered": {
+            "type": "boolean"
+          },
+          "useful_personalization": {
+            "type": "boolean"
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "redundancy_group": {
+            "type": "string"
+          },
+          "issue": {
+            "type": "string",
+            "enum": [
+              "none",
+              "unsupported",
+              "actor",
+              "time",
+              "off_topic",
+              "tone",
+              "awkward",
+              "already_answered"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "grounded",
+          "actor_correct",
+          "time_supported",
+          "current_relevance",
+          "conversational_fit",
+          "evidence_sufficient",
+          "no_unwarranted_personal_claim",
+          "no_already_answered",
+          "useful_personalization",
+          "quality",
+          "redundancy_group",
+          "issue",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "assessments"
+  ],
+  "additionalProperties": false
+}

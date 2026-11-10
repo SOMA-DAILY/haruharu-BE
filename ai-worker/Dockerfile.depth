@@ -1,0 +1,35 @@
+# DialogRPT-depth 점수 서비스(#559). 운영은 AI 작업기 Fargate 태스크(arm64)의 사이드카 — infra/ai-worker/stack.yml.
+# 작업기는 같은 태스크 안에서 http://127.0.0.1:18453 으로 부른다. 가중치(revision 고정)는 이미지에 넣어 시작 때 내려받지 않는다.
+# 시작할 때 공식 점수 5개를 재현해야 포트를 연다(그 전에는 /health 가 응답하지 않는다).
+# 의존성·가중치 층을 소스(reply_ai) 앞에 두어, 소스만 바뀐 빌드는 캐시된 큰 층(약 2.5 GB)을 다시 받지 않는다.
+FROM python:3.12-slim
+COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
+WORKDIR /app
+ENV UV_NO_CACHE=1 VIRTUAL_ENV=/app/.venv PATH="/app/.venv/bin:$PATH"
+COPY pyproject.toml uv.lock ./
+# uv.lock 의 torch 는 linux 에서 CUDA 패키지(nvidia-*, cuda-*, triton)를 끌고 온다. CPU 만 쓰므로
+# 잠금 버전 목록에서 그것들을 빼고 설치한 뒤 같은 버전의 CPU 전용 torch 를 PyTorch CPU 저장소에서 받는다.
+RUN uv export --frozen --no-dev --extra depth --no-hashes --no-emit-project > /tmp/locked.txt \
+    && TORCH_VERSION=$(sed -n 's/^torch==\([^ ;]*\).*/\1/p' /tmp/locked.txt) \
+    && test -n "$TORCH_VERSION" \
+    && grep -vE '^(torch|triton|cuda-|nvidia-)' /tmp/locked.txt > /tmp/requirements.txt \
+    && uv venv /app/.venv \
+    && uv pip install --no-deps -r /tmp/requirements.txt \
+    && uv pip install --no-deps "torch==${TORCH_VERSION}+cpu" --index-url https://download.pytorch.org/whl/cpu \
+    && rm /tmp/locked.txt /tmp/requirements.txt \
+    && python -c "import torch, transformers; assert not torch.cuda.is_available(); print(torch.__version__, transformers.__version__)"
+ENV HF_HOME=/app/hf
+# 내려받기가 멈추면 빌드가 끝나지 않으므로 한 번에 10분 제한·최대 3번(받은 파일은 이어 받는다).
+RUN for attempt in 1 2 3; do \
+      timeout 600 python -c "from huggingface_hub import snapshot_download; snapshot_download('microsoft/DialogRPT-depth', revision='0fa8a8770e267801a5779788ccfd921192ae7f40')" \
+      && break; \
+      [ "$attempt" = 3 ] && exit 1; echo "retry download ($attempt)"; \
+    done \
+    && chmod -R a+rX /app/hf
+COPY README.md ./
+COPY reply_ai ./reply_ai
+RUN uv pip install --no-deps .
+ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+USER 10001
+EXPOSE 18453
+CMD ["reply-ai", "depth-serve", "--host", "127.0.0.1", "--port", "18453"]

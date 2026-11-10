@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "raw": {
+      "type": "string",
+      "enum": [
+        "included",
+        "absent",
+        "uncertain"
+      ]
+    },
+    "final": {
+      "type": "string",
+      "enum": [
+        "included",
+        "absent",
+        "uncertain"
+      ]
+    },
+    "raw_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "final_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "direction_summary": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "raw",
+    "final",
+    "raw_ids",
+    "final_ids",
+    "direction_summary",
+    "reason"
+  ],
+  "additionalProperties": false
+}

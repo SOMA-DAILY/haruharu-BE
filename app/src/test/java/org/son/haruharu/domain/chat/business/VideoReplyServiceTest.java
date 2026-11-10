@@ -11,6 +11,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.son.haruharu.domain.block.implement.BlockReader;
+import org.son.haruharu.domain.chat.business.command.VideoReplySource;
+import org.son.haruharu.domain.chat.business.event.VideoReplySavedEvent;
 import org.son.haruharu.domain.chat.business.event.VideoReplySentEvent;
 import org.son.haruharu.domain.chat.business.exception.ChatNotMemberException;
 import org.son.haruharu.domain.chat.business.exception.VideoReplyUnavailableException;
@@ -192,14 +194,15 @@ class VideoReplyServiceTest {
     }
 
     @Test
-    @DisplayName("답장은 한 번 브로드캐스트되고 영상 작성자에게만 알림 이벤트가 발행된다")
+    @DisplayName("답장은 한 번 브로드캐스트되고 영상 작성자에게만 알림 이벤트가, 추천 연결용 저장 이벤트가 한 번 발행된다")
     void send_publishesBroadcastAndNotifiesOnlyOwner() {
         setupSend();
-        var result = service.send(1L, 30L, 2L, " hello ", key);
+        var source = new VideoReplySource("set-1", "card-1", "00000000-0000-4000-8000-000000000002");
+        var result = service.send(1L, 30L, 2L, " hello ", key, source);
         assertThat(result.videoPostId()).isEqualTo(30L);
         assertThat(result.content()).isEqualTo("hello");
         var captor = ArgumentCaptor.forClass(Object.class);
-        verify(events, times(2)).publishEvent(captor.capture());
+        verify(events, times(3)).publishEvent(captor.capture());
         assertThat(captor.getAllValues())
                 .anySatisfy(
                         e -> {
@@ -207,6 +210,16 @@ class VideoReplyServiceTest {
                             var reply = (VideoReplySentEvent) e;
                             assertThat(reply.ownerId()).isEqualTo(3L);
                             assertThat(reply.senderName()).isEqualTo("민준");
+                        })
+                .anySatisfy(
+                        e -> {
+                            assertThat(e).isInstanceOf(VideoReplySavedEvent.class);
+                            var saved = (VideoReplySavedEvent) e;
+                            assertThat(saved.senderId()).isEqualTo(2L);
+                            assertThat(saved.videoPostId()).isEqualTo(30L);
+                            assertThat(saved.sourceSetId()).isEqualTo("set-1");
+                            assertThat(saved.sourceCardId()).isEqualTo("card-1");
+                            assertThat(saved.sourceSessionId()).isEqualTo(source.sessionId());
                         });
     }
 

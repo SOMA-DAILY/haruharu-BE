@@ -45,6 +45,25 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("의미상 받을 수 없는 요청은 422, 너무 잦은 요청은 429 로 코드와 함께 내려간다(#558)")
+    void givenUnprocessableAndRateLimited_whenHandle_thenMapsStatusAndCode() {
+        var unprocessable = handler.handleUnprocessable(
+                new org.son.haruharu.domain.replyrecommendation.implement.exception
+                        .InvalidRecommendationEventException("occurred_at"),
+                request("POST", "/api/v1/rooms/1/video-posts/2/reply-recommendation-events"));
+        var limited = handler.handleTooManyRequests(
+                new org.son.haruharu.domain.replyrecommendation.implement.exception.RecommendationRateLimitedException(),
+                request("POST", "/api/v1/rooms/1/video-posts/2/reply-recommendations"));
+
+        assertThat(unprocessable.getStatusCode().value()).isEqualTo(422);
+        assertThat(unprocessable.getBody().error().code()).isEqualTo("REPLY_RECOMMENDATION_EVENT_INVALID");
+        assertThat(limited.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(limited.getBody().error().code()).isEqualTo("REPLY_RECOMMENDATION_RATE_LIMITED");
+        assertThat(logs.at(Level.WARN)).hasSize(2);
+        assertThat(logs.at(Level.ERROR)).isEmpty();
+    }
+
+    @Test
     @DisplayName("업로드 용량 초과는 413을 반환하고 원문·스택 없이 WARN으로 기록한다")
     void givenOversizedUpload_whenHandle_thenLogsWarningWithoutCause() {
         var exception = new org.springframework.web.multipart.MaxUploadSizeExceededException(

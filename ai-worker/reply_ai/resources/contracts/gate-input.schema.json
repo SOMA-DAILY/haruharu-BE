@@ -1,0 +1,385 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "input_sha256": {
+      "type": "string"
+    },
+    "current": {
+      "type": "object",
+      "properties": {
+        "video_id": {
+          "type": "string"
+        },
+        "author_id": {
+          "type": "string"
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "caption": {
+          "type": "string"
+        },
+        "contextual_description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "video_id",
+        "author_id",
+        "published_at",
+        "caption",
+        "contextual_description"
+      ],
+      "additionalProperties": false
+    },
+    "viewer_id": {
+      "type": "string"
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "reference_id": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string"
+          },
+          "current_visual_description": {
+            "type": "string"
+          },
+          "replies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reply_id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reply_id",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "reference_id",
+          "caption",
+          "current_visual_description",
+          "replies"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "history_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "chat",
+              "video_description"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "room",
+              "own",
+              "interaction",
+              "parent_context"
+            ]
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "available_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "parent_source_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "source_id",
+          "actor_id",
+          "kind",
+          "role",
+          "occurred_at",
+          "available_at",
+          "revision",
+          "text",
+          "parent_source_ids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "personal_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "chat",
+              "video_description"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "room",
+              "own",
+              "interaction",
+              "parent_context"
+            ]
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "available_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "parent_source_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "source_id",
+          "actor_id",
+          "kind",
+          "role",
+          "occurred_at",
+          "available_at",
+          "revision",
+          "text",
+          "parent_source_ids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "base_cards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "example": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "category",
+          "title",
+          "example"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "generic_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidate_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "example": {
+            "type": "string"
+          },
+          "redundancy_group": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "category",
+          "title",
+          "example",
+          "redundancy_group"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidate_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "question",
+              "reaction",
+              "support",
+              "self_disclosure",
+              "information_suggestion",
+              "compliment",
+              "acknowledgment",
+              "humor",
+              "empathy",
+              "greeting"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "example": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "current_anchor": {
+            "type": "string"
+          },
+          "reference_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "personalization": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "direct_request",
+                  "shared_dialogue",
+                  "explicit_preference",
+                  "past_experience",
+                  "current_situation"
+                ]
+              },
+              "source_quotes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "source_id": {
+                      "type": "string"
+                    },
+                    "quote": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "source_id",
+                    "quote"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "actor_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "delta": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "source_quotes",
+              "actor_ids",
+              "delta"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "candidate_id",
+          "category",
+          "title",
+          "example",
+          "current_anchor",
+          "reference_ids",
+          "personalization"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "task_id",
+    "input_sha256",
+    "current",
+    "viewer_id",
+    "references",
+    "history_records",
+    "personal_history",
+    "base_cards",
+    "candidates"
+  ],
+  "additionalProperties": false
+}

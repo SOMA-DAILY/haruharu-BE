@@ -63,7 +63,8 @@ public class RoomService {
         validateCohort(composition.cohortId());
         Room saved = roomWriter.save(Room.createScheduled(
                 command.startsAt(), command.finalSelectionOpensAt(), command.finalSelectionClosesAt(),
-                command.resultAt(), command.endsAt(), command.totalDays(), composition));
+                command.resultAt(), command.endsAt(), command.totalDays(), composition)
+                .withReplyRecommendationEnabled(command.replyRecommendationEnabled()));
         return saved.id();
     }
 
@@ -120,6 +121,19 @@ public class RoomService {
         }
         roomWriter.save(room.cancelled());
         events.publishEvent(new RoomEndedEvent(roomId));
+    }
+
+    /**
+     * 방 단위 영상 답장 추천 스위치(#560). 방 상태와 무관하게 바꾼다(진행 중 방도).
+     * 상태 전이 배치·취소와 같은 행 잠금으로 줄을 세워 서로의 저장을 덮어쓰지 않게 한다.
+     */
+    @Transactional
+    public void updateReplyRecommendation(Long roomId, boolean enabled) {
+        Room room = roomReader.findByIdForUpdate(roomId)
+                .orElseThrow(RoomNotFoundException::new);
+        if (room.replyRecommendationEnabled() != enabled) {
+            roomWriter.save(room.withReplyRecommendationEnabled(enabled));
+        }
     }
 
     public RoomResponse getMyRoom(Long userId) {

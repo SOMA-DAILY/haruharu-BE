@@ -22,8 +22,13 @@ public record VideoReply(Long videoPostId, String content, String requestId) {
 
     /** 진행 중이거나 최종 선택 중인 방에서만 답장할 수 있다. */
     public static void validateRoomOpen(RoomStatus status) {
-        if (status != RoomStatus.ACTIVE && status != RoomStatus.SELECTING)
+        if (!isRoomOpen(status))
             throw new VideoReplyInvalidException("답장을 보낼 수 없는 방입니다.");
+    }
+
+    /** 영상 답장을 보낼 수 있는 방 상태인가(진행 중·최종 선택 중). */
+    public static boolean isRoomOpen(RoomStatus status) {
+        return status == RoomStatus.ACTIVE || status == RoomStatus.SELECTING;
     }
 
     /** 같은 요청 ID로 이미 저장된 메시지가 이 입력과 같은 답장인지 확인한다. */

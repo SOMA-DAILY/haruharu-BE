@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "input_sha256": {
+      "type": "string"
+    },
+    "current": {
+      "type": "object",
+      "properties": {
+        "video_id": {
+          "type": "string"
+        },
+        "author_id": {
+          "type": "string"
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "caption": {
+          "type": "string"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "frame_id": {
+                "type": "string"
+              },
+              "position_percent": {
+                "type": "integer",
+                "enum": [
+                  10,
+                  50,
+                  90
+                ]
+              },
+              "timestamp_ms": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sha256": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "frame_id",
+              "position_percent",
+              "timestamp_ms",
+              "width",
+              "height",
+              "sha256"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "video_id",
+        "author_id",
+        "published_at",
+        "caption",
+        "frames"
+      ],
+      "additionalProperties": false
+    },
+    "history_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "chat",
+              "video_description"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "room",
+              "own",
+              "interaction",
+              "parent_context"
+            ]
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "available_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "parent_source_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "source_id",
+          "actor_id",
+          "kind",
+          "role",
+          "occurred_at",
+          "available_at",
+          "revision",
+          "text",
+          "parent_source_ids"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "task_id",
+    "input_sha256",
+    "current",
+    "history_records"
+  ],
+  "additionalProperties": false
+}

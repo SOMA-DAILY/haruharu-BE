@@ -22,6 +22,9 @@ public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageEntit
 
     Optional<ChatMessageEntity> findFirstByChatRoomIdOrderByIdDesc(Long chatRoomId);
 
+    /** 답장 추천(#558): 기준 시각 이전 메시지 전체(시간순). 퇴장 멤버의 글은 @SQLRestriction 으로 빠진다. */
+    List<ChatMessageEntity> findByChatRoomIdAndCreatedAtBeforeOrderByIdAsc(Long chatRoomId, java.time.LocalDateTime before);
+
     // 차단한 발신자 제외 미리보기(#408). excludeSenderIds가 비어 있으면 위 메서드를 쓴다(NOT IN 빈 목록 방지).
     @Query("select m from ChatMessageEntity m where m.chatRoomId = :chatRoomId "
             + "and (m.senderId is null or m.senderId not in :excludeSenderIds) order by m.id desc")

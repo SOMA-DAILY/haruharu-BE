@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "set_id": {
+      "type": "string"
+    },
+    "card_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "impression",
+        "card_selected",
+        "composer_started",
+        "dismissed"
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "event_id",
+    "session_id",
+    "request_id",
+    "set_id",
+    "card_id",
+    "event_type",
+    "occurred_at"
+  ],
+  "additionalProperties": false
+}

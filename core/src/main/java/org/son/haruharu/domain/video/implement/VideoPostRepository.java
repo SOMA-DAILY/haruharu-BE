@@ -30,4 +30,7 @@ public interface VideoPostRepository {
 
     /** 주어진 방의 멤버들 중에 해당 슬롯들에 활성(미삭제) 영상을 올린 멤버 id **/
     List<Long> findUploadedRoomMemberIds(List<Long> roomMemberIds, List<LocalDateTime> slotStarts);
+
+    /** 주어진 id 중 지금 볼 수 없는 영상(삭제·숨김·퇴장 멤버·없음)의 id. */
+    java.util.Set<Long> findUnavailableIds(java.util.Collection<Long> ids);
 }

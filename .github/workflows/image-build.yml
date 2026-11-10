@@ -26,12 +26,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Depth 이미지 빌드 여부를 push 전후 비교로 정한다
 
       - name: Resolve tags (immutable SHA + moving branch)
         id: meta
         run: |
           echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           echo "branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      # Depth 사이드카(#559) 이미지는 가중치 포함 약 1.6 GB 라 그 이미지에 들어가는 파일이 바뀔 때만 굽는다(수동 실행은 항상).
+      # 굽지 않은 SHA 는 depth 태그가 없다 — 배포는 depth 이미지를 따로 지정할 때만 바꾸고 기본은 지금 이미지를 유지한다.
+      - name: Detect depth image changes
+        id: depth
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" != "push" ] || [ -z "$BEFORE" ] \
+             || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}"; then
+            echo "build=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BEFORE" "${{ github.sha }}" -- \
+               ai-worker/Dockerfile.depth ai-worker/pyproject.toml ai-worker/uv.lock ai-worker/README.md ai-worker/reply_ai \
+               | grep -q .; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -91,3 +112,32 @@ jobs:
             ${{ env.ECR_REGISTRY }}/haruharu-airflow:${{ steps.meta.outputs.branch }}
           cache-from: type=gha,scope=airflow
           cache-to: type=gha,mode=max,scope=airflow,ignore-error=true
+
+      # AI 작업기(#558): ai-worker/Dockerfile. app·admin·airflow 와 같은 SHA 태그(ECR 레포 haruharu-ai-worker, infra/ai-worker/stack.yml).
+      - name: Build & push (ai-worker)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ai-worker
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/haruharu-ai-worker:${{ steps.meta.outputs.sha }}
+            ${{ env.ECR_REGISTRY }}/haruharu-ai-worker:${{ steps.meta.outputs.branch }}
+          cache-from: type=gha,scope=ai-worker
+          cache-to: type=gha,mode=max,scope=ai-worker,ignore-error=true
+
+      # Depth 점수 사이드카(#559): ai-worker/Dockerfile.depth(CPU torch + microsoft/DialogRPT-depth 가중치, revision 고정).
+      # ECR 레포 haruharu-ai-worker-depth(infra/ai-worker/stack.yml). 추천 작업 태스크 안에서 127.0.0.1:18453 으로 뜬다.
+      - name: Build & push (ai-worker-depth)
+        if: steps.depth.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ai-worker
+          file: ./ai-worker/Dockerfile.depth
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/haruharu-ai-worker-depth:${{ steps.meta.outputs.sha }}
+            ${{ env.ECR_REGISTRY }}/haruharu-ai-worker-depth:${{ steps.meta.outputs.branch }}
+          cache-from: type=gha,scope=ai-worker-depth
+          cache-to: type=gha,mode=max,scope=ai-worker-depth,ignore-error=true

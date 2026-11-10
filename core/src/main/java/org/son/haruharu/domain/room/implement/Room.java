@@ -18,7 +18,9 @@ public record Room(
         LocalDateTime resultAt,
         LocalDateTime endsAt,
         // #513: 기수·이름·성별 정원. 기존 방·웹 전용 방은 NONE.
-        RoomComposition composition
+        RoomComposition composition,
+        // #560: 방 단위 영상 답장 추천 스위치. 기존 방은 false.
+        boolean replyRecommendationEnabled
 ) {
     public Room {
         if (composition == null) {
@@ -30,6 +32,15 @@ public record Room(
     public Room(Long id, RoomStatus status, LocalDate scheduledDate, int totalDays,
                 LocalDateTime startedAt, LocalDateTime endedAt) {
         this(id, status, scheduledDate, totalDays, startedAt, endedAt, null, null, null, null, null);
+    }
+
+    /** 12-arg 하위호환(#560 이전 모양). 답장 추천 스위치는 꺼짐. */
+    public Room(Long id, RoomStatus status, LocalDate scheduledDate, int totalDays,
+                LocalDateTime startedAt, LocalDateTime endedAt, LocalDateTime startsAt,
+                LocalDateTime finalSelectionOpensAt, LocalDateTime finalSelectionClosesAt,
+                LocalDateTime resultAt, LocalDateTime endsAt, RoomComposition composition) {
+        this(id, status, scheduledDate, totalDays, startedAt, endedAt, startsAt, finalSelectionOpensAt,
+                finalSelectionClosesAt, resultAt, endsAt, composition, false);
     }
 
     /** 11-arg 하위호환(#513 이전 모양). 편성 정보는 NONE. */
@@ -122,25 +133,35 @@ public record Room(
         boolean needsAnchor = startsAt != null && startedAt == null && derived != RoomStatus.PENDING;
         LocalDateTime anchor = needsAnchor ? startsAt : startedAt;
         return new Room(id, derived, scheduledDate, totalDays, anchor, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition,
+                replyRecommendationEnabled);
+    }
+
+    /** 방 단위 영상 답장 추천 스위치를 바꾼다(#560). 방 상태와 무관하다. */
+    public Room withReplyRecommendationEnabled(boolean enabled) {
+        return new Room(id, status, scheduledDate, totalDays, startedAt, endedAt,
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition, enabled);
     }
 
     /** 운영진 수동 취소(#311): → CANCELLED. sticky(이후 statusAt 도 CANCELLED). */
     public Room cancelled() {
         return new Room(id, RoomStatus.CANCELLED, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition,
+                replyRecommendationEnabled);
     }
 
     /** 방 시작: PENDING → ACTIVE, startedAt 앵커. currentDay는 startedAt에서 파생하므로 저장하지 않는다. */
     public Room started(LocalDateTime startedAt) {
         return new Room(id, RoomStatus.ACTIVE, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition,
+                replyRecommendationEnabled);
     }
 
     /** 세션 종료: ACTIVE → ENDED, endedAt 앵커. 종료 후 getLegacyActive()·findCurrent 조회에서 제외된다. */
     public Room ended(LocalDateTime endedAt) {
         return new Room(id, RoomStatus.ENDED, scheduledDate, totalDays, startedAt, endedAt,
-                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition);
+                startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, composition,
+                replyRecommendationEnabled);
     }
 
     /**

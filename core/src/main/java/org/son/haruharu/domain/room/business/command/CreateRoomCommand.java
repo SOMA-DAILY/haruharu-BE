@@ -17,8 +17,19 @@ public record CreateRoomCommand(
         Long cohortId,
         String name,
         Integer maleCapacity,
-        Integer femaleCapacity
+        Integer femaleCapacity,
+        // #560: 방 단위 영상 답장 추천 스위치. 기본 false.
+        boolean replyRecommendationEnabled
 ) {
+    /** 답장 추천 스위치 없이 만드는 방(#560 이전 모양). 스위치는 꺼짐. */
+    public CreateRoomCommand(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
+                             LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt,
+                             LocalDateTime endsAt, int totalDays, Long cohortId, String name,
+                             Integer maleCapacity, Integer femaleCapacity) {
+        this(startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt, totalDays,
+                cohortId, name, maleCapacity, femaleCapacity, false);
+    }
+
     /** 편성 정보 없이 스케줄만 주는 생성(#513 이전 모양). */
     public CreateRoomCommand(LocalDateTime startsAt, LocalDateTime finalSelectionOpensAt,
                              LocalDateTime finalSelectionClosesAt, LocalDateTime resultAt,

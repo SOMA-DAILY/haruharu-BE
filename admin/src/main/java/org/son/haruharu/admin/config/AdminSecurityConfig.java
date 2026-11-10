@@ -136,7 +136,8 @@ public class AdminSecurityConfig {
                                                 HttpMethod.PATCH,
                                                 "/api/v1/admin/rooms/*/members/*",
                                                 "/api/v1/admin/rooms/organization",
-                                                "/api/v1/admin/rooms/*/type")
+                                                "/api/v1/admin/rooms/*/type",
+                                                "/api/v1/admin/rooms/*/reply-recommendation")
                                         .hasAnyRole("SUPER", "OPERATOR")
                                         // 방 편성 쓰기(#457)는 SUPER·OPERATOR. 목록 조회(GET)는 로그인만(CS 는 화면이
                                         // 버튼을 숨김).

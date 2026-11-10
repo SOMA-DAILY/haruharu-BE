@@ -60,9 +60,21 @@ public class WithdrawnUserPurgeRepositoryImpl implements WithdrawnUserPurgeRepos
     @Override
     public Map<String, Integer> purgePersonalData(Long userId, LocalDateTime now) {
         Map<String, Integer> counts = new LinkedHashMap<>();
+        // 답장 Depth 라벨(#559): 본인이 보낸 답장과 본인 영상에 달린 답장의 라벨. 영상 행보다 먼저 지운다(영상 id 로 찾는다).
+        // 559 SQL 을 적용하지 않은 환경에서는 건너뛴다.
+        if (replyDepthTableExists()) {
+            counts.put("ai_reply_depth", execute(
+                    "DELETE FROM ai_reply.reply_depth_observation WHERE viewer_id = :userId OR video_id IN "
+                            + "(SELECT v.id FROM video_posts v JOIN room_members m ON m.id = v.room_member_id "
+                            + "WHERE m.user_id = :userId)", userId));
+        }
         // 영상: 반응 → 게시물 → 업로드 세션(캡션) 순. 영상 행은 통째로 지운다(캡션 포함).
         counts.put("video_reactions", execute(
                 "DELETE FROM video_reactions WHERE video_post_id IN (SELECT v.id FROM video_posts v "
+                        + "JOIN room_members m ON m.id = v.room_member_id WHERE m.user_id = :userId)", userId));
+        // 캡션 수정 이력(#558)은 영상 행보다 먼저 지운다(영상 id 로 찾는다).
+        counts.put("video_caption_revisions", execute(
+                "DELETE FROM video_caption_revisions WHERE video_post_id IN (SELECT v.id FROM video_posts v "
                         + "JOIN room_members m ON m.id = v.room_member_id WHERE m.user_id = :userId)", userId));
         counts.put("video_posts", execute(
                 "DELETE FROM video_posts WHERE room_member_id IN (SELECT id FROM room_members WHERE user_id = :userId)",
@@ -101,7 +113,66 @@ public class WithdrawnUserPurgeRepositoryImpl implements WithdrawnUserPurgeRepos
         counts.put("push_bundles", execute("DELETE FROM push_bundles WHERE user_id = :userId", userId));
         counts.put("mid_participation_preferences", execute(
                 "DELETE FROM mid_participation_preferences WHERE user_id = :userId", userId));
+        // 영상 답장 추천(#558, ai_reply 스키마): 시청자로서 남긴 기록과 본인 영상에서 나온 분석·추천을 지운다.
+        // 스키마를 적용하지 않은 환경(기능 꺼짐)에서는 건너뛴다. 다른 사람 영상 분석에 인용된 본인 채팅은
+        // 채팅 원문처럼 남고, 그 분석의 원문·파생 자료는 보관 기간(30일) 정리가 이미 지웠다.
+        if (replyRecommendationSchemaExists()) {
+            counts.put("ai_reply", purgeReplyRecommendation(userId));
+        }
         return counts;
+    }
+
+    private boolean replyRecommendationSchemaExists() {
+        Number found = (Number) em.createNativeQuery(
+                        "SELECT count(*) FROM information_schema.tables "
+                                + "WHERE lower(table_schema) = 'ai_reply' AND lower(table_name) = 'analysis_request'")
+                .getSingleResult();
+        return found.longValue() > 0;
+    }
+
+    private int purgeReplyRecommendation(Long userId) {
+        String videos = "SELECT DISTINCT video_id FROM ai_reply.analysis_request WHERE author_id = :userId";
+        String analyses = "SELECT id FROM ai_reply.analysis_snapshot WHERE video_id IN (" + videos + ")";
+        String personalInputs = "SELECT id FROM ai_reply.personal_input WHERE viewer_id = :userId OR video_id IN ("
+                + videos + ")";
+        String analysisInputs = "SELECT id FROM ai_reply.analysis_input WHERE author_id = :userId";
+        List<String> statements = List.of(
+                // 시청자 기록: 피드백 판정·사례 → 답장 원문 스냅샷 → episode → 연결 → 사건
+                "DELETE FROM ai_reply.feedback_judgment WHERE episode_id IN "
+                        + "(SELECT id FROM ai_reply.reply_episode WHERE viewer_id = :userId)",
+                "DELETE FROM ai_reply.feedback_closure WHERE episode_id IN "
+                        + "(SELECT id FROM ai_reply.reply_episode WHERE viewer_id = :userId)",
+                "DELETE FROM ai_reply.feedback_case WHERE viewer_id = :userId",
+                "DELETE FROM ai_reply.episode_reply_snapshot WHERE episode_id IN "
+                        + "(SELECT id FROM ai_reply.reply_episode WHERE viewer_id = :userId)",
+                "DELETE FROM ai_reply.reply_episode WHERE viewer_id = :userId",
+                "DELETE FROM ai_reply.reply_link WHERE viewer_id = :userId",
+                "DELETE FROM ai_reply.recommendation_event WHERE viewer_id = :userId",
+                // 개인화 입력(본인이 시청자이거나 본인 영상) → 개인 세트·시도
+                "DELETE FROM ai_reply.evidence_source WHERE owner_kind = 'PERSONAL' AND owner_id IN (" + personalInputs + ")",
+                "DELETE FROM ai_reply.recommendation_set WHERE viewer_id = :userId OR video_id IN (" + videos + ")",
+                "DELETE FROM ai_reply.generation_attempt WHERE viewer_id = :userId OR video_id IN (" + videos + ")",
+                "DELETE FROM ai_reply.personal_input WHERE viewer_id = :userId OR video_id IN (" + videos + ")",
+                "DELETE FROM ai_reply.recommendation_request WHERE viewer_id = :userId OR video_id IN (" + videos + ")",
+                // 본인 영상의 분석: 참고 사례 → 분석 결과 → 출처 → 입력 → 요청
+                "DELETE FROM ai_reply.reference_video WHERE source_video_id IN (" + videos + ")",
+                "DELETE FROM ai_reply.evidence_source WHERE owner_kind = 'ANALYSIS' AND owner_id IN (" + analysisInputs + ")",
+                "DELETE FROM ai_reply.analysis_snapshot WHERE id IN (" + analyses + ")",
+                "DELETE FROM ai_reply.analysis_input WHERE author_id = :userId",
+                "DELETE FROM ai_reply.analysis_request WHERE author_id = :userId");
+        int deleted = 0;
+        for (String statement : statements) {
+            deleted += execute(statement, userId);
+        }
+        return deleted;
+    }
+
+    private boolean replyDepthTableExists() {
+        Number found = (Number) em.createNativeQuery(
+                        "SELECT count(*) FROM information_schema.tables "
+                                + "WHERE lower(table_schema) = 'ai_reply' AND lower(table_name) = 'reply_depth_observation'")
+                .getSingleResult();
+        return found.longValue() > 0;
     }
 
     @Override

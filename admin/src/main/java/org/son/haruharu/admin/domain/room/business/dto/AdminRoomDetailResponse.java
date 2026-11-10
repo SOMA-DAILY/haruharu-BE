@@ -36,7 +36,9 @@ public record AdminRoomDetailResponse(
         @Schema(description = "초대코드로 들어온 인원(초대코드 정원과 비교하는 수)", example = "2") int inviteMemberCount,
         Long groupId,
         String groupName,
-        Boolean isTest) {
+        Boolean isTest,
+        @Schema(description = "영상 답장 추천 방 스위치(#560)", example = "false")
+                boolean replyRecommendationEnabled) {
     public record MemberView(
             @Schema(description = "방 멤버 id", example = "10") Long memberId,
             @Schema(description = "유저 id", example = "901") Long userId,

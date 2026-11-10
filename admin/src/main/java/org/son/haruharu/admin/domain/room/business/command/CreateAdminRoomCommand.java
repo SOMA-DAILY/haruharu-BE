@@ -27,7 +27,45 @@ public record CreateAdminRoomCommand(
         Integer maleCapacity,
         Integer femaleCapacity,
         Long groupId,
-        Boolean isTest) {
+        Boolean isTest,
+        // #560: 방 단위 영상 답장 추천 스위치. null 이면 false.
+        Boolean replyRecommendationEnabled) {
+    /** 답장 추천 스위치 없이 만드는 방(#560 이전 모양). 스위치는 꺼짐. */
+    public CreateAdminRoomCommand(
+            LocalDateTime startsAt,
+            LocalDateTime finalSelectionOpensAt,
+            LocalDateTime finalSelectionClosesAt,
+            LocalDateTime resultAt,
+            LocalDateTime endsAt,
+            int totalDays,
+            Integer maxUses,
+            LocalDateTime inviteExpiresAt,
+            List<RoomMissionCommand> missions,
+            Long cohortId,
+            String name,
+            Integer maleCapacity,
+            Integer femaleCapacity,
+            Long groupId,
+            Boolean isTest) {
+        this(
+                startsAt,
+                finalSelectionOpensAt,
+                finalSelectionClosesAt,
+                resultAt,
+                endsAt,
+                totalDays,
+                maxUses,
+                inviteExpiresAt,
+                missions,
+                cohortId,
+                name,
+                maleCapacity,
+                femaleCapacity,
+                groupId,
+                isTest,
+                null);
+    }
+
     public CreateAdminRoomCommand(
             LocalDateTime a,
             LocalDateTime b,
@@ -83,6 +121,7 @@ public record CreateAdminRoomCommand(
                 cohortId,
                 name,
                 maleCapacity,
-                femaleCapacity);
+                femaleCapacity,
+                Boolean.TRUE.equals(replyRecommendationEnabled));
     }
 }

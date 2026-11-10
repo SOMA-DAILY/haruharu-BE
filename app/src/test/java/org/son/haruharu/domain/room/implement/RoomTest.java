@@ -37,6 +37,22 @@ class RoomTest {
     }
 
     @Test
+    @DisplayName("답장 추천 방 스위치는 기본 꺼짐이고, 켠 방은 모든 상태 전이에서 그 값을 보존한다(#560)")
+    void givenReplyRecommendationSwitch_whenStatusChanges_thenSwitchIsPreserved() {
+        assertThat(scheduledRoom().replyRecommendationEnabled()).isFalse();
+        assertThat(activeRoom(3, STARTED_AT).replyRecommendationEnabled()).isFalse();
+
+        Room room = scheduledRoom().withReplyRecommendationEnabled(true);
+
+        assertThat(room.startsAt()).isEqualTo(SCHED_START);
+        assertThat(room.materialized(RoomStatus.ACTIVE).replyRecommendationEnabled()).isTrue();
+        assertThat(room.cancelled().replyRecommendationEnabled()).isTrue();
+        assertThat(room.started(SCHED_START).replyRecommendationEnabled()).isTrue();
+        assertThat(room.ended(SCHED_START.plusDays(3)).replyRecommendationEnabled()).isTrue();
+        assertThat(room.withReplyRecommendationEnabled(false).replyRecommendationEnabled()).isFalse();
+    }
+
+    @Test
     @DisplayName("기수·이름·성별 정원을 주고 만든 방은 모든 상태 전이에서 그 값을 보존한다(#513)")
     void givenComposition_whenStatusChanges_thenCompositionIsPreserved() {
         RoomComposition composition = RoomComposition.of(4L, "서울 6기 1조", 3, 3);
