@@ -146,6 +146,11 @@ haruharu:
       # 실사용자 사건·답장 연결·답장 원문 수집. 보존 정책·사용 목적 고지 전까지 OFF. QA 계정은 따로 남긴다.
       real-user-enabled: ${REPLY_RECOMMENDATION_REAL_USER_COLLECTION_ENABLED:false}
       qa-user-ids: ${REPLY_RECOMMENDATION_QA_USER_IDS:}
+    # 실제 영상 답장의 Depth·Width 라벨(#559, DialogRPT-depth 학습·평가). 기본 OFF.
+    # 켜기 전에 scripts/sql/559-reply-depth-up.sql 을 적용한다. 답장 시각부터 observation-hours 안의 답글만 센다.
+    depth:
+      enabled: ${REPLY_RECOMMENDATION_DEPTH_ENABLED:false}
+      observation-hours: ${REPLY_RECOMMENDATION_DEPTH_OBSERVATION_HOURS:24}
 
 oauth:
   providers:

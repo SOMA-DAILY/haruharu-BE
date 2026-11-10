@@ -60,6 +60,14 @@ public class WithdrawnUserPurgeRepositoryImpl implements WithdrawnUserPurgeRepos
     @Override
     public Map<String, Integer> purgePersonalData(Long userId, LocalDateTime now) {
         Map<String, Integer> counts = new LinkedHashMap<>();
+        // 답장 Depth 라벨(#559): 본인이 보낸 답장과 본인 영상에 달린 답장의 라벨. 영상 행보다 먼저 지운다(영상 id 로 찾는다).
+        // 559 SQL 을 적용하지 않은 환경에서는 건너뛴다.
+        if (replyDepthTableExists()) {
+            counts.put("ai_reply_depth", execute(
+                    "DELETE FROM ai_reply.reply_depth_observation WHERE viewer_id = :userId OR video_id IN "
+                            + "(SELECT v.id FROM video_posts v JOIN room_members m ON m.id = v.room_member_id "
+                            + "WHERE m.user_id = :userId)", userId));
+        }
         // 영상: 반응 → 게시물 → 업로드 세션(캡션) 순. 영상 행은 통째로 지운다(캡션 포함).
         counts.put("video_reactions", execute(
                 "DELETE FROM video_reactions WHERE video_post_id IN (SELECT v.id FROM video_posts v "
@@ -157,6 +165,14 @@ public class WithdrawnUserPurgeRepositoryImpl implements WithdrawnUserPurgeRepos
             deleted += execute(statement, userId);
         }
         return deleted;
+    }
+
+    private boolean replyDepthTableExists() {
+        Number found = (Number) em.createNativeQuery(
+                        "SELECT count(*) FROM information_schema.tables "
+                                + "WHERE lower(table_schema) = 'ai_reply' AND lower(table_name) = 'reply_depth_observation'")
+                .getSingleResult();
+        return found.longValue() > 0;
     }
 
     @Override
