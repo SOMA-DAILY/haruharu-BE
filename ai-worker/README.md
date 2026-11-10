@@ -108,6 +108,7 @@ REPLY_AI_EMBEDDING_URL=http://127.0.0.1:18452 REPLY_AI_MEDIA_ALLOWED_PREFIXES=ht
 ## 실패 코드(`ai_job.failure_code`)
 
 계약 문서의 코드 + 작업기 전용 `PROVIDER_REJECTED`(API 가 요청을 거부, 4xx), `PROVIDER_FAILED`(응답이 실패 상태),
+`PROVIDER_QUOTA_EXCEEDED`(429 `insufficient_quota` — 계정 크레딧·한도 소진, 재시도 안 함. 앱에는 일시 실패로 `ANALYSIS_FAILED`/`GENERATION_FAILED`),
 `ATTEMPTS_EXHAUSTED`(작업기 중단이 반복돼 lease 만료로 max_attempts 초과), `EMBEDDING_UNAVAILABLE`, `INTERNAL_ERROR`(버그, 재시도 안 함).
 
 ## 테스트
@@ -158,44 +159,58 @@ last-token pooling, L2 정규화, float32, CPU. `model_id` 에 pooling·정밀�
 
 생성 AI 는 공통 맥락 C + 개인 기록 P 로 후보를 만들고, Depth 모델은 (C, 후보 하나) → 점수 하나를 낸다.
 
-- 일반 세트: 검수 통과 후보 전부를 채점한다(영어 변환 1번에 전부). 기존 선택 규칙(최대 3개·유형당 1개·의미 그룹당 1개·품질 우선)은
-  그대로 두고, 같은 품질 안의 우선순위(기존: 후보 번호)를 Depth 점수 내림차순으로 바꿔 고른다. 고른 카드는 점수순으로 저장한다.
-- 개인 세트: 병합(merge_personal)은 기존 규칙·순서 그대로 하고, 병합이 끝난 최종 카드의 표시 순서만 점수순으로 바꾼다.
+- 검수(통과/탈락만): 8개 검사·issue none·quality ≥ 3(개인 후보는 useful_personalization 도). 품질 점수는 통과 기준으로만 쓰고
+  선택 순서에는 쓰지 않는다.
+- 한 풀 선택(`depth.select_pool`, `selection_policy=depth-pool-v1`): 통과 후보를 Depth 점수 내림차순(동점은 후보 번호 순)으로
+  유형당 1개·의미 그룹(`redundancy_group`)당 1개·최대 3개. 고른 카드는 점수순으로 저장한다.
+- 일반 세트: 일반 통과 후보 전부를 채점(영어 변환 1번에 전부)하고 한 풀 선택.
+- 개인 세트: 일반 시도의 통과 후보 전체(`candidates.kept` + 검수 결과, 점수는 `depth_ranking.scores` 재사용) + 개인 통과 후보를 한 풀로
+  고른다. 개인 후보만 같은 공통 C(일반 세트의 영어 C 재사용)로 채점한다. 일반 점수와 모델·영어 C 가 다르면 섞지 않는다(`SCORE_MISMATCH`).
+  개인 검수 입력(`gate-input.generic_candidates`)에 일반 통과 후보와 그 의미 그룹을 넣고, 같은 의미면 그 그룹 이름을 그대로 쓰게 한다
+  (지시문 `04-gate.txt` 는 새 버전을 만들 때 반영된다). 개인 후보가 하나도 뽑히지 않으면 일반 세트를 그대로 쓴다. 일반 세트에 있던 후보는
+  같은 카드 id 를 쓴다.
 
-`REPLY_AI_DEPTH_RANKING_ENABLED=false`(기본)이거나 채점에 실패하면 선택·순서·기록이 기존과 같다.
+`REPLY_AI_DEPTH_RANKING_ENABLED=false`(기본)이면 선택·순서·검수 입력·기록이 기존과 같다(일반: 품질순 `select_generic`, 개인:
+`merge_personal`). 켜져 있어도 채점에 실패하면 같은 기존 선택을 쓰고 상태만 남긴다(개인 검수가 일반 그룹 이름을 썼으면 병합 규칙의
+`base:<card_id>` 로 바꿔 판정한다). 13장 고정 검증 재생성은 Depth 점수가 없어 기존 품질순 선택이다.
 
 - 모델: `microsoft/DialogRPT-depth`, revision `0fa8a8770e267801a5779788ccfd921192ae7f40`(MIT, GPT-2 medium 24층,
   `GPT2ForSequenceClassification` num_labels 1). 영어 Reddit 으로만 학습돼 입력은 영어로 바꿔 넣는다. 가중치 학습 없이 추론만 한다.
 - 서비스: `reply-ai depth-serve`(`depth_service.py`, extra `depth` 전용 — 작업기 이미지에는 넣지 않는다). `POST /score`
-  `{context_en: [턴…], candidates_en: [예문…]}` → `{scores, model_id, model_revision, max_seq_len}`, `GET /info`·`/health`.
-  `model_id` 는 모델·revision 앞 12자·max_seq_len·정밀도·라이브러리 버전·장치(`microsoft/DialogRPT-depth@0fa8a8770e26#len50#fp32#tf5.22.2#torch2.15.0#cpu`).
-- 입력: 맥락 턴마다 `<|endoftext|>`(50256) 로 끝내고 답장을 붙인다. 학습 때처럼 50 토큰을 넘으면 앞쪽부터 자른다.
+  `{context_en: [턴…], candidates_en: [예문…]}` → `{scores, model_id, model_revision, max_seq_len, context_token_cap, inputs}`,
+  `GET /info`·`/health`. `model_id` 는 모델·revision 앞 12자·max_seq_len·C 토큰 상한·정밀도·라이브러리 버전·장치
+  (`microsoft/DialogRPT-depth@0fa8a8770e26#len50#ctx25#fp32#tf5.22.2#torch2.15.0#cpu`).
+- 입력: 맥락 턴마다 `<|endoftext|>`(50256) 로 끝내고 답장을 붙인다. C(구분자 포함)는 `REPLY_AI_DEPTH_CONTEXT_TOKEN_CAP`(기본 25, 0 이면
+  상한 없음) 토큰으로 앞쪽부터 자르고 답장은 자르지 않는다. 합이 50 토큰을 넘으면 C 를 앞쪽부터 더 자른다. 답장 혼자 50 토큰을 넘을 때만
+  답장 뒤쪽을 자르고 C 없이 넣는다(`reply_truncated`). depth-serve·`build-pairs`·`train`·`eval` 이 같은 값을 써야 한다(`input_profile`).
   점수 = 답장 마지막 토큰(길이−1)의 logit → sigmoid. 구분자와 패딩이 같은 50256 이라 분류 헤드의 자동 위치 선택은 쓰지 않고
   `model.transformer` 은닉상태 + `model.score` 로 직접 계산한다.
 - 시작 점검: 공식 코드 출력([`doc/toy.tsv.ensemble.jsonl`](https://github.com/golsun/DialogRPT/blob/master/doc/toy.tsv.ensemble.jsonl)
   의 depth 5개)을 1e-3 안에서 재현하지 못하면 시작하지 않는다(실제로는 소수 여섯째 자리까지 같다). 모델 카드 표의
   "Me too!" 0.032 는 같고, "Can anyone recommend a nice review paper?" 0.724 는 공식 계산 방식으로 나오지 않는다(0.5986, 순서는 같음).
+  공식 예시는 짧아 C 25 토큰 상한에 걸리지 않는다.
 - 공통 맥락 C: 분석 스냅샷(영상 게시 시점 고정)의 공개 근거만 — 분석이 인용한 게시 전 단체 대화 중 최근 N 턴(입력 순서) + 영상 게시글
   (캡션 + 장면 설명). 개인 기록 P 는 넣지 않는다. 개인 세트도 일반 세트의 영어 C 를 그대로 다시 쓰고 새 카드 예문만 변환한다.
 - 영어 변환: 기존 provider 로 strict 스키마 1번(`09-depth-translate.txt` / `depth-translate.schema.json`, 단계 이름 `depth_translate:<입력 sha>`).
   입력이 50 토큰이라 C 를 그대로 옮기면 장면 설명 꼬리만 남는다. 그래서 변환 단계가 C 를 영어 한두 문장(영상 내용·캡션·단체 대화 요지,
-  목표 약 30 토큰 이하, 240자 이하)으로 압축하고, 점수 입력의 맥락은 이 한 턴이다. 예문은 압축하지 않고 그대로 옮긴다.
+  25 토큰 이하, 240자 이하)으로 압축하고, 점수 입력의 맥락은 이 한 턴이다. 예문은 압축하지 않고 그대로 옮긴다.
   비용 예약·단계 캐시는 다른 모델 단계와 같다. 지시문은 버전 레지스트리에 묶지 않고 sha 를 기록에 남긴다.
-- 기록: 한국어 원문은 바꾸지 않는다. 카드마다 `internal_cards[].depth = {score, rank, original_rank, example_en, model_id}`,
-  시도마다 `generation_attempt.candidates.depth_ranking`(상태·영어 C·후보 영어·점수·원래/정렬 순서·model_id·변환 지시문 sha·
-  C 에 넣은/인용된 대화 턴 수·후보별 실제 입력 토큰 수와 잘림 여부 `inputs[] = {context_tokens, reply_tokens, input_tokens, used_tokens,
-  truncated, reply_truncated}`). 공개 `cards` 는 정렬된 순서만 바뀐다.
-- 일반 세트 기록(`depth_ranking`, `scope=candidates`): 후보 전체 점수(`scores[]`, candidate_id 기준), 선택 전 순서(`candidate_order`),
-  Depth 우선순위(`prioritized_order`), Depth 없이 골랐을 카드(`baseline_selected`)와 고른 카드(`selected`), `selection_changed`·
+- 기록: 한국어 원문은 바꾸지 않는다. 카드마다 `internal_cards[].depth = {score, rank, example_en, model_id}`,
+  시도마다 `generation_attempt.candidates.depth_ranking`(상태·선택 정책·영어 C·후보 영어·점수·순서·model_id·변환 지시문 sha·
+  C 에 넣은/인용된 대화 턴 수·후보별 실제 입력 토큰 수와 잘림 여부 `inputs[] = {context_tokens, context_used_tokens, reply_tokens,
+  input_tokens, used_tokens, truncated, context_truncated, reply_truncated}`). 공개 `cards` 는 점수순이다.
+- 일반 세트 기록(`depth_ranking`, `scope=candidates`): 후보 전체 점수(`scores[]`, candidate_id 기준), 풀 순서(`candidate_order`),
+  점수순(`prioritized_order`), Depth 없이 골랐을 카드(`baseline_selected`)와 고른 카드(`selected`), `selection_changed`·
   `added_by_depth`·`removed_by_depth`, 표시 순서(`ranked_order`).
-- 개인화 입력(base_cards)과 병합(merge_personal)은 Depth 없이 정했을 순서(`depth.original_rank` = 품질·후보 번호 순)로 동작하고,
-  병합 결과를 다시 점수순으로 정렬한다.
-- 재시도: 점수 단계(`depth_score`)는 카드 id 목록과 함께 저장하고, 재시도에서 카드가 새로 만들어져 id 가 다르면 버리고 다시 계산한다
+- 개인 세트 기록(`scope=pool`): 풀 순서(`pool_order`)·일반/개인 후보 id·다시 쓴 일반 점수(`generic_scores_reused`, 출처 `generic_scores_from`)·
+  풀 전체 점수·고른 카드(`selected`)·그중 개인 후보(`personal_selected`)·기존 병합이었으면 고를 카드(`baseline_selected`).
+  개인화 생성 입력(base_cards)과 기존 병합은 표시 순서가 아니라 기존 선택 순서(품질·후보 번호)로 한다.
+- 재시도: 점수 단계(`depth_score`)는 후보 id 목록과 함께 저장하고, 재시도에서 후보가 새로 만들어져 id 가 다르면 버리고 다시 계산한다
   (예문이 같으면 변환은 캐시를 쓴다). 서비스는 맥락 턴이 32개를 넘어도 거절하지 않고 최근 32턴만 쓴다.
 - 실패: 서비스 꺼짐·오류(`SERVICE_UNAVAILABLE`), 응답 형식 위반(`SERVICE_INVALID`), 영어 변환 실패·비용 한도(`TRANSLATION_FAILED`),
-  캐시·응답을 카드에 대응시키지 못함(`RANKING_INVALID`)은
-  원래 순서를 유지하고 상태만 남긴다(fail-open, 생성·검수는 다시 부르지 않는다). 서비스를 먼저 확인하고 꺼져 있으면 변환을 부르지 않는다.
-  카드가 2개 미만이면 `NOT_NEEDED`.
+  캐시·응답을 카드에 대응시키지 못함(`RANKING_INVALID`), 개인 풀의 점수 불일치(`SCORE_MISMATCH`)는
+  기존 품질순 선택을 쓰고 상태만 남긴다(fail-open, 생성·검수는 다시 부르지 않는다). 서비스를 먼저 확인하고 꺼져 있으면 변환을 부르지 않는다.
+  일반 통과 후보가 2개 미만이면 `NOT_NEEDED`(개인 세트에서 그 후보도 함께 채점한다).
 - 점수는 같은 C 의 후보끼리 비교하는 값이다. 0.8 을 확률 80% 로 쓰지 않는다.
 
 ```sh
@@ -210,6 +225,7 @@ HF_HUB_OFFLINE=1 uv run --extra depth pytest -m depth_live -s   # 실제 가중�
 작업기·depth-serve 동작은 바꾸지 않는 오프라인 명령이다. `export-outcomes` 만 DB 를 읽고, 나머지는 파일만 쓴다.
 
 1. `export-outcomes`: 실제 답장 1건 = 1행(jsonl) + 지표 요약.
+   - 영어 번역 비용이 온라인 하루 한도(`REPLY_AI_DAILY_BUDGET_USD`)를 같이 쓴다. 운영·시연 시간대에는 실행하지 않는다.
    - 추천 쪽: `set_id`(답장의 유효 추천 출처, 없으면 그 답장 episode 가 본 세트), 노출 순서의 카드별 예문(한국어/영어)·추천 당시
      예측 점수·`model_id`(랭킹이 꺼져 있던 세트는 null), 선택한 카드 id(없으면 null).
    - 실제 쪽: 실제 전송 문장(수집 허용 출처만 — `episode_reply_snapshot`, `REPLY_AI_REAL_USER_FEEDBACK_ENABLED` 가 꺼져 있으면
@@ -233,12 +249,13 @@ HF_HUB_OFFLINE=1 uv run --extra depth pytest -m depth_live -s   # 실제 가중�
    - 요약: 실제 문장 점수 vs 실제 Depth 의 Spearman(n 함께, 3개 미만·한쪽이 모두 같으면 null), 같은 C 쌍의 쌍 비교 정확도(같은 점수는
      `ties` 로 따로, `--max-hour-gap` 은 build-pairs 와 같다), 연결 구분별 평균 Depth·영상 작성자 재답장률·평균 후속 메시지 수(값을 아는 행만
      세고 없으면 null), 전체 재답장률, 점수 상태별 수, 미관측 수·이유, 관측 Depth 0 의 수.
-2. `build-pairs`: export 결과 → 같은 영상(같은 C)의 실제 답장끼리 depth 큰 쪽을 r+ 로 한 (C, r+, r−). 답장은 언제나 실제 전송 문장이다
+2. `build-pairs`: export 결과 → 같은 C(한국어 C 턴 sha `context.context_ko_sha`, 번역 캐시 키와 같은 값)의 실제 답장끼리 depth 큰 쪽을
+   r+ 로 한 (C, r+, r−). 같은 영상이라도 C 가 다르면 쌍을 만들지 않는다. 쌍마다 `context_ko_sha` 가 남는다. 답장은 언제나 실제 전송 문장이다
    (카드 예문은 분석용). 동점·`--min-depth-diff` 미만, 두 답장 전송 시각 차가 `--max-hour-gap`(기본 1시간, 논문 §3.1, 0 이면 보지 않음)을
-   넘거나 전송 시각을 모르는 쌍은 빼고 이유별로 센다(unobserved·text_unavailable·english_unavailable·context_unavailable·single_reply·
-   tie·below_min_diff·over_hour_gap·sent_at_unknown·chat_room_unknown·cohort_unknown·chat_room_cohort_conflict·INPUT_COLLISION).
+   넘거나 전송 시각을 모르는 쌍은 빼고 이유별로 센다(unobserved·text_unavailable·english_unavailable·context_unavailable·
+   context_key_unavailable·single_reply·tie·below_min_diff·over_hour_gap·sent_at_unknown·chat_room_unknown·cohort_unknown·chat_room_cohort_conflict·INPUT_COLLISION).
    - `INPUT_COLLISION`: 두 답장이 영어 변환·토큰 잘림 뒤 실제 점수 입력(θ0 토크나이저 + `depth_service.build_ids`, 같은 C·같은
-     `--max-seq-len`)이 같으면 비교할 수 없어 뺀다. 빠진 쌍 id 는 `input_collisions`, 쌍마다 `input_profile`·양쪽 `input_hash` 가 남는다.
+     `--max-seq-len`·C 토큰 상한)이 같으면 비교할 수 없어 뺀다. 빠진 쌍 id 는 `input_collisions`, 쌍마다 `input_profile`·양쪽 `input_hash` 가 남는다.
    - 분할(기수 단위 3개): 행·쌍의 `cohort_id`(답장 채팅방의 3일 방 `rooms.cohort_id`, 수집기가 남긴다) 최댓값 = 최신 기수 = `test`.
      그 이전 기수 안에서 채팅방 id 해시(`--val-fraction`, 기본 0.2)로 `val`(조기 종료용)·`train`. `cohort_id` 를 모르는 쌍은 뺀다.
      같은 채팅방은 두 분할에 걸치지 않는다(기수가 엇갈리는 채팅방은 뺀다). `chat_room_id` 는 `reply_depth_observation.room_id`
@@ -251,7 +268,12 @@ HF_HUB_OFFLINE=1 uv run --extra depth pytest -m depth_live -s   # 실제 가중�
    결과 디렉터리에 `model.safetensors`·토크나이저·`depth_train.json`(base·revision·공식 출력 재현 점검, 인자, 멈춘 이유·best step,
    step 별 train 손실·검증 손실, 쌍 파일 sha, train/val 채팅방·기수). 비어 있지 않은 디렉터리에는 쓰지 않는다.
 4. `eval`: test 분할(최신 기수, train/val 채팅방·기수와 겹치면 거부)에서 θ0 vs 새 모델의 쌍 비교 정확도. test 쌍이 `--min-eval-pairs`(기본 30)
-   미만이면 `INCONCLUSIVE`(정확도는 참고로만 남긴다), 이상이고 새 모델이 더 높을 때만 `REPLACEABLE`, 아니면 `KEEP_BASE`. 교체(depth-serve 가 읽는 모델 바꾸기)는 자동으로 하지 않는다.
+   미만이면 `INCONCLUSIVE`(정확도는 참고로만 남긴다), 이상이고 새 모델 정확도가 θ0 보다 2%p 이상(≥ 0.02, 경계 포함) 높을 때만
+   `REPLACEABLE`, 아니면 `KEEP_BASE`. 교체(depth-serve 가 읽는 모델 바꾸기)는 자동으로 하지 않는다.
+
+- 모델 교체는 수동이다. `eval` 은 판정(`REPLACEABLE`/`KEEP_BASE`/`INCONCLUSIVE`)만 내고, depth-serve 가 읽는 모델 경로는 사람이 바꾼다.
+- 비노출 답장 원문 저장, 장기 학습셋 보관, 단체방에서 같은 방향 카드 제외 3건은 처리방침 개정 전까지 보류다. 그때까지 `train` 의
+  "누적 전체 쌍"은 원문 보존 기간 30일(`episode_reply_snapshot`) 안에 남아 있는 데이터만이다.
 
 ```sh
 uv run reply-ai depth export-outcomes --out outcomes.jsonl --summary outcomes.summary.json \
