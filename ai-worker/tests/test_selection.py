@@ -1,4 +1,4 @@
-"""8장 선택 규칙과 7장 개인화 병합(연구 select_generic/merge_personal 과 같은 동작)."""
+"""8장 선택 규칙과 7장 개인화 병합(연구 select_generic/merge_personal 과 같은 동작). Depth 꺼짐·실패 때(fail-open)의 선택이다."""
 from reply_ai.generation import accepted_candidates, merge_personal, select_generic
 from reply_ai.resources import GATE_BOOLEANS
 

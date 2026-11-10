@@ -41,10 +41,16 @@ def generation_input(task_id: str, current: dict[str, Any], viewer_id: str, refe
 
 def gate_input(task_id: str, current: dict[str, Any], viewer_id: str, references: list[dict[str, Any]],
                history_records: list[dict[str, Any]], personal_history: list[dict[str, Any]],
-               base_cards: list[dict[str, Any]], candidates: list[dict[str, Any]]) -> dict[str, Any]:
-    return _with_sha({"task_id": task_id, "current": current, "viewer_id": viewer_id, "references": references,
-                      "history_records": history_records, "personal_history": personal_history,
-                      "base_cards": base_cards, "candidates": candidates})
+               base_cards: list[dict[str, Any]], candidates: list[dict[str, Any]],
+               generic_candidates: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """generic_candidates(Depth 한 풀 선택 때만): 일반 검수 통과 후보와 그 redundancy_group. None 이면 키를 넣지 않는다."""
+    body = {"task_id": task_id, "current": current, "viewer_id": viewer_id, "references": references,
+            "history_records": history_records, "personal_history": personal_history,
+            "base_cards": base_cards, "candidates": candidates}
+    if generic_candidates is not None:
+        body["generic_candidates"] = [{k: c[k] for k in ("candidate_id", "category", "title", "example", "redundancy_group")}
+                                      for c in generic_candidates]
+    return _with_sha(body)
 
 
 def candidate_number(candidate_id: str) -> int:
@@ -154,8 +160,14 @@ def select_generic(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return selected
 
 
+def quality_order(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """품질 내림차순, 후보 번호 오름차순(accepted_candidates 와 같은 순서). 카드 표시 순서와 무관한 기존 선택 순서."""
+    return sorted(cards, key=lambda c: (-c["quality"], candidate_number(c["candidate_id"])))
+
+
 def merge_personal(base: list[dict[str, Any]], personal: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
     """연구 merge_personal 과 같다. base 의 redundancy_group 은 'base:<card_id>'.
+    Depth 꺼짐·실패 때의 개인 세트 선택(fail-open)에만 쓴다. Depth 가 되면 depth.select_personal 의 한 풀 선택을 쓴다.
 
     같은 유형: 품질이 엄격히 높을 때만 교체(제자리). 다른 유형이 의미 중복이면 버림.
     빈 자리: 끝에 추가. 만석: 최저 품질보다 엄격히 높을 때만 교체, 최저 동률이면 뒤 순위 카드를 교체.

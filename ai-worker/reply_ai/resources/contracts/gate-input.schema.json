@@ -234,6 +234,37 @@
         "additionalProperties": false
       }
     },
+    "generic_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidate_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "example": {
+            "type": "string"
+          },
+          "redundancy_group": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "category",
+          "title",
+          "example",
+          "redundancy_group"
+        ],
+        "additionalProperties": false
+      }
+    },
     "candidates": {
       "type": "array",
       "items": {

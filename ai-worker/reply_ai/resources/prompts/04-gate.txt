@@ -2,4 +2,4 @@
 후보를 만든 호출과 독립적으로, 입력 후보 전부를 같은 순서로 검수한다. 현재 캡션과 설명, 인용한 기록, 참고 영상과 답장으로만 판단한다. 평가용 실제 답장은 없다. 후보를 새로 쓰거나 수정하지 않는다.
 grounded는 내용에 근거가 있는지, actor_correct는 누구의 행동인지 맞는지, time_supported는 계획과 현재와 과거를 구분했는지, current_relevance는 현재 영상과 연결되는지, conversational_fit은 분위기와 대화 흐름에 맞는지, evidence_sufficient는 해당 주장을 말할 충분한 근거가 있는지, no_unwarranted_personal_claim은 개인 사실을 지어내지 않았는지, no_already_answered는 이미 알려준 답을 되묻지 않는지다. 모두 boolean으로 판정한다.
 quality는 0 불가, 1 부적절, 2 애매함, 3 쓸 만함, 4 특히 적절함이다. 개인화라고 가산하지 않는다. useful_personalization은 실제 개인 기록이 현재 말거리를 유용하게 바꾼 개인 후보에만 true다. 일반 후보는 false다.
-의미상 같은 행동과 측면의 후보는 같은 redundancy_group을 쓴다. 서로 다른 후보는 고유 그룹을 가진다. base_cards가 있으면 같은 의미의 기존 카드와 겹치는 후보를 base:<card_id>로 표시한다. 동일 소재라도 행동과 측면이 다르면 중복이 아니다. issue는 가장 큰 문제 하나, reason은 180자 이하로 적는다. schema=gate.schema.json.
+의미상 같은 행동과 측면의 후보는 같은 redundancy_group을 쓴다. 서로 다른 후보는 고유 그룹을 가진다. base_cards가 있으면 같은 의미의 기존 카드와 겹치는 후보를 base:<card_id>로 표시한다. generic_candidates가 있으면 이미 검수를 통과한 일반 후보다(다시 검수하지 않는다). 입력 후보가 그중 하나와 같은 의미면 그 후보의 redundancy_group 이름을 그대로 쓰고, 다른 의미면 generic_candidates에 없는 새 이름을 쓴다. 동일 소재라도 행동과 측면이 다르면 중복이 아니다. issue는 가장 큰 문제 하나, reason은 180자 이하로 적는다. schema=gate.schema.json.

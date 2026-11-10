@@ -381,6 +381,50 @@ def _references_from_record(conn, record: dict[str, Any] | None) -> list[dict[st
     return result
 
 
+def _generic_accepted(attempt: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """일반 시도의 검수 통과 후보 전체(후보 + 검수 결과로 다시 만든다). 기록이 없으면 빈 목록."""
+    candidates = ((attempt and attempt["candidates"]) or {}).get("kept") or []
+    assessments = ((attempt and attempt["gate"]) or {}).get("assessments") or []
+    if not candidates or [a.get("candidate_id") for a in assessments] != [c["candidate_id"] for c in candidates]:
+        return []
+    return generation.accepted_candidates(candidates, assessments)
+
+
+def _merge_fail_open(base_internal: list[dict[str, Any]], accepted: list[dict[str, Any]], *, generic_groups: bool
+                     ) -> list[dict[str, Any]]:
+    """Depth 꺼짐·실패 때의 개인 세트(기존 병합). 개인 카드가 하나도 채택되지 않으면 빈 목록(일반 세트를 그대로 쓴다).
+
+    generic_groups: 개인 검수가 일반 후보의 의미 그룹 이름을 그대로 썼다(Depth 켜짐). 일반 카드와 같은 그룹이면
+    병합 규칙의 'base:<card_id>' 로 바꿔 판정하고, 저장할 때는 원래 그룹 이름으로 되돌린다.
+    """
+    base_for_merge = [{**c, "redundancy_group": "base:" + c["card_id"]} for c in base_internal]
+    original = {c["candidate_id"]: c["redundancy_group"] for c in accepted}
+    if generic_groups:
+        to_base = {c["redundancy_group"]: "base:" + c["card_id"] for c in base_internal}
+        accepted = [{**c, "redundancy_group": to_base.get(c["redundancy_group"], c["redundancy_group"])} for c in accepted]
+    chosen, used = generation.merge_personal(base_for_merge, accepted)
+    if not used:
+        return []
+    internal = [c if "card_id" in c else generation.new_card(c) for c in chosen]
+    for card in internal:  # 일반 카드는 원래 의미 그룹으로 되돌려 저장한다(base: 표시는 병합용).
+        if "card_id" in card and any(b["card_id"] == card["card_id"] for b in base_internal):
+            card["redundancy_group"] = next(b for b in base_internal if b["card_id"] == card["card_id"])["redundancy_group"]
+        elif card["candidate_id"] in original:
+            card["redundancy_group"] = original[card["candidate_id"]]
+    return depth.strip(internal)  # 일반 세트에서 복사한 카드의 이전 순위 기록을 뗀다
+
+
+def _pool_cards(selected: list[dict[str, Any]], base_internal: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """한 풀 선택 결과를 카드로. 일반 세트에 이미 있는 후보는 그 카드(card_id)를 다시 쓴다. 순서는 점수순."""
+    by_candidate = {c["candidate_id"]: c for c in base_internal}  # 일반 카드(G…). 개인 후보는 P… 라 겹치지 않는다.
+    cards = []
+    for c in selected:
+        existing = by_candidate.get(c["candidate_id"])
+        card = {k: v for k, v in existing.items() if k != "depth"} if existing else generation.new_card(c)
+        cards.append(card | {"depth": c["depth"]})
+    return cards
+
+
 def run_personal(ctx: JobContext) -> None:
     conn = ctx.conn
     personal_id = int(ctx.job.payload["personal_input_id"])
@@ -401,13 +445,16 @@ def run_personal(ctx: JobContext) -> None:
     prompts = version["prompts_json"]
     viewer, uploader = str(pinput["viewer_id"]), str(source["author_id"])
     records = list(pinput["personal_records"] or [])
-    # Depth 순서는 표시 순서에만 쓴다. 개인화 입력·병합은 정렬 전(생성·선택) 순서로 한다.
-    base_internal = depth.original_order(list(base["internal_cards"] or []))
+    depth_on = ctx.settings.depth_ranking_enabled
+    # 개인화 입력·기존 병합은 표시 순서(Depth 순)가 아니라 기존 선택 순서(품질·후보 번호)로 한다.
+    base_internal = generation.quality_order(list(base["internal_cards"] or []))
     result_set_id, candidates_doc, gate_output, gen_sha, gate_sha = base["set_id"], None, None, None, None
-    base_attempt = conn.execute("SELECT retrieval, candidates FROM ai_reply.generation_attempt WHERE id = %s",
+    base_attempt = conn.execute("SELECT retrieval, candidates, gate FROM ai_reply.generation_attempt WHERE id = %s",
                                 (base["attempt_id"],)).fetchone()
     references = _references_from_record(conn, base_attempt and base_attempt["retrieval"])
-    chosen: list[dict[str, Any]] = []
+    # Depth 한 풀 선택: 일반 시도의 검수 통과 후보 전체(후보·검수 결과·점수 기록 재사용).
+    generic_pool = _generic_accepted(base_attempt) if depth_on else []
+    internal: list[dict[str, Any]] = []
     if records:  # 근거가 없으면 모델을 부르지 않고 일반 카드를 그대로 쓴다.
         current = generation.current_block(source, snapshot)
         history = analysis.cited_records(list(source["history_records"] or []), snapshot["output_json"])
@@ -423,8 +470,11 @@ def run_personal(ctx: JobContext) -> None:
         candidates_doc = {"output": generated.output, "kept": kept, "dropped": dropped}
         if kept:
             used_ids = {q["source_id"] for c in kept for q in c["personalization"]["source_quotes"]}
+            # Depth 가 켜져 있으면 개인 검수가 일반 통과 후보와 같은 의미 그룹 이름을 쓰도록 그 후보를 함께 넣는다.
             gate_payload = generation.gate_input(f"gate-personal-{personal_id}", current, viewer, references, history,
-                                                 [r for r in records if r["source_id"] in used_ids], base_cards, kept)
+                                                 [r for r in records if r["source_id"] in used_ids],
+                                                 [] if depth_on else base_cards, kept,
+                                                 generic_candidates=generic_pool if depth_on else None)
             analysis.validate_input("gate-input.schema.json", gate_payload)
             gate_sha = gate_payload["input_sha256"]
             gated = ctx.model_call("personal_gate", ModelRequest("gate", prompts["gate"], gate_payload,
@@ -432,30 +482,26 @@ def run_personal(ctx: JobContext) -> None:
             gate_output = gated.output
             assessments = generation.validate_gate(gate_output, kept)
             accepted = generation.accepted_candidates(kept, assessments, personal=True)
-            base_for_merge = [{**c, "redundancy_group": "base:" + c["card_id"]} for c in base_internal]
-            chosen, used = generation.merge_personal(base_for_merge, accepted)
-            if not used:
-                chosen = []
-    internal: list[dict[str, Any]] = []
-    if chosen:
-        internal = [c if "card_id" in c else generation.new_card(c) for c in chosen]
-        for card in internal:  # 일반 카드는 원래 의미 그룹으로 되돌려 저장한다(base: 표시는 병합용).
-            if card["redundancy_group"].startswith("base:"):
-                original = next(b for b in base_internal if b["card_id"] == card["card_id"])
-                card["redundancy_group"] = original["redundancy_group"]
-        # 개인 세트도 점수 입력의 맥락은 공통 C 다(개인 기록은 생성에만 쓴다).
-        base_depth = ((base_attempt and base_attempt["candidates"]) or {}).get("depth_ranking")
-        internal, depth_record = depth.rank_cards(ctx, internal, source=source, snapshot=snapshot,
-                                                  task_id=f"personal-{personal_id}", base_record=base_depth)
-        if depth_record is not None and candidates_doc is not None:
-            candidates_doc["depth_ranking"] = depth_record
+            fallback = _merge_fail_open(base_internal, accepted, generic_groups=depth_on)
+            if depth_on and accepted:
+                base_depth = ((base_attempt and base_attempt["candidates"]) or {}).get("depth_ranking")
+                selected, depth_record = depth.select_personal(
+                    ctx, generic_pool, accepted, source=source, snapshot=snapshot, task_id=f"personal-{personal_id}",
+                    base_record=base_depth, baseline_selected=[c["candidate_id"] for c in fallback or base_internal])
+                candidates_doc["depth_ranking"] = depth_record
+                if selected is not None:
+                    fallback = None
+                    if any(c["candidate_id"] in depth_record["personal_candidates"] for c in selected):
+                        internal = _pool_cards(selected, base_internal)
+            if fallback is not None:
+                internal = fallback
     with conn.transaction():
         jobs.lock_owned(conn, ctx.job.id, ctx.owner)
         attempt_id = _insert_attempt(conn, ctx, stage="PERSONAL", analysis=snapshot, version=version,
                                      gallery=base["gallery_snapshot_id"], revision_no=base["revision_no"], retrieval=None,
                                      gen_sha=gen_sha, gate_sha=gate_sha, candidates=candidates_doc, gate=gate_output,
                                      viewer_id=pinput["viewer_id"], personal_input_id=personal_id, base_set_id=base["set_id"])
-        if chosen:
+        if internal:
             result_set_id = _insert_set(conn, ctx, attempt_id=attempt_id, kind="PERSONAL", analysis=snapshot, version=version,
                                         gallery=base["gallery_snapshot_id"], revision_no=base["revision_no"], internal=internal,
                                         expires_at=base["expires_at"], viewer_id=pinput["viewer_id"], base_set_id=base["set_id"])

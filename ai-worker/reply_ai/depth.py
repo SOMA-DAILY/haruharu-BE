@@ -1,15 +1,17 @@
-"""Depth 평가 모델 랭킹(최종 카드 정렬). REPLY_AI_DEPTH_RANKING_ENABLED=false(기본)면 아무것도 하지 않는다.
+"""Depth 평가 모델로 최종 카드 선택. REPLY_AI_DEPTH_RANKING_ENABLED=false(기본)면 아무것도 하지 않는다.
 
 - 공통 맥락 C = 영상 게시 시점의 분석 스냅샷에서 공개 근거만: 분석이 인용한 게시 전 단체 대화 중 최근 N 턴
   (REPLY_AI_DEPTH_CONTEXT_CHAT_TURNS, 입력 순서) + 영상 게시글(캡션 + 장면 설명). 개인 기록 P 는 넣지 않는다
   (개인 세트도 같은 C 로 점수를 매긴다).
 - 모델 입력은 최대 50 토큰이라 C 를 그대로 옮기면 장면 설명 꼬리만 남는다. 그래서 변환 단계가 C 를 영어 한두 문장
-  (영상 내용·캡션·단체 대화 요지, 목표 약 30 토큰 이하)으로 압축하고, 그 한 턴을 점수 입력의 맥락으로 쓴다.
-  실제 입력 토큰 수·잘림 여부는 서비스 응답을 받아 기록에 남긴다.
-- 압축 C 와 최종 카드 예문을 기존 provider 로 한 번에 변환(strict 스키마 1번, 비용 예약·단계 캐시는 JobContext.model_call).
+  (영상 내용·캡션·단체 대화 요지, 목표 25 토큰 이하)으로 압축하고, 그 한 턴을 점수 입력의 맥락으로 쓴다.
+  점수 서비스는 C 를 25 토큰(설정값)으로 자르고 답장은 자르지 않는다. 실제 입력 토큰 수·잘림 여부는 기록에 남긴다.
+- 압축 C 와 후보 예문을 기존 provider 로 한 번에 변환(strict 스키마 1번, 비용 예약·단계 캐시는 JobContext.model_call).
   한국어 원문은 바꾸지 않고, 영어·점수·모델 id·순위를 카드(`depth`)와 시도 기록(`candidates.depth_ranking`)에 남긴다.
-- 점수 서비스(depth-serve)에 (C, 후보 하나) → 점수 하나를 받아 점수 내림차순(동점은 원래 순서)으로 정렬한다.
-- 서비스 꺼짐·실패·영어 변환 실패는 원래 순서를 유지하고 상태만 기록한다(fail-open). 생성·검수를 다시 부르지 않는다.
+- 선택(select_pool): 검수 통과 후보 한 풀(개인 세트는 일반 통과 후보 + 개인 통과 후보)을 Depth 내림차순(동점은 후보 순서)으로
+  유형당 1개·의미 그룹당 1개·최대 3개. 품질 점수는 통과 기준(≥3)으로만 쓰고 정렬에 쓰지 않는다.
+- 서비스 꺼짐·실패·영어 변환 실패는 기존 품질순 선택(generation.select_generic, 개인은 merge_personal)을 쓰고 상태만
+  기록한다(fail-open). 생성·검수를 다시 부르지 않는다.
 - 점수는 같은 C 의 후보끼리 비교하는 값이다. 확률로 해석하지 않는다.
 """
 from __future__ import annotations
@@ -41,6 +43,10 @@ SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"     # 서비스 연결·시간 초�
 SERVICE_INVALID = "SERVICE_INVALID"             # 응답 형식·개수·유한값 위반
 TRANSLATION_FAILED = "TRANSLATION_FAILED"       # 영어 변환 호출 실패(비용 한도 포함)
 RANKING_INVALID = "RANKING_INVALID"             # 캐시·응답을 카드에 대응시키지 못함(정렬 없이 원래 순서)
+SCORE_MISMATCH = "SCORE_MISMATCH"               # 개인 풀: 일반 기록 점수와 모델·영어 C 가 달라 섞을 수 없음
+# 선택 정책: 검수 통과(8개 검사·issue none·quality≥3, 개인은 useful_personalization) 후보 한 풀을 Depth 내림차순으로
+# 유형당 1개·의미 그룹당 1개·최대 3개. 품질은 통과 기준으로만 쓴다.
+SELECTION_POLICY = "depth-pool-v1"
 
 
 class DepthUnavailable(Exception):
@@ -147,13 +153,6 @@ def _translate(ctx: Any, task_id: str, context_ko: list[dict[str, str]], cards_k
             "prompt_sha": sha256_json(instructions), "model": result.model}
 
 
-def original_order(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Depth 정렬 전(생성·선택) 순서. 병합 같은 순서 의존 규칙은 이 순서로 동작한다(Depth 는 표시 순서에만)."""
-    if cards and all(isinstance(c.get("depth"), dict) and isinstance(c["depth"].get("original_rank"), int) for c in cards):
-        return sorted(cards, key=lambda c: c["depth"]["original_rank"])
-    return list(cards)
-
-
 def _text_key(text: str) -> str:
     return "t" + sha256_text(text)[:16]
 
@@ -226,55 +225,42 @@ def _score(ctx: Any, items: list[dict[str, Any]], *, source: dict[str, Any], sna
     return stage, record
 
 
-def _annotate(cards: list[dict[str, Any]], stage: dict[str, Any], key: str = "card_id") -> list[dict[str, Any]]:
-    """점수 내림차순(동점은 들어온 순서)으로 정렬하고 카드마다 depth 기록을 붙인다. original_rank = 들어온 순서."""
-    scores = [float(stage["scores"][c[key]]) for c in cards]
-    ranked = rank_by_scores(cards, scores)
-    original = {c[key]: i + 1 for i, c in enumerate(cards)}
-    return [{**card, "depth": {"score": round(stage["scores"][card[key]], 6), "rank": rank, "original_rank": original[card[key]],
-                               "example_en": stage["candidates_en"][card[key]], "model_id": stage["model_id"]}}
-            for rank, card in enumerate(ranked, start=1)]
+def select_pool(pool: list[dict[str, Any]], scores: dict[str, float] | None = None, key: str = "candidate_id"
+                ) -> list[dict[str, Any]]:
+    """한 풀 선택. scores 가 있으면 Depth 내림차순(동점은 풀 순서)으로 유형당 1개·의미 그룹당 1개·최대 3개.
 
-
-def rank_cards(ctx: Any, cards: list[dict[str, Any]], *, source: dict[str, Any], snapshot: dict[str, Any], task_id: str,
-               base_record: dict[str, Any] | None = None, client: DepthClient | None = None
-               ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    """개인 세트: 병합까지 끝난 최종 카드의 표시 순서만 점수순으로. (정렬한 카드, 시도 기록).
-
-    꺼져 있으면 (카드 그대로, None) — 기존 동작과 같다. base_record: 일반 세트의 기록. 같은 C 를 쓰도록 그 영어 맥락을
-    다시 쓰고, 이미 영어가 있는 카드는 다시 변환하지 않는다.
+    scores 가 None(Depth 꺼짐·실패·점수 없음)이면 기존 품질순 선택(generation.select_generic, 풀은 품질순)과 같다.
+    품질은 통과 기준으로만 쓰고 Depth 선택의 정렬에는 쓰지 않는다.
     """
-    if not ctx.settings.depth_ranking_enabled:
-        return (strip(cards) if any("depth" in c for c in cards) else cards), None
-    # 일반 세트에서 이미 옮긴 예문(카드의 depth.example_en)은 같은 C 를 다시 쓸 때 변환하지 않는다.
-    known_en = {c["card_id"]: c["depth"]["example_en"] for c in cards
-                if isinstance(c.get("depth"), dict) and isinstance(c["depth"].get("example_en"), str)}
-    if base_record and known_en:
-        base_record = {**base_record, "candidates_en": {**(base_record.get("candidates_en") or {}), **known_en}}
-    cards = strip(cards)
-    if len(cards) < 2:
-        return cards, {"status": NOT_NEEDED, "card_count": len(cards)}
-    stage, record = _score(ctx, cards, source=source, snapshot=snapshot, task_id=task_id, base_record=base_record,
-                           client=client)
-    record["original_order"] = [c["card_id"] for c in cards]
-    if stage is None:
-        return cards, record
-    result = _annotate(cards, stage)
-    record.update(scores=[{"card_id": c["card_id"], "score": stage["scores"][c["card_id"]]} for c in result],
-                  ranked_order=[c["card_id"] for c in result])
-    log.info("depth_ranked", extra={"job_id": ctx.job.id, "model_id": stage["model_id"], "cards": len(cards),
-                                    "changed": record["ranked_order"] != record["original_order"]})
-    return result, record
+    if scores is None:
+        return generation.select_generic(pool)
+    return generation.select_generic(rank_by_scores(pool, [float(scores[c[key]]) for c in pool]))
+
+
+def _annotate(selected: list[dict[str, Any]], scores: dict[str, float], candidates_en: dict[str, str], model_id: str,
+              key: str = "candidate_id") -> list[dict[str, Any]]:
+    """선택 결과(점수순)에 카드마다 depth 기록을 붙인다."""
+    return [{**card, "depth": {"score": round(scores[card[key]], 6), "rank": rank, "example_en": candidates_en[card[key]],
+                               "model_id": model_id}}
+            for rank, card in enumerate(selected, start=1)]
+
+
+def _candidate_order(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """기존 후보 순서(후보 번호 오름차순). Depth 동점의 순서다."""
+    return sorted(candidates, key=lambda c: generation.candidate_number(c["candidate_id"]))
+
+
+def _ids(cards: list[dict[str, Any]]) -> list[str]:
+    return [c["candidate_id"] for c in cards]
 
 
 def select_generic(ctx: Any, accepted: list[dict[str, Any]], *, source: dict[str, Any], snapshot: dict[str, Any],
                    task_id: str, client: DepthClient | None = None
                    ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    """일반 세트: 검수 통과 후보 전부를 (C, example) 별로 채점하고, 기존 선택 규칙(최대 3개·유형당 1개·의미 그룹당 1개·
-    품질 우선) 안에서 같은 품질끼리의 우선순위를 Depth 점수로 정한다. 결과 카드는 점수순.
+    """일반 세트: 검수 통과 후보 전부를 (C, example) 별로 채점하고 select_pool 로 고른다(결과 카드는 점수순).
 
-    accepted 는 generation.accepted_candidates 의 순서(품질 내림차순, 후보 번호 오름차순). 반환 카드는 선택된 후보
-    (card_id 없음). 꺼짐·실패면 (generation.select_generic(accepted), 기록 또는 None) — 기존 선택과 같다.
+    accepted 는 generation.accepted_candidates 결과(품질 내림차순). 반환 카드는 선택된 후보(card_id 없음).
+    꺼짐·실패면 (generation.select_generic(accepted), 기록 또는 None) — 기존 품질순 선택과 같다.
     점수 키는 candidate_id(생성 단계 캐시에서 다시 만들어도 같다).
     """
     baseline = generation.select_generic(accepted)
@@ -282,26 +268,70 @@ def select_generic(ctx: Any, accepted: list[dict[str, Any]], *, source: dict[str
         return baseline, None
     if len(accepted) < 2:
         return baseline, {"status": NOT_NEEDED, "card_count": len(accepted)}
-    items = [{"card_id": c["candidate_id"], "example": c["example"]} for c in accepted]
+    pool = _candidate_order(accepted)
+    items = [{"card_id": c["candidate_id"], "example": c["example"]} for c in pool]
     stage, record = _score(ctx, items, source=source, snapshot=snapshot, task_id=task_id, client=client)
-    baseline_ids = [c["candidate_id"] for c in baseline]
-    record.update(scope="candidates", candidate_order=[c["candidate_id"] for c in accepted], baseline_selected=baseline_ids)
+    baseline_ids = _ids(baseline)
+    record.update(scope="candidates", selection_policy=SELECTION_POLICY, candidate_order=_ids(pool),
+                  baseline_selected=baseline_ids)
     if stage is None:
         return baseline, record
     scores = {cid: float(stage["scores"][cid]) for cid in record["candidate_order"]}
-    position = {cid: i for i, cid in enumerate(record["candidate_order"])}
-    prioritized = sorted(accepted, key=lambda c: (-c["quality"], -scores[c["candidate_id"]], position[c["candidate_id"]]))
-    selected = generation.select_generic(prioritized)
-    # original_rank = Depth 없이 정했을 순서(accepted 순서). 개인화 병합은 이 순서로 동작한다(depth.original_order).
-    chosen = {c["candidate_id"] for c in selected}
-    result = _annotate([c for c in accepted if c["candidate_id"] in chosen], stage, key="candidate_id")
-    selected_ids = [c["candidate_id"] for c in selected]
+    selected = select_pool(pool, scores)
+    result = _annotate(selected, scores, stage["candidates_en"], stage["model_id"])
+    selected_ids = _ids(selected)
     record.update(scores=[{"candidate_id": cid, "score": scores[cid]} for cid in record["candidate_order"]],
-                  prioritized_order=[c["candidate_id"] for c in prioritized], selected=selected_ids,
-                  selection_changed=set(selected_ids) != set(baseline_ids),
+                  prioritized_order=_ids(rank_by_scores(pool, [scores[c["candidate_id"]] for c in pool])),
+                  selected=selected_ids, selection_changed=set(selected_ids) != set(baseline_ids),
                   added_by_depth=[cid for cid in selected_ids if cid not in baseline_ids],
                   removed_by_depth=[cid for cid in baseline_ids if cid not in selected_ids],
-                  ranked_order=[c["candidate_id"] for c in result])
+                  ranked_order=selected_ids)
     log.info("depth_selected", extra={"job_id": ctx.job.id, "model_id": stage["model_id"], "candidates": len(accepted),
                                       "selection_changed": record["selection_changed"]})
+    return result, record
+
+
+def select_personal(ctx: Any, generic: list[dict[str, Any]], personal: list[dict[str, Any]], *,
+                    source: dict[str, Any], snapshot: dict[str, Any], task_id: str,
+                    base_record: dict[str, Any] | None = None, baseline_selected: list[str] | None = None,
+                    client: DepthClient | None = None) -> tuple[list[dict[str, Any]] | None, dict[str, Any]]:
+    """개인 세트: 일반 검수 통과 후보 전체 + 개인 검수 통과 후보를 한 풀로 select_pool. (선택 후보 또는 None, 기록).
+
+    generic·personal 은 accepted_candidates 결과. 일반 후보 점수는 일반 시도 기록(base_record.scores)을 다시 쓰고,
+    점수가 없는 후보(개인 후보, 일반 기록에 없는 일반 후보)만 같은 공통 C(일반 기록의 영어 C 재사용)로 채점한다.
+    개인 기록 P 는 점수 입력에 넣지 않는다. 점수 실패·모델/맥락 불일치면 None(호출자는 기존 병합을 쓴다).
+    """
+    pool = _candidate_order(generic) + _candidate_order(personal)
+    usable = base_record if base_record and base_record.get("status") == OK else None
+    base_scores: dict[str, float] = {}
+    for item in (usable or {}).get("scores") or []:
+        if isinstance(item, dict) and isinstance(item.get("candidate_id"), str):
+            base_scores[item["candidate_id"]] = float(item["score"])
+    reused = [c["candidate_id"] for c in generic if c["candidate_id"] in base_scores
+              and isinstance((usable.get("candidates_en") or {}).get(c["candidate_id"]), str)]
+    items = [{"card_id": c["candidate_id"], "example": c["example"]} for c in pool if c["candidate_id"] not in reused]
+    stage, record = _score(ctx, items, source=source, snapshot=snapshot, task_id=task_id, base_record=usable,
+                           client=client)
+    record.update(scope="pool", selection_policy=SELECTION_POLICY, pool_order=_ids(pool),
+                  generic_candidates=_ids(_candidate_order(generic)), personal_candidates=_ids(_candidate_order(personal)),
+                  generic_scores_reused=reused, generic_scores_from=usable.get("task_id") if usable else None,
+                  baseline_selected=baseline_selected)
+    if stage is None:
+        return None, record
+    if reused and (stage["model_id"] != usable.get("model_id") or stage["context_en"] != usable.get("context_en")):
+        # 한 선택에서 모델·맥락이 다른 점수를 섞지 않는다.
+        log.warning("depth_pool_mismatch", extra={"job_id": ctx.job.id})
+        return None, {**record, "status": SCORE_MISMATCH, "detail": "base model_id/context_en differs"}
+    scores = {cid: base_scores[cid] for cid in reused} | {cid: float(stage["scores"][cid]) for cid in stage["card_ids"]}
+    candidates_en = {cid: usable["candidates_en"][cid] for cid in reused} | dict(stage["candidates_en"])
+    selected = select_pool(pool, scores)
+    result = _annotate(selected, scores, candidates_en, stage["model_id"])
+    selected_ids = _ids(selected)
+    record.update(scores=[{"candidate_id": cid, "score": scores[cid]} for cid in record["pool_order"]],
+                  candidates_en=candidates_en,
+                  prioritized_order=_ids(rank_by_scores(pool, [scores[c["candidate_id"]] for c in pool])),
+                  selected=selected_ids, ranked_order=selected_ids,
+                  personal_selected=[cid for cid in selected_ids if cid in set(record["personal_candidates"])])
+    log.info("depth_pool_selected", extra={"job_id": ctx.job.id, "model_id": stage["model_id"], "pool": len(pool),
+                                           "personal_selected": len(record["personal_selected"])})
     return result, record

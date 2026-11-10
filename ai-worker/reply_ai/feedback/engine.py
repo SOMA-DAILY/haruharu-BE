@@ -18,7 +18,7 @@ from collections import Counter
 from datetime import timedelta
 from typing import Any, Callable
 
-from .. import analysis, budget, errors, generation, jobs, tokens, versions
+from .. import analysis, budget, depth, errors, generation, jobs, tokens, versions
 from ..config import Settings
 from ..db import jsonb
 from ..provider import ModelRequest, Provider
@@ -522,7 +522,8 @@ class Engine:
             if failure.code == errors.BUDGET_EXCEEDED:
                 raise
             raise Inconclusive("validation_generation_invalid", failure.code) from None
-        final = generation.select_generic(generation.accepted_candidates(kept, assessments))
+        # 고정 검증에는 Depth 점수가 없다: select_pool 의 점수 없음 규칙(기존 품질순 선택)과 같다.
+        final = depth.select_pool(generation.accepted_candidates(kept, assessments))
         value = {"input_sha": payload["input_sha256"], "candidates": [_card_view(c, "candidate_id") for c in kept],
                  "final_cards": [{**_card_view(c, "candidate_id"), "card_id": c["candidate_id"]} for c in final],
                  "dropped": dropped}
