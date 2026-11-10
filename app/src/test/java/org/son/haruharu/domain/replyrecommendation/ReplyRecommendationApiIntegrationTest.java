@@ -29,6 +29,7 @@ import org.son.haruharu.domain.block.business.BlockService;
 import org.son.haruharu.domain.block.business.command.CreateBlockCommand;
 import org.son.haruharu.domain.chat.business.ChatService;
 import org.son.haruharu.domain.replyrecommendation.business.ReplyRecommendationMaintenanceService;
+import org.son.haruharu.domain.replyrecommendation.implement.RecommendationRequest;
 import org.son.haruharu.domain.room.implement.Room;
 import org.son.haruharu.domain.room.implement.RoomMember;
 import org.son.haruharu.domain.room.storage.RoomEntity;
@@ -533,6 +534,7 @@ class ReplyRecommendationApiIntegrationTest {
         assertThat((String) json(timedOut, "$.data.reason_code")).isEqualTo("TIMED_OUT");
         String setId = workerGenerates(workerAnalyzes(analysisInputId()), "question", "무슨 과제 하는지 물어볼까요?");
         assertThat((String) json(read(viewer), "$.data.reason_code")).isEqualTo("TIMED_OUT");
+        pastRetryInterval(first);
 
         // when
         var retried = ensure(viewer, 200);
@@ -580,6 +582,7 @@ class ReplyRecommendationApiIntegrationTest {
                 + " WHERE request_id = ?) WHERE job_key = ?", first, "analysis:" + analysisInputId());
         var failed = ensure(viewer, 200);
         assertThat((String) json(failed, "$.data.reason_code")).isEqualTo("ANALYSIS_FAILED");
+        pastRetryInterval(json(failed, "$.data.request_id"));
 
         // when
         var again = ensure(viewer, 202);
@@ -587,6 +590,35 @@ class ReplyRecommendationApiIntegrationTest {
         // then
         assertThat((String) json(again, "$.data.status")).isEqualTo("PENDING");
         assertThat((String) json(again, "$.data.request_id")).isNotEqualTo(json(failed, "$.data.request_id"));
+    }
+
+    @Test
+    @DisplayName("일시 실패로 닫힌 직후(최소 대기 전) 다시 추천 요청(POST)하면 같은 UNAVAILABLE 이고 분석을 다시 넣지 않는다")
+    void givenTransientFailureJustResolved_whenEnsureAgain_thenSameUnavailableWithoutNewJob() throws Exception {
+        // given
+        publish();
+        maintenance.prepareSnapshots();
+        String first = json(ensure(viewer, 202), "$.data.request_id");
+        jdbc.update("UPDATE ai_reply.ai_job SET status = 'FAILED', failure_code = 'PROVIDER_QUOTA_EXCEEDED',"
+                + " finished_at = (SELECT created_at + interval '1 millisecond' FROM ai_reply.recommendation_request"
+                + " WHERE request_id = ?) WHERE job_key = ?", first, "analysis:" + analysisInputId());
+        var failed = ensure(viewer, 200);
+        assertThat((String) json(failed, "$.data.reason_code")).isEqualTo("ANALYSIS_FAILED");
+        Long jobs = jdbc.queryForObject("SELECT count(*) FROM ai_reply.ai_job", Long.class);
+
+        // when
+        var again = ensure(viewer, 200);
+
+        // then
+        assertThat((String) json(again, "$.data.reason_code")).isEqualTo("ANALYSIS_FAILED");
+        assertThat((String) json(again, "$.data.request_id")).isEqualTo(json(failed, "$.data.request_id"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ai_reply.ai_job", Long.class)).isEqualTo(jobs);
+    }
+
+    /** 실패 확정 시각을 재요청 최소 대기보다 앞으로 옮긴다. */
+    private void pastRetryInterval(String requestId) {
+        jdbc.update("UPDATE ai_reply.recommendation_request SET resolved_at = resolved_at - make_interval(secs => ?)"
+                + " WHERE request_id = ?", RecommendationRequest.RETRY_MIN_INTERVAL.toSeconds() + 1, requestId);
     }
 
     @Test

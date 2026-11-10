@@ -588,7 +588,7 @@ class AdminRoomApiIntegrationTest {
 
     @Test
     @DisplayName("방 생성 때 reply_recommendation_enabled 가 없으면 false, true 를 주면 켜진 채로 목록·상세에 나온다(#560)")
-    void createRoom_replyRecommendationSwitch_defaultFalseAndShownInListAndDetail() throws Exception {
+    void givenRoomCreatedWithAndWithoutSwitch_whenAdminReadsRooms_thenReplyRecommendationDefaultFalseAndShown() throws Exception {
         LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
         Long off = createdRoomId(createRoomBody(startsAt));
         Long on = createdRoomId(composedRoomBody(startsAt, "\"reply_recommendation_enabled\": true"));
@@ -608,7 +608,7 @@ class AdminRoomApiIntegrationTest {
 
     @Test
     @DisplayName("PATCH reply-recommendation 은 진행 중 방도 켜고 끄며 갱신된 상세를 돌려준다. 다른 칸은 그대로다(#560)")
-    void patchReplyRecommendation_activeRoom_togglesAndReturnsDetail() throws Exception {
+    void givenActiveRoom_whenPatchReplyRecommendation_thenTogglesAndReturnsDetail() throws Exception {
         LocalDateTime now = LocalDateTime.now().withNano(0);
         Long roomId = persistRoom(Room.createScheduled(now.minusHours(2), now.plusHours(40), now.plusHours(42),
                 now.plusHours(43), now.plusHours(60), 3));
@@ -636,19 +636,37 @@ class AdminRoomApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("PATCH reply-recommendation 은 CS 403, 없는 방 404, enabled 누락 400 이다(#560)")
-    void patchReplyRecommendation_guards() throws Exception {
+    @DisplayName("PATCH reply-recommendation 은 CS 권한이면 403 이다(#560)")
+    void givenCsAdmin_whenPatchReplyRecommendation_thenForbidden() throws Exception {
+        // given
         Long roomId = persistRoom(Room.create(LocalDate.now(), 3));
+
+        // when // then
         mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/reply-recommendation", roomId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(replyRecommendationBody(true))
                         .with(authentication(csAuth())))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("PATCH reply-recommendation 은 없는 방이면 404 이다(#560)")
+    void givenMissingRoom_whenPatchReplyRecommendation_thenNotFound() throws Exception {
+        // given // when // then
         mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/reply-recommendation", 999_999L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(replyRecommendationBody(true))
                         .with(authentication(adminAuth())))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("PATCH reply-recommendation 은 enabled 가 없으면 400 이다(#560)")
+    void givenNoEnabled_whenPatchReplyRecommendation_thenBadRequest() throws Exception {
+        // given
+        Long roomId = persistRoom(Room.create(LocalDate.now(), 3));
+
+        // when // then
         mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/reply-recommendation", roomId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}")

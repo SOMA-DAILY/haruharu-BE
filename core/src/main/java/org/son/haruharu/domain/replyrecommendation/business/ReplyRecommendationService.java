@@ -114,9 +114,12 @@ public class ReplyRecommendationService {
         return response(resolver.resolve(request, RecommendationResolver.Mode.READ, now));
     }
 
-    /** 일시 실패로 닫힌 요청은 추천 요청(POST) 때 닫고 새 요청으로 다시 진행한다. 조회(GET)는 그대로 둔다. */
+    /**
+     * 일시 실패로 닫힌 요청은 추천 요청(POST) 때 닫고 새 요청으로 다시 진행한다. 조회(GET)는 그대로 둔다.
+     * 실패 확정 뒤 최소 대기({@link RecommendationRequest#RETRY_MIN_INTERVAL}) 전에는 같은 UNAVAILABLE 을 돌려준다.
+     */
     private boolean revokedForRetry(RecommendationRequest request, Instant now) {
-        if (!request.retryableUnavailable(properties.unavailableTtl())) {
+        if (!request.retryableUnavailable(properties.unavailableTtl(), now)) {
             return false;
         }
         requests.revokeForRetry(request, now);

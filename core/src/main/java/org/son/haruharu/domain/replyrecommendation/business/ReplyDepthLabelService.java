@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -15,7 +16,8 @@ import org.son.haruharu.domain.replyrecommendation.implement.ReplyDepthTarget;
 import org.springframework.stereotype.Service;
 
 /**
- * 스케줄러가 부르는 Depth 라벨 수집(#559). 스위치가 꺼져 있거나 559 표가 없으면 아무것도 하지 않는다.
+ * 스케줄러가 부르는 Depth 라벨 수집(#559). 스위치가 꺼져 있거나 559 표·기수 칸(cohort_id)이 없으면 아무것도 하지 않는다
+ * (켜져 있는데 표·칸이 없으면 경고를 한 번 남긴다).
  * 답장 하나가 실패해도 나머지를 계속한다. 같은 답장이 {@code max-attempts} 번 연속 실패하면 미관측(LABEL_FAILED)으로
  * 닫아 보낸 순서 앞자리를 계속 차지하지 않게 한다(실패 횟수는 서버 메모리에만 센다). 로그에는 id·개수만 남긴다.
  */
@@ -29,12 +31,21 @@ public class ReplyDepthLabelService {
     private final ReplyDepthCollector collector;
     private final Clock clock;
     private final Map<Long, Integer> failures = new ConcurrentHashMap<>();
+    private final AtomicBoolean schemaWarned = new AtomicBoolean();
 
     /** 관찰 기간이 끝난 답장의 라벨을 만든다. 새로 넣은 개수를 돌려준다. */
     public int collectDue() {
-        if (!properties.enabled() || !collector.ready()) {
+        if (!properties.enabled()) {
             return 0;
         }
+        if (!collector.ready()) {
+            if (schemaWarned.compareAndSet(false, true)) {
+                log.atWarn().addKeyValue("event", "REPLY_DEPTH_SCHEMA_NOT_READY")
+                        .log("답장 Depth 표 또는 기수 칸(cohort_id) 없음: 559-up 적용 전까지 라벨 수집을 건너뜀");
+            }
+            return 0;
+        }
+        schemaWarned.set(false);
         Instant now = clock.instant();
         List<ReplyDepthTarget> due = collector.findDue(now);
         int observed = 0;

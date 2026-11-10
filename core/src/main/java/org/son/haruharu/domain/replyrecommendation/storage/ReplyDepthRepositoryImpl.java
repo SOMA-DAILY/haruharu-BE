@@ -35,11 +35,16 @@ public class ReplyDepthRepositoryImpl implements ReplyDepthRepository {
         this.jdbc = JdbcClient.create(dataSource);
     }
 
+    /**
+     * 표와 기수 칸(cohort_id)이 모두 있어야 준비된 것이다. 칸이 생기기 전에 559-up 을 적용한 DB 는 다시 적용(ADD COLUMN
+     * IF NOT EXISTS)해야 한다. 칸 없이 INSERT 하면 라벨·LABEL_FAILED 마감이 모두 실패하므로 수집을 건너뛴다.
+     */
     @Override
     public boolean schemaReady() {
         Long found = jdbc.sql("""
-                        SELECT count(*) FROM information_schema.tables
-                        WHERE lower(table_schema) = 'ai_reply' AND lower(table_name) = 'reply_depth_observation'""")
+                        SELECT count(*) FROM information_schema.columns
+                        WHERE lower(table_schema) = 'ai_reply' AND lower(table_name) = 'reply_depth_observation'
+                          AND lower(column_name) = 'cohort_id'""")
                 .query(Long.class)
                 .single();
         return found != null && found > 0;

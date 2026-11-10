@@ -154,6 +154,23 @@ class ReplyDepthLabelIntegrationTest {
     }
 
     @Test
+    @DisplayName("기수 칸(cohort_id) 없이 적용된 DB 면 수집을 건너뛰고, 559-up 을 다시 적용하면 수집한다")
+    void givenObservationTableWithoutCohortColumn_whenCollected_thenSkippedUntilReapplied() {
+        // given
+        long r = message(ROOM, VIEWER, null, sent, null);
+        link(r, sent, "VALID");
+        jdbc.execute("ALTER TABLE ai_reply.reply_depth_observation DROP COLUMN cohort_id");
+        try {
+            // when // then
+            assertThat(service.collectDue()).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM ai_reply.reply_depth_observation", Long.class)).isZero();
+        } finally {
+            jdbc.execute("ALTER TABLE ai_reply.reply_depth_observation ADD COLUMN IF NOT EXISTS cohort_id BIGINT");
+        }
+        assertThat(service.collectDue()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("기간이 끝난 답장만 같은 방·기간 안 답글로 Depth·Width 를 남기고, 다시 돌려도 그대로다")
     void givenEndedWindow_whenCollected_thenLabelledOnceWithinWindowAndRoom() {
         long r = message(ROOM, VIEWER, null, sent, null);

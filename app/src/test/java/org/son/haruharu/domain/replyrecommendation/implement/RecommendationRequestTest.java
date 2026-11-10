@@ -49,4 +49,22 @@ class RecommendationRequestTest {
         assertThat(RecommendationRequest.pending(1L, 2L, 3L, 4L, "v1", false, RecommendationRequest.NO_PERSONAL_HASH, NOW)
                 .retryableUnavailable(PERMANENT)).isFalse();
     }
+
+    @Test
+    @DisplayName("일시 실패도 실패 확정 뒤 최소 대기 전에는 새로 시도하지 않는다(크레딧 소진·비용 한도 재실행 방지)")
+    void givenTransientFailure_whenRetriedBeforeMinInterval_thenNotRetryable() {
+        // given
+        RecommendationRequest budget = closed(RecommendationReason.BUDGET_EXCEEDED, TRANSIENT);
+        RecommendationRequest transport = closed(RecommendationReason.ANALYSIS_FAILED, TRANSIENT);
+        Instant justBefore = NOW.plus(RecommendationRequest.RETRY_MIN_INTERVAL).minusSeconds(1);
+        Instant after = NOW.plus(RecommendationRequest.RETRY_MIN_INTERVAL);
+
+        // when // then
+        assertThat(budget.retryableUnavailable(PERMANENT, NOW)).isFalse();
+        assertThat(budget.retryableUnavailable(PERMANENT, justBefore)).isFalse();
+        assertThat(budget.retryableUnavailable(PERMANENT, after)).isTrue();
+        assertThat(transport.retryableUnavailable(PERMANENT, justBefore)).isFalse();
+        assertThat(transport.retryableUnavailable(PERMANENT, after)).isTrue();
+        assertThat(closed(RecommendationReason.OWN_VIDEO, TRANSIENT).retryableUnavailable(PERMANENT, after)).isFalse();
+    }
 }

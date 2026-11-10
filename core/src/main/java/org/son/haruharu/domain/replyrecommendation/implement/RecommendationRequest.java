@@ -29,6 +29,11 @@ public record RecommendationRequest(
         Instant revokedAt
 ) {
     public static final String NO_PERSONAL_HASH = "none";
+    /**
+     * 일시 실패로 닫힌 요청을 추천 요청(POST)으로 다시 진행하기 전 최소 대기(실패 확정 시각 기준).
+     * 크레딧 소진·비용 한도처럼 곧바로 다시 해도 실패하는 경우 POST 마다 분석(미디어 다운로드·프레임 추출)을 다시 넣지 않는다.
+     */
+    public static final Duration RETRY_MIN_INTERVAL = Duration.ofMinutes(2);
 
     /** 항상 일시 실패 유지 시간으로 저장되는 이유. */
     private static final Set<RecommendationReason> TRANSIENT_REASONS = EnumSet.of(
@@ -97,6 +102,12 @@ public record RecommendationRequest(
             return false;
         }
         return Duration.between(resolvedAt, expiresAt).compareTo(permanentTtl) < 0;
+    }
+
+    /** {@link #retryableUnavailable(Duration)} 이고 실패 확정 뒤 {@link #RETRY_MIN_INTERVAL} 이 지났는가. */
+    public boolean retryableUnavailable(Duration permanentTtl, Instant now) {
+        return retryableUnavailable(permanentTtl) && resolvedAt != null
+                && !now.isBefore(resolvedAt.plus(RETRY_MIN_INTERVAL));
     }
 
     public boolean expiredAt(Instant now) {
