@@ -94,6 +94,13 @@ public class AdminRoomCommandService {
         roomService.cancel(roomId);
     }
 
+    /** 방 단위 영상 답장 추천 스위치(#560). 방 상태와 무관하게 바꾼다. 없는 방이면 404. */
+    @Transactional
+    public void updateReplyRecommendation(Long roomId, boolean enabled) {
+        adminRoomReader.requireExists(roomId); // 없는 방은 ADMIN_ROOM_NOT_FOUND(404)
+        roomService.updateReplyRecommendation(roomId, enabled);
+    }
+
     /** 방의 코드 이력(최신순). 없는 방이면 404. */
     public List<AdminRoomInviteResponse> getInvites(Long roomId) {
         adminRoomReader.getById(roomId); // 존재 확인 게이트

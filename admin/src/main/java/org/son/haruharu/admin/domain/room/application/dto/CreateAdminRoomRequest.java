@@ -62,7 +62,12 @@ public record CreateAdminRoomRequest(
                         message = "chat_schedule은 폐기되었습니다. missions를 사용해 주세요")
                 Object retiredChatSchedule,
         @Positive Long groupId,
-        Boolean isTest) {
+        Boolean isTest,
+        @Schema(
+                        description = "영상 답장 추천 켜기(#560). 없으면 false. 전체 스위치가 꺼져 있으면 켜도 동작하지 않는다",
+                        example = "false",
+                        nullable = true)
+                Boolean replyRecommendationEnabled) {
     public CreateAdminRoomCommand toCommand() {
         return new CreateAdminRoomCommand(
                 startsAt,
@@ -79,7 +84,8 @@ public record CreateAdminRoomRequest(
                 maleCapacity,
                 femaleCapacity,
                 groupId,
-                isTest);
+                isTest,
+                replyRecommendationEnabled);
     }
 
     private List<RoomMissionCommand> missionCommands() {

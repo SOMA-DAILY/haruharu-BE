@@ -571,4 +571,88 @@ class AdminRoomApiIntegrationTest {
         mockMvc.perform(get("/api/v1/admin/rooms").with(authentication(csAuth())))
                 .andExpect(status().isOk());
     }
+
+    private Long createdRoomId(String body) throws Exception {
+        String response = mockMvc.perform(post("/api/v1/admin/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return com.jayway.jsonpath.JsonPath.parse(response).read("$.data.room_id", Long.class);
+    }
+
+    private static String replyRecommendationBody(boolean enabled) {
+        return "{\"enabled\": " + enabled + "}";
+    }
+
+    @Test
+    @DisplayName("방 생성 때 reply_recommendation_enabled 가 없으면 false, true 를 주면 켜진 채로 목록·상세에 나온다(#560)")
+    void createRoom_replyRecommendationSwitch_defaultFalseAndShownInListAndDetail() throws Exception {
+        LocalDateTime startsAt = LocalDateTime.now().plusDays(1).withNano(0);
+        Long off = createdRoomId(createRoomBody(startsAt));
+        Long on = createdRoomId(composedRoomBody(startsAt, "\"reply_recommendation_enabled\": true"));
+
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", off).with(authentication(csAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reply_recommendation_enabled").value(false));
+        mockMvc.perform(get("/api/v1/admin/rooms/{roomId}", on).with(authentication(csAuth())))
+                .andExpect(jsonPath("$.data.reply_recommendation_enabled").value(true));
+        mockMvc.perform(get("/api/v1/admin/rooms").param("size", "100").with(authentication(csAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[?(@.room_id == " + on + ")].reply_recommendation_enabled")
+                        .value(org.hamcrest.Matchers.contains(true)))
+                .andExpect(jsonPath("$.data.content[?(@.room_id == " + off + ")].reply_recommendation_enabled")
+                        .value(org.hamcrest.Matchers.contains(false)));
+    }
+
+    @Test
+    @DisplayName("PATCH reply-recommendation 은 진행 중 방도 켜고 끄며 갱신된 상세를 돌려준다. 다른 칸은 그대로다(#560)")
+    void patchReplyRecommendation_activeRoom_togglesAndReturnsDetail() throws Exception {
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+        Long roomId = persistRoom(Room.createScheduled(now.minusHours(2), now.plusHours(40), now.plusHours(42),
+                now.plusHours(43), now.plusHours(60), 3));
+
+        mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/reply-recommendation", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(replyRecommendationBody(true))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.room_id").value(roomId))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.reply_recommendation_enabled").value(true));
+        em.flush();
+        em.clear();
+        Room saved = em.find(RoomEntity.class, roomId).toDomain();
+        assertThat(saved.replyRecommendationEnabled()).isTrue();
+        assertThat(saved.startsAt()).isEqualTo(now.minusHours(2));
+
+        mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/reply-recommendation", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(replyRecommendationBody(false))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reply_recommendation_enabled").value(false));
+    }
+
+    @Test
+    @DisplayName("PATCH reply-recommendation 은 CS 403, 없는 방 404, enabled 누락 400 이다(#560)")
+    void patchReplyRecommendation_guards() throws Exception {
+        Long roomId = persistRoom(Room.create(LocalDate.now(), 3));
+        mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/reply-recommendation", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(replyRecommendationBody(true))
+                        .with(authentication(csAuth())))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/reply-recommendation", 999_999L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(replyRecommendationBody(true))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(patch("/api/v1/admin/rooms/{roomId}/reply-recommendation", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isBadRequest());
+    }
 }

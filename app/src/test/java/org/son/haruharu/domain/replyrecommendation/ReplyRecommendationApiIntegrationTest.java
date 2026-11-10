@@ -143,7 +143,8 @@ class ReplyRecommendationApiIntegrationTest {
                 ON CONFLICT (scope) DO NOTHING""");
         var now = LocalDateTime.now(clock);
         roomId = rooms.save(RoomEntity.from(Room.createScheduled(now.minusHours(25), now.plusHours(23),
-                now.plusHours(25), now.plusHours(26), now.plusHours(47), 3))).toDomain().id();
+                now.plusHours(25), now.plusHours(26), now.plusHours(47), 3)
+                .withReplyRecommendationEnabled(true))).toDomain().id();
         viewer = user();
         uploader = user();
         observer = user();
@@ -301,6 +302,24 @@ class ReplyRecommendationApiIntegrationTest {
 
         var row = jdbc.queryForMap("SELECT origin, status FROM ai_reply.analysis_request WHERE video_id = ?", videoId);
         assertThat(row).containsEntry("origin", "PUBLISH").containsEntry("status", "SNAPSHOT_PENDING");
+    }
+
+    @Test
+    @DisplayName("방 칸이 꺼진 방은 게시 분석 요청·추천 요청이 생기지 않고, 칸을 켜면 같은 방에서 바로 동작한다")
+    void givenRoomSwitchOff_whenPublishOrEnsure_thenNothingUntilSwitchedOn() throws Exception {
+        jdbc.update("UPDATE rooms SET reply_recommendation_enabled = false WHERE id = ?", roomId);
+
+        publish();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ai_reply.analysis_request WHERE video_id = ?",
+                Long.class, videoId)).isZero();
+        assertThat((String) json(ensure(viewer, 200), "$.data.reason_code")).isEqualTo("FEATURE_DISABLED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ai_reply.recommendation_request WHERE video_id = ?",
+                Long.class, videoId)).isZero();
+
+        jdbc.update("UPDATE rooms SET reply_recommendation_enabled = true WHERE id = ?", roomId);
+        publish();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ai_reply.analysis_request WHERE video_id = ?",
+                Long.class, videoId)).isEqualTo(1);
     }
 
     @Test

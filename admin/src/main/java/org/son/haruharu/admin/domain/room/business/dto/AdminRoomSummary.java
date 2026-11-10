@@ -18,4 +18,6 @@ public record AdminRoomSummary(
         @Schema(description = "남성 수", example = "3") int maleCount,
         @Schema(description = "시작 시각(미시작이면 null)", nullable = true) LocalDateTime startedAt,
         Long groupId,
-        Boolean isTest) {}
+        Boolean isTest,
+        @Schema(description = "영상 답장 추천 방 스위치(#560)", example = "false")
+                boolean replyRecommendationEnabled) {}

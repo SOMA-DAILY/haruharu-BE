@@ -24,15 +24,11 @@ public record ReplyRecommendationProperties(
         @DefaultValue Collection collection,
         @DefaultValue Snapshot snapshot,
         /**
-         * 켜 둘 방(시험 공개). 비어 있으면 모든 방이다. 운영은 개인정보처리방침 개정 전까지 운영진 시험 방만 넣고,
-         * 개정·공지 뒤 비워 전체에 연다(2026-11-09 결정).
+         * 방 칸(rooms.reply_recommendation_enabled)과 별도로 켜 둘 방. 기존 시험 방 호환용이며 비어 있으면 추가 방이 없다.
+         * 방별 판단은 {@link ReplyRecommendationRoomGate} 가 한다(#560).
          */
         @DefaultValue List<Long> roomIds
 ) {
-    /** 이 방에서 기능이 켜져 있는지. 분석 요청·추천·사건·답장 연결이 모두 이 판단을 따른다. */
-    public boolean enabledFor(Long roomId) {
-        return enabled && (roomIds.isEmpty() || roomIds.contains(roomId));
-    }
 
     /** 실사용자 자료(사건·답장 연결·답장 원문) 수집. 꺼져 있으면 QA 계정만 남긴다. */
     public record Collection(@DefaultValue("false") boolean realUserEnabled, @DefaultValue List<Long> qaUserIds) {}

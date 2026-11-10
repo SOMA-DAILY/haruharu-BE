@@ -7,7 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.son.haruharu.domain.chat.business.event.VideoReplySavedEvent;
 import org.son.haruharu.domain.replyrecommendation.implement.ReplyLinkRecorder;
-import org.son.haruharu.domain.replyrecommendation.implement.ReplyRecommendationProperties;
+import org.son.haruharu.domain.replyrecommendation.implement.ReplyRecommendationRoomGate;
 import org.son.haruharu.domain.replyrecommendation.implement.SavedVideoReply;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -26,7 +26,7 @@ public class ReplyRecommendationReplyListener {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyRecommendationReplyListener.class);
 
-    private final ReplyRecommendationProperties properties;
+    private final ReplyRecommendationRoomGate roomGate;
     private final ReplyLinkRecorder recorder;
     private final org.son.haruharu.domain.replyrecommendation.implement.RecommendationCollectionPolicy collection;
     private final PlatformTransactionManager transactionManager;
@@ -34,7 +34,7 @@ public class ReplyRecommendationReplyListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReplySaved(VideoReplySavedEvent event) {
-        if (!properties.enabledFor(event.roomId()) || !collection.collectable(event.senderId())) {
+        if (!roomGate.isOpen(event.roomId()) || !collection.collectable(event.senderId())) {
             return; // 남길 자료가 없으면 새 트랜잭션(두 번째 연결)도 열지 않는다
         }
         SavedVideoReply reply = new SavedVideoReply(event.messageId(), event.senderId(), event.videoPostId(),

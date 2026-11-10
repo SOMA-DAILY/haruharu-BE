@@ -168,7 +168,8 @@ public class AdminRoomService {
                 metadata == null || metadata.groupId() == null
                         ? null
                         : organization.group(metadata.groupId()).name(),
-                metadata == null ? null : metadata.isTest());
+                metadata == null ? null : metadata.isTest(),
+                room.replyRecommendationEnabled());
     }
 
     private AdminRoomDetailResponse.MemberView toMemberView(
@@ -213,7 +214,8 @@ public class AdminRoomService {
                 countGender(members, GENDER_MALE),
                 startedAtOf(room),
                 metadata == null ? null : metadata.groupId(),
-                metadata == null ? null : metadata.isTest());
+                metadata == null ? null : metadata.isTest(),
+                room.replyRecommendationEnabled());
     }
 
     /** 새 모델 방은 전이 전까지 startedAt 이 비어 있으므로 예정 시각(starts_at)을 노출한다(#320). */

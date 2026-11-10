@@ -10,6 +10,7 @@ import org.son.haruharu.admin.common.PageResponse;
 import org.son.haruharu.admin.domain.room.application.dto.AssignGenderRequest;
 import org.son.haruharu.admin.domain.room.application.dto.CreateAdminRoomRequest;
 import org.son.haruharu.admin.domain.room.application.dto.ReissueInviteRequest;
+import org.son.haruharu.admin.domain.room.application.dto.UpdateReplyRecommendationRequest;
 import org.son.haruharu.admin.domain.room.business.AdminRoomCommandService;
 import org.son.haruharu.admin.domain.room.business.AdminRoomService;
 import org.son.haruharu.admin.domain.room.business.dto.AdminRoomCreatedResponse;
@@ -119,6 +120,19 @@ public class AdminRoomController {
             @Parameter(description = "방 id", example = "1") @PathVariable Long roomId) {
         adminRoomCommandService.cancelRoom(roomId);
         return ApiResponse.ok(null);
+    }
+
+    @Operation(
+            summary = "방 영상 답장 추천 스위치",
+            description =
+                    "방 단위로 영상 답장 추천을 켜고 끈다(#560). 방 상태와 무관하게 바꿀 수 있다(진행 중 방 포함). "
+                            + "실제 동작은 전체 스위치가 켜져 있을 때만이다. 응답은 갱신된 방 상세. SUPER·OPERATOR 전용.")
+    @PatchMapping("/rooms/{roomId}/reply-recommendation")
+    public ApiResponse<AdminRoomDetailResponse> updateReplyRecommendation(
+            @Parameter(description = "방 id", example = "1") @PathVariable Long roomId,
+            @RequestBody @Valid UpdateReplyRecommendationRequest request) {
+        adminRoomCommandService.updateReplyRecommendation(roomId, request.enabled());
+        return ApiResponse.ok(adminRoomService.getRoom(roomId));
     }
 
     @Operation(summary = "초대코드 목록", description = "해당 방의 코드 이력(최신순). 없는 방은 404.")

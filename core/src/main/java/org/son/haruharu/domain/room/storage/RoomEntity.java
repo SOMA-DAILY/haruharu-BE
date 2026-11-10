@@ -81,6 +81,10 @@ public class RoomEntity extends BaseEntity {
     @Column
     private Integer femaleCapacity;
 
+    // 방 단위 영상 답장 추천 스위치(#560). 560 SQL 과 같은 정의라 칼럼을 생략한 INSERT 도 false 가 된다.
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean replyRecommendationEnabled;
+
     public static RoomEntity from(Room room) {
         RoomEntity entity = new RoomEntity();
         entity.id = room.id();
@@ -98,12 +102,13 @@ public class RoomEntity extends BaseEntity {
         entity.name = room.composition().name();
         entity.maleCapacity = room.composition().maleCapacity();
         entity.femaleCapacity = room.composition().femaleCapacity();
+        entity.replyRecommendationEnabled = room.replyRecommendationEnabled();
         return entity;
     }
 
     public Room toDomain() {
         return new Room(id, status, scheduledDate, totalDays, startedAt, endedAt,
                 startsAt, finalSelectionOpensAt, finalSelectionClosesAt, resultAt, endsAt,
-                new RoomComposition(cohortId, name, maleCapacity, femaleCapacity));
+                new RoomComposition(cohortId, name, maleCapacity, femaleCapacity), replyRecommendationEnabled);
     }
 }

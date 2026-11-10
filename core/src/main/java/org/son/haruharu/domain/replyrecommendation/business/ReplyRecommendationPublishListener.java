@@ -4,7 +4,7 @@ import java.time.Clock;
 
 import lombok.RequiredArgsConstructor;
 import org.son.haruharu.domain.replyrecommendation.implement.AnalysisRequestRegistrar;
-import org.son.haruharu.domain.replyrecommendation.implement.ReplyRecommendationProperties;
+import org.son.haruharu.domain.replyrecommendation.implement.ReplyRecommendationRoomGate;
 import org.son.haruharu.domain.video.business.event.VideoUploadedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -17,13 +17,13 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ReplyRecommendationPublishListener {
 
-    private final ReplyRecommendationProperties properties;
+    private final ReplyRecommendationRoomGate roomGate;
     private final AnalysisRequestRegistrar registrar;
     private final Clock clock;
 
     @EventListener
     public void onVideoUploaded(VideoUploadedEvent event) {
-        if (!properties.enabledFor(event.roomId())) {
+        if (!roomGate.isOpen(event.roomId())) {
             return;
         }
         registrar.registerPublished(event.videoPostId(), event.roomMemberId(), clock.instant());

@@ -16,7 +16,7 @@ import org.son.haruharu.domain.replyrecommendation.implement.RecommendationEvent
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationRequest;
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationRequestStore;
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationSet;
-import org.son.haruharu.domain.replyrecommendation.implement.ReplyRecommendationProperties;
+import org.son.haruharu.domain.replyrecommendation.implement.ReplyRecommendationRoomGate;
 import org.son.haruharu.domain.replyrecommendation.implement.exception.InvalidRecommendationEventException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ReplyRecommendationEventService {
 
-    private final ReplyRecommendationProperties properties;
+    private final ReplyRecommendationRoomGate roomGate;
     private final RecommendationAccessJudge accessJudge;
     private final RecommendationRequestStore requests;
     private final RecommendationEventRecorder recorder;
@@ -39,7 +39,7 @@ public class ReplyRecommendationEventService {
 
     @Transactional
     public void record(Long roomId, Long videoId, Long viewerId, RecommendationEventCommand command) {
-        if (!properties.enabledFor(roomId)) {
+        if (!roomGate.isOpen(roomId)) {
             return;
         }
         if (!accessJudge.isMemberOfVideoRoom(roomId, videoId, viewerId)) {

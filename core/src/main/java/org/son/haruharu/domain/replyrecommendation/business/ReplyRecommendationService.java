@@ -25,6 +25,7 @@ import org.son.haruharu.domain.replyrecommendation.implement.RecommendationReque
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationResolver;
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationSet;
 import org.son.haruharu.domain.replyrecommendation.implement.ReplyRecommendationProperties;
+import org.son.haruharu.domain.replyrecommendation.implement.ReplyRecommendationRoomGate;
 import org.son.haruharu.domain.room.business.exception.RoomNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReplyRecommendationService {
 
     private final ReplyRecommendationProperties properties;
+    private final ReplyRecommendationRoomGate roomGate;
     private final RecommendationAccessJudge accessJudge;
     private final ActiveVersionReader versions;
     private final AnalysisRequestRegistrar registrar;
@@ -52,7 +54,7 @@ public class ReplyRecommendationService {
     /** 유효한 캐시를 돌려주거나 멱등 작업을 만든다. 같은 키로 여러 번 불러도 요청·결과는 하나다. */
     @Transactional
     public RecommendationResponse ensure(Long roomId, Long videoId, Long viewerId) {
-        if (!properties.enabledFor(roomId)) {
+        if (!roomGate.isOpen(roomId)) {
             return RecommendationResponse.unavailable(RecommendationReason.FEATURE_DISABLED);
         }
         RecommendationAccess access = judge(roomId, videoId, viewerId);
@@ -85,7 +87,7 @@ public class ReplyRecommendationService {
     /** 조회만 한다. 아직 요청이 없으면 NOT_REQUESTED, 요청 뒤 영상·캡션·버전이 바뀌었으면 INVALIDATED. */
     @Transactional
     public RecommendationResponse get(Long roomId, Long videoId, Long viewerId) {
-        if (!properties.enabledFor(roomId)) {
+        if (!roomGate.isOpen(roomId)) {
             return RecommendationResponse.unavailable(RecommendationReason.FEATURE_DISABLED);
         }
         RecommendationAccess access = judge(roomId, videoId, viewerId);
