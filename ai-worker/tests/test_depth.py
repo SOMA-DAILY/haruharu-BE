@@ -355,6 +355,17 @@ def test_many_cited_turns_send_only_recent_n(depth_server):
     assert depth.common_context_turns({"caption": "c", "history_records": history}, snapshot, 0)[-1]["turn_id"] == "video"
 
 
+def test_fewer_cited_turns_than_limit_keeps_all():
+    """인용 턴이 N 보다 적으면 전부 넣는다(3턴, N=4 → 3턴 + 영상)."""
+    history = [record(f"chat:{i}", "3", f"대화 {i}", minutes_before=10 - i) for i in range(1, 4)]
+    output = {**analysis_output(), "context_links": [{**analysis_output()["context_links"][0],
+                                                      "source_quotes": [{"source_id": r["source_id"], "quote": r["text"]}
+                                                                        for r in history]}]}
+    snapshot = {"output_json": output, "current_visual_description": "노트북"}
+    turns = depth.common_context_turns({"caption": "c", "history_records": history}, snapshot, 4)
+    assert [t["turn_id"] for t in turns] == ["chat:1", "chat:2", "chat:3", "video"]
+
+
 def test_original_order_restores_pre_depth_order():
     cards = [{"card_id": "c", "depth": {"original_rank": 3}}, {"card_id": "a", "depth": {"original_rank": 1}},
              {"card_id": "b", "depth": {"original_rank": 2}}]

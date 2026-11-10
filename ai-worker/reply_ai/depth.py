@@ -115,7 +115,7 @@ def common_context_turns(source: dict[str, Any], snapshot: dict[str, Any], max_c
     limit = context_chat_turns() if max_chat_turns is None else max(0, max_chat_turns)
     history = analysis.cited_records(list(source.get("history_records") or []), snapshot["output_json"])
     turns = [{"turn_id": r["source_id"], "text": r["text"]} for r in history if r.get("role") == "room" and r["text"].strip()]
-    turns = turns[len(turns) - limit:] if limit else []
+    turns = turns[-limit:] if limit else []
     video = "\n".join(t for t in (source.get("caption") or "", snapshot["current_visual_description"]) if t.strip())
     turns.append({"turn_id": VIDEO_TURN_ID, "text": video})
     return turns
