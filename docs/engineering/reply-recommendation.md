@@ -170,9 +170,13 @@ app 은 추천 조회 때마다 다음을 확인하고, 하나라도 해당하�
 - **예측·실측 연결**(작업기 명령 `reply-ai depth export-outcomes`): 실제 답장 1건 = 1행. 추천 당시 노출 카드·예측 점수·model_id·선택 카드와
   실제 전송 문장(수집 허용 출처만)·그 문장의 점수(지정한 모델로 다시 매김)·Depth·Width·관측 상태, 연결 구분(카드 그대로 / 카드 보고 수정 /
   직접 작성 / 추천 노출 없음, 문자 유사도 임계값은 인자)을 잇고, Spearman·쌍 비교 정확도·연결 구분별 평균 Depth·미관측 수를 요약한다.
-- **추가 학습·교체**(`build-pairs` → `train` → `eval`): 같은 영상의 실제 답장끼리 depth 큰 쪽을 r+ 로 (C, r+, r−)(동점 제외),
-  손실 −log σ(h(C,r+) − h(C,r−)) 로 공개 가중치에서 이어서 학습, 학습에 쓰지 않은 방(미사용 기수)의 쌍 비교 정확도가 공개 모델보다
-  높을 때만 교체 가능으로 판정한다. 교체는 사람이 depth-serve 가 읽는 모델을 바꾸는 것이다(자동 아님).
+- **추가 학습·교체**(`build-pairs` → `train` → `eval`): 같은 영상의 실제 답장끼리 depth 큰 쪽을 r+ 로 (C, r+, r−)(동점 제외).
+  두 답장의 실제 점수 입력(토큰 열 해시)이 같으면 `INPUT_COLLISION` 으로 뺀다. 분할은 기수(`reply_depth_observation.cohort_id`
+  = 답장 채팅방의 `rooms.cohort_id`) 단위: 최신 기수 = test, 이전 기수 안에서 채팅방 단위 val(조기 종료용)·train, 기수 모름은 제외,
+  같은 채팅방은 한 분할에만. 학습은 매번 공개 θ0(고정 revision)에서 누적 전체 쌍으로 다시 한다(이전 결과에서 이어서 학습하지 않고,
+  다른 base 는 거부). 손실 −log σ(h(C,r+) − h(C,r−)), 전체 가중치 + 점수 헤드, lr 1e-5, val 손실 조기 종료(최저 검증 손실 가중치 저장).
+  test 쌍 비교 정확도가 θ0 보다 높을 때만 교체 가능(30쌍 미만이면 판정 보류)으로 판정한다. 교체는 사람이 depth-serve 가 읽는 모델을
+  바꾸는 것이다(자동 아님).
 
 | 표 | 정의 | 쓰는 쪽 | 읽는 쪽 |
 | --- | --- | --- | --- |
@@ -199,13 +203,25 @@ app(`haruharu.reply-recommendation.*`, 기본 모두 OFF)
 | `ensure-rate-limit-per-minute` | `REPLY_RECOMMENDATION_ENSURE_RATE_LIMIT` | 10 |
 | `collection.real-user-enabled` | `REPLY_RECOMMENDATION_REAL_USER_COLLECTION_ENABLED` | false |
 | `collection.qa-user-ids` | `REPLY_RECOMMENDATION_QA_USER_IDS` | 빈 값 |
-| `room-ids` | `REPLY_RECOMMENDATION_ROOM_IDS` | 빈 값(모든 방) |
+| `room-ids` | `REPLY_RECOMMENDATION_ROOM_IDS` | 빈 값(추가로 켤 방 없음) |
 
 수집 스위치가 꺼져 있으면 실제 사용자의 사건·답장 연결·답장 원문은 저장하지 않는다. `qa-user-ids` 계정만 `provenance=QA` 로 저장한다.
 
-`room-ids` 를 채우면 그 방에서만 켜진다(게시 분석 요청·추천 요청·사건·답장 연결 모두). 다른 방은 `UNAVAILABLE(FEATURE_DISABLED)` 로
-숨긴다. 운영은 개인정보처리방침(OpenAI·Cloudflare 국외 이전·위탁, 추천 개선 이용) 개정·공지 전까지 운영진 시험 방만 넣고,
-개정 뒤 비워 전체에 연다(2026-11-09 결정).
+**방 단위 스위치**(#560): 기능은 `enabled AND (rooms.reply_recommendation_enabled OR room-ids 에 포함)` 인 방에서만 켜진다
+(게시 분석 요청·추천 요청·사건·답장 연결 모두, 판단은 `ReplyRecommendationRoomGate`). 다른 방은 `UNAVAILABLE(FEATURE_DISABLED)` 로
+숨긴다. 방 칸은 기본 false 이고 기존 방도 false 다. `room-ids` 는 기존 시험 방 호환용이며, 비어 있어도 모든 방을 뜻하지 않는다.
+전체 스위치가 꺼져 있으면 방 칸·`room-ids` 와 무관하게 꺼진다. 개인정보처리방침(OpenAI·Cloudflare 국외 이전·위탁, 추천 개선 이용)
+개정·공지 전에는 운영진 시험 방만 켠다.
+
+방 칸은 어드민 API 로 바꾼다(SUPER·OPERATOR, 방 상태와 무관하게 진행 중 방도 바꿀 수 있다). JSON 키는 snake_case 다.
+
+| API | 방 칸 |
+| --- | --- |
+| `POST /api/v1/admin/rooms` | 요청 본문 선택 칸 `reply_recommendation_enabled`(boolean, 없으면 false) |
+| `GET /api/v1/admin/rooms` · `GET /api/v1/admin/rooms/{roomId}` | 목록 항목·상세에 `reply_recommendation_enabled` |
+| `PATCH /api/v1/admin/rooms/{roomId}/reply-recommendation` | 본문 `{"enabled": true}` → 200 + 갱신된 방 상세. 없는 방 404, `enabled` 누락 400 |
+
+칸 정의는 `scripts/sql/560-room-reply-recommendation-up.sql`(되돌리기 `-down`, 확인 `-verify`)이다.
 
 작업기 설정은 `ai-worker/README.md` 에 있다(모델·임베딩 버전·비용 한도·배치 스위치).
 
@@ -228,9 +244,10 @@ depth 이미지(압축 약 1.6 GB)는 `image-build` 가 그 이미지에 들어�
 
 처음 켜는 순서(prod 기준, dev 도 같다):
 
-1. **앱 배포 전에** `558-reply-recommendations-up.sql` → `559-reply-depth-up.sql` 적용(각 `-verify.sql` 로 확인). 운영은 시작할 때
-   스키마를 검증(`ddl-auto: validate`)하고, 앱은 기능 스위치와 무관하게 캡션 수정 때 `video_caption_revisions` 를 쓴다.
-   표가 없으면 앱이 뜨지 않는다.
+1. **앱 배포 전에** `558-reply-recommendations-up.sql` → `559-reply-depth-up.sql` → `560-room-reply-recommendation-up.sql` 적용
+   (각 `-verify.sql` 로 확인, 560 verify 는 `reply_recommendation_column = 1`). 운영은 시작할 때 스키마를 검증(`ddl-auto: validate`)하고,
+   앱은 기능 스위치와 무관하게 캡션 수정 때 `video_caption_revisions` 를, 방을 읽을 때 `rooms.reply_recommendation_enabled` 를 쓴다.
+   표·칼럼이 없으면 앱이 뜨지 않고, 어드민(`ddl-auto: none`)은 방 조회·생성이 실패한다.
 2. 작업기 전용 DB 계정(`haruharu_ai_worker`, `ai_reply` 만 읽고 쓰기, 연결 한도) — 558 up SQL 끝의 주석. 559 표에는 같은 계정에
    `SELECT` 를 준다(559 up SQL 끝의 주석).
 3. 스택 만들기(`DesiredCount=0`, `ScheduleState=DISABLED`). 파라미터 값 출처:
@@ -260,9 +277,10 @@ depth 이미지(압축 약 1.6 GB)는 `image-build` 가 그 이미지에 들어�
 6. 작업기 `init-version` 으로 첫 버전·빈 참고 사례 묶음 등록.
 7. 스택 업데이트로 `DesiredCount=1`(필요하면 `ScheduleState=ENABLED`). 나머지 파라미터는 `UsePreviousValue=true`.
    로그 `/ecs/haruharu-ai-worker-prod` 의 `depth/` 스트림에 `depth_ready`(공식 점수 5개)가 찍히고 서비스가 안정되는지 확인한다.
-8. app 작업 정의 환경 변수: `REPLY_RECOMMENDATION_ENABLED=true`, `REPLY_RECOMMENDATION_ROOM_IDS=<시험 방>`,
+8. app 작업 정의 환경 변수: `REPLY_RECOMMENDATION_ENABLED=true`, 시험 방은 어드민 방 스위치로 켠다
+   (`REPLY_RECOMMENDATION_ROOM_IDS=<시험 방>` 도 계속 동작한다),
    `REPLY_RECOMMENDATION_QA_USER_IDS=<운영진 계정>`, Depth 라벨 수집 `REPLY_RECOMMENDATION_DEPTH_ENABLED=true`
-   (관찰 기간 `REPLY_RECOMMENDATION_DEPTH_OBSERVATION_HOURS`, 기본 24). 처리방침 개정·공지 뒤 `ROOM_IDS` 를 비우고, 실사용자 수집
+   (관찰 기간 `REPLY_RECOMMENDATION_DEPTH_OBSERVATION_HOURS`, 기본 24). 처리방침 개정·공지 뒤 열 방의 방 스위치를 켜고, 실사용자 수집
    (`REPLY_RECOMMENDATION_REAL_USER_COLLECTION_ENABLED`)과 스택 `RealUserFeedback` 을 켠다. 개인화는 별도 승인 후.
 
 스택을 다시 고칠 때는 `ImageTag`·`DepthImageTag` 를 지금 배포된 태그로 넘긴다(아니면 CI 가 올린 리비전 대신 스택의 이미지로 돌아간다).
