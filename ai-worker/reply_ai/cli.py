@@ -176,6 +176,9 @@ def cmd_version(args: argparse.Namespace) -> int:
         row = versions.derive(conn, current, "dev", gallery_snapshot_id=args.gallery, note=args.reason)
         revision = versions.activate(conn, row["version_id"], current["version_id"], current["revision"], args.reason)
         _print({"version_id": row["version_id"], "revision": revision, "gallery_snapshot_id": args.gallery})
+    elif args.action == "use-package":
+        # 지시문·설정은 버전에 묶여 있어 파일을 바꿔도 활성 버전은 그대로다. 패키지 내용으로 새 버전을 만들어 활성화한다.
+        _print(versions.use_package(conn, args.reason))
     elif args.action == "rollback":
         _print(versions.rollback(conn, args.version_id, args.reason))
     return 0
@@ -329,8 +332,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--write", action="store_true", help="probe 결과를 resources/embedding_probe.json 에 저장")
     p.set_defaults(func=cmd_embedding)
 
-    p = sub.add_parser("version", help="버전 보기·전환·롤백")
-    p.add_argument("action", choices=["show", "use-gallery", "rollback"])
+    p = sub.add_parser("version", help="버전 보기·전환(use-gallery: 참고 사례만, use-package: 패키지 지시문·설정)·롤백")
+    p.add_argument("action", choices=["show", "use-gallery", "use-package", "rollback"])
     p.add_argument("--gallery")
     p.add_argument("--version-id")
     p.add_argument("--reason", default="manual")

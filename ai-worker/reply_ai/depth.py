@@ -9,9 +9,11 @@
 - 압축 C 와 후보 예문을 기존 provider 로 한 번에 변환(strict 스키마 1번, 비용 예약·단계 캐시는 JobContext.model_call).
   한국어 원문은 바꾸지 않고, 영어·점수·모델 id·순위를 카드(`depth`)와 시도 기록(`candidates.depth_ranking`)에 남긴다.
 - 선택(select_pool): 검수 통과 후보 한 풀(개인 세트는 일반 통과 후보 + 개인 통과 후보)을 Depth 내림차순(동점은 후보 순서)으로
-  유형당 1개·의미 그룹당 1개·최대 3개. 품질 점수는 통과 기준(≥3)으로만 쓰고 정렬에 쓰지 않는다.
-- 서비스 꺼짐·실패·영어 변환 실패는 기존 품질순 선택(generation.select_generic, 개인은 merge_personal)을 쓰고 상태만
-  기록한다(fail-open). 생성·검수를 다시 부르지 않는다.
+  버전의 카드 규칙(generation.CardPolicy)에 따라 고른다. 질문 짝 규칙이면 질문 1장 + 비질문 1장(각 자리 Depth 순, 빈 자리는
+  남은 후보로 채움)·같은 어미 금지·최대 2장, 기존 규칙이면 유형당 1개·의미 그룹당 1개·최대 3개.
+  품질 점수는 통과 기준(≥3)으로만 쓰고 정렬에 쓰지 않는다.
+- 서비스 꺼짐·실패·영어 변환 실패는 같은 카드 규칙의 품질순 선택(generation.select_generic, 개인은 merge_pool·merge_personal)을
+  쓰고 상태만 기록한다(fail-open). 생성·검수를 다시 부르지 않는다.
 - 점수는 같은 C 의 후보끼리 비교하는 값이다. 확률로 해석하지 않는다.
 """
 from __future__ import annotations
@@ -44,9 +46,18 @@ SERVICE_INVALID = "SERVICE_INVALID"             # 응답 형식·개수·유한�
 TRANSLATION_FAILED = "TRANSLATION_FAILED"       # 영어 변환 호출 실패(비용 한도 포함)
 RANKING_INVALID = "RANKING_INVALID"             # 캐시·응답을 카드에 대응시키지 못함(정렬 없이 원래 순서)
 SCORE_MISMATCH = "SCORE_MISMATCH"               # 개인 풀: 일반 기록 점수와 모델·영어 C 가 달라 섞을 수 없음
+POOL_UNAVAILABLE = "POOL_UNAVAILABLE"           # 개인 풀: 활성 검수 지시문이 그룹 재사용을 모르거나 일반 풀이 비어 꺼짐 경로를 씀
+# 개인 검수 지시문이 일반 후보(generic_candidates)의 의미 그룹 이름을 다시 쓰는 규칙을 가진 버전인지 확인하는 표지.
+GATE_POOL_MARKER = "generic_candidates"
 # 선택 정책: 검수 통과(8개 검사·issue none·quality≥3, 개인은 useful_personalization) 후보 한 풀을 Depth 내림차순으로
 # 유형당 1개·의미 그룹당 1개·최대 3개. 품질은 통과 기준으로만 쓴다.
 SELECTION_POLICY = "depth-pool-v1"
+# 질문 짝 카드 규칙(질문 1 + 비질문 1, 같은 어미 금지, 최대 2)으로 고른 선택.
+SELECTION_POLICY_QUESTION_PAIR = "depth-pool-question-pair-v1"
+
+
+def _selection_policy(policy: generation.CardPolicy) -> str:
+    return SELECTION_POLICY_QUESTION_PAIR if policy.question_pair else SELECTION_POLICY
 
 
 class DepthUnavailable(Exception):
@@ -125,6 +136,11 @@ def common_context_turns(source: dict[str, Any], snapshot: dict[str, Any], max_c
     video = "\n".join(t for t in (source.get("caption") or "", snapshot["current_visual_description"]) if t.strip())
     turns.append({"turn_id": VIDEO_TURN_ID, "text": video})
     return turns
+
+
+def gate_supports_pool(gate_prompt: str) -> bool:
+    """활성 버전의 검수 지시문이 개인 검수에서 일반 후보 그룹 이름을 다시 쓰는 규칙을 갖는가(한 풀 선택의 전제)."""
+    return GATE_POOL_MARKER in gate_prompt
 
 
 def rank_by_scores(cards: list[dict[str, Any]], scores: list[float]) -> list[dict[str, Any]]:
@@ -225,16 +241,16 @@ def _score(ctx: Any, items: list[dict[str, Any]], *, source: dict[str, Any], sna
     return stage, record
 
 
-def select_pool(pool: list[dict[str, Any]], scores: dict[str, float] | None = None, key: str = "candidate_id"
-                ) -> list[dict[str, Any]]:
-    """한 풀 선택. scores 가 있으면 Depth 내림차순(동점은 풀 순서)으로 유형당 1개·의미 그룹당 1개·최대 3개.
+def select_pool(pool: list[dict[str, Any]], scores: dict[str, float] | None = None, key: str = "candidate_id",
+                policy: generation.CardPolicy = generation.LEGACY_POLICY) -> list[dict[str, Any]]:
+    """한 풀 선택. scores 가 있으면 Depth 내림차순(동점은 풀 순서)으로 카드 규칙(policy)에 따라 고른다(결과는 점수순).
 
-    scores 가 None(Depth 꺼짐·실패·점수 없음)이면 기존 품질순 선택(generation.select_generic, 풀은 품질순)과 같다.
+    scores 가 None(Depth 꺼짐·실패·점수 없음)이면 같은 카드 규칙의 품질순 선택(generation.select_generic, 풀은 품질순)과 같다.
     품질은 통과 기준으로만 쓰고 Depth 선택의 정렬에는 쓰지 않는다.
     """
     if scores is None:
-        return generation.select_generic(pool)
-    return generation.select_generic(rank_by_scores(pool, [float(scores[c[key]]) for c in pool]))
+        return generation.select_generic(pool, policy)
+    return generation.select_generic(rank_by_scores(pool, [float(scores[c[key]]) for c in pool]), policy)
 
 
 def _annotate(selected: list[dict[str, Any]], scores: dict[str, float], candidates_en: dict[str, str], model_id: str,
@@ -255,15 +271,16 @@ def _ids(cards: list[dict[str, Any]]) -> list[str]:
 
 
 def select_generic(ctx: Any, accepted: list[dict[str, Any]], *, source: dict[str, Any], snapshot: dict[str, Any],
-                   task_id: str, client: DepthClient | None = None
+                   task_id: str, client: DepthClient | None = None,
+                   policy: generation.CardPolicy = generation.LEGACY_POLICY
                    ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     """일반 세트: 검수 통과 후보 전부를 (C, example) 별로 채점하고 select_pool 로 고른다(결과 카드는 점수순).
 
     accepted 는 generation.accepted_candidates 결과(품질 내림차순). 반환 카드는 선택된 후보(card_id 없음).
-    꺼짐·실패면 (generation.select_generic(accepted), 기록 또는 None) — 기존 품질순 선택과 같다.
+    꺼짐·실패면 (generation.select_generic(accepted, policy), 기록 또는 None) — 같은 카드 규칙의 품질순 선택이다.
     점수 키는 candidate_id(생성 단계 캐시에서 다시 만들어도 같다).
     """
-    baseline = generation.select_generic(accepted)
+    baseline = generation.select_generic(accepted, policy)
     if not ctx.settings.depth_ranking_enabled:
         return baseline, None
     if len(accepted) < 2:
@@ -272,12 +289,12 @@ def select_generic(ctx: Any, accepted: list[dict[str, Any]], *, source: dict[str
     items = [{"card_id": c["candidate_id"], "example": c["example"]} for c in pool]
     stage, record = _score(ctx, items, source=source, snapshot=snapshot, task_id=task_id, client=client)
     baseline_ids = _ids(baseline)
-    record.update(scope="candidates", selection_policy=SELECTION_POLICY, candidate_order=_ids(pool),
+    record.update(scope="candidates", selection_policy=_selection_policy(policy), candidate_order=_ids(pool),
                   baseline_selected=baseline_ids)
     if stage is None:
         return baseline, record
     scores = {cid: float(stage["scores"][cid]) for cid in record["candidate_order"]}
-    selected = select_pool(pool, scores)
+    selected = select_pool(pool, scores, policy=policy)
     result = _annotate(selected, scores, stage["candidates_en"], stage["model_id"])
     selected_ids = _ids(selected)
     record.update(scores=[{"candidate_id": cid, "score": scores[cid]} for cid in record["candidate_order"]],
@@ -294,7 +311,8 @@ def select_generic(ctx: Any, accepted: list[dict[str, Any]], *, source: dict[str
 def select_personal(ctx: Any, generic: list[dict[str, Any]], personal: list[dict[str, Any]], *,
                     source: dict[str, Any], snapshot: dict[str, Any], task_id: str,
                     base_record: dict[str, Any] | None = None, baseline_selected: list[str] | None = None,
-                    client: DepthClient | None = None) -> tuple[list[dict[str, Any]] | None, dict[str, Any]]:
+                    client: DepthClient | None = None, policy: generation.CardPolicy = generation.LEGACY_POLICY
+                    ) -> tuple[list[dict[str, Any]] | None, dict[str, Any]]:
     """개인 세트: 일반 검수 통과 후보 전체 + 개인 검수 통과 후보를 한 풀로 select_pool. (선택 후보 또는 None, 기록).
 
     generic·personal 은 accepted_candidates 결과. 일반 후보 점수는 일반 시도 기록(base_record.scores)을 다시 쓰고,
@@ -312,7 +330,7 @@ def select_personal(ctx: Any, generic: list[dict[str, Any]], personal: list[dict
     items = [{"card_id": c["candidate_id"], "example": c["example"]} for c in pool if c["candidate_id"] not in reused]
     stage, record = _score(ctx, items, source=source, snapshot=snapshot, task_id=task_id, base_record=usable,
                            client=client)
-    record.update(scope="pool", selection_policy=SELECTION_POLICY, pool_order=_ids(pool),
+    record.update(scope="pool", selection_policy=_selection_policy(policy), pool_order=_ids(pool),
                   generic_candidates=_ids(_candidate_order(generic)), personal_candidates=_ids(_candidate_order(personal)),
                   generic_scores_reused=reused, generic_scores_from=usable.get("task_id") if usable else None,
                   baseline_selected=baseline_selected)
@@ -324,7 +342,7 @@ def select_personal(ctx: Any, generic: list[dict[str, Any]], personal: list[dict
         return None, {**record, "status": SCORE_MISMATCH, "detail": "base model_id/context_en differs"}
     scores = {cid: base_scores[cid] for cid in reused} | {cid: float(stage["scores"][cid]) for cid in stage["card_ids"]}
     candidates_en = {cid: usable["candidates_en"][cid] for cid in reused} | dict(stage["candidates_en"])
-    selected = select_pool(pool, scores)
+    selected = select_pool(pool, scores, policy=policy)
     result = _annotate(selected, scores, candidates_en, stage["model_id"])
     selected_ids = _ids(selected)
     record.update(scores=[{"candidate_id": cid, "score": scores[cid]} for cid in record["pool_order"]],

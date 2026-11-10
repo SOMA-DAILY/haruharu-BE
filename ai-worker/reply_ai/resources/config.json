@@ -47,7 +47,8 @@
   "generation": {
     "generic_max_candidates": 10,
     "personal_max_candidates": 6,
-    "final_max_cards": 3,
+    "final_max_cards": 2,
+    "card_composition": "question_pair",
     "per_category_max": 1,
     "min_quality": 3,
     "title_max_chars": 30,

@@ -1,6 +1,12 @@
 """후보 생성·검수·최종 선택(7·8장, IMPLEMENTATION-NOTES §4).
 
-- 일반 후보 ≤10(G1…), 개인 후보 ≤6(P1…), 최종 ≤3, 유형당 ≤1, 의미 그룹당 ≤1. 0개도 정상.
+- 일반 후보 ≤10(G1…), 개인 후보 ≤6(P1…), 유형당 ≤1, 의미 그룹당 ≤1. 0개도 정상.
+- 최종 카드 규칙은 버전 설정(config_json.generation)에 묶인다(CardPolicy):
+  - 질문 짝(card_composition = "question_pair", 지금 패키지): 최대 final_max_cards(2)장. 질문(question) 1장 + 질문이 아닌 유형
+    1장을 각 자리 안에서 주어진 순서(Depth 순, 꺼짐·실패면 품질순)로 고른다. 한쪽 자리 후보가 없으면 남은 후보를 같은 순서로
+    채운다. 같은 세트의 두 제목은 같은 어미(title_ending)로 끝나지 않는다(같으면 다음 후보). 제목 문형은 지시문이 유형별로
+    정하고 코드는 '볼까요?' 를 강제하지 않는다.
+  - 기존(키 없음, 이전 버전): 최대 3장, 제목은 '볼까요?' 로 끝난다. 이전 활성 버전의 동작을 그대로 유지한다.
 - 후보 하나의 내용 규칙 위반(제목 형식·anchor·근거)은 그 후보만 검수 전에 버리고 기록한다.
   ID 중복·형식 위반·개인화 선언 불일치처럼 출력 전체가 계약을 어기면 시도 전체가 실패다.
 - 검수 응답이 후보 목록·순서와 다르면 검수 실행 실패다. 검수 뒤 문구는 바꾸지 않는다(최종 카드는 원 후보의 사본).
@@ -8,17 +14,55 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 from . import errors
 from .resources import CATEGORIES, GATE_BOOLEANS, PERSONAL_KINDS, VIEWER_FACT_KINDS, package_config
 from .util import iso, sha256_json
 
-TITLE_SUFFIX = "볼까요?"
+# 기존 카드 규칙(질문 짝 이전 버전)의 제목 어미. 질문 짝 규칙에서는 강제하지 않는다.
+LEGACY_TITLE_SUFFIX = "볼까요?"
 # 앱 추천 칸은 두 줄까지 보여 준다. 30자면 폭 좁은 폰에서도 두 줄 안에 든다(명세의 60자에서 줄임, 2026-11-09).
 TITLE_MAX_CHARS: int = package_config()["generation"]["title_max_chars"]
 NO_PERSONALIZATION = {"kind": "none", "source_quotes": [], "actor_ids": [], "delta": ""}
+
+QUESTION_CATEGORY = "question"
+QUESTION_PAIR = "question_pair"
+# "같은 어미": 제목 끝의 공백·문장부호(?!.~…, 기호)를 떼고 NFC 로 맞춘 뒤 마지막 TITLE_ENDING_CHARS 글자가 같으면 같은 어미다.
+# 예: '물어보기'·'말해보기' → '보기'(같음), '말하기'·'공감하기' → '하기'(같음), '물어보기'·'말하기' → 다름.
+TITLE_ENDING_CHARS = 2
+_TRAILING_MARKS = re.compile(r"[\s\W_]+$")
+
+
+@dataclass(frozen=True)
+class CardPolicy:
+    """최종 카드 규칙. question_pair 면 질문 1장 + 비질문 1장·같은 어미 금지·'볼까요?' 강제 없음."""
+    max_cards: int
+    question_pair: bool
+
+    @property
+    def title_suffix(self) -> str | None:
+        return None if self.question_pair else LEGACY_TITLE_SUFFIX
+
+
+LEGACY_POLICY = CardPolicy(max_cards=3, question_pair=False)
+
+
+def card_policy(config: dict[str, Any] | None) -> CardPolicy:
+    """버전 설정(config_json)의 카드 규칙. card_composition 이 없으면 기존 규칙(최대 3장)."""
+    generation = (config or {}).get("generation") or {}
+    if generation.get("card_composition") == QUESTION_PAIR:
+        return CardPolicy(max_cards=int(generation["final_max_cards"]), question_pair=True)
+    return LEGACY_POLICY
+
+
+def title_ending(title: str) -> str:
+    """같은 어미 비교 키(TITLE_ENDING_CHARS 참고)."""
+    body = _TRAILING_MARKS.sub("", unicodedata.normalize("NFC", title))
+    return body[-TITLE_ENDING_CHARS:]
 
 
 def _with_sha(body: dict[str, Any]) -> dict[str, Any]:
@@ -58,11 +102,12 @@ def candidate_number(candidate_id: str) -> int:
 
 
 def _content_problem(candidate: dict[str, Any], payload: dict[str, Any], personal: bool,
-                     viewer_id: str | None, uploader_id: str | None) -> str | None:
+                     viewer_id: str | None, uploader_id: str | None, policy: CardPolicy) -> str | None:
     if candidate["category"] not in payload["categories"]:
         return "category"
     title = candidate["title"]
-    if not title.strip() or len(title) > TITLE_MAX_CHARS or not title.endswith(TITLE_SUFFIX):
+    if not title.strip() or len(title) > TITLE_MAX_CHARS \
+            or (policy.title_suffix is not None and not title.endswith(policy.title_suffix)):
         return "title"
     if not candidate["example"].strip() or len(candidate["example"]) > 120:
         return "example"
@@ -99,9 +144,10 @@ def _content_problem(candidate: dict[str, Any], payload: dict[str, Any], persona
 
 
 def validate_candidates(output: dict[str, Any], payload: dict[str, Any], *, personal: bool,
-                        viewer_id: str | None = None, uploader_id: str | None = None
-                        ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
-    """(검수에 넘길 후보, 버린 후보와 이유). 출력 전체 계약 위반은 SEMANTIC_INVALID."""
+                        viewer_id: str | None = None, uploader_id: str | None = None,
+                        policy: CardPolicy = LEGACY_POLICY) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """(검수에 넘길 후보, 버린 후보와 이유). 출력 전체 계약 위반은 SEMANTIC_INVALID.
+    제목 검사: 공백만·30자 초과는 버린다. 기존 카드 규칙(policy)이면 '볼까요?' 로도 끝나야 한다."""
     candidates = output["candidates"]
     prefix, cap = ("P", 6) if personal else ("G", 10)
     if len(candidates) > cap:
@@ -116,7 +162,7 @@ def validate_candidates(output: dict[str, Any], payload: dict[str, Any], *, pers
         raise errors.semantic("generic output claims personalization")
     kept, dropped = [], []
     for candidate in candidates:
-        problem = _content_problem(candidate, payload, personal, viewer_id, uploader_id)
+        problem = _content_problem(candidate, payload, personal, viewer_id, uploader_id, policy)
         if problem:
             dropped.append({"candidate_id": candidate["candidate_id"], "reason": problem})
         else:
@@ -149,15 +195,44 @@ def accepted_candidates(candidates: list[dict[str, Any]], assessments: list[dict
     return sorted(result, key=lambda x: (-x["quality"], candidate_number(x["candidate_id"])))
 
 
-def select_generic(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    selected: list[dict[str, Any]] = []
-    for c in candidates:
-        if len(selected) == 3:
+def _conflicts(candidate: dict[str, Any], chosen: list[dict[str, Any]], policy: CardPolicy) -> bool:
+    return any(x["category"] == candidate["category"] or x["redundancy_group"] == candidate["redundancy_group"]
+               or (policy.question_pair and title_ending(x["title"]) == title_ending(candidate["title"]))
+               for x in chosen)
+
+
+def select_generic(candidates: list[dict[str, Any]], policy: CardPolicy = LEGACY_POLICY) -> list[dict[str, Any]]:
+    """주어진 순서(우선순위)대로 유형당 1개·의미 그룹당 1개·최대 policy.max_cards.
+
+    질문 짝 규칙: ① 질문 자리·비질문 자리를 각각 순서대로 채운다(자리마다 1장, 같은 어미 금지). ② 한쪽 자리 후보가 없어
+    빈 자리가 남으면 남은 후보를 같은 순서로 채운다(유형·그룹·어미 규칙 유지). 결과는 주어진 순서대로(앞이 먼저 표시).
+    """
+    if not policy.question_pair:
+        selected: list[dict[str, Any]] = []
+        for c in candidates:
+            if len(selected) == policy.max_cards:
+                break
+            if _conflicts(c, selected, policy):
+                continue
+            selected.append(c)
+        return selected
+    chosen: list[int] = []
+    filled: set[bool] = set()
+    for i, c in enumerate(candidates):  # ① 자리별
+        if len(chosen) == policy.max_cards:
             break
-        if any(x["category"] == c["category"] or x["redundancy_group"] == c["redundancy_group"] for x in selected):
+        slot = c["category"] == QUESTION_CATEGORY
+        if slot in filled or _conflicts(c, [candidates[j] for j in chosen], policy):
             continue
-        selected.append(c)
-    return selected
+        chosen.append(i)
+        filled.add(slot)
+    for i, c in enumerate(candidates):  # ② 빈 자리 채우기
+        if len(chosen) == policy.max_cards:
+            break
+        if i in chosen or _conflicts(c, [candidates[j] for j in chosen], policy):
+            continue
+        chosen.append(i)
+    return [candidates[i] for i in sorted(chosen)]
 
 
 def quality_order(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -165,9 +240,23 @@ def quality_order(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(cards, key=lambda c: (-c["quality"], candidate_number(c["candidate_id"])))
 
 
+def merge_pool(base: list[dict[str, Any]], personal: list[dict[str, Any]], policy: CardPolicy
+               ) -> tuple[list[dict[str, Any]], bool]:
+    """질문 짝 규칙의 Depth 꺼짐·실패 개인 세트: 일반 카드(base, redundancy_group 'base:<card_id>')와 개인 검수 통과 후보를
+    한 풀로 품질순(품질 내림차순, 같은 품질이면 일반 카드 먼저, 그다음 후보 번호)에 select_generic 을 적용한다.
+    일반 카드와 문구가 같은 개인 후보는 뺀다. (선택, 개인 카드 포함 여부)."""
+    texts = {(c["title"], c["example"]) for c in base}
+    pool = [(c, 0) for c in base] + [(c, 1) for c in personal if (c["title"], c["example"]) not in texts]
+    ordered = [c for c, _ in sorted(pool, key=lambda x: (-x[0]["quality"], x[1], candidate_number(x[0]["candidate_id"])))]
+    chosen = [dict(c) for c in select_generic(ordered, policy)]
+    used = any(c.get("personalization", {}).get("kind", "none") != "none" for c in chosen)
+    return chosen, used
+
+
 def merge_personal(base: list[dict[str, Any]], personal: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
     """연구 merge_personal 과 같다. base 의 redundancy_group 은 'base:<card_id>'.
-    Depth 꺼짐·실패 때의 개인 세트 선택(fail-open)에만 쓴다. Depth 가 되면 depth.select_personal 의 한 풀 선택을 쓴다.
+    기존 카드 규칙(최대 3장)에서 Depth 꺼짐·실패 때의 개인 세트 선택(fail-open)에만 쓴다. 질문 짝 규칙은 merge_pool.
+    Depth 가 되면 depth.select_personal 의 한 풀 선택을 쓴다.
 
     같은 유형: 품질이 엄격히 높을 때만 교체(제자리). 다른 유형이 의미 중복이면 버림.
     빈 자리: 끝에 추가. 만석: 최저 품질보다 엄격히 높을 때만 교체, 최저 동률이면 뒤 순위 카드를 교체.

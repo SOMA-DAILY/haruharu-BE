@@ -1,4 +1,5 @@
 """온라인 작업 흐름(분석 → 일반 → 개인화 → 무효화). 가짜 모델·임베더·미디어로 PostgreSQL 에서 끝까지 돈다."""
+import copy
 import uuid
 
 import pytest
@@ -9,7 +10,7 @@ from reply_ai.db import connect, jsonb
 from reply_ai.embedding import HashEmbedder
 from reply_ai.media import MediaFetcher
 from reply_ai.provider import ScriptedProvider
-from reply_ai.resources import GATE_BOOLEANS
+from reply_ai.resources import GATE_BOOLEANS, package_config
 from reply_ai.util import sha256_text
 from reply_ai.worker import Worker
 
@@ -47,11 +48,16 @@ def analysis_output(linked=True):
             "context_links": links}
 
 
-def candidates_output(n=3):
-    rows = [("question", "무슨 과제인지 물어볼까요?", "무슨 과제예요?", "과제 마감"),
-            ("support", "마감까지 응원해 볼까요?", "마감 화이팅이에요!", "과제 마감"),
-            ("empathy", "밤새는 피곤함에 공감해 볼까요?", "밤새면 너무 피곤하죠", "밤샐 것 같다"),
-            ("humor", "커피 몇 잔째인지 물어볼까요?", "커피 몇 잔째예요?", "커피잔")]
+LEGACY_TITLES = ["무슨 과제인지 물어볼까요?", "마감까지 응원해 볼까요?", "밤새는 피곤함에 공감해 볼까요?", "커피 몇 잔째인지 물어볼까요?"]
+TITLES = ["무슨 과제인지 물어보기", "마감까지 힘내라고 응원 보내기", "밤새는 피곤함에 공감하기", "커피 몇 잔째인지 놀려 주기"]
+
+
+def candidates_output(n=3, legacy=False):
+    titles = LEGACY_TITLES if legacy else TITLES
+    rows = [("question", titles[0], "무슨 과제예요?", "과제 마감"),
+            ("support", titles[1], "마감 화이팅이에요!", "과제 마감"),
+            ("empathy", titles[2], "밤새면 너무 피곤하죠", "밤샐 것 같다"),
+            ("humor", titles[3], "커피 몇 잔째예요?", "커피잔")]
     return {"candidates": [{"candidate_id": f"G{i}", "category": c, "title": t, "example": e, "current_anchor": a,
                             "reference_ids": [], "personalization": {"kind": "none", "source_quotes": [], "actor_ids": [], "delta": ""}}
                            for i, (c, t, e, a) in enumerate(rows[:n], 1)], "personalization_used": False, "reason": "일반 후보"}
@@ -70,8 +76,27 @@ def worker(database_url, provider, fetcher, embedder=None, **overrides):
                   connect_fn=lambda: connect(database_url))
 
 
-def start(conn, history=HISTORY):
+def legacy_config():
+    """질문 짝 카드 규칙 이전 버전의 설정(최대 3장, '볼까요?' 제목)."""
+    config = copy.deepcopy(package_config())
+    config["generation"]["final_max_cards"] = 3
+    config["generation"].pop("card_composition")
+    return config
+
+
+def use_legacy_version(conn):
+    """활성 버전을 이전 카드 규칙 버전으로 바꾼다(지시문은 패키지 그대로)."""
+    current = versions.active(conn)
+    row = versions.build_version("legacy", legacy_config(), current["prompts_json"], current["gallery_snapshot_id"],
+                                 parent=current["version_id"])
+    versions.insert_version(conn, row)
+    versions.activate(conn, row["version_id"], current["version_id"], current["revision"], "test legacy")
+
+
+def start(conn, history=HISTORY, legacy=False):
     versions.init_version(conn)
+    if legacy:
+        use_legacy_version(conn)
     row = seed_analysis_input(conn, history=history)
     jobs.enqueue(conn, f"analysis:{row['id']}", "ANALYSIS", {"analysis_input_id": row["id"]})
     return row
@@ -101,7 +126,9 @@ def test_analysis_then_generic_end_to_end(conn, database_url, sample_video):
     assert generation_payload["personal_history"] == [] and generation_payload["base_cards"] == []
     rset = conn.execute("SELECT * FROM ai_reply.recommendation_set").fetchone()
     assert rset["status"] == "READY" and rset["kind"] == "GENERIC" and rset["viewer_id"] is None
-    assert [c["category"] for c in rset["cards"]] == ["question", "support", "empathy"]  # G4 는 G1 과 의미 중복
+    # 질문 짝 규칙(패키지 버전): 질문 1장(G1) + 비질문 1장(품질 같으면 후보 순서 G2), 최대 2장. G4 는 G1 과 의미 중복.
+    assert [c["category"] for c in rset["cards"]] == ["question", "support"]
+    assert [c["title"] for c in rset["cards"]] == ["무슨 과제인지 물어보기", "마감까지 힘내라고 응원 보내기"]
     assert all(set(c) == {"card_id", "category", "title"} for c in rset["cards"])
     assert {c["card_id"] for c in rset["cards"]} == {c["card_id"] for c in rset["internal_cards"]}
     attempt = conn.execute("SELECT * FROM ai_reply.generation_attempt").fetchone()
@@ -340,7 +367,10 @@ def test_personal_candidate_adopted_creates_viewer_set_keeping_generic_ids(conn,
     personal = conn.execute("SELECT * FROM ai_reply.recommendation_set WHERE kind = 'PERSONAL'").fetchone()
     assert personal["viewer_id"] == 3 and personal["base_set_id"] == base["set_id"]
     base_ids = [c["card_id"] for c in base["cards"]]
-    assert [c["card_id"] for c in personal["cards"]][:2] == base_ids and len(personal["cards"]) == 3
+    # Depth 꺼짐 질문 짝 규칙: 일반 카드 + 개인 후보 한 풀을 품질순으로. 품질 4 개인 후보가 비질문 자리를, 일반 질문 카드가
+    # 질문 자리를 차지한다(일반 카드 id 유지). 표시는 품질순.
+    assert [c["category"] for c in personal["cards"]] == ["self_disclosure", "question"]
+    assert personal["cards"][1]["card_id"] == base_ids[0] and len(personal["cards"]) == 2
     gate_payload = provider.calls[-1].payload
     assert [b["card_id"] for b in gate_payload["base_cards"]] == base_ids
 

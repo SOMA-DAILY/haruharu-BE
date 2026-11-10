@@ -511,9 +511,10 @@ class Engine:
         payload = generation.generation_input(f"validation-{case['case_key']}", current, "generic", references, history)
         analysis.validate_input("generation-input.schema.json", payload)
         prompts = version["prompts_json"]
+        policy = generation.card_policy(version["config_json"])
         try:
             generated = self._model("generic", prompts["generic"], payload)
-            kept, dropped = generation.validate_candidates(generated, payload, personal=False)
+            kept, dropped = generation.validate_candidates(generated, payload, personal=False, policy=policy)
             assessments = []
             if kept:
                 gate_payload = generation.gate_input(f"validation-gate-{case['case_key']}", current, "generic", references, history, [], [], kept)
@@ -522,8 +523,8 @@ class Engine:
             if failure.code == errors.BUDGET_EXCEEDED:
                 raise
             raise Inconclusive("validation_generation_invalid", failure.code) from None
-        # 고정 검증에는 Depth 점수가 없다: select_pool 의 점수 없음 규칙(기존 품질순 선택)과 같다.
-        final = depth.select_pool(generation.accepted_candidates(kept, assessments))
+        # 고정 검증에는 Depth 점수가 없다: select_pool 의 점수 없음 규칙(그 버전 카드 규칙의 품질순 선택)과 같다.
+        final = depth.select_pool(generation.accepted_candidates(kept, assessments), policy=policy)
         value = {"input_sha": payload["input_sha256"], "candidates": [_card_view(c, "candidate_id") for c in kept],
                  "final_cards": [{**_card_view(c, "candidate_id"), "card_id": c["candidate_id"]} for c in final],
                  "dropped": dropped}

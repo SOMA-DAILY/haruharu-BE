@@ -282,6 +282,7 @@ def run_generic(ctx: JobContext) -> None:
         return
     version = versions.load(conn, payload["version_id"])
     prompts = version["prompts_json"]
+    policy = generation.card_policy(version["config_json"])
     found = _retrieval(ctx, snapshot, source, version, payload["gallery_snapshot_id"])
     current = generation.current_block(source, snapshot)
     history = analysis.cited_records(list(source["history_records"] or []), snapshot["output_json"])
@@ -290,7 +291,7 @@ def run_generic(ctx: JobContext) -> None:
     analysis.validate_input("generation-input.schema.json", gen_payload)
     generated = ctx.model_call("generic", ModelRequest("generic", prompts["generic"], gen_payload,
                                                        max_output_tokens=ctx.settings.max_output_tokens("generic")))
-    kept, dropped = generation.validate_candidates(generated.output, gen_payload, personal=False)
+    kept, dropped = generation.validate_candidates(generated.output, gen_payload, personal=False, policy=policy)
     gate_output, assessments, gate_sha = None, [], None
     if kept:
         gate_payload = generation.gate_input(f"gate-generic-{analysis_id}-r{revision_no}", current, "generic",
@@ -303,7 +304,8 @@ def run_generic(ctx: JobContext) -> None:
         assessments = generation.validate_gate(gate_output, kept)
     # Depth 가 켜져 있으면 검수 통과 후보 전부를 채점해 기존 선택 규칙 안의 우선순위로 쓴다(꺼짐·실패면 기존 선택 그대로).
     selected, depth_record = depth.select_generic(ctx, generation.accepted_candidates(kept, assessments), source=source,
-                                                  snapshot=snapshot, task_id=f"generic-{analysis_id}-r{revision_no}")
+                                                  snapshot=snapshot, task_id=f"generic-{analysis_id}-r{revision_no}",
+                                                  policy=policy)
     internal = [generation.new_card(c) | ({"depth": c["depth"]} if "depth" in c else {}) for c in selected]
     candidates_doc: dict[str, Any] = {"output": generated.output, "kept": kept, "dropped": dropped}
     if depth_record is not None:
@@ -390,9 +392,10 @@ def _generic_accepted(attempt: dict[str, Any] | None) -> list[dict[str, Any]]:
     return generation.accepted_candidates(candidates, assessments)
 
 
-def _merge_fail_open(base_internal: list[dict[str, Any]], accepted: list[dict[str, Any]], *, generic_groups: bool
-                     ) -> list[dict[str, Any]]:
-    """Depth 꺼짐·실패 때의 개인 세트(기존 병합). 개인 카드가 하나도 채택되지 않으면 빈 목록(일반 세트를 그대로 쓴다).
+def _merge_fail_open(base_internal: list[dict[str, Any]], accepted: list[dict[str, Any]], *, generic_groups: bool,
+                     policy: generation.CardPolicy = generation.LEGACY_POLICY) -> list[dict[str, Any]]:
+    """Depth 꺼짐·실패 때의 개인 세트(품질순). 개인 카드가 하나도 채택되지 않으면 빈 목록(일반 세트를 그대로 쓴다).
+    질문 짝 규칙이면 일반 카드 + 개인 후보 한 풀에 같은 규칙을 품질순으로(merge_pool), 기존 규칙이면 merge_personal.
 
     generic_groups: 개인 검수가 일반 후보의 의미 그룹 이름을 그대로 썼다(Depth 켜짐). 일반 카드와 같은 그룹이면
     병합 규칙의 'base:<card_id>' 로 바꿔 판정하고, 저장할 때는 원래 그룹 이름으로 되돌린다.
@@ -402,7 +405,8 @@ def _merge_fail_open(base_internal: list[dict[str, Any]], accepted: list[dict[st
     if generic_groups:
         to_base = {c["redundancy_group"]: "base:" + c["card_id"] for c in base_internal}
         accepted = [{**c, "redundancy_group": to_base.get(c["redundancy_group"], c["redundancy_group"])} for c in accepted]
-    chosen, used = generation.merge_personal(base_for_merge, accepted)
+    chosen, used = generation.merge_pool(base_for_merge, accepted, policy) if policy.question_pair \
+        else generation.merge_personal(base_for_merge, accepted)
     if not used:
         return []
     internal = [c if "card_id" in c else generation.new_card(c) for c in chosen]
@@ -443,9 +447,9 @@ def run_personal(ctx: JobContext) -> None:
         return
     version = versions.load(conn, pinput["version_id"])
     prompts = version["prompts_json"]
+    policy = generation.card_policy(version["config_json"])
     viewer, uploader = str(pinput["viewer_id"]), str(source["author_id"])
     records = list(pinput["personal_records"] or [])
-    depth_on = ctx.settings.depth_ranking_enabled
     # 개인화 입력·기존 병합은 표시 순서(Depth 순)가 아니라 기존 선택 순서(품질·후보 번호)로 한다.
     base_internal = generation.quality_order(list(base["internal_cards"] or []))
     result_set_id, candidates_doc, gate_output, gen_sha, gate_sha = base["set_id"], None, None, None, None
@@ -453,7 +457,19 @@ def run_personal(ctx: JobContext) -> None:
                                 (base["attempt_id"],)).fetchone()
     references = _references_from_record(conn, base_attempt and base_attempt["retrieval"])
     # Depth 한 풀 선택: 일반 시도의 검수 통과 후보 전체(후보·검수 결과·점수 기록 재사용).
-    generic_pool = _generic_accepted(base_attempt) if depth_on else []
+    # 활성 버전의 검수 지시문이 generic_candidates(일반 후보 그룹 이름 재사용)를 모르면 한 풀에서 같은 의미의 일반·개인
+    # 후보가 함께 뽑힐 수 있다. 그런 버전이거나 일반 풀이 비면 Depth 꺼짐과 같은 경로(base_cards·품질순 병합)를 쓴다.
+    pool_skip = None
+    if not ctx.settings.depth_ranking_enabled:
+        generic_pool = []
+    elif not depth.gate_supports_pool(prompts["gate"]):
+        generic_pool, pool_skip = [], "gate prompt without generic_candidates"
+    else:
+        generic_pool = _generic_accepted(base_attempt)
+        pool_skip = None if generic_pool else "no generic accepted candidates"
+    depth_on = bool(generic_pool)
+    if pool_skip:
+        log.warning("depth_pool_unavailable", extra={"job_id": ctx.job.id, "detail": pool_skip})
     internal: list[dict[str, Any]] = []
     if records:  # 근거가 없으면 모델을 부르지 않고 일반 카드를 그대로 쓴다.
         current = generation.current_block(source, snapshot)
@@ -466,8 +482,10 @@ def run_personal(ctx: JobContext) -> None:
         generated = ctx.model_call("personal", ModelRequest("personal", prompts["personal"], gen_payload,
                                                             max_output_tokens=ctx.settings.max_output_tokens("personal")))
         kept, dropped = generation.validate_candidates(generated.output, gen_payload, personal=True,
-                                                       viewer_id=viewer, uploader_id=uploader)
+                                                       viewer_id=viewer, uploader_id=uploader, policy=policy)
         candidates_doc = {"output": generated.output, "kept": kept, "dropped": dropped}
+        if pool_skip:
+            candidates_doc["depth_ranking"] = {"status": depth.POOL_UNAVAILABLE, "detail": pool_skip}
         if kept:
             used_ids = {q["source_id"] for c in kept for q in c["personalization"]["source_quotes"]}
             # Depth 가 켜져 있으면 개인 검수가 일반 통과 후보와 같은 의미 그룹 이름을 쓰도록 그 후보를 함께 넣는다.
@@ -482,12 +500,13 @@ def run_personal(ctx: JobContext) -> None:
             gate_output = gated.output
             assessments = generation.validate_gate(gate_output, kept)
             accepted = generation.accepted_candidates(kept, assessments, personal=True)
-            fallback = _merge_fail_open(base_internal, accepted, generic_groups=depth_on)
+            fallback = _merge_fail_open(base_internal, accepted, generic_groups=depth_on, policy=policy)
             if depth_on and accepted:
                 base_depth = ((base_attempt and base_attempt["candidates"]) or {}).get("depth_ranking")
                 selected, depth_record = depth.select_personal(
                     ctx, generic_pool, accepted, source=source, snapshot=snapshot, task_id=f"personal-{personal_id}",
-                    base_record=base_depth, baseline_selected=[c["candidate_id"] for c in fallback or base_internal])
+                    base_record=base_depth, baseline_selected=[c["candidate_id"] for c in fallback or base_internal],
+                    policy=policy)
                 candidates_doc["depth_ranking"] = depth_record
                 if selected is not None:
                     fallback = None

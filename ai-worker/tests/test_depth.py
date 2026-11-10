@@ -1,4 +1,8 @@
-"""Depth 평가 모델 랭킹: 토큰 배치·점수 위치(서비스), 정렬·fail-open·꺼짐=기존 동작(작업기)."""
+"""Depth 평가 모델 랭킹: 토큰 배치·점수 위치(서비스), 정렬·fail-open·꺼짐=기존 동작(작업기).
+
+작업기 흐름(PostgreSQL) 테스트는 질문 짝 카드 규칙 이전 버전(최대 3장, '볼까요?' 제목)을 활성화해 그 버전의 동작이
+그대로인지 본다. 질문 짝 규칙(최대 2장)은 test_card_policy.py.
+"""
 from __future__ import annotations
 
 import threading
@@ -179,7 +183,7 @@ def translate(request):
 
 
 def run_generic(conn, database_url, sample_video, provider, **settings):
-    start(conn)
+    start(conn, legacy=True)
     w = worker(database_url, provider, FakeFetcher(sample_video), **settings)
     w.run_once(conn, "t")
     w.run_once(conn, "t")
@@ -189,7 +193,7 @@ def run_generic(conn, database_url, sample_video, provider, **settings):
 
 
 def generic_provider():
-    return ScriptedProvider({"analysis": [analysis_output()], "generic": [candidates_output(3)],
+    return ScriptedProvider({"analysis": [analysis_output()], "generic": [candidates_output(3, legacy=True)],
                              "gate": [gate_output(["G1", "G2", "G3"], quality=4)], "depth_translate": translate})
 
 
@@ -264,9 +268,9 @@ def test_personal_set_scored_with_same_common_context_not_personal_records(conn,
                                                                           depth_server):
     model = FakeDepthModel({"밤샜어요": 0.95, "무슨 과제": 0.6, "화이팅": 0.2})
     records = [record("chat:9", "3", "저도 어제 과제 하느라 밤샜어요", role="own")]
-    provider = ScriptedProvider({"analysis": [analysis_output()], "generic": [candidates_output(2)],
+    provider = ScriptedProvider({"analysis": [analysis_output()], "generic": [candidates_output(2, legacy=True)],
                                  "gate": [gate_output(["G1", "G2"], quality=3)], "depth_translate": translate})
-    start(conn)
+    start(conn, legacy=True)
     w = worker(database_url, provider, FakeFetcher(sample_video), depth_ranking_enabled=True, depth_url=depth_server(model))
     w.run_once(conn, "t")
     w.run_once(conn, "t")
@@ -426,10 +430,10 @@ def _personal_run(conn, database_url, sample_video, depth_server, *, enabled, sc
     """일반 후보 3개(품질 generic_quality) → 일반 세트, 그 뒤 개인 후보(품질 personal_quality)로 개인 세트."""
     model = FakeDepthModel(scores)
     records = [record("chat:9", "3", "저도 어제 과제 하느라 밤샜어요", role="own")]
-    provider = ScriptedProvider({"analysis": [analysis_output()], "generic": [candidates_output(3)],
+    provider = ScriptedProvider({"analysis": [analysis_output()], "generic": [candidates_output(3, legacy=True)],
                                  "gate": [gate_output(["G1", "G2", "G3"], quality=generic_quality)],
                                  "depth_translate": translate})
-    start(conn)
+    start(conn, legacy=True)
     url = depth_server(model)
     w = worker(database_url, provider, FakeFetcher(sample_video), depth_ranking_enabled=enabled, depth_url=url)
     w.run_once(conn, "t")
@@ -558,7 +562,7 @@ def _selection_provider(qualities=None):
     gate = gate_output(["G1", "G2", "G3", "G4"], quality=4, groups={"G4": "grp-G1"})
     for a in gate["assessments"]:
         a["quality"] = (qualities or {}).get(a["candidate_id"], 4)
-    return ScriptedProvider({"analysis": [analysis_output()], "generic": [candidates_output(4)], "gate": [gate],
+    return ScriptedProvider({"analysis": [analysis_output()], "generic": [candidates_output(4, legacy=True)], "gate": [gate],
                              "depth_translate": translate})
 
 

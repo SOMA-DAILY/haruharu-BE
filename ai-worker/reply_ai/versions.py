@@ -149,3 +149,21 @@ def derive(conn, parent: dict[str, Any], label: str, *, prompts: dict[str, str] 
                         gallery_snapshot_id or parent["gallery_snapshot_id"], parent=parent["version_id"], note=note)
     insert_version(conn, row)
     return row
+
+
+def use_package(conn, reason: str) -> dict[str, Any]:
+    """패키지에 들어 있는 지금 지시문·설정(resources/prompts·config.json)으로 새 버전을 만들어 CAS 로 활성화한다.
+
+    참고 사례 묶음(gallery)은 활성 버전 것을 그대로 쓴다. 활성 버전 내용이 이미 같으면 바꾸지 않는다(멱등).
+    피드백 배치가 고친 지시문이 활성 버전에 있었다면 패키지 지시문으로 바뀐다(이전 버전은 rollback 으로 되돌릴 수 있다).
+    """
+    current = active(conn)
+    if current is None:
+        raise ValueError("no active version: run init-version first")
+    row = build_version("pkg", package_config(), default_prompts(), current["gallery_snapshot_id"],
+                        parent=current["version_id"], note=reason)
+    if row["full_config_sha"] == current["full_config_sha"]:
+        return {"changed": False, "version_id": current["version_id"], "revision": current["revision"]}
+    insert_version(conn, row)
+    revision = activate(conn, row["version_id"], current["version_id"], current["revision"], "use-package: " + reason)
+    return {"changed": True, "from": current["version_id"], "version_id": row["version_id"], "revision": revision}
