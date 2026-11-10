@@ -27,6 +27,10 @@ def test_reproduces_official_scores_and_model_card_example(model):
     assert round(scores[1], 3) == 0.032                 # 모델 카드 "Me too!" 0.032
     assert scores[0] > scores[1]                        # 카드 표의 순서(0.724 > 0.032)는 같다
     assert model.info["max_seq_len"] == 50 and model.info["model_revision"] == "0fa8a8770e267801a5779788ccfd921192ae7f40"
+    assert model.info["context_token_cap"] == 25 and "#len50#ctx25#" in model.info["model_id"]
+    # 공식 예시는 짧아 C 25 토큰 상한에 걸리지 않는다(시작 점검 값이 상한 전과 같다).
+    for context in ("I love NLP!", "How are you?"):
+        assert not any(i["truncated"] for i in model.inputs([context], ["Me too!", "pretty good! :)"]))
 
 
 def test_input_token_record_for_short_and_long_context(model):
@@ -36,7 +40,9 @@ def test_input_token_record_for_short_and_long_context(model):
                          ["What assignment is it?"])[0]
     print("\nshort", short, "\nlong", long_)
     assert not short["truncated"] and short["used_tokens"] == short["input_tokens"] <= 50
-    assert long_["truncated"] and long_["used_tokens"] == 50 and not long_["reply_truncated"]
+    # 긴 C 는 25 토큰으로 앞쪽부터 자르고 답장은 그대로 둔다.
+    assert long_["truncated"] and long_["context_truncated"] and long_["context_used_tokens"] == 25
+    assert long_["used_tokens"] == 25 + long_["reply_tokens"] and not long_["reply_truncated"]
 
 
 def test_left_truncation_keeps_reply_score_for_long_context(model):

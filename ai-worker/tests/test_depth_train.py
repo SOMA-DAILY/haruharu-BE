@@ -12,7 +12,7 @@ from reply_ai import depth_outcomes as outcomes
 from reply_ai import depth_train
 from reply_ai.config import Settings
 from reply_ai.provider import ScriptedProvider
-from reply_ai.util import sha256_text
+from reply_ai.util import sha256_json, sha256_text
 
 from .conftest import T0
 from .test_depth import depth_server  # noqa: F401 (fixture)
@@ -25,7 +25,7 @@ TH = outcomes.LinkThresholds(0.9, 0.4)
 
 def row(message_id, video_id, depth, *, room_id=7, status="OBSERVED", text_en=None, context_en=("ctx",),
         link="SELF_WRITTEN", score=None, model="m", text_ko="답장", minute=0, owner_replied=None, followups=None,
-        cohort_id=1):
+        cohort_id=1, context_ko_sha="video"):
     observed = status == "OBSERVED"
     text_en = f"reply {message_id}" if text_en is None and text_ko is not None else text_en
     return {"message_id": message_id, "video_id": video_id, "chat_room_id": room_id, "cohort_id": cohort_id,
@@ -35,7 +35,8 @@ def row(message_id, video_id, depth, *, room_id=7, status="OBSERVED", text_en=No
                       "unobserved_reason": None if observed else "CHAIN_BROKEN", "owner_replied": owner_replied,
                       "followup_message_count": followups},
             "link": {"kind": link},
-            "context": {"context_en": list(context_en) if context_en else None, "context_sha": f"sha-{video_id}"}}
+            "context": {"context_en": list(context_en) if context_en else None, "context_sha": f"sha-{video_id}",
+                        "context_ko_sha": f"ko-{video_id}" if context_ko_sha == "video" else context_ko_sha}}
 
 
 def cards(*examples):
@@ -73,6 +74,17 @@ def test_pairs_only_within_same_video_deeper_is_positive_ties_and_small_diffs_ex
     assert stats2["excluded"]["below_min_diff"] == 3
     with pytest.raises(ValueError):
         outcomes.make_pairs(rows, min_depth_diff=0)
+
+
+def test_pairs_grouped_by_korean_context_sha_not_video_id():
+    """쌍 묶음 키 = 한국어 C 턴 sha(번역 캐시 키). 같은 영상이라도 C 가 다르면 쌍이 없고, 키를 모르면 뺀다."""
+    rows = [row(1, 10, 3, context_ko_sha="ko-a"), row(2, 10, 1, context_ko_sha="ko-b"),      # 같은 영상, 다른 C
+            row(3, 10, 0, context_ko_sha="ko-b"), row(4, 10, 2, context_ko_sha=None)]
+    pairs, stats = outcomes.make_pairs(rows)
+    assert [(p["pair_id"], p["context_ko_sha"]) for p in pairs] == [("10:2>3", "ko-b")]
+    assert stats["excluded"] == {"context_key_unavailable": 1, "single_reply": 1}
+    turns = [{"turn_id": "chat:1", "text": "과제"}, {"turn_id": "video", "text": "노트북"}]
+    assert outcomes.context_key(turns) == sha256_json(["과제", "노트북"])                   # 번역 캐시 키와 같은 값
 
 
 def test_pairs_need_replies_sent_within_max_hour_gap():
@@ -185,10 +197,13 @@ def test_build_pairs_excludes_input_collision_after_translation_and_truncation()
     # 다른 한국어가 같은 영어가 되면 같은 입력이다.
     assert {p["pair_id"] for p in pairs} == {"20:3>4", "30:5>6"} and stats["input_collisions"] == ["10:1>2"]
     assert stats["excluded"]["INPUT_COLLISION"] == 1
-    # 길이 상한에서 앞이 잘리면 꼬리가 같은 두 답장은 같은 입력이다(같은 C·같은 프로파일).
-    short, short_stats = depth_train.build_pairs(rows, encode=char_encode, max_seq_len=len(tail))
-    assert {p["pair_id"] for p in short} == {"30:5>6"}
-    assert short_stats["input_collisions"] == ["10:1>2", "20:3>4"] and short_stats["input_profile"]["max_seq_len"] == len(tail)
+    # 답장 혼자 길이 상한을 넘으면 답장 뒤쪽이 잘린다: 앞이 같은 두 답장은 같은 입력이다(같은 C·같은 프로파일).
+    head = "that sounds great to me "
+    cut = [row(7, 40, 3, text_en=head + "wow"), row(8, 40, 1, text_en=head + "meh")]
+    short, short_stats = depth_train.build_pairs(rows + cut, encode=char_encode, max_seq_len=len(head))
+    assert {p["pair_id"] for p in short} == {"20:3>4", "30:5>6"}
+    assert short_stats["input_collisions"] == ["10:1>2", "40:7>8"] and short_stats["input_profile"]["max_seq_len"] == len(head)
+    assert short_stats["input_profile"]["context_token_cap"] == 25
     kept = next(p for p in pairs if p["pair_id"] == "20:3>4")
     assert kept["pos"]["input_hash"] == depth_train.input_hash(char_encode, ["ctx"], "wow" + tail, 50)
     assert kept["pos"]["input_hash"] != kept["neg"]["input_hash"]
@@ -315,7 +330,7 @@ def test_train_keeps_improving_until_max_steps_and_eval_on_test_cohort(tiny_base
     assert report["base"]["pairs"] == report["candidate"]["pairs"] == 1                  # 정확도는 참고로 남긴다
     report = depth_train.evaluate(pairs_path, out, min_eval_pairs=1)
     assert report["decision"] in ("REPLACEABLE", "KEEP_BASE")
-    assert report["replaceable"] == (report["candidate"]["accuracy"] > report["base"]["accuracy"])
+    assert report["replaceable"] == (report["candidate"]["accuracy"] - report["base"]["accuracy"] >= 0.02)
 
     leaked = tmp_path / "leaked.jsonl"
     outcomes.write_jsonl(leaked, [pair("4:a>b", 10, "x?", "y", "test", cohort=2)])        # val 채팅방
@@ -340,6 +355,25 @@ def test_eval_with_thirty_test_pairs_replaceable_only_when_higher(tiny_base, tmp
     assert report["pairs"] == 30 and (report["decision"], report["replaceable"]) == ("REPLACEABLE", True)
     results = iter([([0.9] * 30, [0.1] * 30), ([0.9] * 30, [0.1] * 30)])              # 같으면 교체하지 않는다
     assert depth_train.evaluate(pairs_path, out)["decision"] == "KEEP_BASE"
+    # 30쌍에서 1쌍 차이(+3.3%p)는 교체, 0쌍 차이는 유지. 경계 자체는 아래 replaceable 테스트.
+    results = iter([([0.9] * 20 + [0.1] * 10, [0.5] * 30), ([0.9] * 21 + [0.1] * 9, [0.5] * 30)])
+    report = depth_train.evaluate(pairs_path, out)
+    assert report["decision"] == "REPLACEABLE" and report["min_improvement"] == 0.02
+
+
+def _acc(correct, pairs):
+    return {"pairs": pairs, "correct": correct, "ties": 0, "accuracy": round(correct / pairs, 4)}
+
+
+def test_replaceable_requires_at_least_two_points_over_base():
+    """교체 기준: TEST 정확도가 θ0 보다 2%p 이상. 정확히 +2%p 는 교체, +1.9%p 는 유지."""
+    assert depth_train.replaceable(_acc(600, 1000), _acc(620, 1000))            # +2.0%p
+    assert not depth_train.replaceable(_acc(600, 1000), _acc(619, 1000))        # +1.9%p
+    assert depth_train.replaceable(_acc(30, 50), _acc(31, 50))                  # +2.0%p(0.62 − 0.60)
+    assert depth_train.replaceable(_acc(570, 1000), _acc(590, 1000))            # 부동소수 경계(0.59 − 0.57)
+    assert not depth_train.replaceable(_acc(30, 50), _acc(30, 50))
+    assert not depth_train.replaceable(_acc(31, 50), _acc(30, 50))
+    assert depth_train.replaceable(_acc(30, 50), _acc(30, 50), min_improvement=0)
 
 
 # ───────────────────────── export-outcomes(PostgreSQL) ─────────────────────────

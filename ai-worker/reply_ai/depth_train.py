@@ -1,6 +1,6 @@
 """Depth 평가 모델 추가 학습·평가(`reply-ai depth build-pairs | train | eval`). extra `depth`(torch·transformers) 전용.
 
-- 비교 데이터셋: export-outcomes 결과(실제 답장 1건 = 1행)에서 같은 영상(같은 C)의 실제 답장끼리 depth 큰 쪽을 r+ 로 한
+- 비교 데이터셋: export-outcomes 결과(실제 답장 1건 = 1행)에서 같은 C(한국어 C 턴 sha)의 실제 답장끼리 depth 큰 쪽을 r+ 로 한
   (C, r+, r−). 동점은 빼고 최소 차이는 인자.
 - 같은 쌍의 두 답장이 정규화·영어 번역·토큰 잘림 뒤 실제 점수 입력(depth_service.build_ids 의 토큰 열, 같은 C·같은 점수
   프로파일)이 같으면 비교할 수 없으므로 쌍에서 빼고 INPUT_COLLISION 으로 남긴다.
@@ -15,7 +15,7 @@
 - 입력·점수 위치는 depth-serve 와 같다(depth_service.build_ids·pad_batch, transformer 은닉상태 + score 헤드를 직접 계산해
   각 줄 길이−1 위치에서 꺼낸다).
 - 평가: TEST 쌍에서 θ0 와 새 모델의 쌍 비교 정확도. 쌍이 최소 수(기본 30) 미만이면 INCONCLUSIVE, 이상이고 새 모델이
-  더 높을 때만 교체 가능(REPLACEABLE)으로 판정한다. 교체(depth-serve 가 읽는 모델 바꾸기)는 자동으로 하지 않는다.
+  θ0 보다 2%p 이상(≥ 0.02) 높을 때만 교체 가능(REPLACEABLE), 아니면 KEEP_BASE 로 판정한다. 교체(depth-serve 가 읽는 모델 바꾸기)는 자동으로 하지 않는다.
 - 점수는 같은 C 의 답장끼리 비교하는 값이다. 확률로 해석하지 않는다.
 """
 from __future__ import annotations
@@ -30,10 +30,11 @@ from typing import Any, Callable, Sequence
 
 from .depth_outcomes import DEFAULT_MAX_HOUR_GAP, make_pairs, pair_accuracy
 from .depth_service import (DEFAULT_MAX_SEQ_LEN, MODEL_ID, PINNED_REVISION, REFERENCE_CHECKS, REFERENCE_TOLERANCE,
-                            build_ids, pad_batch, sigmoid)
+                            build_ids, context_token_cap, pad_batch, sigmoid)
 from .util import iso, now_utc, sha256_json
 
 DEFAULT_MIN_EVAL_PAIRS = 30
+DEFAULT_MIN_IMPROVEMENT = 0.02   # 교체 기준: TEST 정확도가 θ0 보다 이만큼(2%p) 이상 높아야 한다
 DEFAULT_VAL_FRACTION = 0.2
 DEFAULT_EVAL_EVERY = 10
 DEFAULT_PATIENCE = 3
@@ -56,9 +57,14 @@ def require_base(base: str = MODEL_ID, revision: str | None = PINNED_REVISION) -
                          "이전 학습 결과에서 이어서 학습하지 않는다")
 
 
-def input_profile(max_seq_len: int = DEFAULT_MAX_SEQ_LEN) -> dict[str, Any]:
-    """실제 점수 입력을 정하는 값(토크나이저·입력 구성·길이 상한). 입력 해시는 이 프로파일 안에서만 비교한다."""
-    return {"tokenizer": f"{MODEL_ID}@{PINNED_REVISION}", "builder": INPUT_BUILDER, "max_seq_len": max_seq_len}
+def _cap(value: int | None) -> int:
+    return context_token_cap() if value is None else value
+
+
+def input_profile(max_seq_len: int = DEFAULT_MAX_SEQ_LEN, context_cap: int | None = None) -> dict[str, Any]:
+    """실제 점수 입력을 정하는 값(토크나이저·입력 구성·길이 상한·C 토큰 상한). 입력 해시는 이 프로파일 안에서만 비교한다."""
+    return {"tokenizer": f"{MODEL_ID}@{PINNED_REVISION}", "builder": INPUT_BUILDER, "max_seq_len": max_seq_len,
+            "context_token_cap": _cap(context_cap)}
 
 
 def scorer_tokenizer():
@@ -71,9 +77,10 @@ def tokenizer_encoder(tokenizer) -> Callable[[str], list[int]]:
     return lambda text: tokenizer.encode(text, add_special_tokens=False)
 
 
-def input_hash(encode: Callable[[str], list[int]], context_en: Sequence[str], reply_en: str, max_seq_len: int) -> str:
-    """점수 모델이 실제로 받는 토큰 열(build_ids: 맥락 턴 EOS … 답장, 잘림 포함)의 sha256."""
-    ids = build_ids(encode, context_en, reply_en, max_seq_len)
+def input_hash(encode: Callable[[str], list[int]], context_en: Sequence[str], reply_en: str, max_seq_len: int,
+               context_cap: int | None = None) -> str:
+    """점수 모델이 실제로 받는 토큰 열(build_ids: 맥락 턴 EOS … 답장, C 상한·잘림 포함)의 sha256."""
+    ids = build_ids(encode, context_en, reply_en, max_seq_len, _cap(context_cap))
     return hashlib.sha256(json.dumps(ids, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -97,11 +104,13 @@ def _bump(excluded: dict[str, int], reason: str) -> None:
 
 def build_pairs(rows: list[dict[str, Any]], *, encode: Callable[[str], list[int]], min_depth_diff: int = 1,
                 val_fraction: float = DEFAULT_VAL_FRACTION, max_hour_gap: float | None = DEFAULT_MAX_HOUR_GAP,
-                max_seq_len: int = DEFAULT_MAX_SEQ_LEN) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+                max_seq_len: int = DEFAULT_MAX_SEQ_LEN, context_cap: int | None = None
+                ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """(쌍 목록, 통계). encode: θ0 토크나이저(텍스트 → 토큰 id, 특수 토큰 없음)."""
     if not 0 <= val_fraction < 1:
         raise ValueError("val_fraction ∈ [0, 1)")
-    profile = input_profile(max_seq_len)
+    context_cap = _cap(context_cap)
+    profile = input_profile(max_seq_len, context_cap)
     pairs, stats = make_pairs(rows, min_depth_diff, max_hour_gap)
     excluded = stats["excluded"]
     collisions: list[str] = []
@@ -114,8 +123,8 @@ def build_pairs(rows: list[dict[str, Any]], *, encode: Callable[[str], list[int]
             _bump(excluded, "cohort_unknown")
             continue
         # 같은 C·같은 프로파일에서 두 답장의 실제 입력이 같으면 비교할 수 없다.
-        pos_hash = input_hash(encode, pair["context_en"], pair["pos"]["text_en"], max_seq_len)
-        neg_hash = input_hash(encode, pair["context_en"], pair["neg"]["text_en"], max_seq_len)
+        pos_hash = input_hash(encode, pair["context_en"], pair["pos"]["text_en"], max_seq_len, context_cap)
+        neg_hash = input_hash(encode, pair["context_en"], pair["neg"]["text_en"], max_seq_len, context_cap)
         if pos_hash == neg_hash:
             _bump(excluded, INPUT_COLLISION)
             collisions.append(pair["pair_id"])
@@ -156,7 +165,7 @@ class LocalScorer:
     """공개 가중치(허브 id + 고정 revision) 또는 학습 결과 디렉터리를 불러 depth-serve 와 같은 방식으로 점수를 매긴다."""
 
     def __init__(self, source: str = MODEL_ID, revision: str | None = PINNED_REVISION, device: str = "cpu",
-                 max_seq_len: int = DEFAULT_MAX_SEQ_LEN):
+                 max_seq_len: int = DEFAULT_MAX_SEQ_LEN, context_cap: int | None = None):
         import torch
         import transformers
         from transformers import AutoTokenizer, GPT2ForSequenceClassification
@@ -171,13 +180,14 @@ class LocalScorer:
         self.model.to(device).eval()
         self.device = device
         self.max_seq_len = max_seq_len
+        self.context_cap = _cap(context_cap)
         self.local = local
         libs = f"tf{transformers.__version__}#torch{torch.__version__.split('+')[0]}#{device}"
         if local:
             meta = json.loads((Path(source) / META_FILE).read_text(encoding="utf-8")) if (Path(source) / META_FILE).exists() else {}
-            self.model_id = f"{meta.get('model_name') or Path(source).name}#len{max_seq_len}#fp32#{libs}"
+            self.model_id = f"{meta.get('model_name') or Path(source).name}#len{max_seq_len}#ctx{self.context_cap}#fp32#{libs}"
         else:
-            self.model_id = f"{source}@{(revision or 'unpinned')[:12]}#len{max_seq_len}#fp32#{libs}"
+            self.model_id = f"{source}@{(revision or 'unpinned')[:12]}#len{max_seq_len}#ctx{self.context_cap}#fp32#{libs}"
 
     def _encode(self, text: str) -> list[int]:
         return self.tokenizer.encode(text, add_special_tokens=False)
@@ -185,7 +195,8 @@ class LocalScorer:
     def logits(self, contexts: Sequence[Sequence[str]], replies: Sequence[str]):
         """줄마다 [맥락 EOS … 답장] → 답장 마지막 토큰(길이−1)의 logit. 학습 때는 기울기가 흐른다."""
         torch = self.torch
-        rows = [build_ids(self._encode, c, r, self.max_seq_len) for c, r in zip(contexts, replies, strict=True)]
+        rows = [build_ids(self._encode, c, r, self.max_seq_len, self.context_cap)
+                for c, r in zip(contexts, replies, strict=True)]
         ids, mask, last = pad_batch(rows)
         input_ids = torch.tensor(ids, device=self.device)
         attention = torch.tensor(mask, device=self.device)
@@ -377,12 +388,23 @@ def train(pairs_path: Path, out_dir: Path, *, base: str = MODEL_ID, revision: st
 
 # ───────────────────────── 평가 ─────────────────────────
 
+def replaceable(base: dict[str, Any], candidate: dict[str, Any], min_improvement: float = DEFAULT_MIN_IMPROVEMENT) -> bool:
+    """같은 TEST 쌍에서 새 모델 정확도 − θ0 정확도 ≥ min_improvement(경계 포함). 맞힌 수로 계산한다(반올림 전 값)."""
+    if not base["pairs"] or base["pairs"] != candidate["pairs"]:
+        return False
+    return (candidate["correct"] - base["correct"]) / base["pairs"] >= min_improvement - 1e-9
+
+
 def evaluate(pairs_path: Path, candidate_dir: Path, *, device: str = "cpu", max_seq_len: int = DEFAULT_MAX_SEQ_LEN,
-             batch_size: int = 16, min_eval_pairs: int = DEFAULT_MIN_EVAL_PAIRS) -> dict[str, Any]:
+             batch_size: int = 16, min_eval_pairs: int = DEFAULT_MIN_EVAL_PAIRS,
+             min_improvement: float = DEFAULT_MIN_IMPROVEMENT) -> dict[str, Any]:
     """test 분할(최신 기수, 학습·검증에 쓰지 않은 채팅방)에서 θ0 vs 새 모델.
-    쌍이 min_eval_pairs 미만이면 INCONCLUSIVE(정확도는 참고로 남긴다), 이상이고 새 모델이 더 높을 때만 REPLACEABLE."""
+    쌍이 min_eval_pairs 미만이면 INCONCLUSIVE(정확도는 참고로 남긴다), 이상이고 새 모델 정확도가 θ0 보다
+    min_improvement(기본 0.02 = 2%p) 이상 높을 때만 REPLACEABLE, 아니면 KEEP_BASE."""
     if min_eval_pairs < 1:
         raise SystemExit("min_eval_pairs ≥ 1")
+    if not 0 <= min_improvement < 1:
+        raise SystemExit("min_improvement ∈ [0, 1)")
     meta_path = candidate_dir / META_FILE
     if not meta_path.exists():
         raise SystemExit(f"{meta_path} 가 없다(train 결과 디렉터리가 아니다)")
@@ -401,6 +423,7 @@ def evaluate(pairs_path: Path, candidate_dir: Path, *, device: str = "cpu", max_
     result: dict[str, Any] = {"pairs": len(pairs), "videos": len({p["video_id"] for p in pairs}), "chat_rooms": rooms,
                               "cohorts": cohorts, "train_chat_rooms": meta["train_chat_rooms"],
                               "val_chat_rooms": meta["val_chat_rooms"], "min_eval_pairs": min_eval_pairs,
+                              "min_improvement": min_improvement,
                               "candidate_dir": str(candidate_dir), "best_step": meta.get("best_step")}
     if not pairs:
         return result | {"decision": "INCONCLUSIVE", "replaceable": False, "reason": "test 분할에 쌍이 없다"}
@@ -415,7 +438,7 @@ def evaluate(pairs_path: Path, candidate_dir: Path, *, device: str = "cpu", max_
     if len(pairs) < min_eval_pairs:
         return result | scored | {"decision": "INCONCLUSIVE", "replaceable": False,
                                   "reason": f"test 쌍 {len(pairs)}개 < 최소 {min_eval_pairs}개"}
-    better = scored["candidate"]["accuracy"] > scored["base"]["accuracy"]
+    better = replaceable(scored["base"], scored["candidate"], min_improvement)
     return result | scored | {
         "decision": "REPLACEABLE" if better else "KEEP_BASE", "replaceable": better,
         "replace_how": "교체는 depth-serve 가 읽는 모델을 이 디렉터리로 바꾸는 것이다(자동으로 하지 않는다)."}

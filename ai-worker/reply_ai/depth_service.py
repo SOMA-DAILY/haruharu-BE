@@ -1,8 +1,10 @@
 """DialogRPT-depth 점수 서비스(별도 프로세스). revision 을 고정하지 않으면 시작하지 않는다.
 
 - 모델: microsoft/DialogRPT-depth (GPT-2 medium 24층, GPT2ForSequenceClassification, num_labels=1), MIT.
-- 입력: 맥락 턴마다 `<|endoftext|>`(50256) 로 끝내고 답장을 이어 붙인다. max_seq_len(학습 기본 50) 을 넘으면
-  앞쪽(맥락 앞)부터 잘라낸다(공식 feeder 와 같다).
+- 입력: 맥락 턴마다 `<|endoftext|>`(50256) 로 끝내고 답장을 이어 붙인다. 맥락 C(구분자 포함)는 context_token_cap
+  (기본 25, REPLY_AI_DEPTH_CONTEXT_TOKEN_CAP) 토큰으로 앞쪽부터 자르고, 답장은 자르지 않는다. 합이 max_seq_len(학습 기본 50)
+  을 넘으면 C 를 앞쪽부터 더 자른다(공식 feeder 의 왼쪽 자르기와 같은 방향). 답장 혼자 max_seq_len 을 넘는 경우에만
+  답장 뒤쪽을 자르고 C 없이 넣으며 reply_truncated 로 기록한다.
 - 점수: 답장 마지막 토큰 위치(길이−1)의 logit → sigmoid.
   구분자와 패딩이 같은 50256 이라 분류 헤드의 자동 위치 선택(첫 pad 앞)은 맥락 끝을 고를 수 있다. 그래서 헤드에 맡기지 않고
   `model.transformer` 은닉상태 + `model.score` 로 직접 계산해 각 줄의 실제 길이−1 위치에서 꺼낸다.
@@ -16,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,6 +28,7 @@ MODEL_ID = "microsoft/DialogRPT-depth"
 PINNED_REVISION = "0fa8a8770e267801a5779788ccfd921192ae7f40"
 EOS_ID = 50256
 DEFAULT_MAX_SEQ_LEN = 50
+DEFAULT_CONTEXT_TOKEN_CAP = 25
 MAX_CANDIDATES = 16
 MAX_TURNS = 32
 MAX_CHARS = 4000
@@ -42,15 +46,44 @@ REFERENCE_TOLERANCE = 1e-3
 log = logging.getLogger("reply_ai.depth")
 
 
-def build_ids(encode, context_turns: Sequence[str], reply: str, max_seq_len: int) -> list[int]:
-    """[turn₁ EOS turn₂ EOS … reply] 의 토큰 id. 길면 왼쪽(맥락 앞)부터 잘라 마지막 max_seq_len 개를 남긴다."""
-    ids: list[int] = []
+def context_token_cap() -> int:
+    """맥락 C 토큰 상한(구분자 포함). REPLY_AI_DEPTH_CONTEXT_TOKEN_CAP, 기본 25, 0 이면 상한 없음.
+    depth-serve·학습·쌍 만들기가 같은 값을 써야 한다(model_id·input_profile 에 들어간다)."""
+    value = os.environ.get("REPLY_AI_DEPTH_CONTEXT_TOKEN_CAP", "")
+    return max(0, int(value)) if value.strip() else DEFAULT_CONTEXT_TOKEN_CAP
+
+
+def layout(encode, context_turns: Sequence[str], reply: str, max_seq_len: int,
+           context_cap: int = DEFAULT_CONTEXT_TOKEN_CAP) -> tuple[list[int], dict[str, Any]]:
+    """[turn₁ EOS turn₂ EOS … reply] 의 토큰 id 와 토큰 수·잘림 기록.
+
+    1) C(턴 + EOS) 를 context_cap 토큰으로 앞쪽부터 자른다(0 이면 상한 없음). 2) C + 답장이 max_seq_len 을 넘으면 C 를
+    앞쪽부터 더 자른다. 답장은 자르지 않는다. 3) 답장 혼자 max_seq_len 을 넘으면 답장 뒤쪽을 잘라 C 없이 넣는다.
+    max_seq_len 0 이면 2)·3) 을 하지 않는다.
+    """
+    context: list[int] = []
     for turn in context_turns:
-        ids += list(encode(turn)) + [EOS_ID]
-    ids += list(encode(reply))
-    if max_seq_len > 0 and len(ids) > max_seq_len:
-        ids = ids[-max_seq_len:]
-    return ids
+        context += list(encode(turn)) + [EOS_ID]
+    reply_ids = list(encode(reply))
+    context_tokens, reply_tokens = len(context), len(reply_ids)
+    if context_cap > 0 and len(context) > context_cap:
+        context = context[-context_cap:]
+    reply_truncated = False
+    if max_seq_len > 0 and len(reply_ids) > max_seq_len:
+        reply_ids, context, reply_truncated = reply_ids[:max_seq_len], [], True
+    elif max_seq_len > 0 and len(context) + len(reply_ids) > max_seq_len:
+        context = context[len(context) + len(reply_ids) - max_seq_len:]
+    ids = context + reply_ids
+    full = context_tokens + reply_tokens
+    return ids, {"context_tokens": context_tokens, "context_used_tokens": len(context), "reply_tokens": reply_tokens,
+                 "input_tokens": full, "used_tokens": len(ids), "truncated": len(ids) < full,
+                 "context_truncated": len(context) < context_tokens, "reply_truncated": reply_truncated}
+
+
+def build_ids(encode, context_turns: Sequence[str], reply: str, max_seq_len: int,
+              context_cap: int = DEFAULT_CONTEXT_TOKEN_CAP) -> list[int]:
+    """점수 모델이 받는 토큰 id(layout 참고)."""
+    return layout(encode, context_turns, reply, max_seq_len, context_cap)[0]
 
 
 def pad_batch(rows: list[list[int]]) -> tuple[list[list[int]], list[list[int]], list[int]]:
@@ -66,11 +99,15 @@ def sigmoid(x: float) -> float:
 
 
 class DepthModel:
-    def __init__(self, revision: str = PINNED_REVISION, device: str = "cpu", max_seq_len: int = DEFAULT_MAX_SEQ_LEN):
+    def __init__(self, revision: str = PINNED_REVISION, device: str = "cpu", max_seq_len: int = DEFAULT_MAX_SEQ_LEN,
+                 context_cap: int | None = None):
         if not re.fullmatch(r"[0-9a-f]{40}", revision or ""):
             raise SystemExit("depth revision must be pinned to a 40-hex commit")
         if max_seq_len < 8:
             raise SystemExit("depth max_seq_len must be ≥ 8")
+        context_cap = context_token_cap() if context_cap is None else context_cap
+        if context_cap < 0 or (max_seq_len > 0 and context_cap >= max_seq_len):
+            raise SystemExit("depth context_token_cap must be in [0, max_seq_len)")
         import torch
         import transformers
         from transformers import AutoTokenizer, GPT2ForSequenceClassification
@@ -83,32 +120,27 @@ class DepthModel:
             raise SystemExit(f"unexpected num_labels {self.model.config.num_labels}")
         self.device = device
         self.max_seq_len = max_seq_len
+        self.context_cap = context_cap
         versions = {"transformers": transformers.__version__, "torch": torch.__version__.split("+")[0]}
-        system = f"{MODEL_ID}@{revision[:12]}#len{max_seq_len}#fp32#tf{versions['transformers']}#torch{versions['torch']}#{device}"
+        system = (f"{MODEL_ID}@{revision[:12]}#len{max_seq_len}#ctx{context_cap}#fp32#tf{versions['transformers']}"
+                  f"#torch{versions['torch']}#{device}")
         self._lock = threading.Lock()
         self.info = {"model_id": system, "base_model": MODEL_ID, "model_revision": revision, "max_seq_len": max_seq_len,
-                     "dtype": "float32", "device": device, "libraries": versions, "license": "MIT",
-                     "score": "sigmoid(logit at last reply token)", "truncation": "left"}
+                     "context_token_cap": context_cap, "dtype": "float32", "device": device, "libraries": versions,
+                     "license": "MIT", "score": "sigmoid(logit at last reply token)",
+                     "truncation": "context capped and cut from the left; reply kept (cut from the right only if alone over max_seq_len)"}
         self.self_check()
 
     def _encode(self, text: str) -> list[int]:
         return self.tokenizer.encode(text, add_special_tokens=False)
 
     def inputs(self, context_turns: Sequence[str], replies: Sequence[str]) -> list[dict[str, Any]]:
-        """답장마다 실제 입력 토큰 수(자르기 전·후)와 잘림 여부. 기록용."""
-        context_tokens = sum(len(self._encode(t)) + 1 for t in context_turns)
-        result = []
-        for reply in replies:
-            reply_tokens = len(self._encode(reply))
-            full = context_tokens + reply_tokens
-            used = min(full, self.max_seq_len) if self.max_seq_len > 0 else full
-            result.append({"context_tokens": context_tokens, "reply_tokens": reply_tokens, "input_tokens": full,
-                           "used_tokens": used, "truncated": used < full, "reply_truncated": reply_tokens > used})
-        return result
+        """답장마다 실제 입력 토큰 수(자르기 전·후)와 잘림 여부(C·답장 따로). 기록용."""
+        return [layout(self._encode, context_turns, reply, self.max_seq_len, self.context_cap)[1] for reply in replies]
 
     def score(self, context_turns: Sequence[str], replies: Sequence[str]) -> list[float]:
         torch = self.torch
-        rows = [build_ids(self._encode, context_turns, reply, self.max_seq_len) for reply in replies]
+        rows = [build_ids(self._encode, context_turns, reply, self.max_seq_len, self.context_cap) for reply in replies]
         ids, mask, last = pad_batch(rows)
         with self._lock, torch.no_grad():
             input_ids = torch.tensor(ids, device=self.device)
@@ -179,6 +211,8 @@ def make_handler(model: Any) -> type[BaseHTTPRequestHandler]:
                 scores = model.score(*parsed)
                 body = {"scores": scores, "model_id": model.info["model_id"],
                         "model_revision": model.info["model_revision"], "max_seq_len": model.info["max_seq_len"]}
+                if "context_token_cap" in model.info:
+                    body["context_token_cap"] = model.info["context_token_cap"]
                 if hasattr(model, "inputs"):
                     body["inputs"] = model.inputs(*parsed)
                 self._send(200, body)
@@ -200,7 +234,8 @@ def serve(host: str = "127.0.0.1", port: int = 18453, revision: str = PINNED_REV
     server = ThreadingHTTPServer((host, port), make_handler(model))
     log.info("depth_ready")
     print(json.dumps({"event": "depth_ready", "host": host, "port": port,
-                      **{k: model.info[k] for k in ("model_id", "model_revision", "max_seq_len", "self_check")}}), flush=True)
+                      **{k: model.info[k] for k in ("model_id", "model_revision", "max_seq_len", "context_token_cap",
+                                                    "self_check")}}), flush=True)
     try:
         server.serve_forever()
     finally:

@@ -150,6 +150,11 @@ class _OfflineContext:
         return result
 
 
+def context_key(context_ko: list[dict[str, str]]) -> str:
+    """한국어 C 턴 원문 목록의 sha. 번역 캐시 키이자 비교 쌍을 묶는 키(같은 C 의 실제 답장끼리만 비교한다)."""
+    return sha256_json([t["text"] for t in context_ko])
+
+
 class Translator:
     """한국어 → 영어(depth_translate 지시문·스키마 그대로). 캐시 파일은 원문 sha256 → 영어만 담는다(원문 없음).
 
@@ -186,8 +191,8 @@ class Translator:
 
         영어 C 는 depth_translate 가 맥락 턴 전체를 압축한 한 줄이다(depth-serve 입력 [C_en]). 캐시 키는 턴 원문 목록의 sha.
         """
-        context_key = sha256_json([t["text"] for t in context_ko]) if context_ko else None
-        context_en = self.cache.get(context_key) if context_key else None
+        key = context_key(context_ko) if context_ko else None
+        context_en = self.cache.get(key) if key else None
         need_context = bool(context_ko) and context_en is None
         done = {k: en for k, v in texts.items() if (en := self.cached(v)) is not None}
         todo = [{"card_id": k, "text": v} for k, v in texts.items() if k not in done]
@@ -203,7 +208,7 @@ class Translator:
                     continue
                 if turns and out["context_en"]:
                     context_en = out["context_en"][0]
-                    self._remember(context_key, context_en, persist=self.cache_context)
+                    self._remember(key, context_en, persist=self.cache_context)
                 for c in chunk:
                     self._remember(sha256_text(c["text"]), out["candidates"][c["card_id"]])
                     done[c["card_id"]] = out["candidates"][c["card_id"]]
@@ -317,7 +322,7 @@ def export_outcomes(conn, settings: Settings, *, scorer: Scorer | None, translat
             context = {"source": "translated" if context_ko else "unavailable", "attempt_id": None,
                        "context_sha": sha256_json(context_ko) if context_ko else None, "context_en": None}
         context["analysis_id"] = analysis_id
-        context["context_ko_sha"] = sha256_json([t["text"] for t in context_ko]) if context_ko else None
+        context["context_ko_sha"] = context_key(context_ko) if context_ko else None   # 쌍 묶음 키(번역 캐시 키와 같다)
         context["context_ko"] = [t["text"] for t in context_ko] if context_ko and include_context_text else None
 
         prepared = []
@@ -414,10 +419,11 @@ def _hours_apart(a: dict[str, Any], b: dict[str, Any]) -> float | None:
 
 def make_pairs(rows: Iterable[dict[str, Any]], min_depth_diff: int = 1, max_hour_gap: float | None = DEFAULT_MAX_HOUR_GAP
                ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """같은 영상(같은 C)의 실제 답장끼리 depth 큰 쪽을 r+ 로. 동점·차이 부족·전송 시각 차 초과는 뺀다.
+    """같은 C(한국어 C 턴 sha = context.context_ko_sha, 번역 캐시 키와 같다)의 실제 답장끼리 depth 큰 쪽을 r+ 로.
+    같은 영상이라도 C 가 다르면 묶지 않는다. 동점·차이 부족·전송 시각 차 초과는 뺀다.
 
-    제외 이유: 답장 단위(unobserved·text_unavailable·english_unavailable·context_unavailable),
-    영상 단위(single_reply: 쓸 수 있는 답장이 하나뿐), 쌍 단위(tie·below_min_diff·over_hour_gap·sent_at_unknown).
+    제외 이유: 답장 단위(unobserved·text_unavailable·english_unavailable·context_unavailable·context_key_unavailable),
+    C 단위(single_reply: 쓸 수 있는 답장이 하나뿐), 쌍 단위(tie·below_min_diff·over_hour_gap·sent_at_unknown).
     max_hour_gap: 두 답장 전송 시각 차 상한(시간, 논문 §3.1 기본 1). None 이면 보지 않는다.
     """
     if min_depth_diff < 1:
@@ -425,15 +431,15 @@ def make_pairs(rows: Iterable[dict[str, Any]], min_depth_diff: int = 1, max_hour
     if max_hour_gap is not None and not max_hour_gap > 0:
         raise ValueError("max_hour_gap > 0")
     excluded: dict[str, int] = {}
-    groups: dict[int, list[dict[str, Any]]] = {}
+    groups: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
-        reason = pair_exclusion(row)
+        reason = pair_exclusion(row) or (None if row["context"].get("context_ko_sha") else "context_key_unavailable")
         if reason:
             excluded[reason] = excluded.get(reason, 0) + 1
             continue
-        groups.setdefault(row["video_id"], []).append(row)
+        groups.setdefault(row["context"]["context_ko_sha"], []).append(row)
     pairs = []
-    for video_id, group in groups.items():
+    for key, group in groups.items():
         if len(group) < 2:
             excluded["single_reply"] = excluded.get("single_reply", 0) + 1
             continue
@@ -455,8 +461,10 @@ def make_pairs(rows: Iterable[dict[str, Any]], min_depth_diff: int = 1, max_hour
                     excluded["over_hour_gap"] = excluded.get("over_hour_gap", 0) + 1
                     continue
                 pos, neg = (a, b) if diff > 0 else (b, a)
+                video_id = pos["video_id"]
                 pairs.append({
                     "pair_id": f"{video_id}:{pos['message_id']}>{neg['message_id']}", "video_id": video_id,
+                    "context_ko_sha": key,
                     "chat_room_id": pos["chat_room_id"], "cohort_id": pos.get("cohort_id"),
                     "context_en": pos["context"]["context_en"],
                     "context_sha": pos["context"]["context_sha"], "depth_diff": abs(diff),
