@@ -1,6 +1,6 @@
 # reply-ai — 영상 답장 추천 AI 작업기 (#558)
 
-앱 서버가 `ai_reply` 스키마에 넣은 작업을 가져가 영상 이해 → 유사 사례 검색 → 후보 생성 → 독립 검수 → 최종 카드(최대 3개)를 만들고,
+앱 서버가 `ai_reply` 스키마에 넣은 작업을 가져가 영상 이해 → 유사 사례 검색 → 후보 생성 → 독립 검수 → 최종 카드(지금 패키지 버전은 최대 2개: 질문 1 + 비질문 1)를 만들고,
 실제 답장이 쌓이면 피드백 배치로 프롬프트 개선안을 검증한다. 앱 서버·대기열 계약은
 [`docs/engineering/reply-recommendation.md`](../docs/engineering/reply-recommendation.md), 표 정의는
 [`scripts/sql/558-reply-recommendations-up.sql`](../scripts/sql/558-reply-recommendations-up.sql)이다.
@@ -54,6 +54,7 @@ Python 3.12, ffmpeg/ffprobe 필요(`/opt/homebrew/bin` 또는 PATH, `REPLY_AI_FF
 uv run reply-ai init-version [--gallery ID]           # 첫 버전(패키지 프롬프트·설정)과 활성 포인터. 멱등
 uv run reply-ai gallery import fixtures/synthetic_gallery.json   # 합성 사례 → 새 gallery_snapshot(CANDIDATE)
 uv run reply-ai version use-gallery --gallery ID --reason "…"    # 로컬 개발용: 사례 묶음만 바꾼 버전을 CAS 로 활성화
+uv run reply-ai version use-package --reason "…"     # 패키지의 지금 지시문·설정으로 새 버전(pkg-…)을 만들어 CAS 로 활성화. 멱등
 uv run reply-ai version show | rollback --version-id ID --reason "…"
 uv run --extra embedding reply-ai embedding-serve      # 127.0.0.1:18452
 uv run --extra depth reply-ai depth-serve             # 127.0.0.1:18453 (--max-seq-len 50)
@@ -95,7 +96,7 @@ REPLY_AI_EMBEDDING_URL=http://127.0.0.1:18452 REPLY_AI_MEDIA_ALLOWED_PREFIXES=ht
 | 11장 무효화 | `pipeline.run_purge`(PURGE_VIDEO) |
 | 12·13장 피드백 배치 | `feedback/engine.py` |
 
-후보 하나가 내용 규칙(제목 「볼까요?」·30자, 예문 120자, anchor 정확 일치, 근거 id, 개인 인용 정확 일치·주체)을 어기면 그 후보만 검수 전에 버리고
+후보 하나가 내용 규칙(제목 30자·공백만 금지, 예문 120자, anchor 정확 일치, 근거 id, 개인 인용 정확 일치·주체)을 어기면 그 후보만 검수 전에 버리고
 `generation_attempt.candidates.dropped` 에 남긴다. ID 중복·스키마 위반·개인화 선언 불일치, 검수 응답의 누락·순서 변경은 시도 전체 실패다.
 검수되지 않은 후보는 어떤 경우에도 세트가 되지 않는다.
 
@@ -161,18 +162,35 @@ last-token pooling, L2 정규화, float32, CPU. `model_id` 에 pooling·정밀�
 
 - 검수(통과/탈락만): 8개 검사·issue none·quality ≥ 3(개인 후보는 useful_personalization 도). 품질 점수는 통과 기준으로만 쓰고
   선택 순서에는 쓰지 않는다.
-- 한 풀 선택(`depth.select_pool`, `selection_policy=depth-pool-v1`): 통과 후보를 Depth 점수 내림차순(동점은 후보 번호 순)으로
-  유형당 1개·의미 그룹(`redundancy_group`)당 1개·최대 3개. 고른 카드는 점수순으로 저장한다.
+- 한 풀 선택(`depth.select_pool`): 통과 후보를 Depth 점수 내림차순(동점은 후보 번호 순)으로 버전의 카드 규칙에 따라 고르고,
+  고른 카드는 점수순으로 저장한다. 카드 규칙은 아래 「최종 카드 규칙」(질문 짝이면 `selection_policy=depth-pool-question-pair-v1`,
+  이전 규칙이면 `depth-pool-v1`).
 - 일반 세트: 일반 통과 후보 전부를 채점(영어 변환 1번에 전부)하고 한 풀 선택.
-- 개인 세트: 일반 시도의 통과 후보 전체(`candidates.kept` + 검수 결과, 점수는 `depth_ranking.scores` 재사용) + 개인 통과 후보를 한 풀로
+- 개인 세트(활성 버전의 `04-gate` 가 `generic_candidates` 규칙을 가질 때만): 일반 시도의 통과 후보 전체(`candidates.kept` + 검수 결과, 점수는 `depth_ranking.scores` 재사용) + 개인 통과 후보를 한 풀로
   고른다. 개인 후보만 같은 공통 C(일반 세트의 영어 C 재사용)로 채점한다. 일반 점수와 모델·영어 C 가 다르면 섞지 않는다(`SCORE_MISMATCH`).
   개인 검수 입력(`gate-input.generic_candidates`)에 일반 통과 후보와 그 의미 그룹을 넣고, 같은 의미면 그 그룹 이름을 그대로 쓰게 한다
   (지시문 `04-gate.txt` 는 새 버전을 만들 때 반영된다). 개인 후보가 하나도 뽑히지 않으면 일반 세트를 그대로 쓴다. 일반 세트에 있던 후보는
-  같은 카드 id 를 쓴다.
+  같은 카드 id 를 쓴다. 활성 버전의 검수 지시문이 그 규칙을 모르거나(이전 버전) 일반 통과 후보 기록이 비면 Depth 가 켜져 있어도
+  꺼짐과 같은 경로(검수 입력 `base_cards`, 품질순 병합)를 쓰고 `depth_ranking.status=POOL_UNAVAILABLE` 로 남긴다.
 
 `REPLY_AI_DEPTH_RANKING_ENABLED=false`(기본)이면 선택·순서·검수 입력·기록이 기존과 같다(일반: 품질순 `select_generic`, 개인:
-`merge_personal`). 켜져 있어도 채점에 실패하면 같은 기존 선택을 쓰고 상태만 남긴다(개인 검수가 일반 그룹 이름을 썼으면 병합 규칙의
-`base:<card_id>` 로 바꿔 판정한다). 13장 고정 검증 재생성은 Depth 점수가 없어 기존 품질순 선택이다.
+품질순 병합). 켜져 있어도 채점에 실패하면 같은 품질순 선택을 쓰고 상태만 남긴다(개인 검수가 일반 그룹 이름을 썼으면 병합 규칙의
+`base:<card_id>` 로 바꿔 판정한다). 이때 개인 검수 입력은 이미 한 풀 형식(`generic_candidates`)으로 보낸 뒤라 꺼짐 때와 다르다
+(같은 것은 선택 규칙이다). 13장 고정 검증 재생성은 Depth 점수가 없어 그 버전 카드 규칙의 품질순 선택이다.
+
+### 최종 카드 규칙(버전 설정 `generation`)
+
+- 질문 짝(`card_composition: "question_pair"`, `final_max_cards: 2`, 지금 패키지): 질문(`question`) 1장 + 질문이 아닌 유형 1장.
+  각 자리 안에서는 주어진 순서(Depth 내림차순, 꺼짐·실패면 품질순)로 고르고, 한쪽 자리 후보가 없으면 남은 후보를 같은 순서로 채운다.
+  유형당 1개·의미 그룹당 1개는 그대로다. 같은 세트의 두 제목은 같은 어미로 끝나지 않는다: 끝의 공백·문장부호를 떼고 마지막
+  `generation.TITLE_ENDING_CHARS`(2) 글자가 같으면 같은 어미로 보고 다음 후보로 바꾼다. 표시는 앞 순서(Depth 높은 쪽) 먼저.
+  개인 세트는 일반 카드(또는 Depth 켜짐이면 일반 통과 후보 전체) + 개인 후보 한 풀에 같은 규칙을 쓴다(꺼짐·실패의 품질순 병합은
+  같은 품질이면 일반 카드가 앞선다, `generation.merge_pool`).
+  제목은 유형별 문형(`question` '어떤 과제인지 물어보기', `self_disclosure` '나도 발표 준비 중이라고 말하기', `empathy` '밤새는 마음에
+  공감하기' 등 행동의 '~하기' 명사형)으로 지시문 02·03·04 가 정하고, 코드는 30자·공백만 검사한다.
+- 이전 규칙(`card_composition` 없음, 예전 버전): 최대 3장, 제목은 '볼까요?' 로 끝나야 한다. 예전 버전이 활성인 동안은 동작이 그대로다.
+- 새 규칙을 켜려면 `reply-ai version use-package --reason "…"` 로 패키지 지시문·설정을 새 버전으로 활성화한다. 버전이 바뀌면
+  이전 버전 키의 캐시는 쓰지 않으므로 세트가 다시 만들어진다(비용). Depth 를 켜기 전에 먼저 활성화한다.
 
 - 모델: `microsoft/DialogRPT-depth`, revision `0fa8a8770e267801a5779788ccfd921192ae7f40`(MIT, GPT-2 medium 24층,
   `GPT2ForSequenceClassification` num_labels 1). 영어 Reddit 으로만 학습돼 입력은 영어로 바꿔 넣는다. 가중치 학습 없이 추론만 한다.
@@ -290,8 +308,13 @@ GPT-2 medium 전체 미세조정이라 CPU 에서 메모리 약 6GB(가중치·�
 - 큰 입력 스냅샷은 명세처럼 S3 가 아니라 DB(jsonb)에 있다. 30일 뒤 원문 삭제는 앱 서버 몫(`purged_at`).
 - 추천 문구(title)는 명세의 60자 대신 30자 이하다(앱 추천 칸이 두 줄까지라 폭 좁은 폰에서도 다 보이게, 2026-11-09 결정).
   지시문(02·03)·출력 형식(candidates·gate-input)·설정 `generation.title_max_chars`·코드 검사가 같은 값을 쓴다.
-- 지시문·설정은 버전에 묶인다. 이미 활성 버전이 있는 환경에서 `resources` 의 지시문을 바꾸면 새 버전을 등록·활성화해야 반영된다
-  (아직 CLI 명령은 없다 — 운영은 첫 배포의 `init-version` 이 새 지시문으로 등록한다).
+- 지시문·설정은 버전에 묶인다. 이미 활성 버전이 있는 환경에서 `resources` 의 지시문·설정을 바꾸면 `reply-ai version use-package`
+  로 새 버전을 등록·활성화해야 반영된다(참고 사례 묶음은 활성 버전 것을 유지, 피드백 배치가 고친 지시문은 패키지 것으로 바뀐다,
+  되돌리기는 `version rollback`). 첫 배포는 `init-version` 이 패키지 내용으로 등록한다.
+- Depth 점수 입력에서 답장이 26~50 토큰이면 C 를 25 토큰보다 더 자르므로 같은 세트 안에서도 후보마다 실제 C 길이가 다를 수 있다
+  (`inputs[].context_used_tokens` 에 남는다). 지금 예문 길이(영어 5~20 토큰)에서는 거의 생기지 않는다.
+- 학습 내보내기(`export-outcomes`)는 쌍 키를 한국어 C 턴 sha 로 묶지만, C 자체는 아직 영상마다 하나(첫 OK 기록의 분석)로 만든다.
+  같은 영상에서 재분석으로 C 가 바뀐 답장도 같은 키로 묶인다.
 - 이미지 토큰은 OpenAI 타일 규칙으로 추정한다(실제 사용량은 응답 usage 로 기록).
 - 가격(입력 $1·출력 $5 / 100만 토큰)은 설정값이다. 바뀌면 환경 변수로 맞춘다.
 - 피드백 배치의 고정 검증은 일반(비개인화) 생성만 다시 만든다. 개선안도 일반 생성·검수 지시만 바꾼다.

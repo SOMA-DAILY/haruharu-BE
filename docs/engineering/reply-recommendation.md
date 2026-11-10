@@ -1,6 +1,6 @@
 # 영상 답장 추천 AI (#558)
 
-방 참가자가 다른 사람의 영상을 볼 때, 서버가 영상 장면·캡션·게시 전 방 기록으로 답장 방향 카드(최대 3개)를 만든다.
+방 참가자가 다른 사람의 영상을 볼 때, 서버가 영상 장면·캡션·게시 전 방 기록으로 답장 방향 카드(지금 패키지 버전은 최대 2개: 질문 1 + 비질문 1, 이전 버전은 최대 3개)를 만든다.
 사용자는 카드를 참고해 직접 답장을 쓴다. 자동 입력·자동 전송은 없다.
 기준 명세는 「영상 답장 추천 AI 개발 명세」 v1(2026-11-08)과 개발 패키지(계약·프롬프트·인수 테스트 목록)다.
 
@@ -32,7 +32,7 @@
    `evidence_source` 를 만들고, `ai_job(ANALYSIS)` 을 넣은 뒤 요청을 `SNAPSHOT_READY` 로 바꾼다.
 3. **분석**(작업기): 영상 10·50·90% 장면 3장 + 캡션 + 기록으로 한 번 호출해 `analysis_snapshot` 을 저장하고,
    인용한 출처를 `evidence_source.cited` 로 표시한 뒤 `ai_job(GENERIC)` 을 넣는다.
-4. **일반 추천**(작업기): 참고 사례 검색(top 3) → 후보 최대 10개 → 독립 검수 → 서버 규칙으로 최대 3개 →
+4. **일반 추천**(작업기): 참고 사례 검색(top 3) → 후보 최대 10개 → 독립 검수 → 서버 규칙(버전 설정의 카드 규칙, 지금 최대 2개)으로 선택 →
    `generation_attempt` + `recommendation_set(kind=GENERIC)`. 0개도 정상(`EMPTY`)이다.
 5. **추천 요청**(app API): 시청자 권한을 다시 확인하고 `recommendation_request` 를 만들거나 찾는다.
    준비된 일반 세트가 있으면 바로 `READY`/`EMPTY`, 아니면 `PENDING`.
@@ -139,12 +139,13 @@ app 은 추천 조회 때마다 다음을 확인하고, 하나라도 해당하�
 | `POST /reply` (기존) | 선택 항목 `recommendation_source {set_id, card_id|null, session_id}` 추가. 잘못된 출처는 연결만 빼고 답장은 저장 |
 
 `data` = `{status, request_id, set_id, version_id, cards:[{card_id, category, title}], retry_after_ms, reason_code}`.
-`title` 은 「볼까요?」로 끝나는 30자 이하 문구다(앱 추천 칸 두 줄, 작업기 생성 규칙).
+`title` 은 30자 이하 문구다(앱 추천 칸 두 줄). 지금 버전은 유형별 행동 문형('어떤 과제인지 물어보기', '밤새는 마음에 공감하기')이고
+같은 세트의 두 제목은 어미가 다르다. 이전 버전은 「볼까요?」로 끝난다. 응답 형식은 같다.
 
 | status | 규칙 |
 | --- | --- |
 | `PENDING` | `cards=[]`, `set_id=null`, `retry_after_ms>0` |
-| `READY` | 카드 1~3개, `set_id`·`version_id` 있음 |
+| `READY` | 카드 1~3개(지금 버전 1~2개), `set_id`·`version_id` 있음 |
 | `EMPTY` | `cards=[]`, `set_id`·`version_id` 있음 |
 | `UNAVAILABLE` | `cards=[]`, `set_id=null`, `reason_code` 있음 |
 
@@ -152,6 +153,8 @@ app 은 추천 조회 때마다 다음을 확인하고, 하나라도 해당하�
 `ROOM_CLOSED`, `BUDGET_EXCEEDED`, `ANALYSIS_FAILED`, `GENERATION_FAILED`, `TIMED_OUT`(10분 넘게 끝나지 않음), `INVALIDATED`.
 방 멤버가 아니면 403, 다른 방 영상이면 404 다(기존 답장 API 와 같다).
 새 AI 작업을 만드는 POST 는 시청자당 분당 10회로 막고(429), 이미 준비된 결과를 돌려주는 요청은 세지 않는다.
+일시 실패(시간 초과·비용 한도·전송 실패·모델 계정 크레딧 소진 등)로 닫힌 요청은 실패 확정 2분 뒤부터 POST 하면 새 요청으로 다시
+진행한다. 그 전의 POST 는 같은 `UNAVAILABLE` 을 돌려주고 작업을 만들지 않는다(`RecommendationRequest.RETRY_MIN_INTERVAL`).
 
 ## Depth 평가 모델 (#559)
 
@@ -249,6 +252,9 @@ depth 이미지(압축 약 1.6 GB)는 `image-build` 가 그 이미지에 들어�
    (각 `-verify.sql` 로 확인, 560 verify 는 `reply_recommendation_column = 1`). 운영은 시작할 때 스키마를 검증(`ddl-auto: validate`)하고,
    앱은 기능 스위치와 무관하게 캡션 수정 때 `video_caption_revisions` 를, 방을 읽을 때 `rooms.reply_recommendation_enabled` 를 쓴다.
    표·칼럼이 없으면 앱이 뜨지 않고, 어드민(`ddl-auto: none`)은 방 조회·생성이 실패한다.
+   기수 칸(`reply_depth_observation.cohort_id`)이 생기기 전에 559-up 을 적용한 DB(dev 등)는 **559-up 을 다시 적용**하고
+   (`ADD COLUMN IF NOT EXISTS`) `559-reply-depth-verify.sql` 의 `cohort_column = 1` 을 확인한 뒤 앱을 배포한다. 칸이 없으면 앱은
+   라벨 수집을 건너뛰고 경고(`REPLY_DEPTH_SCHEMA_NOT_READY`)를 한 번 남긴다(칸을 더하면 다음 실행부터 수집한다).
 2. 작업기 전용 DB 계정(`haruharu_ai_worker`, `ai_reply` 만 읽고 쓰기, 연결 한도) — 558 up SQL 끝의 주석. 559 표에는 같은 계정에
    `SELECT` 를 준다(559 up SQL 끝의 주석).
 3. 스택 만들기(`DesiredCount=0`, `ScheduleState=DISABLED`). 파라미터 값 출처:
@@ -275,7 +281,11 @@ depth 이미지(압축 약 1.6 GB)는 `image-build` 가 그 이미지에 들어�
    docker buildx build --platform linux/arm64 -t <ECR>/haruharu-ai-worker:<SHA> --push ai-worker
    docker buildx build --platform linux/arm64 -f ai-worker/Dockerfile.depth -t <ECR>/haruharu-ai-worker-depth:<SHA> --push ai-worker
    ```
-6. 작업기 `init-version` 으로 첫 버전·빈 참고 사례 묶음 등록.
+6. 작업기 `init-version` 으로 첫 버전·빈 참고 사례 묶음 등록. 이미 활성 버전이 있는 환경에서 지시문·설정(카드 규칙 포함)이 바뀐
+   이미지를 올렸으면 `reply-ai version use-package --reason "…"` 로 새 버전을 활성화한다(Depth 정렬을 켜기 전에 먼저 —
+   이전 버전의 검수 지시문은 개인 한 풀 선택의 그룹 이름 재사용을 몰라 작업기가 한 풀 선택을 쓰지 않는다).
+   버전이 바뀌면 일반 세트 캐시가 다시 만들어진다(비용). `use-package` 는 검증 단계 없이 패키지 지시문으로 바꾸므로, 월 1회
+   개선 루프가 적용한 지시문이 있으면 그 변경을 덮어쓴다 — 실행 전 `reply-ai version show` 로 활성 버전 출처를 확인한다.
 7. 스택 업데이트로 `DesiredCount=1`(필요하면 `ScheduleState=ENABLED`). 나머지 파라미터는 `UsePreviousValue=true`.
    로그 `/ecs/haruharu-ai-worker-prod` 의 `depth/` 스트림에 `depth_ready`(공식 점수 5개)가 찍히고 서비스가 안정되는지 확인한다.
 8. app 작업 정의 환경 변수: `REPLY_RECOMMENDATION_ENABLED=true`, 시험 방은 어드민 방 스위치로 켠다
@@ -287,6 +297,8 @@ depth 이미지(압축 약 1.6 GB)는 `image-build` 가 그 이미지에 들어�
 스택을 다시 고칠 때는 `ImageTag`·`DepthImageTag` 를 지금 배포된 태그로 넘긴다(아니면 CI 가 올린 리비전 대신 스택의 이미지로 돌아간다).
 끄기: app `REPLY_RECOMMENDATION_ENABLED=false`(즉시 숨김) → 작업기 DesiredCount 0·예약 끄기. Depth 정렬만 끄려면 스택
 `DepthRanking=false`(사이드카 제거, 카드는 생성 순서). depth 가 응답하지 않아도 작업기는 원래 순서로 저장한다(fail-open).
+depth 사이드카는 `Essential: false` 라 죽어도(OOM·시작 확인 실패) ECS 가 다시 띄우지 않는다. 로그에 `depth_unavailable` 이 이어지면
+그동안은 품질순 선택이고, 서비스 새 배포(`aws ecs update-service --force-new-deployment`)로 태스크를 바꿔야 Depth 정렬이 돌아온다.
 
 정리 잡(보관 기간 삭제·삭제 영상·지워진 답장)은 스위치를 꺼도 계속 돈다. 되돌리기(`down.sql`)는 `ai_reply` 만 지우고
 `video_caption_revisions` 는 남긴다 — #558 앱 코드를 되돌려 배포한 뒤에만 따로 지운다.
