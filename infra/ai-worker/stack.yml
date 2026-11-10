@@ -29,6 +29,17 @@ Parameters:
     Type: String
     Default: develop
     Description: haruharu-ai-worker 이미지 태그(SHA 권장). 스택을 고칠 때는 지금 배포된 SHA 를 넘긴다
+  DepthImageTag:
+    Type: String
+    Default: develop
+    Description: haruharu-ai-worker-depth 이미지 태그(SHA 권장). 스택을 고칠 때는 지금 배포된 SHA 를 넘긴다
+  DepthRanking:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: >-
+      true 면 추천 작업 태스크에 Depth 점수 사이드카(depth)를 같이 띄우고 카드를 점수순으로 정렬한다.
+      false 면 사이드카 없이 이전 태스크 구성(1 vCPU·2 GB)과 같다
   DesiredCount:
     Type: Number
     Default: 0
@@ -65,6 +76,13 @@ Parameters:
     AllowedValues: ["true", "false"]
     Default: "true"
     Description: ECR 저장소 haruharu-ai-worker 는 계정에 하나(dev·prod 공유). 두 번째 스택은 false
+  CreateDepthRepository:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: >-
+      ECR 저장소 haruharu-ai-worker-depth 도 계정에 하나(dev·prod 공유). 이 저장소를 처음 만드는 스택만 true.
+      CreateRepository 와 따로 둔다 — haruharu-ai-worker 를 이미 가진 스택이 있어도 depth 저장소는 아직 없을 수 있다
   GithubDeployRoleName:
     Type: String
     Default: github-actions-deploy-policy
@@ -72,6 +90,8 @@ Parameters:
 Conditions:
   IsProd: !Equals [!Ref Env, prod]
   MakeRepository: !Equals [!Ref CreateRepository, "true"]
+  MakeDepthRepository: !Equals [!Ref CreateDepthRepository, "true"]
+  UseDepth: !Equals [!Ref DepthRanking, "true"]
 
 Resources:
   Repository:
@@ -87,6 +107,21 @@ Resources:
         LifecyclePolicyText: >-
           {"rules":[{"rulePriority":1,"description":"keep last 40 images","selection":{"tagStatus":"any",
           "countType":"imageCountMoreThan","countNumber":40},"action":{"type":"expire"}}]}
+
+  # Depth 점수 사이드카 이미지(ai-worker/Dockerfile.depth, 가중치 포함 압축 약 1.6 GB). 계정에 하나.
+  DepthRepository:
+    Type: AWS::ECR::Repository
+    Condition: MakeDepthRepository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RepositoryName: haruharu-ai-worker-depth
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: >-
+          {"rules":[{"rulePriority":1,"description":"keep last 10 images","selection":{"tagStatus":"any",
+          "countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}
 
   LogGroup:
     Type: AWS::Logs::LogGroup
@@ -152,8 +187,9 @@ Resources:
       Family: !If [IsProd, haruharu-ai-worker, haruharu-ai-worker-dev]
       RequiresCompatibilities: [FARGATE]
       NetworkMode: awsvpc
-      Cpu: "1024"
-      Memory: "2048"
+      # 사이드카를 켜면 2 vCPU·6 GB(Fargate 유효 조합). depth 는 fp32 가중치·torch 로 상시 약 1.8 GB, 후보 16개 계산 때 최대 약 2.1 GB.
+      Cpu: !If [UseDepth, "2048", "1024"]
+      Memory: !If [UseDepth, "6144", "2048"]
       RuntimePlatform: {CpuArchitecture: ARM64, OperatingSystemFamily: LINUX}
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       TaskRoleArn: !GetAtt TaskRole.Arn
@@ -172,6 +208,13 @@ Resources:
             - {Name: REPLY_AI_FEEDBACK_BATCH_ENABLED, Value: "false"}
             - {Name: REPLY_AI_REAL_USER_FEEDBACK_ENABLED, Value: !Ref RealUserFeedback}
             - {Name: REPLY_AI_WORKER_ID, Value: !Sub "ecs-${Env}"}
+            - {Name: REPLY_AI_DEPTH_RANKING_ENABLED, Value: !Ref DepthRanking}
+            - {Name: REPLY_AI_DEPTH_URL, Value: "http://127.0.0.1:18453"}
+          # 사이드카가 공식 점수 재현(시작 점검)을 통과해 /health 가 200 이 된 뒤에 작업기를 띄운다.
+          DependsOn: !If
+            - UseDepth
+            - [{ContainerName: depth, Condition: HEALTHY}]
+            - !Ref AWS::NoValue
           Secrets:
             - {Name: OPENAI_API_KEY, ValueFrom: !Sub "${Secret}:OPENAI_API_KEY::"}
             - {Name: CLOUDFLARE_API_TOKEN, ValueFrom: !Sub "${Secret}:CLOUDFLARE_API_TOKEN::"}
@@ -182,6 +225,31 @@ Resources:
               awslogs-group: !Ref LogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: worker
+        # Depth 점수 서비스(microsoft/DialogRPT-depth, revision 고정, 가중치 이미지 포함, 인터넷 없이 시작). 같은 태스크라 127.0.0.1 로만 연다.
+        - !If
+          - UseDepth
+          - Name: depth
+            Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/haruharu-ai-worker-depth:${DepthImageTag}
+            Essential: true
+            MemoryReservation: 2560
+            Memory: 3584
+            HealthCheck:
+              Command:
+                - CMD
+                - python
+                - -c
+                - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18453/health', timeout=3)"
+              Interval: 15
+              Timeout: 5
+              Retries: 3
+              StartPeriod: 180
+            LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group: !Ref LogGroup
+                awslogs-region: !Ref AWS::Region
+                awslogs-stream-prefix: depth
+          - !Ref AWS::NoValue
 
   BatchTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -327,7 +395,9 @@ Resources:
               - ecr:UploadLayerPart
               - ecr:CompleteLayerUpload
               - ecr:PutImage
-            Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/haruharu-ai-worker
+            Resource:
+              - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/haruharu-ai-worker
+              - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/haruharu-ai-worker-depth
           - Effect: Allow
             Action: [ecs:DescribeTaskDefinition, ecs:RegisterTaskDefinition]
             Resource: "*"

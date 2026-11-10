@@ -153,6 +153,41 @@ app 은 추천 조회 때마다 다음을 확인하고, 하나라도 해당하�
 방 멤버가 아니면 403, 다른 방 영상이면 404 다(기존 답장 API 와 같다).
 새 AI 작업을 만드는 POST 는 시청자당 분당 10회로 막고(429), 이미 준비된 결과를 돌려주는 요청은 세지 않는다.
 
+## Depth 평가 모델 (#559)
+
+생성 AI 는 공통 맥락 C + 개인 기록 P 로 후보를 만들고, Depth 평가 모델(`microsoft/DialogRPT-depth`, 고정 revision)은
+(C, 후보 하나) → 점수 하나를 낸다. 최종 카드를 점수순으로 보여 주고, 사용자는 고르거나 고쳐서 직접 보낸다.
+점수는 같은 C 의 후보끼리 비교하는 값이다(0.8 을 확률 80% 로 쓰지 않는다).
+
+- **C**: 영상 게시 시점에 고정된 분석 스냅샷의 공개 근거(분석이 인용한 게시 전 단체 대화 + 캡션·장면 설명). 평가·학습 모두 같은 C 를 쓰고,
+  P 는 생성에만 쓴다. 모델이 영어 Reddit 으로만 학습돼 C·후보를 영어로 바꿔 넣고 한국어 원문은 함께 남긴다.
+- **카드 정렬**(작업기): 검수·선택이 끝난 최종 카드를 depth-serve 점수 내림차순으로 저장한다. 서비스·변환이 실패하면 원래 순서(fail-open).
+  기록은 `recommendation_set.internal_cards[].depth`·`generation_attempt.candidates.depth_ranking`.
+- **라벨**(app): 실제 전송한 영상 답장(`reply_link`)마다 관찰 기간(답장 시각부터 `observation-hours`, 모든 답장에 같은 기간)이 끝난 뒤
+  `chat_messages.reply_to_message_id` 를 따라 Depth(답장 r → 상대 → 나 → 상대 = 3, 답글 없으면 0)·Width(직접 답글 수)를 한 번 계산해
+  `ai_reply.reply_depth_observation` 에 넣는다. 연결이 끊기거나 불명확하면 `UNOBSERVED`(depth·width null, 0 과 다르다).
+  전송되지 않은 후보에는 라벨이 없다. 미래 대화는 라벨로만 쓰고 모델 입력에 넣지 않는다. 회원 탈퇴 파기 때 함께 지운다.
+- **예측·실측 연결**(작업기 명령 `reply-ai depth export-outcomes`): 실제 답장 1건 = 1행. 추천 당시 노출 카드·예측 점수·model_id·선택 카드와
+  실제 전송 문장(수집 허용 출처만)·그 문장의 점수(지정한 모델로 다시 매김)·Depth·Width·관측 상태, 연결 구분(카드 그대로 / 카드 보고 수정 /
+  직접 작성 / 추천 노출 없음, 문자 유사도 임계값은 인자)을 잇고, Spearman·쌍 비교 정확도·연결 구분별 평균 Depth·미관측 수를 요약한다.
+- **추가 학습·교체**(`build-pairs` → `train` → `eval`): 같은 영상의 실제 답장끼리 depth 큰 쪽을 r+ 로 (C, r+, r−)(동점 제외),
+  손실 −log σ(h(C,r+) − h(C,r−)) 로 공개 가중치에서 이어서 학습, 학습에 쓰지 않은 방(미사용 기수)의 쌍 비교 정확도가 공개 모델보다
+  높을 때만 교체 가능으로 판정한다. 교체는 사람이 depth-serve 가 읽는 모델을 바꾸는 것이다(자동 아님).
+
+| 표 | 정의 | 쓰는 쪽 | 읽는 쪽 |
+| --- | --- | --- | --- |
+| `ai_reply.reply_depth_observation` | `scripts/sql/559-reply-depth-up.sql`(되돌리기 `-down`, 확인 `-verify`) | app 스케줄러(10분마다) | 작업기 `depth export-outcomes` |
+
+스위치(모두 기본 OFF, 끄면 기존 동작과 같다)
+
+| 쪽 | 키 / 환경 변수 | 기본 |
+| --- | --- | --- |
+| app 라벨 수집 | `haruharu.reply-recommendation.depth.enabled` / `REPLY_RECOMMENDATION_DEPTH_ENABLED` | false |
+| app 관찰 기간 | `haruharu.reply-recommendation.depth.observation-hours` / `REPLY_RECOMMENDATION_DEPTH_OBSERVATION_HOURS` | 24 |
+| 작업기 카드 정렬 | `REPLY_AI_DEPTH_RANKING_ENABLED`(서비스 주소 `REPLY_AI_DEPTH_URL`) | false |
+
+라벨 수집을 켜기 전에 559 SQL 을 적용한다. 명령·서비스 실행법은 `ai-worker/README.md` 의 Depth 절에 있다.
+
 ## 설정
 
 app(`haruharu.reply-recommendation.*`, 기본 모두 OFF)
@@ -176,25 +211,63 @@ app(`haruharu.reply-recommendation.*`, 기본 모두 OFF)
 
 ## 운영 배포
 
-AWS 자원은 `infra/ai-worker/stack.yml`(CloudFormation, 환경마다 한 스택)이 만든다: ECR `haruharu-ai-worker`(계정에 하나),
-작업기 서비스 `haruharu-ai-worker-svc-{env}`(Fargate arm64 1 vCPU·2 GiB, 앱과 같은 서브넷·보안 그룹), 월 1회 작업 정의
+AWS 자원은 `infra/ai-worker/stack.yml`(CloudFormation, 환경마다 한 스택)이 만든다: ECR `haruharu-ai-worker`·`haruharu-ai-worker-depth`
+(각각 계정에 하나), 작업기 서비스 `haruharu-ai-worker-svc-{env}`(Fargate arm64, 앱과 같은 서브넷·보안 그룹), 월 1회 작업 정의
 `haruharu-ai-worker-batch[-dev]` 와 예약 `haruharu-ai-feedback-monthly-{env}`, 로그 `/ecs/haruharu-ai-worker-{env}`(30일),
 비밀값 `haruharu/{env}/ai-worker`(OPENAI_API_KEY·CLOUDFLARE_API_TOKEN·REPLY_AI_DATABASE_URL — 사람이 콘솔에서 넣는다),
 GitHub 배포 역할에 이 작업기만 배포하는 권한. develop 에 병합하면 `image-build` 가 같은 SHA 로 작업기 이미지도 굽고,
 `deploy-ecs`(all)가 작업기 스택이 있는 환경에서 서비스·월 1회 작업 정의를 같은 SHA 로 올린다(없는 환경은 건너뜀).
 
-1. **앱 배포 전에** `558-reply-recommendations-up.sql` 적용(dev·운영 각각). 운영은 시작할 때 스키마를 검증(`ddl-auto: validate`)하고,
-   앱은 기능 스위치와 무관하게 캡션 수정 때 `video_caption_revisions` 를 쓴다. 표가 없으면 앱이 뜨지 않는다.
-2. 작업기 전용 DB 계정(`haruharu_ai_worker`, `ai_reply` 만 읽고 쓰기, 연결 한도) — up SQL 끝의 주석.
-3. 작업기 스택 만들기(DesiredCount 0, 예약 꺼짐) → 비밀값 세 키 넣기 → PR 병합으로 이미지 빌드.
-4. 작업기 `init-version` 으로 첫 버전·빈 참고 사례 묶음 등록.
-5. `deploy-ecs`(dev → prod, 이미지 SHA) 뒤 스택 업데이트로 작업기 1개·예약 켜기(ImageTag 는 배포한 SHA).
-6. app 작업 정의 환경 변수: `REPLY_RECOMMENDATION_ENABLED=true`, `REPLY_RECOMMENDATION_ROOM_IDS=<시험 방>`,
-   `REPLY_RECOMMENDATION_QA_USER_IDS=<운영진 계정>`. 처리방침 개정·공지 뒤 `ROOM_IDS` 를 비우고, 실사용자 수집
+**Depth 사이드카**(스택 `DepthRanking=true`, 기본): 추천 작업 태스크에 컨테이너 `depth`(`ai-worker/Dockerfile.depth` —
+CPU torch + `microsoft/DialogRPT-depth` 가중치 revision 고정, 인터넷 없이 시작)가 같이 뜨고, 작업기는
+`REPLY_AI_DEPTH_URL=http://127.0.0.1:18453` 로 점수를 받는다. depth 는 시작 때 공식 점수 5개를 재현해야 포트를 열고(`/health` 200),
+작업기 컨테이너는 depth 가 HEALTHY 가 된 뒤 시작한다. 태스크는 2 vCPU·6 GB(depth 상시 약 1.8 GB, 후보 16개 계산 때 최대 약 2.1 GB),
+`DepthRanking=false` 면 사이드카 없이 1 vCPU·2 GB·정렬 끔이다. 개선 루프(batch) 작업에는 넣지 않는다.
+depth 이미지(압축 약 1.6 GB)는 `image-build` 가 그 이미지에 들어가는 파일(`Dockerfile.depth`·`pyproject.toml`·`uv.lock`·`README.md`·`reply_ai/`)이
+바뀐 병합에서만 굽는다. `deploy-ecs` 는 `depth_image_tag` 를 줄 때만 depth 이미지를 바꾸고, 비우면 지금 이미지를 유지한다.
+
+처음 켜는 순서(prod 기준, dev 도 같다):
+
+1. **앱 배포 전에** `558-reply-recommendations-up.sql` → `559-reply-depth-up.sql` 적용(각 `-verify.sql` 로 확인). 운영은 시작할 때
+   스키마를 검증(`ddl-auto: validate`)하고, 앱은 기능 스위치와 무관하게 캡션 수정 때 `video_caption_revisions` 를 쓴다.
+   표가 없으면 앱이 뜨지 않는다.
+2. 작업기 전용 DB 계정(`haruharu_ai_worker`, `ai_reply` 만 읽고 쓰기, 연결 한도) — 558 up SQL 끝의 주석. 559 표에는 같은 계정에
+   `SELECT` 를 준다(559 up SQL 끝의 주석).
+3. 스택 만들기(`DesiredCount=0`, `ScheduleState=DISABLED`). 파라미터 값 출처:
+   - `Subnets`·`SecurityGroups`·`AssignPublicIp`: 앱 서비스와 같은 값 —
+     `aws ecs describe-services --cluster haruharu --services haruharu-app-svc-prod --query 'services[0].networkConfiguration.awsvpcConfiguration'`.
+   - `MediaBucket`: 앱 작업 정의의 `AWS_S3_BUCKET` 값.
+   - `CloudflareAccountId`: Cloudflare 대시보드 계정 ID(Workers AI 를 쓰는 계정).
+   - `ImageTag`·`DepthImageTag`: 4번에서 올릴 이미지 태그(커밋 SHA).
+   - `CreateRepository`·`CreateDepthRepository`: 그 ECR 저장소를 처음 만드는 스택만 `true`(이미 다른 환경 스택이 만들었으면 `false`).
+   - `DepthRanking`: `true`(기본). 나머지는 기본값.
+   ```sh
+   aws cloudformation create-stack --stack-name haruharu-ai-worker-prod --template-body file://infra/ai-worker/stack.yml \
+     --capabilities CAPABILITY_NAMED_IAM --parameters ParameterKey=Env,ParameterValue=prod \
+     ParameterKey=Subnets,ParameterValue='subnet-a\,subnet-b' ParameterKey=SecurityGroups,ParameterValue=sg-x \
+     ParameterKey=AssignPublicIp,ParameterValue=ENABLED ParameterKey=MediaBucket,ParameterValue=<버킷> \
+     ParameterKey=CloudflareAccountId,ParameterValue=<계정 ID> ParameterKey=ImageTag,ParameterValue=<SHA> \
+     ParameterKey=DepthImageTag,ParameterValue=<SHA> ParameterKey=CreateRepository,ParameterValue=<true|false> \
+     ParameterKey=CreateDepthRepository,ParameterValue=<true|false>
+   ```
+4. 비밀값 `haruharu/prod/ai-worker` 의 세 키를 콘솔에서 채운다(템플릿의 SecretString 은 빈 칸이고 다시 덮어쓰지 않는다).
+5. 이미지 두 개를 같은 태그로 올린다. 병합 전이면 직접 굽는다(병합 뒤에는 `image-build` 가 굽는다):
+   ```sh
+   aws ecr get-login-password | docker login --username AWS --password-stdin <계정>.dkr.ecr.ap-northeast-2.amazonaws.com
+   docker buildx build --platform linux/arm64 -t <ECR>/haruharu-ai-worker:<SHA> --push ai-worker
+   docker buildx build --platform linux/arm64 -f ai-worker/Dockerfile.depth -t <ECR>/haruharu-ai-worker-depth:<SHA> --push ai-worker
+   ```
+6. 작업기 `init-version` 으로 첫 버전·빈 참고 사례 묶음 등록.
+7. 스택 업데이트로 `DesiredCount=1`(필요하면 `ScheduleState=ENABLED`). 나머지 파라미터는 `UsePreviousValue=true`.
+   로그 `/ecs/haruharu-ai-worker-prod` 의 `depth/` 스트림에 `depth_ready`(공식 점수 5개)가 찍히고 서비스가 안정되는지 확인한다.
+8. app 작업 정의 환경 변수: `REPLY_RECOMMENDATION_ENABLED=true`, `REPLY_RECOMMENDATION_ROOM_IDS=<시험 방>`,
+   `REPLY_RECOMMENDATION_QA_USER_IDS=<운영진 계정>`, Depth 라벨 수집 `REPLY_RECOMMENDATION_DEPTH_ENABLED=true`
+   (관찰 기간 `REPLY_RECOMMENDATION_DEPTH_OBSERVATION_HOURS`, 기본 24). 처리방침 개정·공지 뒤 `ROOM_IDS` 를 비우고, 실사용자 수집
    (`REPLY_RECOMMENDATION_REAL_USER_COLLECTION_ENABLED`)과 스택 `RealUserFeedback` 을 켠다. 개인화는 별도 승인 후.
 
-스택을 다시 고칠 때는 `ImageTag` 를 지금 배포된 SHA 로 넘긴다(아니면 CI 가 올린 리비전 대신 스택의 이미지로 돌아간다).
-끄기: app `REPLY_RECOMMENDATION_ENABLED=false`(즉시 숨김) → 작업기 DesiredCount 0·예약 끄기.
+스택을 다시 고칠 때는 `ImageTag`·`DepthImageTag` 를 지금 배포된 태그로 넘긴다(아니면 CI 가 올린 리비전 대신 스택의 이미지로 돌아간다).
+끄기: app `REPLY_RECOMMENDATION_ENABLED=false`(즉시 숨김) → 작업기 DesiredCount 0·예약 끄기. Depth 정렬만 끄려면 스택
+`DepthRanking=false`(사이드카 제거, 카드는 생성 순서). depth 가 응답하지 않아도 작업기는 원래 순서로 저장한다(fail-open).
 
 정리 잡(보관 기간 삭제·삭제 영상·지워진 답장)은 스위치를 꺼도 계속 돈다. 되돌리기(`down.sql`)는 `ai_reply` 만 지우고
 `video_caption_revisions` 는 남긴다 — #558 앱 코드를 되돌려 배포한 뒤에만 따로 지운다.
