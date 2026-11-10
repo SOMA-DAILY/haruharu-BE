@@ -10,7 +10,7 @@
   한국어 원문은 바꾸지 않고, 영어·점수·모델 id·순위를 카드(`depth`)와 시도 기록(`candidates.depth_ranking`)에 남긴다.
 - 선택(select_pool): 검수 통과 후보 한 풀(개인 세트는 일반 통과 후보 + 개인 통과 후보)을 Depth 내림차순(동점은 후보 순서)으로
   버전의 카드 규칙(generation.CardPolicy)에 따라 고른다. 질문 짝 규칙이면 질문 1장 + 비질문 1장(각 자리 Depth 순, 빈 자리는
-  남은 후보로 채움)·같은 어미 금지·최대 2장, 기존 규칙이면 유형당 1개·의미 그룹당 1개·최대 3개.
+  남은 후보로 채움)·같은 마지막 어절 금지·최대 2장, 기존 규칙이면 유형당 1개·의미 그룹당 1개·최대 3개.
   품질 점수는 통과 기준(≥3)으로만 쓰고 정렬에 쓰지 않는다.
 - 서비스 꺼짐·실패·영어 변환 실패는 같은 카드 규칙의 품질순 선택(generation.select_generic, 개인은 merge_pool·merge_personal)을
   쓰고 상태만 기록한다(fail-open). 생성·검수를 다시 부르지 않는다.
@@ -52,7 +52,7 @@ GATE_POOL_MARKER = "generic_candidates"
 # 선택 정책: 검수 통과(8개 검사·issue none·quality≥3, 개인은 useful_personalization) 후보 한 풀을 Depth 내림차순으로
 # 유형당 1개·의미 그룹당 1개·최대 3개. 품질은 통과 기준으로만 쓴다.
 SELECTION_POLICY = "depth-pool-v1"
-# 질문 짝 카드 규칙(질문 1 + 비질문 1, 같은 어미 금지, 최대 2)으로 고른 선택.
+# 질문 짝 카드 규칙(질문 1 + 비질문 1, 같은 마지막 어절 금지, 최대 2)으로 고른 선택.
 SELECTION_POLICY_QUESTION_PAIR = "depth-pool-question-pair-v1"
 
 

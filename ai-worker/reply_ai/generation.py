@@ -4,8 +4,9 @@
 - 최종 카드 규칙은 버전 설정(config_json.generation)에 묶인다(CardPolicy):
   - 질문 짝(card_composition = "question_pair", 지금 패키지): 최대 final_max_cards(2)장. 질문(question) 1장 + 질문이 아닌 유형
     1장을 각 자리 안에서 주어진 순서(Depth 순, 꺼짐·실패면 품질순)로 고른다. 한쪽 자리 후보가 없으면 남은 후보를 같은 순서로
-    채운다. 같은 세트의 두 제목은 같은 어미(title_ending)로 끝나지 않는다(같으면 다음 후보). 제목 문형은 지시문이 유형별로
-    정하고 코드는 '볼까요?' 를 강제하지 않는다.
+    채운다. 같은 세트의 두 제목은 마지막 어절(title_last_word)이 같지 않다(같으면 다음 후보). 제목 문형은 지시문이 유형별로
+    정하고 코드는 '볼까요?' 를 강제하지 않는다. 지시문의 제목 예시(config generation.title_examples)와 똑같은 제목은 검수 전에
+    버린다(사유 title_example).
   - 기존(키 없음, 이전 버전): 최대 3장, 제목은 '볼까요?' 로 끝난다. 이전 활성 버전의 동작을 그대로 유지한다.
 - 후보 하나의 내용 규칙 위반(제목 형식·anchor·근거)은 그 후보만 검수 전에 버리고 기록한다.
   ID 중복·형식 위반·개인화 선언 불일치처럼 출력 전체가 계약을 어기면 시도 전체가 실패다.
@@ -31,17 +32,19 @@ NO_PERSONALIZATION = {"kind": "none", "source_quotes": [], "actor_ids": [], "del
 
 QUESTION_CATEGORY = "question"
 QUESTION_PAIR = "question_pair"
-# "같은 어미": 제목 끝의 공백·문장부호(?!.~…, 기호)를 떼고 NFC 로 맞춘 뒤 마지막 TITLE_ENDING_CHARS 글자가 같으면 같은 어미다.
-# 예: '물어보기'·'말해보기' → '보기'(같음), '말하기'·'공감하기' → '하기'(같음), '물어보기'·'말하기' → 다름.
-TITLE_ENDING_CHARS = 2
+# "같은 문형": NFC 로 맞추고 제목 끝의 공백·문장부호(?!.~…, 기호)를 뗀 뒤 띄어쓰기 기준 마지막 어절(앞쪽 문장부호도 뗌)이
+# 전체가 같을 때만 같은 문형이다. 예: '물어보기'·'물어보기' → 같음, '공감하기'·'응원하기' → 다름.
 _TRAILING_MARKS = re.compile(r"[\s\W_]+$")
+_LEADING_MARKS = re.compile(r"^[\W_]+")
 
 
 @dataclass(frozen=True)
 class CardPolicy:
-    """최종 카드 규칙. question_pair 면 질문 1장 + 비질문 1장·같은 어미 금지·'볼까요?' 강제 없음."""
+    """최종 카드 규칙. question_pair 면 질문 1장 + 비질문 1장·같은 마지막 어절 금지·'볼까요?' 강제 없음.
+    example_titles: 지시문 제목 예시(정규화 키, 질문 짝 규칙만). 이와 똑같은 제목은 후보 단계에서 버린다. 키가 없으면 빈 집합."""
     max_cards: int
     question_pair: bool
+    example_titles: frozenset[str] = frozenset()
 
     @property
     def title_suffix(self) -> str | None:
@@ -55,14 +58,20 @@ def card_policy(config: dict[str, Any] | None) -> CardPolicy:
     """버전 설정(config_json)의 카드 규칙. card_composition 이 없으면 기존 규칙(최대 3장)."""
     generation = (config or {}).get("generation") or {}
     if generation.get("card_composition") == QUESTION_PAIR:
-        return CardPolicy(max_cards=int(generation["final_max_cards"]), question_pair=True)
+        examples = frozenset(title_key(e["title"]) for e in generation.get("title_examples") or [])
+        return CardPolicy(max_cards=int(generation["final_max_cards"]), question_pair=True, example_titles=examples)
     return LEGACY_POLICY
 
 
-def title_ending(title: str) -> str:
-    """같은 어미 비교 키(TITLE_ENDING_CHARS 참고)."""
-    body = _TRAILING_MARKS.sub("", unicodedata.normalize("NFC", title))
-    return body[-TITLE_ENDING_CHARS:]
+def title_key(title: str) -> str:
+    """제목 비교 키: NFC, 끝 공백·문장부호 제거, 공백 연속은 하나로."""
+    return " ".join(_TRAILING_MARKS.sub("", unicodedata.normalize("NFC", title)).split())
+
+
+def title_last_word(title: str) -> str:
+    """같은 문형 비교 키: 띄어쓰기 기준 마지막 어절 전체(정규화는 위 주석 참고)."""
+    words = title_key(title).split()
+    return _LEADING_MARKS.sub("", words[-1]) if words else ""
 
 
 def _with_sha(body: dict[str, Any]) -> dict[str, Any]:
@@ -109,6 +118,8 @@ def _content_problem(candidate: dict[str, Any], payload: dict[str, Any], persona
     if not title.strip() or len(title) > TITLE_MAX_CHARS \
             or (policy.title_suffix is not None and not title.endswith(policy.title_suffix)):
         return "title"
+    if title_key(title) in policy.example_titles:
+        return "title_example"
     if not candidate["example"].strip() or len(candidate["example"]) > 120:
         return "example"
     anchor = candidate["current_anchor"]
@@ -147,7 +158,8 @@ def validate_candidates(output: dict[str, Any], payload: dict[str, Any], *, pers
                         viewer_id: str | None = None, uploader_id: str | None = None,
                         policy: CardPolicy = LEGACY_POLICY) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     """(검수에 넘길 후보, 버린 후보와 이유). 출력 전체 계약 위반은 SEMANTIC_INVALID.
-    제목 검사: 공백만·30자 초과는 버린다. 기존 카드 규칙(policy)이면 '볼까요?' 로도 끝나야 한다."""
+    제목 검사: 공백만·30자 초과는 버린다. 기존 카드 규칙(policy)이면 '볼까요?' 로도 끝나야 한다.
+    지시문 제목 예시와 똑같은 제목은 title_example 로 버린다."""
     candidates = output["candidates"]
     prefix, cap = ("P", 6) if personal else ("G", 10)
     if len(candidates) > cap:
@@ -197,15 +209,15 @@ def accepted_candidates(candidates: list[dict[str, Any]], assessments: list[dict
 
 def _conflicts(candidate: dict[str, Any], chosen: list[dict[str, Any]], policy: CardPolicy) -> bool:
     return any(x["category"] == candidate["category"] or x["redundancy_group"] == candidate["redundancy_group"]
-               or (policy.question_pair and title_ending(x["title"]) == title_ending(candidate["title"]))
+               or (policy.question_pair and title_last_word(x["title"]) == title_last_word(candidate["title"]))
                for x in chosen)
 
 
 def select_generic(candidates: list[dict[str, Any]], policy: CardPolicy = LEGACY_POLICY) -> list[dict[str, Any]]:
     """주어진 순서(우선순위)대로 유형당 1개·의미 그룹당 1개·최대 policy.max_cards.
 
-    질문 짝 규칙: ① 질문 자리·비질문 자리를 각각 순서대로 채운다(자리마다 1장, 같은 어미 금지). ② 한쪽 자리 후보가 없어
-    빈 자리가 남으면 남은 후보를 같은 순서로 채운다(유형·그룹·어미 규칙 유지). 결과는 주어진 순서대로(앞이 먼저 표시).
+    질문 짝 규칙: ① 질문 자리·비질문 자리를 각각 순서대로 채운다(자리마다 1장, 같은 마지막 어절 금지). ② 한쪽 자리 후보가
+    없어 빈 자리가 남으면 남은 후보를 같은 순서로 채운다(유형·그룹·마지막 어절 규칙 유지). 결과는 주어진 순서대로(앞이 먼저 표시).
     """
     if not policy.question_pair:
         selected: list[dict[str, Any]] = []

@@ -52,7 +52,18 @@
     "per_category_max": 1,
     "min_quality": 3,
     "title_max_chars": 30,
-    "example_max_chars": 120
+    "example_max_chars": 120,
+    "title_examples": [
+      {"category": "question", "title": "오늘 운동 몇 세트 했는지 묻기"},
+      {"category": "empathy", "title": "여행 첫날 설렘에 공감하기"},
+      {"category": "support", "title": "과제 마감까지 힘내라고 응원하기"},
+      {"category": "self_disclosure", "title": "나도 그 떡볶이집 가 봤다고 말하기"},
+      {"category": "compliment", "title": "직접 만든 파스타 솜씨 칭찬하기"},
+      {"category": "information_suggestion", "title": "비 오는 날 갈 만한 실내 코스 알려 주기"},
+      {"category": "reaction", "title": "바다 노을 사진에 감탄 남기기"},
+      {"category": "humor", "title": "고양이 표정에 맞춰 농담 던지기"},
+      {"category": "question", "title": "시험 끝나면 뭐 할지 여쭤보기"}
+    ]
   },
   "runtime": {
     "worker_concurrency": 2,

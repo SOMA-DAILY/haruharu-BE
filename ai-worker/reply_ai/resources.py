@@ -58,8 +58,22 @@ def stage_schema(stage: str) -> dict[str, Any]:
     return schema((STAGES.get(stage) or AUX_STAGES[stage])[1])
 
 
+# 지시문 파일 안의 제목 예시 자리. 예시 목록의 출처는 config.json generation.title_examples 하나다(코드의 예시 제목 탈락
+# 검사와 같은 목록). 버전 지시문(prompts_json)에는 채운 결과가 들어간다.
+TITLE_EXAMPLES_PLACEHOLDER = "{{TITLE_EXAMPLES}}"
+
+
+def title_examples_text(config: dict[str, Any]) -> str:
+    """제목 예시를 지시문 문구로: "question '…', empathy '…'"."""
+    return ", ".join(f"{e['category']} '{e['title']}'" for e in config["generation"]["title_examples"])
+
+
+def render_prompt(text: str, config: dict[str, Any]) -> str:
+    return text.replace(TITLE_EXAMPLES_PLACEHOLDER, title_examples_text(config)) if TITLE_EXAMPLES_PLACEHOLDER in text else text
+
+
 def default_prompts() -> dict[str, str]:
-    return {stage: prompt_file(files[0]) for stage, files in STAGES.items()}
+    return {stage: render_prompt(prompt_file(files[0]), package_config()) for stage, files in STAGES.items()}
 
 
 @lru_cache(maxsize=None)

@@ -1,9 +1,11 @@
-"""질문 짝 카드 규칙(최대 2장: 질문 1장 + 질문이 아닌 유형 1장, 같은 어미 금지, 유형별 제목 문형)과 버전 등록(use-package).
+"""질문 짝 카드 규칙(최대 2장: 질문 1장 + 질문이 아닌 유형 1장, 같은 마지막 어절 금지, 유형별 제목 문형, 지시문 예시와 같은 제목
+탈락)과 버전 등록(use-package).
 
 이전 카드 규칙(최대 3장, '볼까요?' 제목) 버전의 동작은 test_depth·test_selection 이 그대로 확인한다.
 """
 from __future__ import annotations
 
+import copy
 import uuid
 
 import pytest
@@ -11,7 +13,7 @@ import pytest
 from reply_ai import depth, generation, jobs, versions
 from reply_ai.db import jsonb
 from reply_ai.provider import ScriptedProvider
-from reply_ai.resources import package_config, prompt_file
+from reply_ai.resources import TITLE_EXAMPLES_PLACEHOLDER, default_prompts, package_config, prompt_file
 
 from .conftest import record
 from .test_depth import FakeDepthModel, depth_server, translate  # noqa: F401 (fixture)
@@ -33,26 +35,35 @@ def ids(cards):
 # ───────────────────────── 규칙·설정 ─────────────────────────
 
 def test_package_config_is_question_pair_with_two_cards_and_old_config_keeps_three():
-    assert QP == generation.CardPolicy(max_cards=2, question_pair=True) and QP.title_suffix is None
+    assert (QP.max_cards, QP.question_pair, QP.title_suffix) == (2, True, None)
+    assert QP.example_titles == {generation.title_key(e["title"]) for e in package_config()["generation"]["title_examples"]}
     assert package_config()["generation"]["final_max_cards"] == 2
     assert generation.card_policy(legacy_config()) == generation.LEGACY_POLICY == generation.CardPolicy(3, False)
     assert generation.card_policy(None).title_suffix == "볼까요?"
 
 
-def test_same_ending_is_last_two_chars_after_trailing_marks():
-    assert generation.TITLE_ENDING_CHARS == 2
-    assert generation.title_ending("어떤 과제인지 물어보기") == generation.title_ending("같이 해보기 ") == "보기"
-    assert generation.title_ending("나도 발표 준비 중이라고 말하기") == generation.title_ending("밤새는 마음에 공감하기!") == "하기"
-    assert generation.title_ending("무슨 과제인지 물어볼까요?") == "까요"
+def test_same_form_is_the_whole_last_word_after_trailing_marks():
+    last = generation.title_last_word
+    assert last("어떤 과제인지 물어보기") == last("언제 끝나는지 물어보기 ") == last("시간 '물어보기'?!") == "물어보기"
+    assert last("밤새는 마음에 공감하기!") == "공감하기" != last("힘내라고 응원하기") == "응원하기"
+    assert last("물어보기") != last("말해보기") and last("노트 칭찬해 주기") == "주기" and last("  ?! ") == ""
+    assert generation.title_key(" 오늘  운동 몇 세트\u3000했는지 묻기?! ") == "오늘 운동 몇 세트 했는지 묻기"
 
 
-def test_prompts_use_per_category_title_forms_without_forced_suffix():
-    for name in ("02-generic.txt", "03-personal.txt"):
-        text = prompt_file(name)
-        assert "'볼까요?'로 끝" not in text and "물어보기" in text and "말하기" in text, name
-    gate = prompt_file("04-gate.txt")
-    assert "같은 어미" in gate and "질문 1장" in gate and depth.gate_supports_pool(gate)
-    assert "공감하기" in prompt_file("02-generic.txt")
+def test_prompts_use_mixed_title_examples_from_the_one_config_list():
+    examples = package_config()["generation"]["title_examples"]
+    assert len({e["category"] for e in examples}) >= 6 and len({generation.title_last_word(e["title"]) for e in examples}) == len(examples)
+    rendered = default_prompts()
+    for stage, name in (("generic", "02-generic.txt"), ("personal", "03-personal.txt"), ("gate", "04-gate.txt")):
+        raw = prompt_file(name)
+        assert raw.count(TITLE_EXAMPLES_PLACEHOLDER) == 1 and not any(e["title"] in raw for e in examples), name  # 중복 정의 없음
+        text = rendered[stage]
+        assert TITLE_EXAMPLES_PLACEHOLDER not in text and all(f"{e['category']} '{e['title']}'" in text for e in examples), name
+        assert "'볼까요?'로 끝" not in text and "똑같은 제목" in text, name
+    gate = rendered["gate"]
+    assert "마지막 어절" in gate and "같은 어미" not in gate and "질문 1장" in gate and depth.gate_supports_pool(gate)
+    assert "awkward로 탈락" in gate
+    assert all(TITLE_EXAMPLES_PLACEHOLDER not in t for t in rendered.values())
 
 
 def test_title_check_keeps_length_and_blank_rules_but_not_the_old_suffix():
@@ -62,6 +73,15 @@ def test_title_check_keeps_length_and_blank_rules_but_not_the_old_suffix():
     assert ids(kept) == ["G1"] and [(d["candidate_id"], d["reason"]) for d in dropped] == [("G2", "title"), ("G3", "title")]
     legacy_kept, _ = generation.validate_candidates(out, gen_payload(), personal=False)   # 이전 규칙은 '볼까요?' 를 요구
     assert legacy_kept == []
+
+
+def test_title_identical_to_a_prompt_example_is_dropped_before_gate():
+    example = package_config()["generation"]["title_examples"][0]["title"]
+    out = {"candidates": [candidate(title=example), candidate("G2", title=f" {example}? "),
+                          candidate("G3", title=example + " 다시")], "personalization_used": False, "reason": ""}
+    kept, dropped = generation.validate_candidates(out, gen_payload(), personal=False, policy=QP)
+    assert ids(kept) == ["G3"] and [(d["candidate_id"], d["reason"]) for d in dropped] == [("G1", "title_example"),
+                                                                                         ("G2", "title_example")]
 
 
 # ───────────────────────── 선택(질문 짝) ─────────────────────────
@@ -85,13 +105,25 @@ def test_missing_question_fills_with_next_other_and_missing_other_leaves_one_que
     assert ids(generation.select_generic(same_group, QP)) == ["G1", "G3"]  # 의미 그룹당 1개도 유지
 
 
-def test_same_title_ending_is_blocked_and_replaced_by_next_candidate():
-    ordered = [c("G1", "question", "어떤 과제인지 물어보기"), c("G2", "self_disclosure", "나도 같이 해보기"),
+def test_same_last_word_is_blocked_and_replaced_by_next_candidate():
+    ordered = [c("G1", "question", "어떤 과제인지 물어보기"), c("G2", "self_disclosure", "나도 했던 일 물어보기"),
                c("G3", "empathy", "밤새는 마음에 공감하기")]
-    assert ids(generation.select_generic(ordered, QP)) == ["G1", "G3"]    # G2 는 G1 과 같은 어미 '보기'
-    fill = [c("G2", "support", "힘내라고 응원하기"), c("G3", "empathy", "밤새는 마음에 공감하기"),
-            c("G4", "compliment", "노트 칭찬해 주기")]
-    assert ids(generation.select_generic(fill, QP)) == ["G2", "G4"]       # 빈 자리 채우기도 같은 어미를 건너뛴다
+    assert ids(generation.select_generic(ordered, QP)) == ["G1", "G3"]    # G2 는 G1 과 같은 마지막 어절 '물어보기'
+    different = [c("G1", "question", "어떤 과제인지 물어보기"), c("G2", "self_disclosure", "나도 같이 해보기")]
+    assert ids(generation.select_generic(different, QP)) == ["G1", "G2"]  # 끝 두 글자만 같으면('보기') 다른 문형
+
+
+def test_fill_keeps_two_cards_on_different_last_words_and_one_when_only_same_remains():
+    fill = [c("G2", "support", "힘내라고 응원하기"), c("G3", "empathy", "밤새는 마음에 공감하기")]
+    assert ids(generation.select_generic(fill, QP)) == ["G2", "G3"]       # 질문 없음: '응원하기'·'공감하기' 는 달라 2장
+    same = [c("G2", "support", "마감까지 응원하기"), c("G3", "empathy", "밤샘도 같이 응원하기")]
+    assert ids(generation.select_generic(same, QP)) == ["G2"]             # 남은 후보가 같은 마지막 어절뿐이면 1장
+    pool = [c("G1", "question", "어떤 과제인지 물어보기"), c("P1", "self_disclosure", "언제 끝나는지 물어보기", quality=3)]
+    assert ids(depth.select_pool(pool, {"G1": 0.2, "P1": 0.9}, policy=QP)) == ["P1"]   # 한 풀(Depth)도 같은 함수
+    assert ids(depth.select_pool(pool, policy=QP)) == ["G1"]                           # 꺼짐(품질순)도 같은 함수
+    base = [{**c("G1", "question", "어떤 과제인지 물어보기", group="base:c1"), "card_id": "c1"}]
+    chosen, used = generation.merge_pool(base, [c("P1", "self_disclosure", "나도 했던 일 물어보기", kind="past_experience")], QP)
+    assert ids(chosen) == ["G1"] and not used                                         # 개인 fail-open 도 같은 함수
 
 
 def test_fail_open_applies_same_combination_in_quality_order():
@@ -272,6 +304,30 @@ def test_use_package_registers_and_activates_current_prompts_and_config(conn):
     assert depth.gate_supports_pool(current["prompts_json"]["gate"])
     assert versions.use_package(conn, "again") == {"changed": False, "version_id": current["version_id"],
                                                    "revision": current["revision"]}
+
+
+@pytest.mark.pg
+def test_use_package_registers_new_version_for_title_examples_and_rollback_restores_previous(conn):
+    """이전 질문 짝 패키지(제목 예시 목록·자리 없음)가 활성일 때 use-package 는 sha 가 다른 새 버전을 만든다."""
+    versions.init_version(conn)
+    pkg = versions.active(conn)
+    config = copy.deepcopy(pkg["config_json"])
+    config["generation"].pop("title_examples")
+    prompts = {**pkg["prompts_json"], "generic": "예: question '어떤 과제인지 물어보기'. 모든 제목을 같은 어미로 끝내지 않는다."}
+    row = versions.build_version("f3", config, prompts, pkg["gallery_snapshot_id"], parent=pkg["version_id"])
+    versions.insert_version(conn, row)
+    versions.activate(conn, row["version_id"], pkg["version_id"], pkg["revision"], "test previous package")
+    previous = versions.active(conn)
+    assert generation.card_policy(previous["config_json"]).example_titles == frozenset()
+
+    result = versions.use_package(conn, "제목 예시 다양화")
+    current = versions.active(conn)
+    assert result["changed"] and result["from"] == previous["version_id"] and current["version_id"] == result["version_id"]
+    assert current["prompts_sha"] != previous["prompts_sha"] and current["full_config_sha"] != previous["full_config_sha"]
+    assert current["prompts_json"] == default_prompts() and generation.card_policy(current["config_json"]) == QP
+    assert QP.example_titles and TITLE_EXAMPLES_PLACEHOLDER not in current["prompts_json"]["generic"]
+    versions.rollback(conn, previous["version_id"], "test rollback")
+    assert versions.active(conn)["version_id"] == previous["version_id"]
 
 
 @pytest.mark.pg
