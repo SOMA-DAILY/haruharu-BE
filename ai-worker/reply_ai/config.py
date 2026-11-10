@@ -77,6 +77,11 @@ class Settings:
     ffprobe: str = "ffprobe"
     media_max_bytes: int = 50 * 1024 * 1024
     worker_id: str = ""
+    # Depth 평가 모델 랭킹(최종 카드 정렬). 끄면 기존 순서·기록과 같다.
+    depth_ranking_enabled: bool = False
+    depth_url: str = "http://127.0.0.1:18453"
+    depth_timeout_seconds: float = 10.0
+    depth_context_chat_turns: int = 4      # 공통 맥락 C 에 넣을 인용 단체 대화(최근 N 턴)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -115,6 +120,10 @@ class Settings:
             ffprobe=_tool("ffprobe", "REPLY_AI_FFPROBE"),
             media_max_bytes=_int("REPLY_AI_MEDIA_MAX_BYTES", 50 * 1024 * 1024),
             worker_id=os.environ.get("REPLY_AI_WORKER_ID", ""),
+            depth_ranking_enabled=_bool("REPLY_AI_DEPTH_RANKING_ENABLED", False),
+            depth_url=os.environ.get("REPLY_AI_DEPTH_URL", "http://127.0.0.1:18453"),
+            depth_timeout_seconds=_float("REPLY_AI_DEPTH_TIMEOUT_SECONDS", 10.0),
+            depth_context_chat_turns=max(0, _int("REPLY_AI_DEPTH_CONTEXT_CHAT_TURNS", 4)),
         )
 
     def max_output_tokens(self, stage: str) -> int:

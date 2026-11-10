@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from . import analysis, budget, errors, generation, jobs, media, tokens, versions
+from . import analysis, budget, depth, errors, generation, jobs, media, tokens, versions
 from .config import Settings
 from .db import jsonb
 from .embedding import Embedder, version_of
@@ -301,15 +301,19 @@ def run_generic(ctx: JobContext) -> None:
                                                     max_output_tokens=ctx.settings.max_output_tokens("gate")))
         gate_output = gated.output
         assessments = generation.validate_gate(gate_output, kept)
-    selected = generation.select_generic(generation.accepted_candidates(kept, assessments))
-    internal = [generation.new_card(c) for c in selected]
+    # Depth 가 켜져 있으면 검수 통과 후보 전부를 채점해 기존 선택 규칙 안의 우선순위로 쓴다(꺼짐·실패면 기존 선택 그대로).
+    selected, depth_record = depth.select_generic(ctx, generation.accepted_candidates(kept, assessments), source=source,
+                                                  snapshot=snapshot, task_id=f"generic-{analysis_id}-r{revision_no}")
+    internal = [generation.new_card(c) | ({"depth": c["depth"]} if "depth" in c else {}) for c in selected]
+    candidates_doc: dict[str, Any] = {"output": generated.output, "kept": kept, "dropped": dropped}
+    if depth_record is not None:
+        candidates_doc["depth_ranking"] = depth_record
     with conn.transaction():
         jobs.lock_owned(conn, ctx.job.id, ctx.owner)
         attempt_id = _insert_attempt(conn, ctx, stage="GENERIC", analysis=snapshot, version=version,
                                      gallery=payload["gallery_snapshot_id"], revision_no=revision_no,
                                      retrieval=found["record"], gen_sha=gen_payload["input_sha256"], gate_sha=gate_sha,
-                                     candidates={"output": generated.output, "kept": kept, "dropped": dropped},
-                                     gate=gate_output)
+                                     candidates=candidates_doc, gate=gate_output)
         set_id = _insert_set(conn, ctx, attempt_id=attempt_id, kind="GENERIC", analysis=snapshot, version=version,
                              gallery=payload["gallery_snapshot_id"], revision_no=revision_no, internal=internal,
                              expires_at=now_utc() + timedelta(hours=ctx.settings.set_ttl_hours))
@@ -397,9 +401,11 @@ def run_personal(ctx: JobContext) -> None:
     prompts = version["prompts_json"]
     viewer, uploader = str(pinput["viewer_id"]), str(source["author_id"])
     records = list(pinput["personal_records"] or [])
-    base_internal = list(base["internal_cards"] or [])
+    # Depth 순서는 표시 순서에만 쓴다. 개인화 입력·병합은 정렬 전(생성·선택) 순서로 한다.
+    base_internal = depth.original_order(list(base["internal_cards"] or []))
     result_set_id, candidates_doc, gate_output, gen_sha, gate_sha = base["set_id"], None, None, None, None
-    base_attempt = conn.execute("SELECT retrieval FROM ai_reply.generation_attempt WHERE id = %s", (base["attempt_id"],)).fetchone()
+    base_attempt = conn.execute("SELECT retrieval, candidates FROM ai_reply.generation_attempt WHERE id = %s",
+                                (base["attempt_id"],)).fetchone()
     references = _references_from_record(conn, base_attempt and base_attempt["retrieval"])
     chosen: list[dict[str, Any]] = []
     if records:  # 근거가 없으면 모델을 부르지 않고 일반 카드를 그대로 쓴다.
@@ -430,6 +436,19 @@ def run_personal(ctx: JobContext) -> None:
             chosen, used = generation.merge_personal(base_for_merge, accepted)
             if not used:
                 chosen = []
+    internal: list[dict[str, Any]] = []
+    if chosen:
+        internal = [c if "card_id" in c else generation.new_card(c) for c in chosen]
+        for card in internal:  # 일반 카드는 원래 의미 그룹으로 되돌려 저장한다(base: 표시는 병합용).
+            if card["redundancy_group"].startswith("base:"):
+                original = next(b for b in base_internal if b["card_id"] == card["card_id"])
+                card["redundancy_group"] = original["redundancy_group"]
+        # 개인 세트도 점수 입력의 맥락은 공통 C 다(개인 기록은 생성에만 쓴다).
+        base_depth = ((base_attempt and base_attempt["candidates"]) or {}).get("depth_ranking")
+        internal, depth_record = depth.rank_cards(ctx, internal, source=source, snapshot=snapshot,
+                                                  task_id=f"personal-{personal_id}", base_record=base_depth)
+        if depth_record is not None and candidates_doc is not None:
+            candidates_doc["depth_ranking"] = depth_record
     with conn.transaction():
         jobs.lock_owned(conn, ctx.job.id, ctx.owner)
         attempt_id = _insert_attempt(conn, ctx, stage="PERSONAL", analysis=snapshot, version=version,
@@ -437,11 +456,6 @@ def run_personal(ctx: JobContext) -> None:
                                      gen_sha=gen_sha, gate_sha=gate_sha, candidates=candidates_doc, gate=gate_output,
                                      viewer_id=pinput["viewer_id"], personal_input_id=personal_id, base_set_id=base["set_id"])
         if chosen:
-            internal = [c if "card_id" in c else generation.new_card(c) for c in chosen]
-            for card in internal:  # 일반 카드는 원래 의미 그룹으로 되돌려 저장한다(base: 표시는 병합용).
-                if card["redundancy_group"].startswith("base:"):
-                    original = next(b for b in base_internal if b["card_id"] == card["card_id"])
-                    card["redundancy_group"] = original["redundancy_group"]
             result_set_id = _insert_set(conn, ctx, attempt_id=attempt_id, kind="PERSONAL", analysis=snapshot, version=version,
                                         gallery=base["gallery_snapshot_id"], revision_no=base["revision_no"], internal=internal,
                                         expires_at=base["expires_at"], viewer_id=pinput["viewer_id"], base_set_id=base["set_id"])

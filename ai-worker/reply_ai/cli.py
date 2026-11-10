@@ -55,6 +55,66 @@ def cmd_embedding_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_depth_serve(args: argparse.Namespace) -> int:
+    from .depth_service import PINNED_REVISION, serve
+    from .worker import setup_logging
+    setup_logging("INFO")
+    serve(args.host, args.port, os.environ.get("REPLY_AI_DEPTH_REVISION", PINNED_REVISION), args.device, args.max_seq_len)
+    return 0
+
+
+def cmd_depth(args: argparse.Namespace) -> int:
+    """Depth 예측·실측 연결(export-outcomes)·비교 데이터셋(build-pairs)·추가 학습(train)·평가(eval)."""
+    from . import depth_outcomes as outcomes
+    if args.action == "export-outcomes":
+        from .depth import DepthClient
+        settings = _settings(args)
+        conn = _conn(settings)
+        if args.scorer == "serve":
+            scorer = outcomes.ServeScorer(DepthClient(settings))
+        elif args.scorer == "local":
+            from .depth_train import LocalScorer
+            scorer = LocalScorer(args.model, args.revision, args.device, args.max_seq_len)
+        else:
+            scorer = None
+        provider = None
+        if args.translate == "provider":
+            from .provider import OpenAIProvider
+            provider = OpenAIProvider(settings)
+        translator = outcomes.Translator(conn, settings, provider, Path(args.translation_cache) if args.translation_cache else None,
+                                         cache_context=args.include_context_text)
+        rows, meta = outcomes.export_outcomes(conn, settings, scorer=scorer, translator=translator,
+                                              thresholds=outcomes.LinkThresholds(args.as_is_threshold, args.edited_threshold),
+                                              include_context_text=args.include_context_text)
+        outcomes.write_jsonl(Path(args.out), rows)
+        summary = {"out": args.out, **meta, "metrics": outcomes.summarize(rows, args.min_depth_diff, args.max_hour_gap or None)}
+        if args.summary:
+            Path(args.summary).write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        _print(summary)
+        return 0
+    from . import depth_train
+    if args.action == "build-pairs":
+        rows = outcomes.read_jsonl(Path(args.outcomes))
+        chat_rooms = ({int(r) for r in args.eval_chat_room_ids.split(",") if r.strip()}
+                      if args.eval_chat_room_ids else None)
+        pairs, stats = depth_train.build_pairs(rows, min_depth_diff=args.min_depth_diff, eval_chat_room_ids=chat_rooms,
+                                               max_hour_gap=args.max_hour_gap or None,
+                                               eval_fraction=args.eval_fraction)
+        outcomes.write_jsonl(Path(args.out), pairs)
+        _print({"out": args.out, "outcome_rows": len(rows), **stats})
+        return 0
+    if args.action == "train":
+        _print(depth_train.train(Path(args.pairs), Path(args.out), base=args.base, revision=args.revision, steps=args.steps,
+                                 batch_size=args.batch_size, lr=args.lr, seed=args.seed, device=args.device,
+                                 max_seq_len=args.max_seq_len))
+        return 0
+    result = depth_train.evaluate(Path(args.pairs), Path(args.candidate), base=args.base, revision=args.revision,
+                                  device=args.device, max_seq_len=args.max_seq_len, batch_size=args.batch_size,
+                                  min_eval_pairs=args.min_eval_pairs)
+    _print(result)
+    return 0
+
+
 def cmd_init_version(args: argparse.Namespace) -> int:
     from . import versions
     settings = _settings(args)
@@ -174,6 +234,76 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=18452)
     p.add_argument("--device", default=os.environ.get("REPLY_AI_EMBEDDING_DEVICE", "cpu"))
     p.set_defaults(func=cmd_embedding_serve)
+
+    p = sub.add_parser("depth-serve", help="Depth 점수 서비스(microsoft/DialogRPT-depth, revision 고정)")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=18453)
+    p.add_argument("--device", default=os.environ.get("REPLY_AI_DEPTH_DEVICE", "cpu"))
+    p.add_argument("--max-seq-len", type=int, default=int(os.environ.get("REPLY_AI_DEPTH_MAX_SEQ_LEN", "50")),
+                   help="맥락+답장 토큰 상한(학습 기본 50). 넘으면 맥락 앞부터 자른다")
+    p.set_defaults(func=cmd_depth_serve)
+
+    p = sub.add_parser("depth", help="Depth 예측·실측 연결·비교 데이터셋·추가 학습·평가")
+    dsub = p.add_subparsers(dest="action", required=True)
+
+    from .depth_service import MODEL_ID as DEPTH_MODEL_ID, PINNED_REVISION as DEPTH_REVISION
+
+    def model_args(d: argparse.ArgumentParser) -> None:
+        d.add_argument("--revision", default=os.environ.get("REPLY_AI_DEPTH_REVISION", DEPTH_REVISION),
+                       help="공개 가중치 revision(기본: REPLY_AI_DEPTH_REVISION 또는 고정 revision)")
+        d.add_argument("--device", default=os.environ.get("REPLY_AI_DEPTH_DEVICE", "cpu"))
+        d.add_argument("--max-seq-len", type=int, default=int(os.environ.get("REPLY_AI_DEPTH_MAX_SEQ_LEN", "50")))
+
+    d = dsub.add_parser("export-outcomes", help="실제 답장 1건 = 1행: 추천 당시 예측 + 실제 문장·점수·Depth + 연결 구분, 지표 요약")
+    d.add_argument("--out", required=True, help="결과 jsonl")
+    d.add_argument("--summary", help="요약 JSON 도 파일로 저장")
+    d.add_argument("--scorer", choices=["serve", "local", "none"], default="serve",
+                   help="실제 문장 점수: depth-serve(REPLY_AI_DEPTH_URL) | 로컬 가중치(--model) | 매기지 않음")
+    d.add_argument("--model", default=DEPTH_MODEL_ID, help="--scorer local: 허브 id 또는 train 결과 디렉터리")
+    d.add_argument("--translate", choices=["provider", "off"], default="provider",
+                   help="실제 문장·C 영어 변환: 기존 provider(depth_translate, 온라인 일일 한도) | 캐시만")
+    d.add_argument("--translation-cache", help="원문 sha256 → 영어 jsonl(읽고 이어 쓴다, 원문은 넣지 않는다). "
+                                              "기본은 답장 번역만 남긴다")
+    d.add_argument("--include-context-text", action="store_true",
+                   help="단체 대화 원문(한국어 C)을 결과에 넣고 C 번역도 캐시에 남긴다(기본: sha 만). 파일은 파기 대상이 아니니 쓰고 지운다")
+    d.add_argument("--as-is-threshold", type=float, default=0.9, help="문자 유사도 ≥ 이 값: 카드 그대로")
+    d.add_argument("--edited-threshold", type=float, default=0.4, help="문자 유사도 ≥ 이 값: 카드 보고 수정(아래는 직접 작성)")
+    d.add_argument("--min-depth-diff", type=int, default=1, help="지표의 쌍 비교에 쓰는 최소 depth 차이")
+    d.add_argument("--max-hour-gap", type=float, default=1.0, help="지표의 쌍 비교: 두 답장 전송 시각 차 상한(시간, 0 이면 보지 않음)")
+    model_args(d)
+    d.set_defaults(func=cmd_depth)
+
+    d = dsub.add_parser("build-pairs", help="export-outcomes 결과 → 같은 C 의 (C, r+, r−) 쌍, 방 단위 train/eval 분할")
+    d.add_argument("--outcomes", required=True)
+    d.add_argument("--out", required=True)
+    d.add_argument("--min-depth-diff", type=int, default=1)
+    d.add_argument("--max-hour-gap", type=float, default=1.0,
+                   help="두 답장 전송 시각 차가 이 시간을 넘으면 쌍에서 뺀다(논문 §3.1, 기본 1, 0 이면 보지 않음)")
+    d.add_argument("--eval-chat-room-ids",
+                   help="평가로 남길 단체 채팅방 id(chat_rooms.id, 쉼표). 3일 방 rooms.id 가 아니다 — 미사용 기수 방들의 "
+                        "단체 채팅방 id 를 넣는다. 없으면 채팅방 id 해시로 --eval-fraction")
+    d.add_argument("--eval-fraction", type=float, default=0.2)
+    d.set_defaults(func=cmd_depth)
+
+    d = dsub.add_parser("train", help="train 분할로 공개 DialogRPT-depth 에서 이어서 학습(−log σ(h(C,r+) − h(C,r−)))")
+    d.add_argument("--pairs", required=True)
+    d.add_argument("--out", required=True, help="결과 가중치 디렉터리(비어 있어야 한다)")
+    d.add_argument("--base", default=DEPTH_MODEL_ID)
+    d.add_argument("--steps", type=int, default=100)
+    d.add_argument("--batch-size", type=int, default=8)
+    d.add_argument("--lr", type=float, default=1e-5)
+    d.add_argument("--seed", type=int, default=0)
+    model_args(d)
+    d.set_defaults(func=cmd_depth)
+
+    d = dsub.add_parser("eval", help="eval 분할(학습에 안 쓴 방)에서 공개 모델 vs 새 모델 쌍 비교 정확도 → 교체 가능 판정")
+    d.add_argument("--pairs", required=True)
+    d.add_argument("--candidate", required=True, help="train 결과 디렉터리")
+    d.add_argument("--base", default=DEPTH_MODEL_ID)
+    d.add_argument("--batch-size", type=int, default=16)
+    d.add_argument("--min-eval-pairs", type=int, default=30, help="평가 쌍이 이보다 적으면 INCONCLUSIVE(교체 판정 안 함)")
+    model_args(d)
+    d.set_defaults(func=cmd_depth)
 
     p = sub.add_parser("init-version", help="첫 버전·활성 포인터 등록(멱등)")
     p.add_argument("--gallery", help="시작할 gallery_snapshot id(기본: 빈 묶음)")

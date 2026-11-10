@@ -21,6 +21,12 @@ embedding = [
     "transformers>=4.51",
     "huggingface-hub>=0.30",
 ]
+# Depth 점수 서비스 전용(작업기 이미지에는 넣지 않는다). microsoft/DialogRPT-depth 는 MIT.
+depth = [
+    "torch>=2.6",
+    "transformers>=4.51",
+    "huggingface-hub>=0.30",
+]
 
 [project.scripts]
 reply-ai = "reply_ai.cli:main"
@@ -40,5 +46,6 @@ testpaths = ["tests"]
 markers = [
     "pg: PostgreSQL 통합 테스트(127.0.0.1:5465 컨테이너, reply_ai_test_* DB 사용)",
     "live: 실제 OpenAI 호출(기본 제외, -m live 로만 실행)",
+    "depth_live: 실제 DialogRPT-depth 가중치(--extra depth, 기본 제외, -m depth_live 로만 실행)",
 ]
-addopts = "-m 'not live'"
+addopts = "-m 'not live and not depth_live'"

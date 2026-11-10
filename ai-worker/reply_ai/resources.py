@@ -37,6 +37,12 @@ STAGES = {
 # version_registry.prompts_json 의 키(단계 이름과 같다).
 PROMPT_KEYS = tuple(STAGES)
 
+# 버전 레지스트리에 묶지 않는 보조 단계(지시문은 패키지 파일, sha 를 결과 기록에 남긴다).
+# depth_translate: Depth 평가 모델 입력용 영어 변환(공통 맥락·최종 카드 예문).
+AUX_STAGES = {
+    "depth_translate": ("09-depth-translate.txt", "depth-translate.schema.json"),
+}
+
 
 @lru_cache(maxsize=None)
 def schema(name: str) -> dict[str, Any]:
@@ -49,7 +55,7 @@ def prompt_file(name: str) -> str:
 
 
 def stage_schema(stage: str) -> dict[str, Any]:
-    return schema(STAGES[stage][1])
+    return schema((STAGES.get(stage) or AUX_STAGES[stage])[1])
 
 
 def default_prompts() -> dict[str, str]:
