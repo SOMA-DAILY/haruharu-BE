@@ -64,9 +64,9 @@ def test_refusal_incomplete_and_bad_json_are_failures_not_results():
         assert info.value.code == code and not info.value.retryable and info.value.cost_usd > 0
 
 
-def status_error(cls, code, headers=None):
+def status_error(cls, code, headers=None, body=None):
     request = httpx.Request("POST", "https://api.openai.com/v1/responses")
-    return cls("x", response=httpx.Response(code, request=request, headers=headers or {}), body=None)
+    return cls("x", response=httpx.Response(code, request=request, headers=headers or {}), body=body)
 
 
 def test_only_transport_errors_are_retryable():
@@ -86,6 +86,18 @@ def test_only_transport_errors_are_retryable():
     with pytest.raises(errors.JobFailure) as info:
         p.call(REQUEST)
     assert not info.value.retryable and info.value.code == errors.PROVIDER_REJECTED
+
+
+def test_insufficient_quota_429_fails_without_retry():
+    quota = {"message": "You exceeded your current quota", "type": "insufficient_quota", "code": "insufficient_quota"}
+    p, _ = provider(status_error(openai.RateLimitError, 429, {"retry-after": "7"}, body=quota))
+    with pytest.raises(errors.JobFailure) as info:
+        p.call(REQUEST)
+    assert info.value.code == errors.PROVIDER_QUOTA_EXCEEDED and not info.value.retryable
+    p, _ = provider(status_error(openai.RateLimitError, 429, body={"code": "rate_limit_exceeded"}))
+    with pytest.raises(errors.JobFailure) as info:
+        p.call(REQUEST)
+    assert info.value.code == errors.TRANSPORT_EXHAUSTED and info.value.retryable
 
 
 def test_api_schema_keeps_property_names_and_drops_only_listed_keywords():

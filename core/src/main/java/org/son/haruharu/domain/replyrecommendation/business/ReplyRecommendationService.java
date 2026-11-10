@@ -71,7 +71,8 @@ public class ReplyRecommendationService {
 
         Optional<RecommendationRequest> current = registrar.findActive(target)
                 .flatMap(analysis -> requests.findActive(viewerId, analysis.id(), version.get().versionId(), personalKey))
-                .filter(request -> guard.validateOrRevoke(request, now));
+                .filter(request -> guard.validateOrRevoke(request, now))
+                .filter(request -> !revokedForRetry(request, now));
         RecommendationRequest request = current.orElseGet(() -> {
             // 근거 삭제로 분석이 막혔을 수 있으니 다시 찾는다. 없으면 새 AI 작업이라 한도를 센다.
             AnalysisRequest analysis = registrar.findActive(target).orElseGet(() -> {
@@ -111,6 +112,15 @@ public class ReplyRecommendationService {
             return RecommendationResponse.unavailable(request.requestId(), RecommendationReason.INVALIDATED);
         }
         return response(resolver.resolve(request, RecommendationResolver.Mode.READ, now));
+    }
+
+    /** 일시 실패로 닫힌 요청은 추천 요청(POST) 때 닫고 새 요청으로 다시 진행한다. 조회(GET)는 그대로 둔다. */
+    private boolean revokedForRetry(RecommendationRequest request, Instant now) {
+        if (!request.retryableUnavailable(properties.unavailableTtl())) {
+            return false;
+        }
+        requests.revokeForRetry(request, now);
+        return true;
     }
 
     /** 단체 채팅 멤버가 아니면 403, 방이 없으면 404(기존 영상 답장과 같은 정책). */

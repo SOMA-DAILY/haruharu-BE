@@ -113,6 +113,15 @@ def _retry_after(response: Any) -> float | None:
     return None
 
 
+def _quota_exceeded(error: Any) -> bool:
+    """429 중 계정 크레딧·한도 소진(insufficient_quota)인가. 속도 제한 429 와 달리 기다려도 풀리지 않는다."""
+    code = getattr(error, "code", None)
+    if code is None and isinstance(getattr(error, "body", None), dict):
+        body = error.body
+        code = (body.get("error") or {}).get("code") if isinstance(body.get("error"), dict) else body.get("code")
+    return code == "insufficient_quota"
+
+
 class OpenAIProvider:
     def __init__(self, settings: Settings, client: Any | None = None):
         if client is None:
@@ -144,6 +153,8 @@ class OpenAIProvider:
         except (openai.APITimeoutError, openai.APIConnectionError) as error:
             raise errors.transport(f"{request.stage}: {type(error).__name__}") from None
         except openai.RateLimitError as error:
+            if _quota_exceeded(error):
+                raise errors.JobFailure(errors.PROVIDER_QUOTA_EXCEEDED, f"{request.stage}: 429 insufficient_quota") from None
             raise errors.transport(f"{request.stage}: 429", _retry_after(error.response)) from None
         except openai.APIStatusError as error:
             status = getattr(error, "status_code", 0) or 0

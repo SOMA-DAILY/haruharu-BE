@@ -323,6 +323,27 @@ class ReplyRecommendationApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("게시 뒤 방 칸이 꺼지면 스냅샷 스위퍼가 분석 작업을 넣지 않고 분석 요청을 취소한다")
+    void givenRoomSwitchedOffAfterPublish_whenPrepareSnapshots_thenCancelledWithoutJob() {
+        // given
+        publish();
+        jdbc.update("UPDATE rooms SET reply_recommendation_enabled = false WHERE id = ?", roomId);
+
+        // when
+        maintenance.prepareSnapshots();
+
+        // then
+        var row = jdbc.queryForMap("SELECT status, cancel_reason FROM ai_reply.analysis_request WHERE video_id = ?",
+                videoId);
+        assertThat(row).containsEntry("status", "CANCELLED").containsEntry("cancel_reason", "ROOM_DISABLED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ai_reply.analysis_input WHERE video_id = ?",
+                Long.class, videoId)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ai_reply.ai_job WHERE job_type = 'ANALYSIS'"
+                + " AND payload->>'analysis_input_id' IN (SELECT id::text FROM ai_reply.analysis_input"
+                + " WHERE video_id = ?)", Long.class, videoId)).isZero();
+    }
+
+    @Test
     @DisplayName("AI 쪽 SQL 이 실패해도 그 부분만 되돌리고 영상 게시는 저장된다(savepoint)")
     void givenAiInsertFails_whenPublish_thenVideoStillCommits() {
         jdbc.execute("ALTER TABLE ai_reply.analysis_request ADD CONSTRAINT test_block_outbox CHECK (video_id < 0) NOT VALID");
@@ -497,6 +518,75 @@ class ReplyRecommendationApiIntegrationTest {
         assertThat((String) json(failed, "$.data.status")).isEqualTo("UNAVAILABLE");
         assertThat((String) json(failed, "$.data.reason_code")).isEqualTo("ANALYSIS_FAILED");
         assertThat((List<?>) json(failed, "$.data.cards")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("시간 초과로 닫힌 뒤 세트가 준비되면 같은 시청자의 추천 요청(POST)은 새 요청으로 READY 를 받는다")
+    void givenTimedOut_whenSetReadyAndEnsureAgain_thenReady() throws Exception {
+        // given
+        publish();
+        maintenance.prepareSnapshots();
+        String first = json(ensure(viewer, 202), "$.data.request_id");
+        jdbc.update("UPDATE ai_reply.recommendation_request SET created_at = now() - interval '11 minutes'"
+                + " WHERE request_id = ?", first);
+        var timedOut = ensure(viewer, 200);
+        assertThat((String) json(timedOut, "$.data.reason_code")).isEqualTo("TIMED_OUT");
+        String setId = workerGenerates(workerAnalyzes(analysisInputId()), "question", "무슨 과제 하는지 물어볼까요?");
+        assertThat((String) json(read(viewer), "$.data.reason_code")).isEqualTo("TIMED_OUT");
+
+        // when
+        var retried = ensure(viewer, 200);
+
+        // then
+        assertThat((String) json(retried, "$.data.status")).isEqualTo("READY");
+        assertThat((String) json(retried, "$.data.set_id")).isEqualTo(setId);
+        assertThat((String) json(retried, "$.data.request_id")).isNotEqualTo(first);
+        assertThat(jdbc.queryForObject("SELECT revoke_reason FROM ai_reply.recommendation_request WHERE request_id = ?",
+                String.class, first)).isEqualTo("RETRY_AFTER_UNAVAILABLE");
+        assertThat((String) json(read(viewer), "$.data.status")).isEqualTo("READY");
+    }
+
+    @Test
+    @DisplayName("거절로 닫힌 요청(영구 실패)은 다시 추천 요청(POST)해도 같은 요청으로 UNAVAILABLE 이다")
+    void givenRefused_whenEnsureAgain_thenSameUnavailable() throws Exception {
+        // given
+        publish();
+        maintenance.prepareSnapshots();
+        String first = json(ensure(viewer, 202), "$.data.request_id");
+        jdbc.update("UPDATE ai_reply.ai_job SET status = 'FAILED', failure_code = 'REFUSAL',"
+                + " finished_at = (SELECT created_at + interval '1 millisecond' FROM ai_reply.recommendation_request"
+                + " WHERE request_id = ?) WHERE job_key = ?", first, "analysis:" + analysisInputId());
+        var failed = ensure(viewer, 200);
+        assertThat((String) json(failed, "$.data.reason_code")).isEqualTo("ANALYSIS_FAILED");
+
+        // when
+        var again = ensure(viewer, 200);
+
+        // then
+        assertThat((String) json(again, "$.data.reason_code")).isEqualTo("ANALYSIS_FAILED");
+        assertThat((String) json(again, "$.data.request_id")).isEqualTo(json(failed, "$.data.request_id"));
+    }
+
+    @Test
+    @DisplayName("전송 실패(일시 실패)로 닫힌 요청은 다시 추천 요청(POST)하면 분석을 다시 넣는다")
+    void givenTransportExhausted_whenEnsureAgain_thenRetried() throws Exception {
+        // given
+        publish();
+        maintenance.prepareSnapshots();
+        String first = json(ensure(viewer, 202), "$.data.request_id");
+        // 실패 시각은 앱 시계 기준(첫 요청 직후)으로 둔다. DB 시계와 앱 시계 차이에 흔들리지 않게 한다.
+        jdbc.update("UPDATE ai_reply.ai_job SET status = 'FAILED', failure_code = 'TRANSPORT_EXHAUSTED',"
+                + " finished_at = (SELECT created_at + interval '1 millisecond' FROM ai_reply.recommendation_request"
+                + " WHERE request_id = ?) WHERE job_key = ?", first, "analysis:" + analysisInputId());
+        var failed = ensure(viewer, 200);
+        assertThat((String) json(failed, "$.data.reason_code")).isEqualTo("ANALYSIS_FAILED");
+
+        // when
+        var again = ensure(viewer, 202);
+
+        // then
+        assertThat((String) json(again, "$.data.status")).isEqualTo("PENDING");
+        assertThat((String) json(again, "$.data.request_id")).isNotEqualTo(json(failed, "$.data.request_id"));
     }
 
     @Test

@@ -1,7 +1,9 @@
 package org.son.haruharu.domain.replyrecommendation.implement;
 
+import jakarta.validation.constraints.Positive;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * 영상 답장 Depth 라벨 수집(#559) 설정. 기본 OFF 다. 켜기 전에 scripts/sql/559-reply-depth-up.sql 을 적용한다.
@@ -10,12 +12,14 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param batchSize        한 번 실행에서 라벨을 만들 답장 수
  * @param maxDepth         답글 경로 길이 상한. 넘으면 미관측(DEPTH_LIMIT)으로 남긴다.
  * @param maxAttempts      한 답장이 이만큼 연속 실패하면 미관측(LABEL_FAILED)으로 닫아 뒤 답장을 막지 않는다.
+ *                         수치 설정은 모두 1 이상이어야 하고, 0 이하이면 앱이 시작되지 않는다.
  */
+@Validated
 @ConfigurationProperties(prefix = "haruharu.reply-recommendation.depth")
 public record ReplyDepthProperties(
         @DefaultValue("false") boolean enabled,
-        @DefaultValue("24") int observationHours,
-        @DefaultValue("100") int batchSize,
-        @DefaultValue("200") int maxDepth,
-        @DefaultValue("3") int maxAttempts
+        @DefaultValue("24") @Positive int observationHours,
+        @DefaultValue("100") @Positive int batchSize,
+        @DefaultValue("200") @Positive int maxDepth,
+        @DefaultValue("3") @Positive int maxAttempts
 ) {}

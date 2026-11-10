@@ -65,3 +65,16 @@ def test_undecodable_bytes_fail_as_decode_error():
     with pytest.raises(errors.JobFailure) as info:
         media.extract_frames(Settings.from_env(), b"not a video", "http", None)
     assert info.value.code == errors.MEDIA_DECODE_FAILED
+
+
+def test_ffprobe_timeout_is_retryable_decode_failure(monkeypatch, tmp_path):
+    def slow(args, **kwargs):
+        raise subprocess.TimeoutExpired(args, kwargs.get("timeout"))
+
+    monkeypatch.setattr(media.subprocess, "run", slow)
+    with pytest.raises(errors.JobFailure) as info:
+        media.probe("ffprobe", tmp_path / "video")
+    assert info.value.code == errors.MEDIA_DECODE_FAILED and info.value.retryable
+    with pytest.raises(errors.JobFailure) as info:
+        media._extract("ffmpeg", tmp_path / "video", 1.0, tmp_path / "frame.jpg")
+    assert info.value.code == errors.MEDIA_DECODE_FAILED and info.value.retryable

@@ -17,6 +17,8 @@ INPUT_REVOKED = "INPUT_REVOKED"
 # 작업기 전용: 모델 API 가 요청 자체를 거부(400·401·403·404·422)하거나 응답이 실패 상태.
 PROVIDER_REJECTED = "PROVIDER_REJECTED"
 PROVIDER_FAILED = "PROVIDER_FAILED"
+# 작업기 전용: 모델 API 계정의 크레딧·한도 소진(429 insufficient_quota). 재시도해도 풀리지 않아 바로 실패한다.
+PROVIDER_QUOTA_EXCEEDED = "PROVIDER_QUOTA_EXCEEDED"
 # lease 만료로 다시 잡힌 작업이 max_attempts 를 넘김(작업기 중단이 반복됨).
 ATTEMPTS_EXHAUSTED = "ATTEMPTS_EXHAUSTED"
 EMBEDDING_UNAVAILABLE = "EMBEDDING_UNAVAILABLE"

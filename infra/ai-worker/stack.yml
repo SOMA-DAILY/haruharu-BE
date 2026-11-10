@@ -210,10 +210,10 @@ Resources:
             - {Name: REPLY_AI_WORKER_ID, Value: !Sub "ecs-${Env}"}
             - {Name: REPLY_AI_DEPTH_RANKING_ENABLED, Value: !Ref DepthRanking}
             - {Name: REPLY_AI_DEPTH_URL, Value: "http://127.0.0.1:18453"}
-          # 사이드카가 공식 점수 재현(시작 점검)을 통과해 /health 가 200 이 된 뒤에 작업기를 띄운다.
+          # 사이드카가 시작된 뒤에 작업기를 띄운다. 사이드카가 준비되지 않았거나 실패해도 작업기는 돌고, 코드가 원래 순서로 처리한다(fail-open).
           DependsOn: !If
             - UseDepth
-            - [{ContainerName: depth, Condition: HEALTHY}]
+            - [{ContainerName: depth, Condition: START}]
             - !Ref AWS::NoValue
           Secrets:
             - {Name: OPENAI_API_KEY, ValueFrom: !Sub "${Secret}:OPENAI_API_KEY::"}
@@ -230,7 +230,8 @@ Resources:
           - UseDepth
           - Name: depth
             Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/haruharu-ai-worker-depth:${DepthImageTag}
-            Essential: true
+            # 죽어도 태스크를 내리지 않는다(작업기는 Depth 없이 원래 순서로 계속).
+            Essential: false
             MemoryReservation: 2560
             Memory: 3584
             HealthCheck:

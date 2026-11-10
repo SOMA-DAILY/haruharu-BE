@@ -123,7 +123,12 @@ class MediaFetcher:
 
 
 def _run(args: list[str], timeout: float = 60.0) -> subprocess.CompletedProcess:
-    return subprocess.run(args, capture_output=True, timeout=timeout, check=False)
+    try:
+        return subprocess.run(args, capture_output=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired:
+        # CPU 포화처럼 일시적일 수 있다. 영구 실패로 닫지 않고 시도 횟수 안에서 다시 한다.
+        raise errors.JobFailure(errors.MEDIA_DECODE_FAILED, f"{Path(args[0]).name} timed out after {timeout:g}s",
+                                retryable=True) from None
 
 
 @lru_cache(maxsize=4)

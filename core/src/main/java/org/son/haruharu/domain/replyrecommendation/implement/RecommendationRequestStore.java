@@ -34,6 +34,11 @@ public class RecommendationRequestStore {
                 analysisRequestId, versionId, personal, personalKey, now));
     }
 
+    /** 다시 시도하려고 기존 요청을 닫는다. 같은 키로 새 요청을 만들 수 있게 된다. */
+    public void revokeForRetry(RecommendationRequest request, Instant now) {
+        recommendations.revokeRequest(request.requestId(), "RETRY_AFTER_UNAVAILABLE", now);
+    }
+
     public List<RecommendationRequest> findPendingPersonal(Instant since, int limit) {
         return recommendations.findPendingPersonalRequests(since, limit);
     }

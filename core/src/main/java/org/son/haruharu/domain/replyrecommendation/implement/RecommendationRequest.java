@@ -1,6 +1,9 @@
 package org.son.haruharu.domain.replyrecommendation.implement;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -26,6 +29,14 @@ public record RecommendationRequest(
         Instant revokedAt
 ) {
     public static final String NO_PERSONAL_HASH = "none";
+
+    /** 항상 일시 실패 유지 시간으로 저장되는 이유. */
+    private static final Set<RecommendationReason> TRANSIENT_REASONS = EnumSet.of(
+            RecommendationReason.TIMED_OUT, RecommendationReason.BUDGET_EXCEEDED,
+            RecommendationReason.INVALIDATED, RecommendationReason.NOT_CONFIGURED);
+    /** 실패 종류(전송 실패·거절 등)에 따라 유지 시간이 갈리는 이유. */
+    private static final Set<RecommendationReason> FAILURE_REASONS = EnumSet.of(
+            RecommendationReason.ANALYSIS_FAILED, RecommendationReason.GENERATION_FAILED);
 
     public static RecommendationRequest pending(Long viewerId, Long videoId, Long roomId, Long analysisRequestId,
                                                 String versionId, boolean personal, String personalSnapshotHash,
@@ -67,6 +78,25 @@ public record RecommendationRequest(
 
     public boolean resolvedState() {
         return status == RecommendationStatus.READY || status == RecommendationStatus.EMPTY;
+    }
+
+    /**
+     * 다시 요청하면 복구될 수 있는 UNAVAILABLE 인가(시간 초과·비용 한도·무효화·전송 실패 등).
+     * 분석·생성 실패는 영구 실패 유지 시간보다 짧게 저장된 것(일시 실패)만 해당한다.
+     * 두 유지 시간이 같으면 구분할 수 없으므로 분석·생성 실패는 해당하지 않는다.
+     * 권한·소유(OWN_VIDEO 등)·거절로 닫힌 요청은 해당하지 않는다.
+     */
+    public boolean retryableUnavailable(Duration permanentTtl) {
+        if (status != RecommendationStatus.UNAVAILABLE || reason == null) {
+            return false;
+        }
+        if (TRANSIENT_REASONS.contains(reason)) {
+            return true;
+        }
+        if (!FAILURE_REASONS.contains(reason) || resolvedAt == null || expiresAt == null) {
+            return false;
+        }
+        return Duration.between(resolvedAt, expiresAt).compareTo(permanentTtl) < 0;
     }
 
     public boolean expiredAt(Instant now) {
