@@ -57,7 +57,7 @@ class ReplyDepthCollectorTest {
     @DisplayName("관찰 기간이 끝나면 기간 끝까지의 답글로 계산해 넣는다")
     void givenWindowEnded_thenObservedWithWindow() {
         Instant now = SENT_AT.plus(Duration.ofHours(25));
-        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false)));
+        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false, 42L)));
         given(repository.findRepliesAfter(3L, 500L, SENT.plusHours(24))).willReturn(List.of(
                 new ReplyDepthMessage(501L, 500L, false), new ReplyDepthMessage(502L, 501L, false),
                 new ReplyDepthMessage(503L, 502L, false)));
@@ -73,6 +73,8 @@ class ReplyDepthCollectorTest {
         assertThat(row.observedAt()).isEqualTo(now);
         assertThat(row.provenance()).isEqualTo("QA");
         assertThat(row.sourceSetId()).isEqualTo("set-1");
+        // 학습 분할용 기수는 답장 채팅방의 3일 방 기수를 그대로 남긴다.
+        assertThat(row.cohortId()).isEqualTo(42L);
         // 작성자를 모르면 보조 지표는 비운다.
         assertThat(row.ownerReplied()).isNull();
         assertThat(row.followupMessageCount()).isNull();
@@ -81,7 +83,7 @@ class ReplyDepthCollectorTest {
     @Test
     @DisplayName("관찰 기간이 끝나지 않았으면 계산하지 않는다")
     void givenWindowOpen_thenSkipped() {
-        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false)));
+        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false, null)));
 
         assertThat(collector.observe(target(10L, null), SENT_AT.plus(Duration.ofHours(23)))).isFalse();
 
@@ -101,6 +103,7 @@ class ReplyDepthCollectorTest {
         ReplyDepthObservation row = inserted();
         assertThat(row.result()).isEqualTo(ReplyDepthResult.unobserved(ReplyDepthResult.REPLY_UNAVAILABLE));
         assertThat(row.roomId()).isNull();
+        assertThat(row.cohortId()).isNull();
         assertThat(row.windowStart()).isEqualTo(SENT_AT);
         // 노출 없이 보낸 답장은 수집 정책으로 출처를 정한다(QA 목록에 없으면 실사용자).
         assertThat(row.provenance()).isEqualTo("REAL_USER");
@@ -111,7 +114,7 @@ class ReplyDepthCollectorTest {
     @DisplayName("노출 출처가 모르는 값(SYNTHETIC 등)이어도 멈추지 않고 그대로 적는다")
     void givenUnknownEpisodeProvenance_thenCopiedAsIs() {
         Instant now = SENT_AT.plus(Duration.ofHours(25));
-        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false)));
+        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false, null)));
         given(repository.findRepliesAfter(3L, 500L, SENT.plusHours(24))).willReturn(List.of());
         given(repository.insert(any())).willReturn(true);
 
@@ -133,6 +136,7 @@ class ReplyDepthCollectorTest {
         assertThat(row.windowStart()).isEqualTo(SENT_AT);
         assertThat(row.windowEnd()).isEqualTo(SENT_AT.plus(Duration.ofHours(24)));
         assertThat(row.provenance()).isEqualTo("QA");
+        assertThat(row.cohortId()).isNull();
         then(repository).should(never()).findRoot(any());
     }
 
@@ -140,7 +144,7 @@ class ReplyDepthCollectorTest {
     @DisplayName("보조 지표: 작성자 답글 여부와 답장한 사람·작성자의 기간 안 메시지 수를 Depth 와 따로 남긴다")
     void givenOwnerKnown_thenAuxiliaryMetrics() {
         Instant now = SENT_AT.plus(Duration.ofHours(25));
-        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false)));
+        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false, null)));
         given(repository.findRepliesAfter(3L, 500L, SENT.plusHours(24))).willReturn(List.of(
                 new ReplyDepthMessage(501L, 500L, false, 20L)));
         given(repository.findVideoAuthor(77L)).willReturn(Optional.of(20L));
@@ -159,7 +163,7 @@ class ReplyDepthCollectorTest {
     @DisplayName("미관측이면 작성자 답글 여부는 null, 메시지 수는 연결과 무관하게 센다")
     void givenChainBroken_thenOwnerRepliedNullButFollowupCounted() {
         Instant now = SENT_AT.plus(Duration.ofHours(25));
-        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false)));
+        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false, null)));
         given(repository.findRepliesAfter(3L, 500L, SENT.plusHours(24))).willReturn(List.of(
                 new ReplyDepthMessage(501L, 500L, true, 20L), new ReplyDepthMessage(502L, 501L, false, 10L)));
         given(repository.findVideoAuthor(77L)).willReturn(Optional.of(10L));

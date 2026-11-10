@@ -302,6 +302,38 @@ class ReplyDepthLabelIntegrationTest {
                 .containsEntry("followup_message_count", null);
     }
 
+    @Test
+    @DisplayName("기수: 답장 채팅방의 3일 방 기수(rooms.cohort_id)를 남기고, 3일 방이 없거나 기수 없는 방이면 NULL")
+    void givenChatRoomOfCohortRoom_whenCollected_thenCohortIdStored() {
+        LocalDateTime now = LocalDateTime.now(clock);
+        long cohortRoom = rooms.save(RoomEntity.from(Room.createScheduled(now.minusHours(25), now.plusHours(23),
+                now.plusHours(25), now.plusHours(26), now.plusHours(47), 3))).toDomain().id();
+        jdbc.update("UPDATE rooms SET cohort_id = 42 WHERE id = ?", cohortRoom);
+        long plainRoom = rooms.save(RoomEntity.from(Room.createScheduled(now.minusHours(25), now.plusHours(23),
+                now.plusHours(25), now.plusHours(26), now.plusHours(47), 3))).toDomain().id();
+        long cohortChat = chatRoom(cohortRoom);
+        long plainChat = chatRoom(plainRoom);
+
+        long inCohort = message(cohortChat, VIEWER, null, sent, null);
+        link(inCohort, sent, "NONE");
+        long noCohort = message(plainChat, VIEWER, null, sent.plusMinutes(1), null);
+        link(noCohort, sent.plusMinutes(1), "NONE");
+        long noChatRoom = message(ROOM, VIEWER, null, sent.plusMinutes(2), null);   // chat_rooms 행 없음
+        link(noChatRoom, sent.plusMinutes(2), "NONE");
+
+        assertThat(service.collectDue()).isEqualTo(3);
+
+        assertThat(observation(inCohort)).containsEntry("cohort_id", 42L).containsEntry("room_id", cohortChat);
+        assertThat(observation(noCohort)).containsEntry("cohort_id", null).containsEntry("status", "OBSERVED");
+        assertThat(observation(noChatRoom)).containsEntry("cohort_id", null).containsEntry("status", "OBSERVED");
+    }
+
+    private long chatRoom(long roomId) {
+        return jdbc.queryForObject("""
+                INSERT INTO chat_rooms (type, room_id, created_at, updated_at)
+                VALUES ('GROUP', ?, now(), now()) RETURNING id""", Long.class, roomId);
+    }
+
     private static Object toOffset(Object value) {
         return value instanceof java.sql.Timestamp t ? t.toInstant().atOffset(java.time.ZoneOffset.UTC) : value;
     }

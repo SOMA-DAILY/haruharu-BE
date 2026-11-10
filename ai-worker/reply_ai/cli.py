@@ -95,21 +95,20 @@ def cmd_depth(args: argparse.Namespace) -> int:
     from . import depth_train
     if args.action == "build-pairs":
         rows = outcomes.read_jsonl(Path(args.outcomes))
-        chat_rooms = ({int(r) for r in args.eval_chat_room_ids.split(",") if r.strip()}
-                      if args.eval_chat_room_ids else None)
-        pairs, stats = depth_train.build_pairs(rows, min_depth_diff=args.min_depth_diff, eval_chat_room_ids=chat_rooms,
-                                               max_hour_gap=args.max_hour_gap or None,
-                                               eval_fraction=args.eval_fraction)
+        encode = depth_train.tokenizer_encoder(depth_train.scorer_tokenizer())
+        pairs, stats = depth_train.build_pairs(rows, encode=encode, min_depth_diff=args.min_depth_diff,
+                                               max_hour_gap=args.max_hour_gap or None, val_fraction=args.val_fraction,
+                                               max_seq_len=args.max_seq_len)
         outcomes.write_jsonl(Path(args.out), pairs)
         _print({"out": args.out, "outcome_rows": len(rows), **stats})
         return 0
     if args.action == "train":
-        _print(depth_train.train(Path(args.pairs), Path(args.out), base=args.base, revision=args.revision, steps=args.steps,
-                                 batch_size=args.batch_size, lr=args.lr, seed=args.seed, device=args.device,
-                                 max_seq_len=args.max_seq_len))
+        _print(depth_train.train(Path(args.pairs), Path(args.out), max_steps=args.max_steps, eval_every=args.eval_every,
+                                 patience=args.patience, batch_size=args.batch_size, lr=args.lr, seed=args.seed,
+                                 device=args.device, max_seq_len=args.max_seq_len))
         return 0
-    result = depth_train.evaluate(Path(args.pairs), Path(args.candidate), base=args.base, revision=args.revision,
-                                  device=args.device, max_seq_len=args.max_seq_len, batch_size=args.batch_size,
+    result = depth_train.evaluate(Path(args.pairs), Path(args.candidate), device=args.device,
+                                  max_seq_len=args.max_seq_len, batch_size=args.batch_size,
                                   min_eval_pairs=args.min_eval_pairs)
     _print(result)
     return 0
@@ -248,9 +247,10 @@ def main(argv: list[str] | None = None) -> int:
 
     from .depth_service import MODEL_ID as DEPTH_MODEL_ID, PINNED_REVISION as DEPTH_REVISION
 
-    def model_args(d: argparse.ArgumentParser) -> None:
-        d.add_argument("--revision", default=os.environ.get("REPLY_AI_DEPTH_REVISION", DEPTH_REVISION),
-                       help="공개 가중치 revision(기본: REPLY_AI_DEPTH_REVISION 또는 고정 revision)")
+    def model_args(d: argparse.ArgumentParser, revision: bool = True) -> None:
+        if revision:   # train·eval 의 기준은 θ0(고정 revision)뿐이라 받지 않는다
+            d.add_argument("--revision", default=os.environ.get("REPLY_AI_DEPTH_REVISION", DEPTH_REVISION),
+                           help="공개 가중치 revision(기본: REPLY_AI_DEPTH_REVISION 또는 고정 revision)")
         d.add_argument("--device", default=os.environ.get("REPLY_AI_DEPTH_DEVICE", "cpu"))
         d.add_argument("--max-seq-len", type=int, default=int(os.environ.get("REPLY_AI_DEPTH_MAX_SEQ_LEN", "50")))
 
@@ -273,36 +273,38 @@ def main(argv: list[str] | None = None) -> int:
     model_args(d)
     d.set_defaults(func=cmd_depth)
 
-    d = dsub.add_parser("build-pairs", help="export-outcomes 결과 → 같은 C 의 (C, r+, r−) 쌍, 방 단위 train/eval 분할")
+    d = dsub.add_parser("build-pairs", help="export-outcomes 결과 → 같은 C 의 (C, r+, r−) 쌍, 최신 기수 test·이전 기수 "
+                                            "채팅방 단위 val/train 분할, 입력이 같은 쌍(INPUT_COLLISION) 제외")
     d.add_argument("--outcomes", required=True)
     d.add_argument("--out", required=True)
     d.add_argument("--min-depth-diff", type=int, default=1)
     d.add_argument("--max-hour-gap", type=float, default=1.0,
                    help="두 답장 전송 시각 차가 이 시간을 넘으면 쌍에서 뺀다(논문 §3.1, 기본 1, 0 이면 보지 않음)")
-    d.add_argument("--eval-chat-room-ids",
-                   help="평가로 남길 단체 채팅방 id(chat_rooms.id, 쉼표). 3일 방 rooms.id 가 아니다 — 미사용 기수 방들의 "
-                        "단체 채팅방 id 를 넣는다. 없으면 채팅방 id 해시로 --eval-fraction")
-    d.add_argument("--eval-fraction", type=float, default=0.2)
+    d.add_argument("--val-fraction", type=float, default=0.2,
+                   help="최신 기수 이전 기수의 채팅방 중 검증(조기 종료용)으로 보낼 비율(채팅방 id 해시)")
+    d.add_argument("--max-seq-len", type=int, default=int(os.environ.get("REPLY_AI_DEPTH_MAX_SEQ_LEN", "50")),
+                   help="입력 해시(INPUT_COLLISION)를 잴 점수 입력 토큰 상한(train·eval 과 같아야 한다)")
     d.set_defaults(func=cmd_depth)
 
-    d = dsub.add_parser("train", help="train 분할로 공개 DialogRPT-depth 에서 이어서 학습(−log σ(h(C,r+) − h(C,r−)))")
+    d = dsub.add_parser("train", help="train 분할로 공개 DialogRPT-depth θ0(고정 revision)에서 학습"
+                                      "(−log σ(h(C,r+) − h(C,r−)), val 손실 조기 종료)")
     d.add_argument("--pairs", required=True)
     d.add_argument("--out", required=True, help="결과 가중치 디렉터리(비어 있어야 한다)")
-    d.add_argument("--base", default=DEPTH_MODEL_ID)
-    d.add_argument("--steps", type=int, default=100)
+    d.add_argument("--max-steps", type=int, default=2000, help="안전 상한(보통 조기 종료로 먼저 멈춘다)")
+    d.add_argument("--eval-every", type=int, default=10, help="이 step 마다 val 손실을 잰다")
+    d.add_argument("--patience", type=int, default=3, help="val 손실이 이 횟수만큼 연속으로 나아지지 않으면 멈춘다")
     d.add_argument("--batch-size", type=int, default=8)
     d.add_argument("--lr", type=float, default=1e-5)
     d.add_argument("--seed", type=int, default=0)
-    model_args(d)
+    model_args(d, revision=False)
     d.set_defaults(func=cmd_depth)
 
-    d = dsub.add_parser("eval", help="eval 분할(학습에 안 쓴 방)에서 공개 모델 vs 새 모델 쌍 비교 정확도 → 교체 가능 판정")
+    d = dsub.add_parser("eval", help="test 분할(최신 기수)에서 θ0 vs 새 모델 쌍 비교 정확도 → 교체 가능 판정")
     d.add_argument("--pairs", required=True)
     d.add_argument("--candidate", required=True, help="train 결과 디렉터리")
-    d.add_argument("--base", default=DEPTH_MODEL_ID)
     d.add_argument("--batch-size", type=int, default=16)
     d.add_argument("--min-eval-pairs", type=int, default=30, help="평가 쌍이 이보다 적으면 INCONCLUSIVE(교체 판정 안 함)")
-    model_args(d)
+    model_args(d, revision=False)
     d.set_defaults(func=cmd_depth)
 
     p = sub.add_parser("init-version", help="첫 버전·활성 포인터 등록(멱등)")

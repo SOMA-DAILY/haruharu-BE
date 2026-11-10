@@ -9,6 +9,8 @@ import java.time.Instant;
  *                             작성자를 모르면 null.
  * @param followupMessageCount 보조 지표. 관찰 기간 안에 같은 채팅방에서 답장한 사람과 영상 작성자가 보낸 메시지 수
  *                             (답글 연결과 무관, 답장 자체·숨겨진 메시지 제외). 답장 메시지를 못 찾거나 작성자를 모르면 null.
+ * @param cohortId             답장 채팅방의 3일 방 기수(rooms.cohort_id). 학습 분할(최신 기수 = test)에 쓴다.
+ *                             답장 메시지를 못 찾았거나 기수 없는 방이면 null.
  */
 public record ReplyDepthObservation(
         Long messageId,
@@ -23,5 +25,6 @@ public record ReplyDepthObservation(
         Instant observedAt,
         String provenance,
         Boolean ownerReplied,
-        Integer followupMessageCount
+        Integer followupMessageCount,
+        Long cohortId
 ) {}

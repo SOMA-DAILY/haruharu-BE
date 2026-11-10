@@ -64,7 +64,8 @@ public class ReplyDepthCollector {
         }
         return repository.insert(new ReplyDepthObservation(target.messageId(), target.videoId(), target.viewerId(),
                 root.map(ReplyDepthRoot::roomId).orElse(null), target.sourceSetId(), target.sourceCardId(), result,
-                windowStart, windowEnd, now, provenanceOf(target), ownerReplied, followupCount));
+                windowStart, windowEnd, now, provenanceOf(target), ownerReplied, followupCount,
+                root.map(ReplyDepthRoot::cohortId).orElse(null)));
     }
 
     /** 계속 실패하는 답장을 미관측(LABEL_FAILED)으로 닫는다. 채팅을 다시 읽지 않는다. 넣었으면 true. */
@@ -72,7 +73,7 @@ public class ReplyDepthCollector {
         return repository.insert(new ReplyDepthObservation(target.messageId(), target.videoId(), target.viewerId(),
                 null, target.sourceSetId(), target.sourceCardId(),
                 ReplyDepthResult.unobserved(ReplyDepthResult.LABEL_FAILED), target.sentAt(),
-                target.sentAt().plus(window()), now, provenanceOf(target), null, null));
+                target.sentAt().plus(window()), now, provenanceOf(target), null, null, null));
     }
 
     private String provenanceOf(ReplyDepthTarget target) {

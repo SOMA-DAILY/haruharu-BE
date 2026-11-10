@@ -12,6 +12,8 @@
 -- owner_replied          : 관찰 기간 안에 영상 작성자가 이 답장의 답글 트리 안에서 한 번이라도 답했는지. 미관측이면 NULL.
 -- followup_message_count : 관찰 기간 안에 같은 채팅방에서 답장한 사람과 영상 작성자가 보낸 메시지 수
 --                          (답글 연결과 무관, 답장 자체·숨겨진 메시지 제외). 답장 메시지를 못 찾으면 NULL.
+-- cohort_id : 답장 채팅방(chat_rooms.room_id)의 3일 방 기수(rooms.cohort_id). 학습 분할(최신 기수 = test)에 쓴다.
+--             답장 메시지를 못 찾았거나 기수 없는 방이면 NULL. 수집 시점 값을 그대로 남긴다(FK 없음).
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '60s';
@@ -33,6 +35,7 @@ CREATE TABLE IF NOT EXISTS ai_reply.reply_depth_observation (
     provenance        VARCHAR(20)  NOT NULL,               -- 노출(episode) 출처 그대로(REAL_USER | QA | SYNTHETIC), 노출 없으면 수집 정책
     owner_replied          BOOLEAN,
     followup_message_count INTEGER,
+    cohort_id         BIGINT,
     CONSTRAINT ck_reply_depth_status CHECK (
         (status = 'OBSERVED' AND depth IS NOT NULL AND depth >= 0 AND width IS NOT NULL AND width >= 0
             AND unobserved_reason IS NULL)
@@ -44,6 +47,8 @@ CREATE TABLE IF NOT EXISTS ai_reply.reply_depth_observation (
 -- 보조 지표 이전에 이 파일을 적용한 DB 에도 칸을 더한다(제약은 새로 만든 표에만 있다).
 ALTER TABLE ai_reply.reply_depth_observation ADD COLUMN IF NOT EXISTS owner_replied BOOLEAN;
 ALTER TABLE ai_reply.reply_depth_observation ADD COLUMN IF NOT EXISTS followup_message_count INTEGER;
+-- 기수 칸 이전에 이 파일을 적용한 DB 에도 칸을 더한다(이미 있는 행은 NULL = 기수 모름, 학습 쌍에서 빠진다).
+ALTER TABLE ai_reply.reply_depth_observation ADD COLUMN IF NOT EXISTS cohort_id BIGINT;
 -- 비교 데이터셋은 같은 C(같은 영상)의 실제 답장끼리 묶는다.
 CREATE INDEX IF NOT EXISTS idx_reply_depth_observation_video ON ai_reply.reply_depth_observation (video_id, status);
 

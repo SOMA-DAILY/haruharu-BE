@@ -16,7 +16,10 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-/** 558 적용 뒤 Depth 라벨 SQL(#559)을 두 번 적용·확인하고 되돌린다. 미관측과 0 의 구분은 제약으로도 막는다. */
+/**
+ * 558 적용 뒤 Depth 라벨 SQL(#559)을 두 번 적용·확인하고 되돌린다. 미관측과 0 의 구분은 제약으로도 막는다.
+ * 기수 칸(cohort_id) 이전에 적용한 DB 에 다시 적용하면 칸만 더한다.
+ */
 @Testcontainers
 class ReplyDepthMigrationPostgresTest {
 
@@ -40,6 +43,14 @@ class ReplyDepthMigrationPostgresTest {
             assertThat(rows.getInt("depth_video_index")).isEqualTo(expected);
             assertThat(rows.getInt("depth_status_check")).isEqualTo(expected);
             assertThat(rows.getInt("auxiliary_columns")).isEqualTo(expected * 2);
+            assertThat(rows.getInt("cohort_column")).isEqualTo(expected);
+        }
+    }
+
+    private static void assertVerifyCohort(Statement s, int expected) throws Exception {
+        try (var rows = s.executeQuery(script("559-reply-depth-verify"))) {
+            assertThat(rows.next()).isTrue();
+            assertThat(rows.getInt("cohort_column")).isEqualTo(expected);
         }
     }
 
@@ -80,6 +91,21 @@ class ReplyDepthMigrationPostgresTest {
                     .isInstanceOf(SQLException.class);
             assertThatThrownBy(() -> s.executeUpdate(row(9, "OBSERVED", "0", "0", "NULL", "false", "-1")))
                     .isInstanceOf(SQLException.class);
+            // 기수 칸: 모르면 NULL 로 넣을 수 있다.
+            assertThat(s.executeUpdate("UPDATE ai_reply.reply_depth_observation SET cohort_id = 7 WHERE message_id = 1"))
+                    .isEqualTo(1);
+
+            // 기수 칸 이전 559 를 적용한 DB: 다시 적용하면 기존 행은 그대로 두고 칸만 더한다(기존 행은 NULL).
+            s.execute("ALTER TABLE ai_reply.reply_depth_observation DROP COLUMN cohort_id");
+            assertVerifyCohort(s, 0);
+            s.execute(script("559-reply-depth-up"));
+            assertVerify(s, 1);
+            try (var rows = s.executeQuery("SELECT count(*) AS n, count(cohort_id) AS known"
+                    + " FROM ai_reply.reply_depth_observation")) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getInt("n")).isEqualTo(5);
+                assertThat(rows.getInt("known")).isZero();
+            }
 
             s.execute(script("559-reply-depth-down"));
             assertVerify(s, 0);

@@ -69,10 +69,17 @@ public class ReplyDepthRepositoryImpl implements ReplyDepthRepository {
 
     @Override
     public Optional<ReplyDepthRoot> findRoot(Long messageId) {
-        return jdbc.sql("SELECT id, chat_room_id, created_at, " + HIDDEN + " AS hidden FROM chat_messages WHERE id = :id")
+        // 기수: 채팅방(chat_rooms.room_id) → 3일 방(rooms.cohort_id). 어느 쪽이든 없으면 null.
+        return jdbc.sql("SELECT m.id, m.chat_room_id, m.created_at, r.cohort_id,"
+                        + " (m.admin_deleted_at IS NOT NULL OR m.deleted_at IS NOT NULL OR m.member_removed_at IS NOT NULL)"
+                        + " AS hidden FROM chat_messages m"
+                        + " LEFT JOIN chat_rooms c ON c.id = m.chat_room_id"
+                        + " LEFT JOIN rooms r ON r.id = c.room_id"
+                        + " WHERE m.id = :id")
                 .param("id", messageId)
                 .query((rs, row) -> new ReplyDepthRoot(rs.getLong("id"), rs.getLong("chat_room_id"),
-                        rs.getObject("created_at", LocalDateTime.class), rs.getBoolean("hidden")))
+                        rs.getObject("created_at", LocalDateTime.class), rs.getBoolean("hidden"),
+                        AiReplySql.nullableLong(rs, "cohort_id")))
                 .optional();
     }
 
@@ -119,10 +126,10 @@ public class ReplyDepthRepositoryImpl implements ReplyDepthRepository {
                         INSERT INTO ai_reply.reply_depth_observation
                             (message_id, video_id, viewer_id, room_id, source_set_id, source_card_id, width, depth,
                              status, unobserved_reason, window_start, window_end, observed_at, provenance,
-                             owner_replied, followup_message_count)
+                             owner_replied, followup_message_count, cohort_id)
                         VALUES (:messageId, :videoId, :viewerId, :roomId, :setId, :cardId, :width, :depth,
                                 :status, :reason, :windowStart, :windowEnd, :observedAt, :provenance,
-                                :ownerReplied, :followupCount)
+                                :ownerReplied, :followupCount, :cohortId)
                         ON CONFLICT (message_id) DO NOTHING""")
                 .param("messageId", o.messageId())
                 .param("videoId", o.videoId())
@@ -140,6 +147,7 @@ public class ReplyDepthRepositoryImpl implements ReplyDepthRepository {
                 .param("provenance", o.provenance())
                 .param("ownerReplied", o.ownerReplied())
                 .param("followupCount", o.followupMessageCount())
+                .param("cohortId", o.cohortId())
                 .update() == 1;
     }
 }

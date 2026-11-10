@@ -236,22 +236,28 @@ HF_HUB_OFFLINE=1 uv run --extra depth pytest -m depth_live -s   # 실제 가중�
 2. `build-pairs`: export 결과 → 같은 영상(같은 C)의 실제 답장끼리 depth 큰 쪽을 r+ 로 한 (C, r+, r−). 답장은 언제나 실제 전송 문장이다
    (카드 예문은 분석용). 동점·`--min-depth-diff` 미만, 두 답장 전송 시각 차가 `--max-hour-gap`(기본 1시간, 논문 §3.1, 0 이면 보지 않음)을
    넘거나 전송 시각을 모르는 쌍은 빼고 이유별로 센다(unobserved·text_unavailable·english_unavailable·context_unavailable·single_reply·
-   tie·below_min_diff·over_hour_gap·sent_at_unknown·chat_room_unknown). 학습/평가는 단체 채팅방 단위로 나눈다:
-   `--eval-chat-room-ids`(`chat_rooms.id`, 쉼표) 또는 채팅방 id 해시 `--eval-fraction`(기본 0.2). 행·쌍의 `chat_room_id` 는
-   `reply_depth_observation.room_id`(= `chat_messages.chat_room_id`)이고 3일 방 `rooms.id` 가 아니다. 미사용 기수로 평가하려면 그 기수
-   방들의 단체 채팅방 id 를 넣는다(영상 답장은 단체 채팅에만 있어 같은 영상의 답장은 같은 채팅방이다).
-3. `train`: train 분할로 공개 가중치(고정 revision)에서 이어서 학습. 손실 L = −log σ(h(C,r+) − h(C,r−)), h = 답장 마지막 토큰의 logit
-   (depth-serve 와 같은 입력·위치 계산, max_seq_len 50). AdamW, `--steps`·`--batch-size`·`--lr`·`--seed`. 결과 디렉터리에
-   `model.safetensors`·토크나이저·`depth_train.json`(시작 모델과 공식 출력 재현 점검, 인자, 쌍 파일 sha, 학습 채팅방, 손실 기록).
-   비어 있지 않은 디렉터리에는 쓰지 않는다.
-4. `eval`: eval 분할(학습 채팅방과 겹치면 거부)에서 공개 모델 vs 새 모델의 쌍 비교 정확도. 평가 쌍이 `--min-eval-pairs`(기본 30)
+   tie·below_min_diff·over_hour_gap·sent_at_unknown·chat_room_unknown·cohort_unknown·chat_room_cohort_conflict·INPUT_COLLISION).
+   - `INPUT_COLLISION`: 두 답장이 영어 변환·토큰 잘림 뒤 실제 점수 입력(θ0 토크나이저 + `depth_service.build_ids`, 같은 C·같은
+     `--max-seq-len`)이 같으면 비교할 수 없어 뺀다. 빠진 쌍 id 는 `input_collisions`, 쌍마다 `input_profile`·양쪽 `input_hash` 가 남는다.
+   - 분할(기수 단위 3개): 행·쌍의 `cohort_id`(답장 채팅방의 3일 방 `rooms.cohort_id`, 수집기가 남긴다) 최댓값 = 최신 기수 = `test`.
+     그 이전 기수 안에서 채팅방 id 해시(`--val-fraction`, 기본 0.2)로 `val`(조기 종료용)·`train`. `cohort_id` 를 모르는 쌍은 뺀다.
+     같은 채팅방은 두 분할에 걸치지 않는다(기수가 엇갈리는 채팅방은 뺀다). `chat_room_id` 는 `reply_depth_observation.room_id`
+     (= `chat_messages.chat_room_id`)이고 3일 방 `rooms.id` 가 아니다.
+3. `train`: 시작점은 언제나 공개 θ0(`microsoft/DialogRPT-depth` 고정 revision)다. 이전 학습 결과에서 이어서 학습하지 않고, 매 기수 θ0 +
+   누적 전체 쌍으로 다시 학습한다(다른 base·로컬 디렉터리는 거부, `--base`·`--revision` 인자 없음). 손실 L = −log σ(h(C,r+) − h(C,r−)),
+   h = 답장 마지막 토큰의 logit(depth-serve 와 같은 입력·위치 계산, max_seq_len 50). 전체 가중치 + 점수 헤드, AdamW, `--lr` 기본 1e-5.
+   `--eval-every`(기본 10) step 마다 val 쌍의 같은 손실을 재고 `--patience`(기본 3)번 연속 최저값보다 낮아지지 않으면 멈춘다
+   (`--max-steps` 기본 2000 은 안전 상한). val 이 비면 거부한다. 저장하는 가중치는 최저 검증 손실 시점이다(step 0 = θ0 포함).
+   결과 디렉터리에 `model.safetensors`·토크나이저·`depth_train.json`(base·revision·공식 출력 재현 점검, 인자, 멈춘 이유·best step,
+   step 별 train 손실·검증 손실, 쌍 파일 sha, train/val 채팅방·기수). 비어 있지 않은 디렉터리에는 쓰지 않는다.
+4. `eval`: test 분할(최신 기수, train/val 채팅방·기수와 겹치면 거부)에서 θ0 vs 새 모델의 쌍 비교 정확도. test 쌍이 `--min-eval-pairs`(기본 30)
    미만이면 `INCONCLUSIVE`(정확도는 참고로만 남긴다), 이상이고 새 모델이 더 높을 때만 `REPLACEABLE`, 아니면 `KEEP_BASE`. 교체(depth-serve 가 읽는 모델 바꾸기)는 자동으로 하지 않는다.
 
 ```sh
 uv run reply-ai depth export-outcomes --out outcomes.jsonl --summary outcomes.summary.json \
     --scorer serve --translation-cache depth_translation_cache.jsonl
-uv run reply-ai depth build-pairs --outcomes outcomes.jsonl --out pairs.jsonl --eval-chat-room-ids 205,206
-HF_HUB_OFFLINE=1 uv run --extra depth reply-ai depth train --pairs pairs.jsonl --out depth-ft --steps 200 --batch-size 8 --lr 1e-5
+HF_HUB_OFFLINE=1 uv run --extra depth reply-ai depth build-pairs --outcomes outcomes.jsonl --out pairs.jsonl --val-fraction 0.2
+HF_HUB_OFFLINE=1 uv run --extra depth reply-ai depth train --pairs pairs.jsonl --out depth-ft --eval-every 10 --patience 3 --batch-size 8
 HF_HUB_OFFLINE=1 uv run --extra depth reply-ai depth eval --pairs pairs.jsonl --candidate depth-ft
 ```
 

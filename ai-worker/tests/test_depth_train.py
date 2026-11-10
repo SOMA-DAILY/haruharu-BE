@@ -23,10 +23,12 @@ TH = outcomes.LinkThresholds(0.9, 0.4)
 
 # ───────────────────────── 행 만들기(단위) ─────────────────────────
 
-def row(message_id, video_id, depth, *, room_id=7, status="OBSERVED", text_en="reply", context_en=("ctx",),
-        link="SELF_WRITTEN", score=None, model="m", text_ko="답장", minute=0, owner_replied=None, followups=None):
+def row(message_id, video_id, depth, *, room_id=7, status="OBSERVED", text_en=None, context_en=("ctx",),
+        link="SELF_WRITTEN", score=None, model="m", text_ko="답장", minute=0, owner_replied=None, followups=None,
+        cohort_id=1):
     observed = status == "OBSERVED"
-    return {"message_id": message_id, "video_id": video_id, "chat_room_id": room_id,
+    text_en = f"reply {message_id}" if text_en is None and text_ko is not None else text_en
+    return {"message_id": message_id, "video_id": video_id, "chat_room_id": room_id, "cohort_id": cohort_id,
             "actual": {"text_ko": text_ko, "text_en": text_en, "score": score, "score_model_id": model if score is not None else None,
                        "sent_at": None if minute is None else f"2026-11-08T{3 + minute // 60:02d}:{minute % 60:02d}:00Z"},
             "label": {"status": status, "depth": depth if observed else None, "width": 0 if observed else None,
@@ -60,7 +62,7 @@ def test_pairs_only_within_same_video_deeper_is_positive_ties_and_small_diffs_ex
             row(5, 20, 0), row(6, 20, 4),
             row(7, 30, 5),                                                  # 혼자 → single_reply
             row(8, 10, None, status="UNOBSERVED"), row(9, 10, 2, text_en=None, text_ko=None),
-            row(10, 10, 2, text_en=None), row(11, 40, 1, context_en=None)]
+            row(10, 10, 2, text_en=""), row(11, 40, 1, context_en=None)]
     pairs, stats = outcomes.make_pairs(rows, min_depth_diff=1)
     assert {p["pair_id"] for p in pairs} == {"10:1>2", "10:1>3", "10:1>4", "10:4>2", "10:4>3", "20:6>5"}
     assert all(p["pos"]["depth"] > p["neg"]["depth"] for p in pairs)
@@ -82,7 +84,7 @@ def test_pairs_need_replies_sent_within_max_hour_gap():
     loose, loose_stats = outcomes.make_pairs(rows, max_hour_gap=None)          # 보지 않으면 시각 없는 답장도 쓴다
     assert len(loose) == 6 and "over_hour_gap" not in loose_stats["excluded"]
     assert len(outcomes.make_pairs(rows, max_hour_gap=2)[0]) == 3
-    _, built = depth_train.build_pairs(rows, max_hour_gap=1.0, eval_chat_room_ids=set())
+    _, built = depth_train.build_pairs(rows, encode=char_encode, max_hour_gap=1.0)
     assert built["excluded"]["over_hour_gap"] == 1
     with pytest.raises(ValueError):
         outcomes.make_pairs(rows, max_hour_gap=0)
@@ -126,19 +128,70 @@ def test_summary_keeps_blank_and_zero_apart():
     assert s["pairwise_same_context"]["accuracy"] == 1.0 and s["pairwise_same_context"]["pairs"] == 3
 
 
-def test_build_pairs_splits_by_room_never_across():
-    rows = [row(i * 10 + j, i, j, room_id=100 + i % 6) for i in range(12) for j in range(3)]
-    pairs, stats = depth_train.build_pairs(rows, eval_chat_room_ids={101, 104})
-    assert {p["chat_room_id"] for p in pairs if p["split"] == "eval"} == {101, 104}
-    assert not set(stats["split"]["train"]["chat_rooms"]) & set(stats["split"]["eval"]["chat_rooms"])
-    assert stats["split"]["eval"]["pairs"] + stats["split"]["train"]["pairs"] == stats["pairs"] == 36
-    hashed, hstats = depth_train.build_pairs(rows, eval_fraction=0.5)
-    assert hashed == depth_train.build_pairs(rows, eval_fraction=0.5)[0]                    # 결정적
-    by_room = {}
-    for p in hashed:
-        by_room.setdefault(p["chat_room_id"], set()).add(p["split"])
-    assert all(len(s) == 1 for s in by_room.values())
-    assert hstats["split_rule"] == {"eval_chat_room_ids": None, "eval_fraction": 0.5}
+def char_encode(text):
+    """테스트용 토크나이저(글자 = 토큰)."""
+    return [ord(c) % 50000 for c in text]
+
+
+def cohort_rows():
+    """기수 1·2·3(최신), 기수마다 채팅방 6개, 채팅방마다 영상 1개·답장 3개(쌍 3개). 기수 모름 채팅방 1개."""
+    rows, mid = [], 0
+    for cohort in (1, 2, 3):
+        for k in range(6):
+            room = cohort * 100 + k
+            for depth_value in range(3):
+                mid += 1
+                rows.append(row(mid, room, depth_value, room_id=room, cohort_id=cohort))
+    for depth_value in range(3):
+        mid += 1
+        rows.append(row(mid, 999, depth_value, room_id=999, cohort_id=None))
+    return rows
+
+
+def test_build_pairs_latest_cohort_is_test_and_earlier_cohorts_split_by_chat_room():
+    pairs, stats = depth_train.build_pairs(cohort_rows(), encode=char_encode, val_fraction=0.5)
+    by_split = {s: [p for p in pairs if p["split"] == s] for s in ("train", "val", "test")}
+    assert {p["cohort_id"] for p in by_split["test"]} == {3} and len(by_split["test"]) == 18   # 최신 기수 전부
+    assert {p["cohort_id"] for p in by_split["train"] + by_split["val"]} == {1, 2}
+    assert by_split["train"] and by_split["val"]
+    assert stats["split_rule"]["test_cohort_id"] == 3 and stats["split"]["test"]["cohorts"] == [3]
+    # 같은 채팅방은 한 분할에만, 기수 모름은 사유와 함께 뺀다.
+    rooms = {}
+    for p in pairs:
+        rooms.setdefault(p["chat_room_id"], set()).add(p["split"])
+    assert all(len(s) == 1 for s in rooms.values())
+    assert stats["excluded"]["cohort_unknown"] == 3 and 999 not in rooms
+    assert sum(stats["split"][s]["pairs"] for s in ("train", "val", "test")) == stats["pairs"] == 54
+    assert pairs == depth_train.build_pairs(cohort_rows(), encode=char_encode, val_fraction=0.5)[0]   # 결정적
+    assert all(p["input_profile"] == depth_train.input_profile(50) for p in pairs)
+    with pytest.raises(ValueError):
+        depth_train.build_pairs(cohort_rows(), encode=char_encode, val_fraction=1.0)
+
+
+def test_build_pairs_excludes_chat_room_seen_in_two_cohorts():
+    rows = [row(1, 10, 2, room_id=5, cohort_id=1), row(2, 10, 0, room_id=5, cohort_id=1),
+            row(3, 11, 2, room_id=5, cohort_id=2), row(4, 11, 0, room_id=5, cohort_id=2),
+            row(5, 12, 2, room_id=6, cohort_id=2), row(6, 12, 0, room_id=6, cohort_id=2)]
+    pairs, stats = depth_train.build_pairs(rows, encode=char_encode)
+    assert [p["pair_id"] for p in pairs] == ["12:5>6"] and stats["excluded"]["chat_room_cohort_conflict"] == 2
+
+
+def test_build_pairs_excludes_input_collision_after_translation_and_truncation():
+    tail = " that sounds great to me"
+    rows = [row(1, 10, 3, text_en="Thanks!", text_ko="고마워요!"), row(2, 10, 1, text_en="Thanks!", text_ko="감사해요"),
+            row(3, 20, 3, text_en="wow" + tail), row(4, 20, 1, text_en="meh" + tail),
+            row(5, 30, 3, text_en="What was the hardest part?"), row(6, 30, 0, text_en="ok")]
+    pairs, stats = depth_train.build_pairs(rows, encode=char_encode, max_seq_len=50)
+    # 다른 한국어가 같은 영어가 되면 같은 입력이다.
+    assert {p["pair_id"] for p in pairs} == {"20:3>4", "30:5>6"} and stats["input_collisions"] == ["10:1>2"]
+    assert stats["excluded"]["INPUT_COLLISION"] == 1
+    # 길이 상한에서 앞이 잘리면 꼬리가 같은 두 답장은 같은 입력이다(같은 C·같은 프로파일).
+    short, short_stats = depth_train.build_pairs(rows, encode=char_encode, max_seq_len=len(tail))
+    assert {p["pair_id"] for p in short} == {"30:5>6"}
+    assert short_stats["input_collisions"] == ["10:1>2", "20:3>4"] and short_stats["input_profile"]["max_seq_len"] == len(tail)
+    kept = next(p for p in pairs if p["pair_id"] == "20:3>4")
+    assert kept["pos"]["input_hash"] == depth_train.input_hash(char_encode, ["ctx"], "wow" + tail, 50)
+    assert kept["pos"]["input_hash"] != kept["neg"]["input_hash"]
 
 
 # ───────────────────────── 학습·평가(작은 무작위 GPT-2) ─────────────────────────
@@ -161,6 +214,15 @@ def tiny_model_dir(tmp_path_factory):
     return out
 
 
+@pytest.fixture()
+def tiny_base(tiny_model_dir, monkeypatch):
+    """θ0 를 불러오는 자리에 작은 무작위 모델을 넣는다(공식 출력 재현 확인은 없음)."""
+    def load(device="cpu", max_seq_len=50):
+        return depth_train.LocalScorer(str(tiny_model_dir), None, device, max_seq_len), None
+    monkeypatch.setattr(depth_train, "base_scorer", load)
+    return tiny_model_dir
+
+
 def test_local_scorer_takes_each_rows_last_reply_token(tiny_model_dir):
     torch = pytest.importorskip("torch")
     from reply_ai.depth_service import build_ids
@@ -175,40 +237,109 @@ def test_local_scorer_takes_each_rows_last_reply_token(tiny_model_dir):
             assert value == pytest.approx(float(alone), abs=1e-5)
 
 
-def pair(pid, room, pos, neg, split):
-    return {"pair_id": pid, "video_id": int(pid.split(":")[0]), "chat_room_id": room, "context_en": ["We finished the project!"],
-            "context_sha": "s", "depth_diff": 2, "pos": {"text_en": pos}, "neg": {"text_en": neg}, "split": split}
+def pair(pid, room, pos, neg, split, cohort=1):
+    return {"pair_id": pid, "video_id": int(pid.split(":")[0]), "chat_room_id": room, "cohort_id": cohort,
+            "context_en": ["We finished the project!"], "context_sha": "s", "depth_diff": 2,
+            "input_profile": depth_train.input_profile(50), "pos": {"text_en": pos}, "neg": {"text_en": neg},
+            "split": split}
 
 
-def test_train_lowers_pairwise_loss_and_eval_compares_against_base(tiny_model_dir, tmp_path):
-    pairs = [pair("1:a>b", 1, "What did you build? Tell me more", "ok", "train"),
-             pair("2:a>b", 2, "How long did it take you?", "nice", "train"),
-             pair("3:a>b", 3, "Which part was hardest for you?", "cool", "eval")]
+QUESTIONS = ["What did you build? Tell me more", "How long did it take you?", "Which part was hardest for you?",
+             "Who helped you with it?"]
+SHORT = ["ok", "nice", "cool", "fine"]
+
+
+def test_train_refuses_base_other_than_pinned_public_model(tiny_model_dir, tmp_path):
+    from reply_ai.depth_service import MODEL_ID, PINNED_REVISION
+    pairs_path = tmp_path / "pairs.jsonl"
+    outcomes.write_jsonl(pairs_path, [pair("1:a>b", 1, "x?", "y", "train"), pair("2:a>b", 2, "x?", "y", "val")])
+    for base, revision in ((str(tiny_model_dir), None), (MODEL_ID, "main"), ("someone/other-model", PINNED_REVISION)):
+        with pytest.raises(SystemExit, match="base"):
+            depth_train.train(pairs_path, tmp_path / "out", base=base, revision=revision)
+    assert not (tmp_path / "out").exists()
+
+
+def test_train_refuses_without_val_pairs(tiny_base, tmp_path):
+    pairs_path = tmp_path / "pairs.jsonl"
+    outcomes.write_jsonl(pairs_path, [pair("1:a>b", 1, "x?", "y", "train"), pair("2:a>b", 2, "x?", "y", "test", cohort=2)])
+    with pytest.raises(SystemExit, match="val"):
+        depth_train.train(pairs_path, tmp_path / "out")
+    other = tmp_path / "other.jsonl"
+    outcomes.write_jsonl(other, [pair("1:a>b", 1, "x?", "y", "train"),
+                                 {**pair("2:a>b", 2, "x?", "y", "val"), "input_profile": depth_train.input_profile(64)}])
+    with pytest.raises(SystemExit, match="input_profile"):
+        depth_train.train(other, tmp_path / "out")
+
+
+def test_train_stops_early_on_val_loss_and_saves_best_weights(tiny_base, tmp_path):
+    # val 은 train 과 반대 선호 → 학습할수록 val 손실이 나빠진다 → patience 뒤 멈춘다.
+    pairs = [pair(f"{i}:a>b", i, QUESTIONS[i], SHORT[i], "train") for i in range(4)]
+    pairs += [pair(f"{10 + i}:a>b", 10 + i, SHORT[i], QUESTIONS[i], "val") for i in range(4)]
     pairs_path = tmp_path / "pairs.jsonl"
     outcomes.write_jsonl(pairs_path, pairs)
     out = tmp_path / "ft"
-    result = depth_train.train(pairs_path, out, base=str(tiny_model_dir), revision=None, steps=25, batch_size=2, lr=1e-3,
-                               seed=0)
-    assert result["train_pairs"] == 2 and result["train_chat_rooms"] == [1, 2]
-    assert result["last_loss"] < result["first_loss"]
+    result = depth_train.train(pairs_path, out, max_steps=200, eval_every=2, patience=3, batch_size=4, lr=1e-3)
+    assert result["stop_reason"] == "early_stop" and result["steps_run"] < 200
     meta = json.loads((out / depth_train.META_FILE).read_text())
-    assert meta["loss"] == "-log sigmoid(h(C,r+) - h(C,r-))" and meta["args"]["max_seq_len"] == 50
-    assert (out / "model.safetensors").exists()
+    vals = meta["val_history"]
+    assert vals[0]["step"] == 0 and [v["step"] for v in vals[1:]] == list(range(2, meta["steps_run"] + 1, 2))
+    assert meta["best_val_loss"] == min(v["val_loss"] for v in vals)
+    assert meta["best_step"] == next(v["step"] for v in vals if v["val_loss"] == meta["best_val_loss"])
+    after_best = [v for v in vals if v["step"] > meta["best_step"]]
+    assert len(after_best) == 3 and not any(v["best"] for v in after_best)             # patience 번 나아지지 않음
+    assert [h["step"] for h in meta["train_history"]] == list(range(1, meta["steps_run"] + 1))
+    assert (meta["base_model"], meta["base_revision"]) == ("microsoft/DialogRPT-depth", depth_train.PINNED_REVISION)
+    assert meta["args"]["lr"] == 1e-3 and meta["val_chat_rooms"] == [10, 11, 12, 13]
+    # 저장된 가중치 = 최저 검증 손실 시점(마지막 step 이 아니다)
+    saved = depth_train.LocalScorer(str(out), None, "cpu", 50)
+    assert depth_train.validation_loss(saved, [p for p in pairs if p["split"] == "val"])["loss"] == \
+        pytest.approx(meta["best_val_loss"], abs=1e-5)
     with pytest.raises(SystemExit):
-        depth_train.train(pairs_path, out, base=str(tiny_model_dir), revision=None, steps=1)   # 덮어쓰지 않는다
+        depth_train.train(pairs_path, out, max_steps=1)                                   # 덮어쓰지 않는다
 
-    report = depth_train.evaluate(pairs_path, out, base=str(tiny_model_dir), revision=None)
-    assert report["pairs"] == 1 and report["chat_rooms"] == [3] and report["min_eval_pairs"] == 30
-    assert (report["decision"], report["replaceable"]) == ("INCONCLUSIVE", False)   # 평가 쌍 1개 < 최소 30개
-    assert report["base"]["pairs"] == report["candidate"]["pairs"] == 1              # 정확도는 참고로 남긴다
-    report = depth_train.evaluate(pairs_path, out, base=str(tiny_model_dir), revision=None, min_eval_pairs=1)
+
+def test_train_keeps_improving_until_max_steps_and_eval_on_test_cohort(tiny_base, tmp_path):
+    pairs = [pair(f"{i}:a>b", i, QUESTIONS[i], SHORT[i], "train") for i in range(3)]
+    pairs += [pair("10:a>b", 10, QUESTIONS[3], SHORT[3], "val")]
+    pairs += [pair("20:a>b", 20, "Which part was hardest?", "cool", "test", cohort=2)]
+    pairs_path = tmp_path / "pairs.jsonl"
+    outcomes.write_jsonl(pairs_path, pairs)
+    out = tmp_path / "ft"
+    result = depth_train.train(pairs_path, out, max_steps=12, eval_every=3, patience=5, batch_size=3, lr=1e-3)
+    assert result["stop_reason"] == "max_steps" and result["steps_run"] == 12
+    assert result["best_step"] > 0 and result["best_val_loss"] < result["val_history"][0]["val_loss"]
+
+    report = depth_train.evaluate(pairs_path, out)
+    assert report["pairs"] == 1 and report["chat_rooms"] == [20] and report["cohorts"] == [2]
+    assert (report["decision"], report["replaceable"]) == ("INCONCLUSIVE", False)       # test 쌍 1개 < 최소 30개
+    assert report["base"]["pairs"] == report["candidate"]["pairs"] == 1                  # 정확도는 참고로 남긴다
+    report = depth_train.evaluate(pairs_path, out, min_eval_pairs=1)
     assert report["decision"] in ("REPLACEABLE", "KEEP_BASE")
     assert report["replaceable"] == (report["candidate"]["accuracy"] > report["base"]["accuracy"])
 
     leaked = tmp_path / "leaked.jsonl"
-    outcomes.write_jsonl(leaked, [pair("4:a>b", 1, "x?", "y", "eval")])
+    outcomes.write_jsonl(leaked, [pair("4:a>b", 10, "x?", "y", "test", cohort=2)])        # val 채팅방
     with pytest.raises(SystemExit, match="겹친다"):
-        depth_train.evaluate(leaked, out, base=str(tiny_model_dir), revision=None)
+        depth_train.evaluate(leaked, out)
+    same_cohort = tmp_path / "same-cohort.jsonl"
+    outcomes.write_jsonl(same_cohort, [pair("5:a>b", 30, "x?", "y", "test", cohort=1)])
+    with pytest.raises(SystemExit, match="기수"):
+        depth_train.evaluate(same_cohort, out)
+
+
+def test_eval_with_thirty_test_pairs_replaceable_only_when_higher(tiny_base, tmp_path, monkeypatch):
+    pairs = [pair("1:a>b", 1, "x?", "y", "train"), pair("2:a>b", 2, "x?", "y", "val")]
+    pairs += [pair(f"{100 + i}:a>b", 100 + i, f"q{i}?", f"s{i}", "test", cohort=2) for i in range(30)]
+    pairs_path = tmp_path / "pairs.jsonl"
+    outcomes.write_jsonl(pairs_path, pairs)
+    out = tmp_path / "ft"
+    depth_train.train(pairs_path, out, max_steps=1, eval_every=1, patience=1, batch_size=1)
+    results = iter([([0.2] * 30, [0.5] * 30), ([0.9] * 30, [0.1] * 30)])              # base 0/30, 후보 30/30
+    monkeypatch.setattr(depth_train, "pairwise_scores", lambda scorer, p, b: next(results))
+    report = depth_train.evaluate(pairs_path, out)
+    assert report["pairs"] == 30 and (report["decision"], report["replaceable"]) == ("REPLACEABLE", True)
+    results = iter([([0.9] * 30, [0.1] * 30), ([0.9] * 30, [0.1] * 30)])              # 같으면 교체하지 않는다
+    assert depth_train.evaluate(pairs_path, out)["decision"] == "KEEP_BASE"
 
 
 # ───────────────────────── export-outcomes(PostgreSQL) ─────────────────────────
@@ -232,7 +363,7 @@ def _seed_559(conn):
 
 
 def _reply(conn, *, message_id, set_id, card_id, text, depth_value, provenance="QA", status="OBSERVED", viewer_id=3,
-           video_id=101, room_id=7, exposed=True, sent_minutes=0, owner_replied=None, followups=None):
+           video_id=101, room_id=7, exposed=True, sent_minutes=0, owner_replied=None, followups=None, cohort_id=None):
     episode_id = None
     if exposed:
         episode_id = conn.execute(
@@ -257,8 +388,8 @@ def _reply(conn, *, message_id, set_id, card_id, text, depth_value, provenance="
         (message_id, video_id, viewer_id, room_id, set_id if card_id else None, card_id, 1 if observed else None,
          depth_value if observed else None, status, None if observed else "CHAIN_BROKEN", T0, T0 + timedelta(hours=24),
          T0 + timedelta(hours=25), provenance))
-    conn.execute("""UPDATE ai_reply.reply_depth_observation SET owner_replied = %s, followup_message_count = %s
-                     WHERE message_id = %s""", (owner_replied, followups, message_id))
+    conn.execute("""UPDATE ai_reply.reply_depth_observation SET owner_replied = %s, followup_message_count = %s,
+                            cohort_id = %s WHERE message_id = %s""", (owner_replied, followups, cohort_id, message_id))
 
 
 def _translate_tagged(request):
@@ -348,9 +479,9 @@ def test_export_without_ranking_record_translates_common_context(conn, database_
     _seed_559(conn)
     rset, _ = run_generic(conn, database_url, sample_video, generic_provider())               # 랭킹 꺼짐(기본)
     _reply(conn, message_id=1, set_id=rset["set_id"], card_id=None, text="무슨 과제예요?", depth_value=2, owner_replied=True,
-           followups=2)
+           followups=2, cohort_id=4)
     _reply(conn, message_id=2, set_id=rset["set_id"], card_id=None, text="힘내요", depth_value=0, sent_minutes=40,
-           owner_replied=False, followups=0)
+           owner_replied=False, followups=0, cohort_id=4)
     _reply(conn, message_id=3, set_id=rset["set_id"], card_id=None, text="늦은 답장", depth_value=5, sent_minutes=120)
     provider = ScriptedProvider({"depth_translate": _translate_tagged})
     rows, _ = outcomes.export_outcomes(conn, Settings(), scorer=KeywordScorer(),
@@ -362,6 +493,8 @@ def test_export_without_ranking_record_translates_common_context(conn, database_
     assert rows[0]["link"]["kind"] == "CARD_AS_IS" and rows[1]["link"]["kind"] == "SELF_WRITTEN"
     pairs, stats = outcomes.make_pairs(rows)
     assert [p["pair_id"] for p in pairs] == ["101:1>2"] and stats["excluded"]["over_hour_gap"] == 2   # 3 은 1시간 넘게 늦다
+    # 기수: 수집기가 남긴 cohort_id 를 행·쌍에 옮긴다(모르면 null).
+    assert [r["cohort_id"] for r in rows] == [4, 4, None] and pairs[0]["cohort_id"] == 4
     # 세트에 기록된 모델이 없으면(랭킹 꺼짐) 지정한 모델 id 로 점수를 남긴다.
     assert rows[0]["actual"]["set_model_id"] is None and rows[0]["actual"]["score_model_id"] == "kw-depth#len50"
     assert (rows[0]["label"]["owner_replied"], rows[0]["label"]["followup_message_count"]) == (True, 2)

@@ -13,6 +13,8 @@
   model_id(카드 예측을 낸 모델)와 같은 모델일 때만 남기고, 다르면 점수 null + score_status=MODEL_MISMATCH 다(카드 예측과
   실제 문장 점수를 같은 모델끼리만 비교한다). 추천 노출이 없거나 세트에 기록된 모델이 없으면 지정한 모델 id 로 남긴다.
   학습 입력의 답장은 언제나 실제 전송 문장이다. 카드 예문은 분석용이다.
+- 기수: 행마다 cohort_id(답장 채팅방의 3일 방 rooms.cohort_id, 모르면 null). 비교 데이터셋 분할(최신 기수 = test)에 쓴다
+  (559 표에 그 칸이 없으면 null).
 - 대화 결과: Depth·Width 와 함께 영상 작성자 재답장 여부(owner_replied)·후속 메시지 수(followup_message_count)를 행과 요약에 남긴다
   (559 표에 그 칸이 없으면 null).
 - 연결 구분: 노출 카드 예문과 실제 문장의 문자 유사도(difflib ratio, 공백 정규화) 최댓값으로
@@ -55,6 +57,7 @@ MODEL_MISMATCH = "MODEL_MISMATCH"       # 세트에 기록된 모델과 지금 �
 NOT_SCORED = "NOT_SCORED"               # 점수 모델 없음(--scorer none)·영어 문장 또는 영어 C 없음
 SCORE_FAILED = "SCORE_FAILED"           # 점수 서비스 실패
 OUTCOME_COLUMNS = ("owner_replied", "followup_message_count")   # 559 표에 있으면 읽는다
+COHORT_COLUMN = "cohort_id"                                         # 559 표에 있으면 읽는다
 TRANSLATE_CHUNK = 16   # depth-translate.schema.json candidates maxItems
 SCORE_CHUNK = 16       # depth-serve MAX_CANDIDATES
 
@@ -237,11 +240,11 @@ def _cards(rset: dict[str, Any]) -> list[dict[str, Any]]:
     return cards
 
 
-def _outcome_columns(conn) -> list[str]:
+def _outcome_columns(conn, names: tuple[str, ...] = OUTCOME_COLUMNS) -> list[str]:
     rows = conn.execute("""SELECT column_name FROM information_schema.columns
                             WHERE table_schema = 'ai_reply' AND table_name = 'reply_depth_observation'
-                              AND column_name = ANY(%s)""", (list(OUTCOME_COLUMNS),)).fetchall()
-    return [c for c in OUTCOME_COLUMNS if c in {r["column_name"] for r in rows}]
+                              AND column_name = ANY(%s)""", (list(names),)).fetchall()
+    return [c for c in names if c in {r["column_name"] for r in rows}]
 
 
 def _set_model_id(cards: list[dict[str, Any]]) -> str | None:
@@ -287,7 +290,7 @@ def export_outcomes(conn, settings: Settings, *, scorer: Scorer | None, translat
     """(행 목록, 내보내기 기록). 행 순서는 video_id, message_id. include_context_text=False(기본)면 한국어 C 는 sha 만."""
     allowed = allowed_provenance(settings)
     present = _outcome_columns(conn)
-    columns = "".join(f"o.{c}, " for c in present)
+    columns = "".join(f"o.{c}, " for c in present + _outcome_columns(conn, (COHORT_COLUMN,)))
     raw = conn.execute(ROWS_SQL.format(outcome_columns=columns), {"allowed": allowed}).fetchall()
     skipped = conn.execute("""SELECT count(*) AS n FROM ai_reply.reply_depth_observation
                                WHERE NOT provenance = ANY(%s)""", (allowed,)).fetchone()["n"]
@@ -358,7 +361,8 @@ def export_outcomes(conn, settings: Settings, *, scorer: Scorer | None, translat
                 score_status = SCORE_FAILED if failed and actual_en.get(key) else NOT_SCORED
             kept = score_status == SCORE_OK
             rows.append({
-                "message_id": r["message_id"], "video_id": video_id, "chat_room_id": r["room_id"], "viewer_id": r["viewer_id"],
+                "message_id": r["message_id"], "video_id": video_id, "chat_room_id": r["room_id"],
+                "cohort_id": r.get(COHORT_COLUMN), "viewer_id": r["viewer_id"],
                 "provenance": r["provenance"],
                 "recommendation": {"set_id": set_id,
                                    "set_status": "NONE" if set_id is None else "UNAVAILABLE" if unavailable else "AVAILABLE",
@@ -453,7 +457,8 @@ def make_pairs(rows: Iterable[dict[str, Any]], min_depth_diff: int = 1, max_hour
                 pos, neg = (a, b) if diff > 0 else (b, a)
                 pairs.append({
                     "pair_id": f"{video_id}:{pos['message_id']}>{neg['message_id']}", "video_id": video_id,
-                    "chat_room_id": pos["chat_room_id"], "context_en": pos["context"]["context_en"],
+                    "chat_room_id": pos["chat_room_id"], "cohort_id": pos.get("cohort_id"),
+                    "context_en": pos["context"]["context_en"],
                     "context_sha": pos["context"]["context_sha"], "depth_diff": abs(diff),
                     "hour_gap": round(gap, 4) if gap is not None else None,
                     "pos": _side(pos), "neg": _side(neg)})
