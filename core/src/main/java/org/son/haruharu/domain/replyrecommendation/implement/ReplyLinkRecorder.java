@@ -9,6 +9,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.son.haruharu.domain.chat.implement.ChatMessage;
 import org.son.haruharu.domain.chat.implement.ChatMessageReader;
 import org.springframework.stereotype.Component;
@@ -22,12 +24,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ReplyLinkRecorder {
 
+    private static final Logger log = LoggerFactory.getLogger(ReplyLinkRecorder.class);
+
     static final Duration EPISODE_WINDOW = Duration.ofHours(24);
 
     private final RecommendationFeedbackRepository feedback;
     private final RecommendationRepository recommendations;
     private final RecommendationCollectionPolicy collection;
     private final ChatMessageReader chatMessages;
+    private final HoldoutAssigner holdout;
     private final Clock clock;
 
     public void record(SavedVideoReply reply, Instant now) {
@@ -60,11 +65,27 @@ public class ReplyLinkRecorder {
         ReplyEpisode linked = target;
         feedback.insertReplyLink(new ReplyLink(reply.messageId(), viewerId, reply.videoId(), sentAt,
                 clip(reply.sourceSetId(), 36), clip(reply.sourceCardId(), 64), clip(reply.sourceSessionId(), 36),
-                source.status(), source.reason(), attribution, linked == null ? null : linked.id()), now);
+                source.status(), source.reason(), attribution, linked == null ? null : linked.id(),
+                experimentArm(reply, now)), now);
         if (linked != null) {
             Optional<ChatMessage> message = chatMessages.findById(reply.messageId());
             message.ifPresent(saved -> feedback.saveReplySnapshot(linked.id(), saved.id(), saved.content(),
                     linked.provenance(), now));
+        }
+    }
+
+    /** 보낸 사람의 비교 그룹(이슈 #560). 561 SQL 이 없으면 null(칸을 쓰지 않는다), 실험이 꺼져 있으면 NONE. */
+    private ExperimentArm experimentArm(SavedVideoReply reply, Instant now) {
+        try {
+            if (!holdout.recordable()) {
+                return null;
+            }
+            return holdout.armOf(reply.roomId(), reply.viewerId(), now);
+        } catch (RuntimeException failure) {
+            // 실험 기록 실패가 기존 답장 연결(#558)까지 막지 않게 한다. 그룹 칸은 비운다(비교에서 빠진다).
+            log.atWarn().setCause(failure).addKeyValue("event", "REPLY_HOLDOUT_ARM_FAILED")
+                    .addKeyValue("messageId", reply.messageId()).log("답장 비교 그룹 기록 실패(연결은 저장)");
+            return null;
         }
     }
 

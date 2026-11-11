@@ -150,7 +150,8 @@ app 은 추천 조회 때마다 다음을 확인하고, 하나라도 해당하�
 | `UNAVAILABLE` | `cards=[]`, `set_id=null`, `reason_code` 있음 |
 
 `reason_code`: `NOT_REQUESTED`, `FEATURE_DISABLED`, `NOT_CONFIGURED`, `OWN_VIDEO`, `VIDEO_UNAVAILABLE`, `BLOCKED`, `OWNER_WITHDRAWN`, `OWNER_LEFT`,
-`ROOM_CLOSED`, `BUDGET_EXCEEDED`, `ANALYSIS_FAILED`, `GENERATION_FAILED`, `TIMED_OUT`(10분 넘게 끝나지 않음), `INVALIDATED`.
+`ROOM_CLOSED`, `BUDGET_EXCEEDED`, `ANALYSIS_FAILED`, `GENERATION_FAILED`, `TIMED_OUT`(10분 넘게 끝나지 않음), `INVALIDATED`,
+`HOLDOUT`(추천 효과 비교 그룹에서 카드를 보여주지 않는 시청자, 아래 효과 검증).
 방 멤버가 아니면 403, 다른 방 영상이면 404 다(기존 답장 API 와 같다).
 새 AI 작업을 만드는 POST 는 시청자당 분당 10회로 막고(429), 이미 준비된 결과를 돌려주는 요청은 세지 않는다.
 일시 실패(시간 초과·비용 한도·전송 실패·모델 계정 크레딧 소진 등)로 닫힌 요청은 실패 확정 2분 뒤부터 POST 하면 새 요청으로 다시
@@ -196,6 +197,41 @@ app 은 추천 조회 때마다 다음을 확인하고, 하나라도 해당하�
 
 라벨 수집을 켜기 전에 559 SQL 을 적용한다. 명령·서비스 실행법은 `ai-worker/README.md` 의 Depth 절에 있다.
 
+## 추천 효과 검증 (이슈 #560)
+
+학습 라벨과 효과 라벨을 나누고 섞지 않는다.
+
+| | 학습 라벨 | 효과 라벨 |
+| --- | --- | --- |
+| 정의 | Depth: 답글 버튼(`reply_to_message_id`) 사슬 길이 | 답장 시각부터 `response-window-minutes`(기본 30) 안에 영상 작성자가 같은 채팅방에 숨겨지지 않은 메시지를 보냈는지 |
+| 칸 | `depth`, `width` | `owner_responded`, `owner_response_minutes`(첫 메시지까지 분), `response_window_minutes` |
+| 쓰는 곳 | `build-pairs` → `train` → `eval` | `reply-ai depth effect-report` |
+
+- 효과 라벨은 Depth 라벨과 같은 스케줄러(관찰 기간이 끝난 뒤 한 번)가 같은 행에 넣는다. 답장 메시지를 못 찾거나 작성자를 모르면 NULL.
+  창은 관찰 기간 안이어야 한다(아니면 앱이 시작되지 않는다).
+- 대조 확인 칸 `bystander_members`(답장 시각에 방에 있던 멤버 중 답장자와 작성자를 뺀 수)와 `bystanders_responded`(그중 같은 창 안에
+  말한 수). 답장받은 작성자의 응답률이 다른 멤버의 채팅률보다 높아야 라벨이 답장에 대한 반응을 잡는 것이다
+  (3~9기 1,182건: 작성자 75.5%, 다른 멤버 32.7%).
+
+**무작위 비교 그룹**: `holdout.ratio` 가 0 보다 크면 켜진 방의 시청자를 두 그룹으로 나눈다(`HoldoutAssigner`).
+
+1. 단위는 시청자이고 묶음 키는 `cohort:<rooms.cohort_id>`(기수 없는 방은 `room:<id>`)다. 재참가하면 기수가 달라 다시 계산된다.
+2. 방의 첫 추천 요청(또는 첫 답장 기록) 때 그 방 멤버 전원의 `sha256(salt:groupKey:userId)` 앞 8바이트를 [0, 1) 값으로 바꿔 오름차순으로
+   줄 세운다. 앞 `floor(n × (1 − ratio))` 명은 `TREATMENT`, 뒤 `floor(n × ratio)` 명은 `HOLDOUT`, 남는 1명은 값이 `1 − ratio` 이상이면
+   `HOLDOUT`. 방 안에서 나누므로 방 분위기 차이가 양쪽에 고르게 들어간다.
+3. 그 뒤 들어온 멤버는 값이 `1 − ratio` 이상이면 `HOLDOUT`.
+4. 배정은 `ai_reply.holdout_assignment` 에 한 번 넣고 바꾸지 않는다(`ON CONFLICT DO NOTHING`). 탈퇴 파기 때 지운다.
+5. `HOLDOUT` 시청자의 추천 요청(POST/GET)은 권한 확인 뒤 `UNAVAILABLE` + `HOLDOUT` 이고 작업·요청을 만들지 않는다. 앱은 다른
+   `UNAVAILABLE` 처럼 추천 칸을 숨긴다(앱 수정 없음).
+6. 영상 답장을 저장할 때 보낸 사람의 그룹을 `reply_link.experiment_arm` 에 남긴다(실험이 꺼져 있으면 `NONE`).
+
+판정은 기수가 끝난 뒤 `reply-ai depth effect-report` 로 한다: 그룹별 게시자 응답률, 차이와 95% 구간(채팅방 단위 bootstrap 2,000회),
+그룹당 330건 미만이면 `INCONCLUSIVE`. 카드 그대로/수정/직접 작성별 응답률은 참고로만 낸다.
+같은 방에서 카드를 못 받는 사람도 카드를 받은 사람의 답장을 보므로 차이는 실제보다 작게 나올 수 있다.
+
+표·칸 정의는 `scripts/sql/561-reply-effect-up.sql`(되돌리기 `-down`, 확인 `-verify`)이다. 칸·표가 없으면 앱은 효과 라벨과 그룹 기록을
+건너뛰고 기존과 같이 동작한다. 칸이 있다고 한 번 확인하면 다시 묻지 않으므로, 되돌릴 때는 비율을 0 으로 두고 `-down` 적용 뒤 앱을 다시 시작한다.
+
 ## 설정
 
 app(`haruharu.reply-recommendation.*`, 기본 모두 OFF)
@@ -208,6 +244,9 @@ app(`haruharu.reply-recommendation.*`, 기본 모두 OFF)
 | `collection.real-user-enabled` | `REPLY_RECOMMENDATION_REAL_USER_COLLECTION_ENABLED` | false |
 | `collection.qa-user-ids` | `REPLY_RECOMMENDATION_QA_USER_IDS` | 빈 값 |
 | `room-ids` | `REPLY_RECOMMENDATION_ROOM_IDS` | 빈 값(추가로 켤 방 없음) |
+| `depth.response-window-minutes` | `REPLY_RECOMMENDATION_RESPONSE_WINDOW_MINUTES` | 30 |
+| `holdout.ratio` | `REPLY_RECOMMENDATION_HOLDOUT_RATIO` | 0(꺼짐, 실험할 때 0.5) |
+| `holdout.salt` | `REPLY_RECOMMENDATION_HOLDOUT_SALT` | `haruharu-holdout-v1` |
 
 수집 스위치가 꺼져 있으면 실제 사용자의 사건·답장 연결·답장 원문은 저장하지 않는다. `qa-user-ids` 계정만 `provenance=QA` 로 저장한다.
 

@@ -92,6 +92,19 @@ def cmd_depth(args: argparse.Namespace) -> int:
             Path(args.summary).write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         _print(summary)
         return 0
+    if args.action == "effect-report":
+        from . import effect_report as effect
+        conn = _conn(_settings(args))
+        rows = effect.fetch_rows(conn, args.cohort, outcomes.LinkThresholds(args.as_is_threshold, args.edited_threshold))
+        kwargs = {"min_per_arm": args.min_per_arm, "iterations": args.bootstrap, "seed": args.seed}
+        assigned = effect.fetch_assigned(conn)
+        result = ({"cohort": args.cohort,
+                   **effect.report(rows, assigned=effect.assigned_for(assigned, args.cohort), **kwargs)}
+                  if args.cohort is not None else {"by_cohort": effect.by_cohort(rows, assigned, **kwargs)})
+        if args.out:
+            Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        _print(result)
+        return 0
     from . import depth_train
     if args.action == "build-pairs":
         rows = outcomes.read_jsonl(Path(args.outcomes))
@@ -274,6 +287,17 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--min-depth-diff", type=int, default=1, help="지표의 쌍 비교에 쓰는 최소 depth 차이")
     d.add_argument("--max-hour-gap", type=float, default=1.0, help="지표의 쌍 비교: 두 답장 전송 시각 차 상한(시간, 0 이면 보지 않음)")
     model_args(d)
+    d.set_defaults(func=cmd_depth)
+
+    d = dsub.add_parser("effect-report", help="추천 효과: 무작위 비교 그룹(카드 받음/안 받음)별 게시자 응답률, 차이와 95%% 구간"
+                                              "(채팅방 단위 bootstrap), 대조 확인, 연결 구분별 참고")
+    d.add_argument("--cohort", type=int, help="이 기수만(없으면 기수별로 모두)")
+    d.add_argument("--out", help="결과 JSON 도 파일로 저장")
+    d.add_argument("--min-per-arm", type=int, default=330, help="그룹당 답장이 이보다 적으면 INCONCLUSIVE")
+    d.add_argument("--bootstrap", type=int, default=2000, help="bootstrap 반복 수")
+    d.add_argument("--seed", type=int, default=0)
+    d.add_argument("--as-is-threshold", type=float, default=0.9, help="참고 연결 구분: 카드 그대로 유사도 기준")
+    d.add_argument("--edited-threshold", type=float, default=0.4, help="참고 연결 구분: 카드 보고 수정 유사도 기준")
     d.set_defaults(func=cmd_depth)
 
     d = dsub.add_parser("build-pairs", help="export-outcomes 결과 → 같은 C 의 (C, r+, r−) 쌍, 최신 기수 test·이전 기수 "

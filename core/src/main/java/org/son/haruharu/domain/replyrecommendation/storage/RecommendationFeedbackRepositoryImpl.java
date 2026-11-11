@@ -134,13 +134,20 @@ public class RecommendationFeedbackRepositoryImpl implements RecommendationFeedb
 
     @Override
     public boolean insertReplyLink(ReplyLink link, Instant now) {
-        return jdbc.sql("""
+        // 비교 그룹 칸(이슈 #560)은 561 SQL 이 있을 때만 값이 온다. 없으면 칸을 쓰지 않는다.
+        String armColumn = link.experimentArm() == null ? "" : ", experiment_arm";
+        String armValue = link.experimentArm() == null ? "" : ", :arm";
+        var sql = jdbc.sql("""
                         INSERT INTO ai_reply.reply_link
                             (message_id, viewer_id, video_id, sent_at, source_set_id, source_card_id,
-                             source_session_id, source_status, invalid_reason, attribution, episode_id, created_at)
+                             source_session_id, source_status, invalid_reason, attribution, episode_id, created_at%s)
                         VALUES (:messageId, :viewerId, :videoId, :sentAt, :setId, :cardId, :sessionId, :status,
-                                :reason, :attribution, :episodeId, :now)
-                        ON CONFLICT (message_id) DO NOTHING""")
+                                :reason, :attribution, :episodeId, :now%s)
+                        ON CONFLICT (message_id) DO NOTHING""".formatted(armColumn, armValue));
+        if (link.experimentArm() != null) {
+            sql = sql.param("arm", link.experimentArm().name());
+        }
+        return sql
                 .param("messageId", link.messageId())
                 .param("viewerId", link.viewerId())
                 .param("videoId", link.videoId())

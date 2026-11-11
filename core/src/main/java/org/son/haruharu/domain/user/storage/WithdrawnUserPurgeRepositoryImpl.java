@@ -68,6 +68,11 @@ public class WithdrawnUserPurgeRepositoryImpl implements WithdrawnUserPurgeRepos
                             + "(SELECT v.id FROM video_posts v JOIN room_members m ON m.id = v.room_member_id "
                             + "WHERE m.user_id = :userId)", userId));
         }
+        // 추천 효과 비교 그룹 배정(이슈 #560). 561 SQL 을 적용하지 않은 환경에서는 건너뛴다.
+        if (aiReplyTableExists("holdout_assignment")) {
+            counts.put("ai_reply_holdout", execute(
+                    "DELETE FROM ai_reply.holdout_assignment WHERE user_id = :userId", userId));
+        }
         // 영상: 반응 → 게시물 → 업로드 세션(캡션) 순. 영상 행은 통째로 지운다(캡션 포함).
         counts.put("video_reactions", execute(
                 "DELETE FROM video_reactions WHERE video_post_id IN (SELECT v.id FROM video_posts v "
@@ -165,6 +170,15 @@ public class WithdrawnUserPurgeRepositoryImpl implements WithdrawnUserPurgeRepos
             deleted += execute(statement, userId);
         }
         return deleted;
+    }
+
+    private boolean aiReplyTableExists(String table) {
+        Number found = (Number) em.createNativeQuery(
+                        "SELECT count(*) FROM information_schema.tables "
+                                + "WHERE lower(table_schema) = 'ai_reply' AND lower(table_name) = :table")
+                .setParameter("table", table)
+                .getSingleResult();
+        return found.longValue() > 0;
     }
 
     private boolean replyDepthTableExists() {

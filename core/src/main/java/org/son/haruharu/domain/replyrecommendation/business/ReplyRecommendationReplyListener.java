@@ -38,7 +38,7 @@ public class ReplyRecommendationReplyListener {
             return; // 남길 자료가 없으면 새 트랜잭션(두 번째 연결)도 열지 않는다
         }
         SavedVideoReply reply = new SavedVideoReply(event.messageId(), event.senderId(), event.videoPostId(),
-                event.sentAt(), event.sourceSetId(), event.sourceCardId(), event.sourceSessionId());
+                event.sentAt(), event.sourceSetId(), event.sourceCardId(), event.sourceSessionId(), event.roomId());
         try {
             TransactionTemplate tx = new TransactionTemplate(transactionManager);
             tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);

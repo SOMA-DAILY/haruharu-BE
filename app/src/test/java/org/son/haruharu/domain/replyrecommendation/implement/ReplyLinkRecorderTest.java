@@ -37,6 +37,7 @@ class ReplyLinkRecorderTest {
     @Mock RecommendationFeedbackRepository feedback;
     @Mock RecommendationRepository recommendations;
     @Mock ChatMessageReader chatMessages;
+    @Mock HoldoutAssigner holdout;
 
     ReplyLinkRecorder recorder;
 
@@ -46,7 +47,7 @@ class ReplyLinkRecorderTest {
                 Duration.ofHours(24), new ReplyRecommendationProperties.Collection(false, List.of(10L)),
                 new ReplyRecommendationProperties.Snapshot(3000, 20, 5, Duration.ofDays(30)), List.of());
         recorder = new ReplyLinkRecorder(feedback, recommendations, new RecommendationCollectionPolicy(properties),
-                chatMessages, Clock.fixed(SENT_AT, SEOUL));
+                chatMessages, holdout, Clock.fixed(SENT_AT, SEOUL));
     }
 
     private static SavedVideoReply reply(Long viewer, String setId, String cardId, String session) {
@@ -141,5 +142,17 @@ class ReplyLinkRecorderTest {
 
         then(feedback).shouldHaveNoInteractions();
         then(recommendations).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("비교 그룹 계산이 실패해도 답장 연결은 그룹 칸 없이 저장한다")
+    void givenArmFailure_whenRecord_thenLinkSavedWithoutArm() {
+        given(holdout.recordable()).willReturn(true);
+        given(holdout.armOf(any(), any(), any())).willThrow(new IllegalStateException("db"));
+        given(feedback.findOpenEpisodes(any(), any(), any(), any())).willReturn(List.of());
+
+        recorder.record(new SavedVideoReply(500L, 10L, 77L, SENT, null, null, null, 3L), SENT_AT);
+
+        assertThat(savedLink().experimentArm()).isNull();
     }
 }
