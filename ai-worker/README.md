@@ -306,6 +306,26 @@ HF_HUB_OFFLINE=1 uv run --extra depth reply-ai depth eval --pairs pairs.jsonl --
 
 GPT-2 medium 전체 미세조정이라 CPU 에서 메모리 약 6GB(가중치·기울기·AdamW 상태), 결과 가중치는 약 1.4GB 다. 결과 디렉터리는 저장소 밖에 둔다.
 
+### 추천 효과 보고(`reply-ai depth effect-report`, 이슈 #560)
+
+앱 서버가 남긴 효과 라벨(`reply_depth_observation.owner_responded`)과 비교 그룹(`reply_link.experiment_arm`)만 읽는다.
+561 SQL 이 없으면 멈춘다. 운영 계정에는 `holdout_assignment` 읽기 권한도 준다.
+
+```sh
+uv run reply-ai depth effect-report --cohort 10 --out effect-10.json   # 한 기수
+uv run reply-ai depth effect-report                                   # 기수별 모두
+```
+
+| 출력 칸 | 뜻 |
+| --- | --- |
+| `arms.TREATMENT` / `arms.HOLDOUT` | 답장 수, 응답 수, 응답률, 첫 응답까지 분 중앙값, 채팅방 수 |
+| `difference`, `ci95` | TREATMENT − HOLDOUT 응답률과 95% 구간(채팅방 단위 bootstrap, `--bootstrap`·`--seed`) |
+| `verdict` | `RESPONSE_UP` / `RESPONSE_DOWN` / `NO_DIFFERENCE`, 그룹당 `--min-per-arm`(330) 미만이면 `INCONCLUSIVE` |
+| `placebo` | 작성자 응답률 vs 같은 방 다른 멤버의 같은 창 안 채팅률(라벨이 반응을 잡는지 확인) |
+| `treatment_by_link` | 참고: 카드 그대로 / 수정 / 직접 작성 / 노출 없음별 응답률(판정에 안 씀) |
+| `excluded_arm` | 비교에서 뺀 행(`NONE`, 그룹 칸 없음) |
+| `per_assigned_viewer` | 배정된 시청자 1명당 답장 수와 응답 수(`holdout_assignment` 기준, 기수 묶음만). 카드가 답장을 쓰는 사람·횟수를 바꿀 수 있어 답장 단위 비교와 같이 본다 |
+
 ## 알려진 제한
 
 - 큰 입력 스냅샷은 명세처럼 S3 가 아니라 DB(jsonb)에 있다. 30일 뒤 원문 삭제는 앱 서버 몫(`purged_at`).
