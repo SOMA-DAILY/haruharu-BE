@@ -10,8 +10,17 @@ public record SavedVideoReply(
         LocalDateTime sentAt,
         String sourceSetId,
         String sourceCardId,
-        String sourceSessionId
+        String sourceSessionId,
+        /** 답장한 3일 방(비교 그룹 판단용, 이슈 #560). 모르면 null. */
+        Long roomId
 ) {
+
+    /** 방 없는 모양(이슈 #560 이전). */
+    public SavedVideoReply(Long messageId, Long viewerId, Long videoId, LocalDateTime sentAt, String sourceSetId,
+                           String sourceCardId, String sourceSessionId) {
+        this(messageId, viewerId, videoId, sentAt, sourceSetId, sourceCardId, sourceSessionId, null);
+    }
+
     public boolean hasSource() {
         return sourceSetId != null && !sourceSetId.isBlank();
     }

@@ -10,6 +10,7 @@ import java.util.Optional;
 
 import javax.sql.DataSource;
 
+import org.son.haruharu.domain.replyrecommendation.implement.ReplyBystanders;
 import org.son.haruharu.domain.replyrecommendation.implement.ReplyDepthMessage;
 import org.son.haruharu.domain.replyrecommendation.implement.ReplyDepthObservation;
 import org.son.haruharu.domain.replyrecommendation.implement.ReplyDepthRepository;
@@ -30,6 +31,7 @@ public class ReplyDepthRepositoryImpl implements ReplyDepthRepository {
             "(admin_deleted_at IS NOT NULL OR deleted_at IS NOT NULL OR member_removed_at IS NOT NULL)";
 
     private final JdbcClient jdbc;
+    private volatile boolean responseReady;
 
     public ReplyDepthRepositoryImpl(DataSource dataSource) {
         this.jdbc = JdbcClient.create(dataSource);
@@ -125,17 +127,94 @@ public class ReplyDepthRepositoryImpl implements ReplyDepthRepository {
         return count == null ? 0 : count.intValue();
     }
 
+    /** 효과 라벨 칸(561 SQL). 한 번 확인되면 다시 묻지 않는다. */
+    @Override
+    public boolean responseSchemaReady() {
+        if (responseReady) {
+            return true;
+        }
+        Long found = jdbc.sql("""
+                        SELECT count(*) FROM information_schema.columns
+                        WHERE lower(table_schema) = 'ai_reply' AND lower(table_name) = 'reply_depth_observation'
+                          AND lower(column_name) IN ('owner_responded', 'owner_response_minutes',
+                              'response_window_minutes', 'bystander_members', 'bystanders_responded')""")
+                .query(Long.class)
+                .single();
+        responseReady = found != null && found == 5;
+        return responseReady;
+    }
+
+    @Override
+    public Optional<LocalDateTime> findFirstMessageAt(Long roomId, Long rootMessageId, LocalDateTime rootAt,
+                                                      LocalDateTime windowEnd, Long senderId) {
+        // id 순서와 저장 시각이 어긋난 행(동시 저장 등)이 답장 이전 말을 응답으로 세지 않게 시각도 본다.
+        return jdbc.sql("SELECT created_at FROM chat_messages"
+                        + " WHERE chat_room_id = :roomId AND id > :rootId AND created_at >= :rootAt"
+                        + " AND created_at <= :windowEnd"
+                        + " AND sender_id = :senderId AND NOT " + HIDDEN + " ORDER BY created_at, id LIMIT 1")
+                .param("roomId", roomId)
+                .param("rootId", rootMessageId)
+                .param("windowEnd", windowEnd)
+                .param("senderId", senderId)
+                .param("rootAt", rootAt)
+                .query((rs, row) -> rs.getObject(1, LocalDateTime.class))
+                .optional();
+    }
+
+    @Override
+    public ReplyBystanders countBystanders(Long roomId, Long rootMessageId, LocalDateTime rootAt,
+                                           LocalDateTime windowEnd, java.util.Collection<Long> excluded) {
+        // 채팅방 → 3일 방(chat_rooms.room_id) → 답장 시각에 멤버였던 사람(들어온 뒤, 나가기 전, 지워지지 않음).
+        return jdbc.sql("""
+                        SELECT count(DISTINCT m.user_id) AS members,
+                               count(DISTINCT m.user_id) FILTER (WHERE EXISTS (
+                                   SELECT 1 FROM chat_messages c
+                                   WHERE c.chat_room_id = :roomId AND c.id > :rootId AND c.created_at >= :rootAt
+                                     AND c.created_at <= :windowEnd
+                                     AND c.sender_id = m.user_id
+                                     AND c.admin_deleted_at IS NULL AND c.deleted_at IS NULL
+                                     AND c.member_removed_at IS NULL)) AS responded
+                        FROM chat_rooms cr
+                        JOIN room_members m ON m.room_id = cr.room_id
+                        WHERE cr.id = :roomId AND m.deleted_at IS NULL
+                          AND (m.joined_at IS NULL OR m.joined_at <= :rootAt)
+                          AND (m.member_removed_at IS NULL OR m.member_removed_at > :rootAt)
+                          AND m.user_id NOT IN (:excluded)""")
+                .param("roomId", roomId)
+                .param("rootId", rootMessageId)
+                .param("windowEnd", windowEnd)
+                .param("rootAt", rootAt)
+                .param("excluded", excluded)
+                .query((rs, row) -> new ReplyBystanders(rs.getInt("members"), rs.getInt("responded")))
+                .single();
+    }
+
     @Override
     public boolean insert(ReplyDepthObservation o) {
-        return jdbc.sql("""
+        // 효과 라벨(이슈 #560)은 계산했을 때만(561 SQL 이 있을 때만) 칸을 쓴다.
+        boolean response = o.response().present();
+        String columns = response
+                ? ", owner_responded, owner_response_minutes, response_window_minutes, bystander_members,"
+                        + " bystanders_responded" : "";
+        String values = response
+                ? ", :ownerResponded, :ownerResponseMinutes, :responseWindow, :bystanders, :bystandersResponded" : "";
+        var sql = jdbc.sql("""
                         INSERT INTO ai_reply.reply_depth_observation
                             (message_id, video_id, viewer_id, room_id, source_set_id, source_card_id, width, depth,
                              status, unobserved_reason, window_start, window_end, observed_at, provenance,
-                             owner_replied, followup_message_count, cohort_id)
+                             owner_replied, followup_message_count, cohort_id%s)
                         VALUES (:messageId, :videoId, :viewerId, :roomId, :setId, :cardId, :width, :depth,
                                 :status, :reason, :windowStart, :windowEnd, :observedAt, :provenance,
-                                :ownerReplied, :followupCount, :cohortId)
-                        ON CONFLICT (message_id) DO NOTHING""")
+                                :ownerReplied, :followupCount, :cohortId%s)
+                        ON CONFLICT (message_id) DO NOTHING""".formatted(columns, values));
+        if (response) {
+            sql = sql.param("ownerResponded", o.response().ownerResponded())
+                    .param("ownerResponseMinutes", o.response().ownerResponseMinutes())
+                    .param("responseWindow", o.response().windowMinutes())
+                    .param("bystanders", o.response().bystanderMembers())
+                    .param("bystandersResponded", o.response().bystandersResponded());
+        }
+        return sql
                 .param("messageId", o.messageId())
                 .param("videoId", o.videoId())
                 .param("viewerId", o.viewerId())

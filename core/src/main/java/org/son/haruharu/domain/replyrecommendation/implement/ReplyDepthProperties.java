@@ -1,7 +1,9 @@
 package org.son.haruharu.domain.replyrecommendation.implement;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Positive;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
@@ -21,5 +23,23 @@ public record ReplyDepthProperties(
         @DefaultValue("24") @Positive int observationHours,
         @DefaultValue("100") @Positive int batchSize,
         @DefaultValue("200") @Positive int maxDepth,
-        @DefaultValue("3") @Positive int maxAttempts
-) {}
+        @DefaultValue("3") @Positive int maxAttempts,
+        @DefaultValue("30") @Positive int responseWindowMinutes
+) {
+
+    /** 설정 바인딩은 이 생성자(모든 칸)로 한다. */
+    @ConstructorBinding
+    public ReplyDepthProperties {
+    }
+
+    /** 효과 라벨 창 기본값(30분) 모양(이슈 #560 이전 호출부). */
+    public ReplyDepthProperties(boolean enabled, int observationHours, int batchSize, int maxDepth, int maxAttempts) {
+        this(enabled, observationHours, batchSize, maxDepth, maxAttempts, 30);
+    }
+
+    /** 라벨은 관찰 기간이 끝난 뒤 한 번 만든다. 창이 관찰 기간보다 길면 창 끝까지의 말을 다 볼 수 없다. */
+    @AssertTrue(message = "response-window-minutes 는 observation-hours 안이어야 한다")
+    public boolean isResponseWindowWithinObservation() {
+        return responseWindowMinutes <= observationHours * 60L;
+    }
+}

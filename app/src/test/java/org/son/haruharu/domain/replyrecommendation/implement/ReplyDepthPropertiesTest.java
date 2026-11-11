@@ -58,4 +58,19 @@ class ReplyDepthPropertiesTest {
                 .run(context -> assertThat(context.getBean(ReplyDepthProperties.class).observationHours())
                         .isEqualTo(1));
     }
+
+    @Test
+    @DisplayName("효과 라벨 창은 기본 30분이고, 관찰 기간보다 길면 시작에 실패한다")
+    void givenResponseWindow_whenStart_thenDefaultOrFailsBeyondObservation() {
+        runner.run(context -> assertThat(context.getBean(ReplyDepthProperties.class).responseWindowMinutes())
+                .isEqualTo(30));
+        runner.withPropertyValues("haruharu.reply-recommendation.depth.observation-hours=1",
+                        "haruharu.reply-recommendation.depth.response-window-minutes=60")
+                .run(context -> assertThat(context).hasNotFailed());
+        runner.withPropertyValues("haruharu.reply-recommendation.depth.observation-hours=1",
+                        "haruharu.reply-recommendation.depth.response-window-minutes=61")
+                .run(context -> assertThat(context).hasFailed());
+        runner.withPropertyValues("haruharu.reply-recommendation.depth.response-window-minutes=0")
+                .run(context -> assertThat(context).hasFailed());
+    }
 }

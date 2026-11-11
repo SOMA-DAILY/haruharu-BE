@@ -15,6 +15,8 @@ import org.son.haruharu.domain.replyrecommendation.implement.AnalysisRequest;
 import org.son.haruharu.domain.replyrecommendation.implement.AnalysisRequestRegistrar;
 import org.son.haruharu.domain.replyrecommendation.implement.AnalysisTarget;
 import org.son.haruharu.domain.replyrecommendation.implement.EnsureRateLimiter;
+import org.son.haruharu.domain.replyrecommendation.implement.ExperimentArm;
+import org.son.haruharu.domain.replyrecommendation.implement.HoldoutAssigner;
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationAccess;
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationAccessJudge;
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationCard;
@@ -49,6 +51,7 @@ public class ReplyRecommendationService {
     private final RecommendationGuard guard;
     private final RecommendationResolver resolver;
     private final EnsureRateLimiter rateLimiter;
+    private final HoldoutAssigner holdout;
     private final Clock clock;
 
     /** 유효한 캐시를 돌려주거나 멱등 작업을 만든다. 같은 키로 여러 번 불러도 요청·결과는 하나다. */
@@ -61,11 +64,14 @@ public class ReplyRecommendationService {
         if (!access.allowed()) {
             return RecommendationResponse.unavailable(access.reason());
         }
+        Instant now = clock.instant();
+        if (holdout.armOf(roomId, viewerId, now) == ExperimentArm.HOLDOUT) {
+            return RecommendationResponse.unavailable(RecommendationReason.HOLDOUT);   // 작업을 만들지 않는다
+        }
         Optional<ActiveVersion> version = versions.findActive();
         if (version.isEmpty()) {
             return RecommendationResponse.unavailable(RecommendationReason.NOT_CONFIGURED);
         }
-        Instant now = clock.instant();
         AnalysisTarget target = registrar.targetFor(access.post(), access.owner(), access.scope(), version.get());
         String personalKey = personalKey();
 
@@ -94,6 +100,9 @@ public class ReplyRecommendationService {
         RecommendationAccess access = judge(roomId, videoId, viewerId);
         if (!access.allowed()) {
             return RecommendationResponse.unavailable(access.reason());
+        }
+        if (holdout.armOf(roomId, viewerId, clock.instant()) == ExperimentArm.HOLDOUT) {
+            return RecommendationResponse.unavailable(RecommendationReason.HOLDOUT);
         }
         Optional<ActiveVersion> version = versions.findActive();
         if (version.isEmpty()) {

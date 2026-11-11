@@ -15,5 +15,7 @@ public enum RecommendationReason {
     ANALYSIS_FAILED,
     GENERATION_FAILED,
     TIMED_OUT,
-    INVALIDATED
+    INVALIDATED,
+    /** 추천 효과 비교 그룹에서 카드를 보여주지 않는 시청자(이슈 #560). */
+    HOLDOUT
 }

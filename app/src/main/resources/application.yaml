@@ -151,6 +151,13 @@ haruharu:
     depth:
       enabled: ${REPLY_RECOMMENDATION_DEPTH_ENABLED:false}
       observation-hours: ${REPLY_RECOMMENDATION_DEPTH_OBSERVATION_HOURS:24}
+      # 효과 라벨(이슈 #560): 답장 뒤 이 분 안에 영상 작성자가 말했는지. 561 SQL 이 있을 때만 남긴다. 관찰 기간 안이어야 한다.
+      response-window-minutes: ${REPLY_RECOMMENDATION_RESPONSE_WINDOW_MINUTES:30}
+    # 추천 효과 무작위 비교(이슈 #560). 켠 방에서 이 비율의 시청자에게 카드를 보여주지 않는다(UNAVAILABLE/HOLDOUT).
+    # 기본 0(꺼짐). 켜기 전에 scripts/sql/561-reply-effect-up.sql 을 적용한다. 실험할 때 0.5.
+    holdout:
+      ratio: ${REPLY_RECOMMENDATION_HOLDOUT_RATIO:0}
+      salt: ${REPLY_RECOMMENDATION_HOLDOUT_SALT:haruharu-holdout-v1}
 
 oauth:
   providers:

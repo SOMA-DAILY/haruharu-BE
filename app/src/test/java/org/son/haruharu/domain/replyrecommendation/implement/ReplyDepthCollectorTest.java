@@ -177,4 +177,52 @@ class ReplyDepthCollectorTest {
         assertThat(row.ownerReplied()).isNull();
         assertThat(row.followupMessageCount()).isEqualTo(1);
     }
+
+    @Test
+    @DisplayName("효과 라벨: 561 칸이 있고 작성자를 알면 창 안 첫 메시지까지 분과 대조 집계를 남긴다. 칸이 없으면 비운다")
+    void givenKnownOwner_whenObserved_thenResponseLabel() {
+        Instant now = SENT_AT.plus(Duration.ofHours(25));
+        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false, 42L)));
+        given(repository.findRepliesAfter(3L, 500L, SENT.plusHours(24))).willReturn(List.of());
+        given(repository.findVideoAuthor(77L)).willReturn(Optional.of(20L));
+        given(repository.countMessagesAfter(any(), any(), any(), any())).willReturn(2);
+        given(repository.responseSchemaReady()).willReturn(true);
+        given(repository.findFirstMessageAt(3L, 500L, SENT, SENT.plusMinutes(30), 20L))
+                .willReturn(Optional.of(SENT.plusMinutes(7).plusSeconds(30)));
+        given(repository.countBystanders(3L, 500L, SENT, SENT.plusMinutes(30), Set.of(10L, 20L)))
+                .willReturn(new ReplyBystanders(4, 1));
+        given(repository.insert(any())).willReturn(true);
+
+        collector.observe(target(10L, "QA"), now);
+
+        ReplyResponseLabel label = inserted().response();
+        assertThat(label.ownerResponded()).isTrue();
+        assertThat(label.ownerResponseMinutes()).isEqualByComparingTo("7.50");
+        assertThat(label.windowMinutes()).isEqualTo(30);
+        assertThat(label.bystanderMembers()).isEqualTo(4);
+        assertThat(label.bystandersResponded()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("효과 라벨: 창 안에 작성자 메시지가 없으면 false 와 분 null, 561 칸이 없으면 라벨 없이 넣는다")
+    void givenNoOwnerMessageOrNoSchema_whenObserved_thenFalseOrNone() {
+        Instant now = SENT_AT.plus(Duration.ofHours(25));
+        given(repository.findRoot(500L)).willReturn(Optional.of(new ReplyDepthRoot(500L, 3L, SENT, false, 42L)));
+        given(repository.findRepliesAfter(3L, 500L, SENT.plusHours(24))).willReturn(List.of());
+        given(repository.findVideoAuthor(77L)).willReturn(Optional.of(20L));
+        given(repository.countMessagesAfter(any(), any(), any(), any())).willReturn(0);
+        given(repository.responseSchemaReady()).willReturn(true, false);
+        given(repository.findFirstMessageAt(any(), any(), any(), any(), any())).willReturn(Optional.empty());
+        given(repository.countBystanders(any(), any(), any(), any(), any())).willReturn(new ReplyBystanders(4, 0));
+        given(repository.insert(any())).willReturn(true);
+
+        collector.observe(target(10L, "QA"), now);
+        collector.observe(target(10L, "QA"), now);
+
+        ArgumentCaptor<ReplyDepthObservation> rows = ArgumentCaptor.forClass(ReplyDepthObservation.class);
+        then(repository).should(org.mockito.Mockito.times(2)).insert(rows.capture());
+        assertThat(rows.getAllValues().get(0).response().ownerResponded()).isFalse();
+        assertThat(rows.getAllValues().get(0).response().ownerResponseMinutes()).isNull();
+        assertThat(rows.getAllValues().get(1).response()).isEqualTo(ReplyResponseLabel.NONE);
+    }
 }

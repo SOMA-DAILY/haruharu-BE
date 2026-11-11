@@ -22,6 +22,7 @@ import org.son.haruharu.domain.chat.business.event.VideoReplySavedEvent;
 import org.son.haruharu.domain.replyrecommendation.implement.ActiveVersionReader;
 import org.son.haruharu.domain.replyrecommendation.implement.AnalysisRequestRegistrar;
 import org.son.haruharu.domain.replyrecommendation.implement.EnsureRateLimiter;
+import org.son.haruharu.domain.replyrecommendation.implement.HoldoutAssigner;
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationAccessJudge;
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationCollectionPolicy;
 import org.son.haruharu.domain.replyrecommendation.implement.RecommendationEventRecorder;
@@ -131,7 +132,8 @@ class ReplyRecommendationRoomGateTest {
                 closedForOtherRoom(), judge,
                 mock(ActiveVersionReader.class), mock(AnalysisRequestRegistrar.class),
                 mock(RecommendationRequestStore.class), mock(RecommendationGuard.class),
-                mock(RecommendationResolver.class), mock(EnsureRateLimiter.class), Clock.systemUTC());
+                mock(RecommendationResolver.class), mock(EnsureRateLimiter.class), mock(HoldoutAssigner.class),
+                Clock.systemUTC());
 
         assertThat(service.ensure(OTHER_ROOM, 1L, 2L).reasonCode()).isEqualTo("FEATURE_DISABLED");
         assertThat(service.get(OTHER_ROOM, 1L, 2L).reasonCode()).isEqualTo("FEATURE_DISABLED");
