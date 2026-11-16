@@ -1,6 +1,7 @@
 package org.son.haruharu.domain.chat.implement;
 
 import org.springframework.stereotype.Component;
+import org.son.haruharu.domain.chat.implement.exception.InvalidChatSyncCursorException;
 
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +39,28 @@ public class ChatMessageReader {
 
     public List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit) {
         return chatMessageRepository.findPage(chatRoomId, cursorId, limit);
+    }
+
+    /**
+     * 모든 생성 경로는 같은 방 행 잠금 안에서 ID를 발급하고 저장한다.
+     * 따라서 커밋된 head 이하에 더 늦게 커밋되는 메시지가 없다는 전제로 범위를 확정한다.
+     * HTTP 페이지 사이에는 DB 트랜잭션을 유지하지 않는다.
+     */
+    public ChatMessageSyncPage sync(Long chatRoomId, long afterId, Long untilId, int size) {
+        if (afterId < 0 || (untilId != null && untilId < afterId)) {
+            throw new InvalidChatSyncCursorException();
+        }
+        long head = chatMessageRepository.findLastIdIncludingDeleted(chatRoomId);
+        long target = untilId == null ? head : untilId;
+        if (afterId > head || target > head) {
+            throw new InvalidChatSyncCursorException();
+        }
+        int limit = Math.min(Math.max(size, 1), 100);
+        List<ChatMessage> rows = chatMessageRepository.findSyncPage(chatRoomId, afterId, target, limit + 1);
+        boolean hasMore = rows.size() > limit;
+        List<ChatMessage> page = hasMore ? rows.subList(0, limit) : rows;
+        long next = hasMore ? page.getLast().id() : target;
+        return new ChatMessageSyncPage(page, target, next, hasMore);
     }
 
     public Optional<ChatMessage> findLast(Long chatRoomId, Set<Long> excludeSenderIds) {

@@ -17,6 +17,12 @@ public interface ChatMessageRepository {
      */
     List<ChatMessage> findPage(Long chatRoomId, Long cursorId, int limit);
 
+    /** 커밋된 방 최신 ID. 숨김·삭제 행도 포함해 동기화 진행 위치가 역행하지 않는다. */
+    long findLastIdIncludingDeleted(Long chatRoomId);
+
+    /** (afterId, targetId] 구간의 열람 가능한 메시지. ID 오름차순, 최대 limit건. */
+    List<ChatMessage> findSyncPage(Long chatRoomId, long afterId, long targetId, int limit);
+
     /** 기준 시각 이전 메시지 전체(시간순). 답장 추천의 방 기록 스냅샷에 쓴다(#558). */
     List<ChatMessage> findHistoryBefore(Long chatRoomId, java.time.LocalDateTime before);
     /** 방의 마지막(가장 최신) 메시지. 목록 화면의 미리보기용. excludeSenderIds 발신자의 메시지는 건너뛴다(차단 필터, #408). */

@@ -22,6 +22,15 @@ public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageEntit
 
     Optional<ChatMessageEntity> findFirstByChatRoomIdOrderByIdDesc(Long chatRoomId);
 
+    // native 쿼리로 SoftDelete·member_removed_at 필터를 의도적으로 제외한다. 본문은 반환하지 않는다.
+    @Query(value = "select coalesce(max(id), 0) from chat_messages where chat_room_id = :roomId", nativeQuery = true)
+    long findLastIdIncludingDeleted(@Param("roomId") Long roomId);
+
+    @Query("select m from ChatMessageEntity m where m.chatRoomId = :roomId "
+            + "and m.id > :afterId and m.id <= :targetId order by m.id asc")
+    List<ChatMessageEntity> findSyncPage(@Param("roomId") Long roomId, @Param("afterId") long afterId,
+                                       @Param("targetId") long targetId, Pageable pageable);
+
     /** 답장 추천(#558): 기준 시각 이전 메시지 전체(시간순). 퇴장 멤버의 글은 @SQLRestriction 으로 빠진다. */
     List<ChatMessageEntity> findByChatRoomIdAndCreatedAtBeforeOrderByIdAsc(Long chatRoomId, java.time.LocalDateTime before);
 
