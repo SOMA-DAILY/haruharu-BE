@@ -63,6 +63,22 @@ RED: `./gradlew :app:test --tests '*ChatMessageSyncPostgresIntegrationTest'`를 
 
 전체 1,868건은 이번 보완에서 재실행하지 않았다. 위의 전체 집계와 성능 진단 수치는 최초 구현 시점의 기록이며, 이번 테스트 추가 후 전체 실행·성능 측정을 다시 했다는 의미가 아니다. Gradle의 테스트 결과와 JaCoCo 리포트는 후속 실행 범위로 덮어써질 수 있다.
 
+## 2026-11-17 CI 메모리 부족 보완
+
+- 최초 CI 실행 `43829511201`은 `StompRedisFanoutIntegrationTest`의 Spring 컨텍스트 생성 중 `OutOfMemoryError`가 발생했고, 종료되지 않아 6시간 제한으로 취소됐다. 취소 상태에서는 기존 `if: failure()` 리포트 업로드가 실행되지 않았다.
+- Gradle 9.5.1 테스트 worker의 기본 최대 힙은 실제 JVM 인자와 GC 로그에서 **512 MiB**로 확인했다. 앱에는 `@SpringBootTest` 클래스 86개가 있으며, 전체 실행 중 여러 Spring/JPA 컨텍스트가 함께 유지된다. 로컬 클래스 히스토그램에서 컨텍스트/SessionFactory 15개와 23개, 살아 있는 객체 약 343 MiB와 487 MiB를 관측했다. 특정 객체의 누수나 참조 경로까지 확정한 결과는 아니다.
+- 기존 설정의 macOS 전체 앱 실행은 통과했지만 Full GC **639회**, Full GC 이후 최대 **509/512 MiB**를 기록했다. 이 실행은 메모리 압박의 재현이며 OOM 자체를 로컬에서 재현했다는 뜻은 아니다. 진단용 임시 init script로 GC 로그와 OOM 종료/덤프 옵션만 추가했고 힙·캐시·테스트 범위는 바꾸지 않았다.
+- `app:test`에 최대 힙 **1 GiB**를 지정했다. 테스트 범위, 컨텍스트 캐시, fork 설정과 JaCoCo는 유지한다. OOM이면 테스트 JVM이 즉시 실패 종료하며, 프로세스별 GC 로그를 크기 제한과 함께 `app/build/reports/test-jvm`에 남긴다. CI는 빌드 단계 20분/작업 25분 제한과 실패·취소 시 GC/테스트 리포트 수집을 사용한다. 작업 자체의 강제 종료까지 리포트 업로드를 보장하는 것은 아니다.
+- 전체 검증 중 기존 관리자 감사 통계 테스트의 날짜 경계 결함도 확인했다. 현재 시각에서 199분을 빼며 생성한 200건이 자정을 가로질러 하루 200건 조건을 충족하지 못했다. fixture를 고정일 정오로 만들고 조회 기간도 그날로 명시했다. 업무 쿼리와 기존 기대값은 유지했다.
+
+최종 로컬 검증:
+
+```sh
+./gradlew :app:build :core:build jacocoTestReport --continue --no-daemon
+```
+
+**BUILD SUCCESSFUL**, admin 208 + app 1,473 + core 195 = **1,876건 통과**, 실패·오류·스킵 0. 세 모듈의 테스트가 모두 실행됐고 JaCoCo 리포트가 생성됐다. 관리자 컴파일·bootJar는 앞선 전체 build에서 통과한 동일 프로덕션 코드의 증거를 재사용했다. 수정 후 앱의 Full GC는 **0회**였다. 이는 로컬 테스트 JVM의 진단 수치이며 운영 성능 개선율을 뜻하지 않는다. 빌드 전문 리뷰에서 메모리/CI 설정과 날짜 fixture 수정에 CRITICAL/HIGH 및 명확한 회귀 결함은 없었다. 원격 검증 상태는 PR의 해당 커밋 CI 결과로 확인한다.
+
 ## 실제 동작과 측정
 
 두 app 컨텍스트가 동일 PostgreSQL/Valkey를 사용하고, 서로 다른 실제 WebSocket/STOMP 클라이언트 2개가 각각 한 서버에 접속했다. 송신은 실제 ChatService, 방송은 실제 로컬/Redis 어댑터, 복구는 두 번째 서버에 실제 HTTP 요청을 보냈다.

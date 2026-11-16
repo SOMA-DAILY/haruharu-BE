@@ -7,6 +7,19 @@ tasks.named('jar') {
     enabled = false
 }
 
+tasks.named('test') {
+    // 여러 Spring/JPA 컨텍스트를 재사용하는 전체 실행에서 발생한 512 MiB 힙 부족을 방지한다(#562).
+    maxHeapSize = '1g'
+    def diagnosticDir = layout.buildDirectory.dir('reports/test-jvm').get().asFile
+    doFirst {
+        diagnosticDir.mkdirs()
+    }
+    // OOM 뒤 응답 없이 남지 않도록 실패 종료하고 모듈별 GC 로그를 보존한다.
+    jvmArgs '-XX:+ExitOnOutOfMemoryError',
+            "-Xlog:gc*:file=${diagnosticDir}/gc-%p.log:time,level,tags:filecount=2,filesize=10M"
+    testLogging.exceptionFormat = 'full'
+}
+
 // app = 유저용 서버(ECS APP). HTTP·WebSocket(STOMP)·스케줄러·유저 시큐리티 담당.
 dependencies {
     implementation project(':core')

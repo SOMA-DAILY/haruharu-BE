@@ -217,7 +217,7 @@ class AdminAuditApiIntegrationTest {
     @Test
     @DisplayName("요약은 관리자별 조회·반출 수를 내고 하루 200건 이상 조회한 관리자를 대량 조회로 올린다")
     void givenHeavyViewer_whenSummary_thenCountsAndHeavyViewers() throws Exception {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.of(2026, 11, 4, 12, 0);
         List<AdminAccessLogEntity> rows = new java.util.ArrayList<>();
         for (int i = 0; i < 200; i++) {
             rows.add(AdminAccessLogEntity.from(AdminAccessLog.of(operatorId, now.minusMinutes(i), "10.0.0.1", "GET",
@@ -228,7 +228,8 @@ class AdminAuditApiIntegrationTest {
                 AdminAuditAction.EXPORT, AdminAuditTargetType.ROOM, 1L, 200, "조사용 반출 사유", null, null)));
         accessLogJpaRepository.saveAll(rows);
 
-        mockMvc.perform(get("/api/v1/admin/audit/summary").with(authentication(auth(superId, AdminRole.SUPER))))
+        mockMvc.perform(get("/api/v1/admin/audit/summary").with(authentication(auth(superId, AdminRole.SUPER)))
+                        .param("from", now.toLocalDate().toString()).param("to", now.toLocalDate().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.heavy_view_threshold").value(200))
                 .andExpect(jsonPath("$.data.per_admin[?(@.admin.id == " + operatorId + ")].views").value(200))
