@@ -70,6 +70,7 @@ RED: `./gradlew :app:test --tests '*ChatMessageSyncPostgresIntegrationTest'`를 
 - 기존 설정의 macOS 전체 앱 실행은 통과했지만 Full GC **639회**, Full GC 이후 최대 **509/512 MiB**를 기록했다. 이 실행은 메모리 압박의 재현이며 OOM 자체를 로컬에서 재현했다는 뜻은 아니다. 진단용 임시 init script로 GC 로그와 OOM 종료/덤프 옵션만 추가했고 힙·캐시·테스트 범위는 바꾸지 않았다.
 - `app:test`에 최대 힙 **1 GiB**를 지정했다. 테스트 범위, 컨텍스트 캐시, fork 설정과 JaCoCo는 유지한다. OOM이면 테스트 JVM이 즉시 실패 종료하며, 프로세스별 GC 로그를 크기 제한과 함께 `app/build/reports/test-jvm`에 남긴다. CI는 빌드 단계 20분/작업 25분 제한과 실패·취소 시 GC/테스트 리포트 수집을 사용한다. 작업 자체의 강제 종료까지 리포트 업로드를 보장하는 것은 아니다.
 - 전체 검증 중 기존 관리자 감사 통계 테스트의 날짜 경계 결함도 확인했다. 현재 시각에서 199분을 빼며 생성한 200건이 자정을 가로질러 하루 200건 조건을 충족하지 못했다. fixture를 고정일 정오로 만들고 조회 기간도 그날로 명시했다. 업무 쿼리와 기존 기대값은 유지했다.
+- 후속 CI `43901094394`에서 같은 집계 테스트가 다시 실패해 보존된 리포트로 시간대 차이를 확인했다. 고정 fixture여도 UTC에서 시작한 H2가 기본 시간대를 캐시한 뒤 `TimeZoneConfig`가 서울로 전환하면 날짜별 집계가 갈라졌다. UTC 테스트 JVM으로 같은 실패를 재현(7건 중 1건 실패)했다. 운영 Docker와 같이 관리자 테스트 JVM 시작 시 `user.timezone=Asia/Seoul`을 지정한 뒤 `TZ=UTC ./gradlew :admin:build :admin:jacocoTestReport --no-daemon`으로 **208건 전부 통과**, 실패·오류·스킵 0을 확인했다. 앱/core는 변경이 없어 아래 전체 검증 증거를 재사용했다.
 
 최종 로컬 검증:
 
