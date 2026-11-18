@@ -7,6 +7,11 @@ tasks.named('jar') {
     enabled = false
 }
 
+tasks.named('test') {
+    // 운영 이미지와 같이 JVM 시작 전에 고정한다. H2는 Spring 초기화 전 기본 시간대를 캐시한다.
+    systemProperty 'user.timezone', 'Asia/Seoul'
+}
+
 // admin = 운영 어드민 서버(ECS Admin). core를 공유하되 유저용 웹소켓/스케줄러는 포함하지 않는다.
 // staff 계정 인증(RBAC)은 후속 이슈에서 구현. 현재는 기동 골격 + 잠금 시큐리티만.
 dependencies {

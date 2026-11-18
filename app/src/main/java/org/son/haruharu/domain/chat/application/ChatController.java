@@ -14,6 +14,7 @@ import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
 import org.son.haruharu.domain.chat.business.dto.GroupChatRoomResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
+import org.son.haruharu.domain.chat.business.dto.MessageSyncResponse;
 import org.son.haruharu.domain.chat.business.dto.MessageReactionResponse;
 import org.son.haruharu.domain.chat.business.dto.MessageReactorResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerProfileResponse;
@@ -100,6 +101,23 @@ public class ChatController {
                                                         Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.ok(chatService.getMessages(chatRoomId, userId, cursor, size));
+    }
+
+    @Operation(summary = "누락 메시지 동기화",
+            description = "(after_message_id, until_message_id]를 ID 오름차순으로 조회한다. 첫 요청은 until을 생략하고, "
+                    + "이후 페이지는 응답의 sync_target_message_id를 고정해 사용한다. 응답을 로컬에 적용한 뒤에만 "
+                    + "next_after_message_id로 동기화 커서를 갱신한다. 실시간 수신 최대 ID·읽음 커서와 별개다. "
+                    + "음수·역전·해당 방의 커밋된 최신 ID를 넘는 범위는 400 CHAT_SYNC_CURSOR_INVALID.")
+    @GetMapping("/{chatRoomId}/messages/sync")
+    public ApiResponse<MessageSyncResponse> syncMessages(@PathVariable Long chatRoomId,
+            @Parameter(description = "적용 완료한 ID(제외 경계), 처음에는 0")
+            @RequestParam(name = "after_message_id", defaultValue = "0") long afterId,
+            @Parameter(description = "첫 응답에서 받은 고정 상한(포함 경계), 첫 요청은 생략")
+            @RequestParam(name = "until_message_id", required = false) Long untilId,
+            @Parameter(description = "페이지 크기(기본 30, 1~100으로 제한)")
+            @RequestParam(defaultValue = "30") int size, Authentication authentication) {
+        return ApiResponse.ok(chatService.syncMessages(chatRoomId, (Long) authentication.getPrincipal(),
+                afterId, untilId, size));
     }
 
     @Operation(summary = "메시지 반응 토글",

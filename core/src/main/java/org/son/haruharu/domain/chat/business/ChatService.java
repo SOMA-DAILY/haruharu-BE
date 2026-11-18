@@ -6,6 +6,7 @@ import org.son.haruharu.domain.chat.business.dto.ChatRoomDetailResponse;
 import org.son.haruharu.domain.chat.business.dto.ChatRoomsResponse;
 import org.son.haruharu.domain.chat.business.dto.GroupChatRoomResponse;
 import org.son.haruharu.domain.chat.business.dto.MessagePageResponse;
+import org.son.haruharu.domain.chat.business.dto.MessageSyncResponse;
 import org.son.haruharu.domain.chat.business.dto.PartnerBrief;
 import org.son.haruharu.domain.chat.business.dto.ReadResponse;
 import org.son.haruharu.domain.chat.business.event.ChatMessageSentEvent;
@@ -279,6 +280,15 @@ public class ChatService {
         int limit = Math.min(Math.max(size, 1), MAX_MESSAGE_PAGE_SIZE);
         List<ChatMessage> messages = chatMessageReader.findPage(chatRoomId, cursor, limit);
         return MessagePageResponse.of(messages, limit, chatMessageViews.toItems(messages, userId));
+    }
+
+    /** 쓰기 DB에서 확인한 고정 범위를 복구한다. 동기화 완료는 읽음 처리와 별개다. */
+    public MessageSyncResponse syncMessages(Long chatRoomId, Long userId, long afterId, Long untilId, int size) {
+        requireMember(chatRoomId, userId);
+        participants.requireActiveIfOneToOne(chatRoomId, userId);
+        var page = chatMessageReader.sync(chatRoomId, afterId, untilId, size);
+        return new MessageSyncResponse(chatMessageViews.toItems(page.messages(), userId),
+                page.targetId(), page.nextAfterId(), page.hasMore());
     }
 
     /** 읽음 커서 갱신. 커서는 뒤로만 이동한다(역행 방지). */

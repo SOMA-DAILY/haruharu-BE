@@ -63,6 +63,17 @@ public class ChatMessageRepositoryImpl implements ChatMessageRepository {
     }
 
     @Override
+    public long findLastIdIncludingDeleted(Long chatRoomId) {
+        return chatMessageJpaRepository.findLastIdIncludingDeleted(chatRoomId);
+    }
+
+    @Override
+    public List<ChatMessage> findSyncPage(Long chatRoomId, long afterId, long targetId, int limit) {
+        return chatMessageJpaRepository.findSyncPage(chatRoomId, afterId, targetId, PageRequest.of(0, limit))
+                .stream().map(ChatMessageEntity::toDomain).toList();
+    }
+
+    @Override
     public long countUnread(Long chatRoomId, Long lastReadMessageId, Set<Long> excludeSenderIds) {
         // 커서가 없으면(한 번도 안 읽음) 0L 기준 — IDENTITY id는 1부터라 전체가 안읽음으로 집계된다.
         long cursor = (lastReadMessageId == null) ? 0L : lastReadMessageId;
