@@ -7,10 +7,34 @@ gradle.projectsEvaluated {
     def classes = app.layout.buildDirectory.dir('diagnostics/context-profiler/classes')
     def resources = app.layout.buildDirectory.dir('diagnostics/context-profiler/resources')
     def compile = app.tasks.register('compileContextProfiler', JavaCompile) {
-        source app.rootProject.file('scripts/diagnostics/TestContextMetrics.java')
+        source new File(System.getProperty('testContextProfilerSource',
+                app.rootProject.file('scripts/diagnostics/TestContextMetrics.java').absolutePath))
         classpath = app.sourceSets.test.runtimeClasspath
         destinationDirectory = classes
         options.release = 21
+    }
+    // CI 반복 실험은 app뿐 아니라 모든 모듈의 테스트를 매번 실행한다.
+    def eventsPath = System.getProperty('testContextTaskEvents')
+    if (eventsPath != null) {
+        def events = new File(eventsPath)
+        app.rootProject.allprojects { project ->
+            project.tasks.withType(Test).configureEach {
+                outputs.upToDateWhen { false }
+                outputs.doNotCacheIf('Repeated context experiment') { true }
+                doFirst {
+                    events << groovy.json.JsonOutput.toJson([
+                            event: 'start', task: path, epochMillis: System.currentTimeMillis()]) + '\n'
+                }
+            }
+        }
+        gradle.taskGraph.afterTask { task, state ->
+            if (task instanceof Test) {
+                events << groovy.json.JsonOutput.toJson([
+                        event: 'finish', task: task.path, epochMillis: System.currentTimeMillis(),
+                        skipped: state.skipped, upToDate: state.upToDate,
+                        failure: state.failure != null]) + '\n'
+            }
+        }
     }
     app.tasks.named('test', Test) {
         dependsOn compile
@@ -21,6 +45,9 @@ gradle.projectsEvaluated {
         def startedAt
         def startedAtMillis
         doFirst {
+            if (maxHeapSize != '1g') {
+                throw new GradleException("Expected unchanged app maxHeapSize=1g, found ${maxHeapSize}")
+            }
             if (output.exists() && output.list().length > 0) {
                 throw new GradleException("Profile output must be empty; choose a new testContextProfileDir: ${output}")
             }

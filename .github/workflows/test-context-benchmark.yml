@@ -1,0 +1,59 @@
+name: Test context memory experiment
+
+on:
+  # Explicit opt-in; later documentation pushes must not repeat the eight-build experiment.
+  pull_request:
+    branches: [develop]
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: context-memory-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  profile:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ci-memory-experiment'
+    # Match the OS/JDK used by successful CI run 44260401082.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        sequence: [ABBA, BAAB]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21.0.13+9'
+          cache: gradle
+      - name: Verify measurement helpers
+        run: python3 -B -m unittest discover -s scripts/diagnostics -p 'test_*.py' -v
+      - name: Run balanced full-build measurements
+        timeout-minutes: 90
+        env:
+          EXPERIMENT_SEQUENCE: ${{ matrix.sequence }}
+        run: >-
+          python3 -u -B scripts/diagnostics/run-context-experiment.py
+          --sequence "$EXPERIMENT_SEQUENCE"
+          --output "$RUNNER_TEMP/context-experiment"
+      - name: Preserve successful and failed measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: context-memory-${{ matrix.sequence }}
+          # Also preserve the active checkout's raw files if the harness itself is interrupted.
+          path: |
+            ${{ runner.temp }}/context-experiment/
+            ${{ runner.temp }}/context-experiment-sources/*/*/build/test-results/test/*.xml
+            ${{ runner.temp }}/context-experiment-sources/*/app/build/reports/test-jvm/gc-*.log*
+          if-no-files-found: warn
+          retention-days: 3

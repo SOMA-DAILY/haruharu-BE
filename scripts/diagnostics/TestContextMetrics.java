@@ -25,6 +25,8 @@ public final class TestContextMetrics implements SpringApplicationRunListener {
     private static int maxOpen;
 
     static {
+        write("jvm\tpid=" + ProcessHandle.current().pid()
+                + "\tmaxHeapBytes=" + Runtime.getRuntime().maxMemory());
         Thread sampler = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 sampleHeap();
