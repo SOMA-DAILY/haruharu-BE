@@ -13,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -23,7 +24,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 결제(IAP) 비활성(#309) 검증. haruharu.payment.enabled 기본 false라 IapWebhookController·IapProductController 빈 미등록.
  * webhook은 permitAll이라 인증 없이 접근해도 핸들러가 없어 404, 티켓 상품 조회도 ACTIVE 유저에게 404.
  */
-@SpringBootTest(properties = "haruharu.payment.enabled=false")
+// 이 플래그 전용 컨텍스트는 재사용되지 않는다. 닫을 때 공유 H2 스키마를 지우지 않도록 DB도 분리한다(#564).
+@SpringBootTest(properties = {
+        "haruharu.payment.enabled=false",
+        "spring.datasource.url=jdbc:h2:mem:payment_disabled;MODE=PostgreSQL;DB_CLOSE_DELAY=0;DB_CLOSE_ON_EXIT=FALSE"
+})
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PaymentDisabledIntegrationTest {

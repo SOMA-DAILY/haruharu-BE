@@ -1,0 +1,49 @@
+// Usage: ./gradlew -I scripts/diagnostics/test-context-profile.init.gradle \
+//   -DtestContextProfileDir=/tmp/context-before :app:test
+// This adds a diagnostic listener to this invocation only; normal test classpaths are unchanged.
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.project(':app')
+    def output = new File(System.getProperty('testContextProfileDir', '/tmp/haruharu-test-context-profile'))
+    def classes = app.layout.buildDirectory.dir('diagnostics/context-profiler/classes')
+    def resources = app.layout.buildDirectory.dir('diagnostics/context-profiler/resources')
+    def compile = app.tasks.register('compileContextProfiler', JavaCompile) {
+        source app.rootProject.file('scripts/diagnostics/TestContextMetrics.java')
+        classpath = app.sourceSets.test.runtimeClasspath
+        destinationDirectory = classes
+        options.release = 21
+    }
+    app.tasks.named('test', Test) {
+        dependsOn compile
+        classpath += app.files(classes, resources)
+        systemProperty 'test.context.metrics', new File(output, 'contexts.tsv').absolutePath
+        systemProperty 'logging.level.org.springframework.test.context.cache', 'TRACE'
+        outputs.upToDateWhen { false }
+        def startedAt
+        def startedAtMillis
+        doFirst {
+            if (output.exists() && output.list().length > 0) {
+                throw new GradleException("Profile output must be empty; choose a new testContextProfileDir: ${output}")
+            }
+            output.mkdirs()
+            def metadata = new File(resources.get().asFile, 'META-INF/spring.factories')
+            metadata.parentFile.mkdirs()
+            metadata.text = 'org.springframework.boot.SpringApplicationRunListener=org.son.haruharu.diagnostics.TestContextMetrics\n'
+            startedAt = System.nanoTime()
+            startedAtMillis = System.currentTimeMillis()
+        }
+        doLast {
+            new File(output, 'task-seconds.txt').text = ((System.nanoTime() - startedAt) / 1_000_000_000d).toString()
+            app.copy {
+                from app.layout.buildDirectory.dir('test-results/test')
+                include '*.xml'
+                into new File(output, 'test-results')
+            }
+            app.copy {
+                from app.fileTree(app.layout.buildDirectory.dir('reports/test-jvm')).files.findAll {
+                    it.name.startsWith('gc-') && it.lastModified() >= startedAtMillis
+                }
+                into new File(output, 'gc')
+            }
+        }
+    }
+}

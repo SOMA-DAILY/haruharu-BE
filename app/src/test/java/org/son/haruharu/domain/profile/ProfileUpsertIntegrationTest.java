@@ -1,5 +1,7 @@
 package org.son.haruharu.domain.profile;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.son.haruharu.domain.profile.business.ProfileService;
@@ -10,33 +12,55 @@ import org.son.haruharu.domain.profile.implement.UserProfile;
 import org.son.haruharu.domain.profile.implement.UserProfileReader;
 import org.son.haruharu.domain.profile.storage.UserProfileEntity;
 import org.son.haruharu.domain.profile.storage.UserProfileJpaRepository;
+import org.son.haruharu.domain.user.implement.User;
+import org.son.haruharu.domain.user.implement.UserStatus;
+import org.son.haruharu.domain.user.storage.UserEntity;
+import org.son.haruharu.domain.user.storage.UserJpaRepository;
 import org.son.haruharu.infrastructure.s3.S3StoragePort;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ProfileUpsertIntegrationTest {
 
     @Autowired ProfileService profileService;
     @Autowired UserProfileReader userProfileReader;
     @Autowired UserProfileJpaRepository jpaRepository;
+    @Autowired UserJpaRepository userJpaRepository;
+    @Autowired JdbcTemplate jdbc;
 
     // 응답 이미지 URL presign(#182)이 실제 AWS 자격증명을 요구하지 않도록 포트를 목으로 대체한다.
-    // (다른 테스트가 남긴 user_images 행이 있으면 updateProfile 응답 생성 시 presign을 타게 됨)
     @MockitoBean S3StoragePort s3StoragePort;
+
+    private Long userId;
+
+    @BeforeEach
+    void createUserWithoutProfile() {
+        // 컨텍스트 재사용 시 다른 테스트의 프로필을 갱신해서 생성 검증이 통과하지 않도록 한다.
+        userId = userJpaRepository.save(UserEntity.from(new User(null, UserStatus.ACTIVE, null)))
+                .toDomain().id();
+        assertThat(jpaRepository.findByUserId(userId)).isEmpty();
+    }
+
+    @AfterEach
+    void cleanUpOwnFixture() {
+        jdbc.update("DELETE FROM user_profiles WHERE user_id = ?", userId);
+        jdbc.update("DELETE FROM users WHERE id = ?", userId);
+    }
 
     @Test
     @DisplayName("프로필이 없는 신규 유저가 PUT 시 새 프로필이 생성되고 id가 부여된다")
     void givenNoProfile_whenUpdateProfile_thenCreatesWithGeneratedId() {
-        Long userId = 1L;
         UpdateProfileCommand command = new UpdateProfileCommand(
             "서울", "회사원",
             178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null);
@@ -51,7 +75,6 @@ class ProfileUpsertIntegrationTest {
     @Test
     @DisplayName("같은 유저가 두 번 PUT 해도 row는 1개로 유지되고 최신 값으로 갱신된다")
     void givenExistingProfile_whenUpdateAgain_thenUpsertsSingleRow() {
-        Long userId = 2L;
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",
             178, "ENFP", "하루", DrinkingStatus.SOMETIMES, SmokingStatus.NONE, null));
@@ -70,7 +93,6 @@ class ProfileUpsertIntegrationTest {
     @Test
     @DisplayName("마이페이지 편집(음주·흡연 미전송)으로 PUT 시 온보딩에서 설정한 음주·흡연이 보존된다")
     void givenOmittedDrinkingSmoking_whenUpdate_thenPreservesExisting() {
-        Long userId = 3L;
         // 온보딩: 음주·흡연 포함 저장
         profileService.updateProfile(userId, new UpdateProfileCommand(
             "서울", "회사원",

@@ -7,6 +7,7 @@ import org.son.haruharu.domain.ticket.business.TicketService;
 import org.son.haruharu.domain.ticket.implement.TicketWalletReader;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * 제약 위반이 난다 — 탈퇴로 지갑이 soft-delete된 계정이 실제로 이 상태다(dev DB에서 6건 확인).
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class TicketWalletCreationIntegrationTest {
 

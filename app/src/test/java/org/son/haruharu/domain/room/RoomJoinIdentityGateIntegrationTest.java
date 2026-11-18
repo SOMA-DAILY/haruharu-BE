@@ -31,6 +31,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -40,7 +41,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** 초대코드 입장 PASS 본인확인 게이트(#514). 플래그를 켠 실제 HTTP·영속성으로 확인한다. 플래그 OFF 동작은 RoomJoinApiIntegrationTest. */
-@SpringBootTest(properties = "haruharu.room.join-identity-required=true")
+// 이 플래그 전용 컨텍스트는 재사용되지 않는다. 닫을 때 공유 H2 스키마를 지우지 않도록 DB도 분리한다(#564).
+@SpringBootTest(properties = {
+        "haruharu.room.join-identity-required=true",
+        "spring.datasource.url=jdbc:h2:mem:room_join_identity_gate;MODE=PostgreSQL;DB_CLOSE_DELAY=0;DB_CLOSE_ON_EXIT=FALSE"
+})
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class RoomJoinIdentityGateIntegrationTest {

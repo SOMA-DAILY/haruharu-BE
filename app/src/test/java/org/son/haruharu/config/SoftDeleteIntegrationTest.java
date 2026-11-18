@@ -10,6 +10,7 @@ import org.son.haruharu.domain.user.storage.UserEntity;
 import org.son.haruharu.domain.user.storage.UserJpaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * deleted_at 세팅으로 전환되고, 일반 조회는 삭제된 행을 자동 제외해야 한다.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
 class SoftDeleteIntegrationTest {

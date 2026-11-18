@@ -25,6 +25,7 @@ import org.son.haruharu.domain.room.implement.RoomMemberWriter;
 import org.son.haruharu.domain.room.implement.RoomWriter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -36,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * GroupChatAutoCreateListener 가 방 멤버 스냅샷으로 GROUP 채팅방을 생성하는지 실제 DB로 검증한다.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class GroupChatAutoCreateIntegrationTest {
 
