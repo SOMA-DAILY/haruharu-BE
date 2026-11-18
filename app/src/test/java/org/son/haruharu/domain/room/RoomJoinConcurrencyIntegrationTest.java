@@ -24,6 +24,7 @@ import org.son.haruharu.domain.user.storage.UserEntity;
 import org.son.haruharu.domain.user.storage.UserJpaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (H2 MODE=PostgreSQL 은 SELECT ... FOR UPDATE 를 실동작시킨다.)
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class RoomJoinConcurrencyIntegrationTest {
 

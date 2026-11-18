@@ -9,6 +9,7 @@ import org.son.haruharu.domain.chat.business.dto.ReplyToView;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.data.redis.connection.DefaultMessage;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -35,6 +36,7 @@ import static org.mockito.Mockito.verify;
  * 발행 측이 설정 없는 매퍼를 새로 만들면(camelCase) 이 테스트가 깨진다. 토글 기본값(off) 컨텍스트에서 돈다.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class StompFanoutPayloadIntegrationTest {
 

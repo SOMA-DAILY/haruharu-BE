@@ -8,6 +8,7 @@ import org.son.haruharu.domain.notification.business.PushBundleService.ChatDecis
 import org.son.haruharu.domain.notification.business.PushBundleService.UploadDecision;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 테스트마다 다른 방·유저 id 를 써서 서로의 상태를 공유하지 않는다.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PushBundleServiceIntegrationTest {
 

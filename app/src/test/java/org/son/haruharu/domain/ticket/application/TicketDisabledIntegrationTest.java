@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -21,7 +22,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 티켓 비활성 검증(#492). haruharu.ticket.enabled 기본 false라 TicketController 빈 미등록 → 티켓 조회 엔드포인트가 사라진다.
  * ACTIVE 유저 토큰으로 접근해 상태 필터는 통과하되(403 아님) 핸들러가 없어 404가 나는지 확인한다.
  */
-@SpringBootTest(properties = "haruharu.ticket.enabled=false")
+// 이 플래그 전용 컨텍스트는 재사용되지 않는다. 닫을 때 공유 H2 스키마를 지우지 않도록 DB도 분리한다(#564).
+@SpringBootTest(properties = {
+        "haruharu.ticket.enabled=false",
+        "spring.datasource.url=jdbc:h2:mem:ticket_disabled;MODE=PostgreSQL;DB_CLOSE_DELAY=0;DB_CLOSE_ON_EXIT=FALSE"
+})
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class TicketDisabledIntegrationTest {
